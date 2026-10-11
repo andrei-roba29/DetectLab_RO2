@@ -1,139 +1,151 @@
-# 3D Globe Country Gate (canvas edition)
+# Country-selection gate (ArcGIS SceneView + canvas fallback)
 
-## What changed
+## Renderer choice
 
-The country-selection gate — the first thing an authenticated visitor sees
-in the map card — remains an **orthographic globe drawn on a plain 2D
-`<canvas>` with d3-geo**. This keeps hover/click picking independent of WebGL:
-every pixel is drawn by the app and picking is pure geometry
-(`projection.invert` + `d3.geoContains`).
+The authenticated country gate now prefers a **lazy-loaded ArcGIS SceneView**
+globe with a professional single-country list. The existing 2D canvas globe
+remains the fallback if the ArcGIS SDK, imagery/network, WebGL, or SceneView
+cannot start. Both renderers use the same country-picker data and preserve the
+existing one-country hand-off, localStorage record, events, Leaflet lock, and
+“Change Country” re-entry. This is approach B: keep the canvas implementation
+until the ArcGIS route has been verified in the deployed browser environment.
 
-The working map underneath now has its own **permanent MapLibre GL 3D globe
-basemap** (`projection: globe`) using Esri World Imagery. A Leaflet binding
-keeps the existing map controls, geographic data layers and country-lock
-contract in place; MapLibre is used only to render the basemap. It uses a local,
-inline style (no remote style-host dependency), with the pre-existing Esri tile
-service as the imagery source. If WebGL is unavailable, the app falls back to
-the same imagery as a Leaflet raster layer so country selection and the map
-remain usable.
+The working Leaflet/MapLibre map is deliberately unchanged. The ArcGIS view is
+only the temporary country-selection surface; selecting a country still
+hands off to the existing Leaflet map and its MapLibre globe base. Roman layers
+are not part of this gate.
 
-The gate is now the *start* of a locked country view rather than a one-off
-hand-off: picking a country pins the Leaflet-controlled working map to its
-bounds (tight `maxBounds` + zoom floor) while keeping the same 3D globe base.
-The search-bar country dock takes over switching from there — see
-**COUNTRY_SELECTION_DOCK.md**.
+## ArcGIS globe
 
-The gate and the working map share **one basemap**: the canvas globe samples
-the same Esri World Imagery tiles (`IMAGERY_URL` in the picker =
-`WORLD_IMAGERY_URL` in `globe-base-layer.js`) over the same background colour
-(`#030916`), drawn flat like MapLibre draws them — no hillshade, no
-limb darkening, no atmosphere halo. The bundled Blue Marble texture is kept
-only as a fallback for when the tile service cannot be reached (see "Base
-layer" below), and the gate shows the imagery credit in its bottom-left
-corner (`#globeGateAttrib`).
+`js/globe-arcgis-gate.js` is a small local adapter. It does **not** load the
+ArcGIS runtime at page load. Only after `DetectLabGlobeGate.open()` has opened
+the gate does it request the ArcGIS Maps SDK 4.31 and its dark theme from
+`js.arcgis.com`; the SDK and theme are intentionally not precached. The SceneView
+configuration is:
 
-Files:
+- `viewingMode: "global"`, centered initially at **14°E, 40°N**;
+- Esri **World Imagery** as a `TileLayer` in a custom basemap;
+- `ground: { layers: [] }`, which leaves a flat globe with no elevation layer;
+- background `#030916`, `starsEnabled: false`, `atmosphereEnabled: false`, and
+  virtual lighting with direct shadows and ambient occlusion disabled;
+- no Esri view widgets: the gate supplies its own zoom controls, country list,
+  and visible imagery credit.
 
-- `js/globe-country-picker.js` — the canvas gate (hover/click picking,
-  fly-to animation, Leaflet handoff, persistence) plus the country-switching /
-  locked-view API the dock uses (`listCountries`, `selectCountry`, `isLocked`,
-  `unlock`, `exitView`).
-- `js/globe-base-layer.js` — local MapLibre style + Leaflet adapter for the
-  permanent 3D working-map basemap, with opacity handling and WebGL fallback.
-- `css/globe-base-layer.css`, `js/maplibre-gl.js`,
-  `js/leaflet-maplibre-gl.js`, `css/maplibre-gl.css` — local runtime assets;
-  licenses are retained in `MAPLIBRE_LICENSE.txt` and
-  `MAPLIBRE_LEAFLET_LICENSE.txt`.
-- `css/globe-country-picker.css` — gate overlay, legend, zoom buttons,
-  loading/error states, "Change Country" pill.
-- `js/country-dock.js` + `css/country-dock.css` — the search-bar country dock,
-  the World-hillshade checkbox and the "Exit view" button of the locked
-  country view (see COUNTRY_SELECTION_DOCK.md).
-- `js/d3.min.js` (7.9.0), `js/topojson-client.min.js` (3.1.0) — lazy-loaded
-  **local** libraries (no CDN dependency; both precached by `sw.js`).
-- `data/countries-50m.json` — world-atlas 2 TopoJSON, the primary country
-  geometry, shipped with the site (public CDN mirror as fallback).
-- `images/globe/earth-blue-marble.jpg`, `images/globe/earth-topology.png` —
-  the fallback Earth texture (and its elevation map), used only when the
-  World Imagery tile service is unreachable.
-- `tools/globe-gate-preview.html` — dev-only harness that opens the gate
-  without auth/Leaflet for visual checks.
-- `js/maplibre-gl.js` / `css/maplibre-gl.css` — **deleted**.
+The 50-country polygons come from the gate's existing geometry builder. The
+renderer normalizes GeoJSON ring winding for ArcGIS, draws a separate
+`GraphicsLayer` casing under the country outlines, and uses hit-testing plus a
+small screen-space fallback for tiny states. The current repository colors and
+line styles are retained: default fill `#6b5f82` at 34%, white casing 1.8 px
+(1.35 pt), black inner outline 0.9 px (0.675 pt); hover green `#39ff14` at 42%
+with 4.5 px casing (3.375 pt) and 2 px outline (1.5 pt); selected fill at 50%
+with 5 px casing (3.75 pt) and 2.4 px outline (1.8 pt). Text uses the existing
+pale green label color and system font. Tiny country geometry also receives a
+small marker so micro-states remain visible and targetable.
 
-## How the globe is drawn
+## Country selection and data
 
-1. **Base layer (raster).** For every canvas pixel inside the globe disc the
-   inverse orthographic mapping gives a lon/lat, which is converted to Web
-   Mercator and sampled (bilinear) from the **Esri World Imagery** tile
-   covering it — the same tiles the working map's MapLibre globe draws, so
-   the picture does not change at the hand-off. Per frame the picker builds a
-   tile plan (`chooseImageryRange` → `planImagery` → `buildImageryGrid`):
-   the finest zoom follows the least-stretched latitude in view and the
-   sampling step of the frame (the coarse frames drawn while spinning or
-   dragging never ask for finer tiles than the refined frame needs), each
-   Mercator row nearer a pole steps down to the zoom whose
-   texels match the screen there, only cells on the front hemisphere are
-   requested, at most 128 distinct tiles per frame (the zoom steps down until
-   the view fits), and a cell whose tile is still downloading is drawn from
-   its nearest loaded ancestor — the same progressive refinement MapLibre
-   does. z0–z2 are loaded as soon as the gate opens and never evicted, so
-   every pixel has imagery within a moment; the other tiles live in an LRU
-   cache (400 images / 160 decoded buffers). Tiles are drawn as they are: no
-   hillshade, no limb darkening, no atmosphere halo; the pole caps repeat the
-   outermost Mercator row. The base layer is cached on an offscreen canvas
-   and only rebuilt when rotation/zoom/size change (or new tiles arrive) —
-   coarse (step 3) while dragging, refined to full resolution ~140 ms after
-   the interaction stops. If the tile service is unreachable (the first tiles
-   all fail and nothing has loaded, or the canvas gets tainted) the picker
-   falls back to the bundled 2048×1024 Blue Marble texture (with its
-   hillshade), and if even that can't load, countries render over a flat
-   land fill (`topojson.merge` of the atlas) — the gate never blocks on
-   images.
-2. **Vector overlay.** Every European country (same 50-ISO list as the
-   retired flat picker) is drawn per frame with `d3.geoPath`: translucent
-   grey-violet fill (`#6b5f82` @ 34%), black border over a pale casing.
-   Hover = translucent **neon green** (`#39ff14`) + name label; micro-states
-   (Malta, Monaco, Vatican…) get a ring marker when they'd be sub-pixel.
-3. **Geometry sources.** `data/countries-50m.json` (local, instant) builds
-   the gate; overseas territories are trimmed by polygon-centroid windows
-   (France keeps metropolitan France, Russia draws fully but hands off only
-   its European bbox). In the background the module then tries to stream the
-   Natural Earth **10m** shapefile from the Supabase bucket
-   (`.../Harti/ne_10m_admin_0_countries.shp`, matched to atlas countries by
-   centroid containment) and swaps in the finer coastlines when it arrives —
-   purely an enhancement, never a dependency.
-4. **Interaction.** Pointer drag rotates (speed scaled by zoom), wheel and
-   the on-screen +/− buttons zoom, two-finger pinch works on touch. The
-   globe auto-spins slowly until the first interaction. Hover/click picking
-   is exact point-in-polygon with a 12 px screen tolerance so micro-states
-   stay clickable.
-5. **Selecting a country.** A click flies the camera to the country
-   (smoothstep rotation + zoom fitted to the country's angular size), then
-   hands off to the existing Leaflet map exactly like before:
-   `window._detectlabSelectedCountry` / `..Name` / `..Bounds` +
-   the `_detectlabCountryLayer` shim (so `filterLayersForCountry()` in
-   `js/map-app.js` keeps working unmodified), locking, and the
-   `detectlab:country-selected` CustomEvent. The lock is deliberately tight —
-   `maxBounds` = country bbox padded by 0.15° with viscosity 1, and the zoom
-   floor one reachable step below the fitted zoom (Leaflet snaps zooms to whole
-   levels; opening zoom capped at 11 for micro-states) — and **never replaces the
-   3D globe base**: a selection only moves the camera. The `<html>` element gets `country-view-locked` and a
-   `detectlab:country-lockchange` event fires, which is what the dock's
-   "Exit view" button reacts to (COUNTRY_SELECTION_DOCK.md).
-6. **Persistence & re-entry.** Unchanged: the `{iso, name, bbox}` selection
-   is saved to `localStorage['detectlab_selected_country_v1']`, returning
-   visitors skip the globe entirely, and the "Change Country" pill reopens
-   it.
-7. **Failure mode.** If d3/topojson/the atlas can't load at all, a plain
-   `<select>` of countries (static name table, `APPROX_CENTER` bboxes)
-   replaces the canvas so the gate never hard-locks the app.
-8. **Search bar follows the selection.** Once a non-RO country is active,
-   the map search bar serves that country's localities, streamed from the
-   project's Supabase `europe-places.geojsonseq` (NDJSON/RFC 8142, filtered
-   per country while streaming — only the selected country stays in memory).
-   Romania keeps the richer `OSM.geojson` source (real counties + manual
-   additions). See `osmPlaceLookup` / `europePlaceLookup` in `js/map-app.js`
-   and `test-europe-places-search.js`.
+The right-hand panel is a **single-selection checkbox list**, not app
+multi-select. It shows the localized country name, the alternate EN/RO name,
+and ISO code. Search checks both names and the ISO code using the picker's
+existing accent-insensitive normalizer. A click on the globe or a checkbox
+stages exactly one country; “Continue to map” flies the SceneView to that
+country, persists the existing selection, and then applies the existing
+Leaflet country lock. The canvas fallback keeps its original direct map-click
+selection and also supports the list.
+
+The data flow remains the one in `js/globe-country-picker.js`:
+
+1. `data/countries-50m.json` (world-atlas TopoJSON) supplies the 50-country
+   geometry; the local d3-geo/topojson libraries are loaded as needed.
+2. The Natural Earth **10m** admin-0 shapefile is optionally streamed from the
+   existing Supabase public-storage URL, matched to the atlas countries, and
+   used to refine the displayed outlines in the background. Neither renderer
+   waits on that refinement.
+3. Overseas territories are trimmed by the existing picker logic. France
+   displays metropolitan France; Russia may display its full geometry but
+   retains the existing European hand-off bounds.
+
+Selection still writes
+`localStorage['detectlab_selected_country_v1']`, sets
+`window._detectlabSelectedCountry` / `..Name` / `..Bounds`, dispatches
+`detectlab:country-selected`, and uses the existing `_detectlabCountryLayer`
+shim, `filterLayersForCountry()`, lock-change event, and country dock. The app
+remains limited to one selected country. Returning users keep the same saved
+selection and can reopen the gate using “Change Country”.
+
+## Canvas and list-only fallbacks
+
+If ArcGIS CDN loading, WebGL initialization, SceneView preparation, or the
+imagery layer fails, the adapter is closed and the gate activates the existing
+canvas globe. That path samples the same legacy Esri World Imagery tile URL as
+the working map, over `#030916`; if imagery is unavailable it uses the bundled
+Blue Marble texture, and if that also fails it draws the atlas land fill. It
+keeps the canvas's geometric picking, fly-to, and no-WebGL behavior.
+
+If the local geometry or 2D canvas cannot initialize either, the static country
+list/select remains usable with the existing approximate country bounds. It
+still applies the standard one-country map lock, but naturally has no globe
+animation or imagery. The gate should never hard-lock the map solely because a
+renderer failed.
+
+## PWA, network, licensing, and device constraints
+
+`sw.js` uses shell cache `detectlab-v182-arcgis-gate`. The local adapter, picker,
+CSS, translations, and country data remain in the app shell. The external
+ArcGIS SDK/theme and imagery services are **not** precached; cross-origin
+requests pass through the service worker's network path. `js.arcgis.com`,
+`arcgis.com`, and `ibasemaps-api.arcgis.com` are noted in the service-worker
+passthrough host list. The static ArcGIS adapter remains available offline, but
+the CDN SceneView does not: offline, it falls back to the local canvas assets;
+canvas imagery also needs the network, with bundled Blue Marble as its image
+fallback.
+
+No API key is embedded in the repository. If the production owner supplies an
+approved, referrer-restricted key through
+`window.DETECTLAB_ARCGIS_API_KEY` or `window.DetectLabConfig.arcgisApiKey`, the
+ArcGIS adapter switches to the keyed `ibasemaps-api.arcgis.com` World Imagery
+service and sets `esriConfig.apiKey`. Without that runtime key it uses the same
+legacy `server.arcgisonline.com` World Imagery service already used by the
+application. Production credentials, usage limits, and the applicable Esri
+terms for this deployment still need confirmation by the service owner; this
+implementation makes no legal or licensing determination. The gate shows Esri
+imagery credit in its own UI.
+
+SceneView consumes WebGL/GPU memory and downloads a third-party SDK when online;
+very low-memory phones, older mobile WebViews, or browsers with blocked WebGL
+may use the canvas or list-only fallback instead. The 10m geometry refinement
+can also increase work when it arrives on a mobile device. The list is scrollable
+and moves to a bottom panel at narrow widths. These are documented risks, not
+verified mobile-device results.
+
+## Files
+
+- `js/globe-arcgis-gate.js` — optional ArcGIS SceneView renderer, projection and
+  country graphics, hover/click hit-testing, micro-state snap, and camera zoom.
+- `js/globe-country-picker.js` — shared 50-country / 10m data flow, gate DOM,
+  localized list/search, public API, persistence, selection events, Leaflet
+  lock and canvas fallback.
+- `css/globe-country-picker.css`, `index.html`, and `js/translations.js` — gate
+  panel, responsive layout, markup, and EN/RO copy.
+- `js/globe-base-layer.js` — the separate working-map MapLibre globe; untouched.
+- `js/country-dock.js` + `css/country-dock.css` — the working map's country
+  switcher and lock-exit controls (see `COUNTRY_SELECTION_DOCK.md`).
+- `js/d3.min.js`, `js/topojson-client.min.js`, `js/shapefile.js`, and
+  `data/countries-50m.json` — local data/rendering dependencies; the optional
+  Natural Earth 10m shapefile remains a remote Supabase refinement.
+- `images/globe/earth-blue-marble.jpg` and `images/globe/earth-topology.png` —
+  canvas fallback texture assets.
+- `tools/globe-gate-preview.html` — dev-only full-gate harness for visual
+  checks without auth or a working map.
+
+## Verification status for this change
+
+The root Node tests exercise the shared data builder, single-country contract,
+SceneView configuration, lazy CDN wiring, cache versions, and renderer fallback
+wiring. A live browser check of ArcGIS WebGL, Esri imagery, mobile layout,
+service-worker offline behavior, and the production key/terms was **not run for
+this change**. Those checks remain required before removing or deprecating the
+canvas fallback.
 
 ## The country outline on the 3D basemap
 
@@ -468,22 +480,18 @@ EEA ArcGIS tiles), the historical and other country families (`map-app.js`, the
 for conversion, and any canvas-drawn source gets the zoom gate, not a twin.
 
 
+## Gate deployment and regression checks
 
-- `sw.js` (cache `v178`) precaches the country picker, local MapLibre runtime /
-  Leaflet binding, globe-base module, d3, topojson-client, the atlas and the
-  country dock. The two canvas-gate texture images are intentionally **not**
-  precached (≈1.8 MB; the texture-less gate fallback still works offline).
-- Suites guard this area: `node test-globe-canvas-picker.js` (canvas gate,
-  picking, geometry), `node test-globe-base-layer.js` (MapLibre globe source,
-  Leaflet adapter, opacity and PWA wiring) and `node test-country-dock.js`
-  (country list API, lock maths, dock UI, hillshade, exit view).
-- Country name → ISO resolution uses the bundled EN/RO name dictionary
-  (`NAMES`, incl. `alt` spellings such as "Bosnia and Herz.", "Macedonia",
-  "Vatican" used by world-atlas). `test-globe-canvas-picker.js` asserts all
-  50 countries resolve from the shipped atlas and that picking works — run
-  `node test-globe-canvas-picker.js` after touching any of this.
-- The module exposes `window.DetectLabGlobeGate` with the same API as
-  before (`attach/open/close/hasSelection/reset/getSelection`), plus the
-  country-switching / lock API the dock builds on
-  (`listCountries/nameOf/selectCountry/prefetch/isLocked/getLockZoom/unlock/exitView`)
-  and a `_test` hook for the node suites.
+`sw.js` cache `v182` precaches the local ArcGIS adapter, picker, styles,
+translations, 50m atlas, and existing MapLibre assets. The remote ArcGIS SDK,
+theme, imagery, and the two optional canvas texture images are intentionally
+not precached. The canvas can still show atlas land if those texture images are
+unavailable.
+
+The key suites are `node test-globe-arcgis-gate.js` (lazy loading, SceneView
+configuration, country graphics and single-select flow),
+`node test-globe-canvas-picker.js` (fallback picking, shared geometry and
+imagery math), `node test-globe-base-layer.js` (unchanged MapLibre working-map
+base), and `node test-country-dock.js` (public API, lock, dock, and re-entry).
+The public `window.DetectLabGlobeGate` API and `_test` hooks remain in
+`js/globe-country-picker.js`.
