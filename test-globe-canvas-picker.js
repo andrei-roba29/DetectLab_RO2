@@ -1,4 +1,4 @@
-// Test suite for the canvas-based 3D Globe Country Gate
+// Regression suite for the preserved 2D-canvas fallback of the country gate
 // (js/globe-country-picker.js — d3-geo orthographic edition).
 // Usage: node test-globe-canvas-picker.js
 'use strict';
@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-console.log('[Test] Canvas globe country gate...');
+console.log('[Test] Canvas fallback globe country gate...');
 
 // ── 1. index.html structure ──
 const indexHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
@@ -17,8 +17,8 @@ assert(indexHtml.includes('id="globeGateCanvas"'), 'index.html contains globeGat
 assert(indexHtml.includes('id="globeGateZoomIn"'), 'index.html contains globeGateZoomIn');
 assert(indexHtml.includes('id="globeGateZoomOut"'), 'index.html contains globeGateZoomOut');
 assert(indexHtml.includes('id="globeGateFallbackSelect"'), 'index.html keeps the no-canvas fallback select');
-assert(indexHtml.includes('js/globe-country-picker.js?v=20261010-gate-imagery'), 'index.html loads the re-versioned picker');
-assert(indexHtml.includes('css/globe-country-picker.css?v=20261010-gate-imagery'), 'index.html loads the re-versioned css');
+assert(indexHtml.includes('js/globe-country-picker.js?v=20261011-arcgis-gate'), 'index.html loads the re-versioned picker');
+assert(indexHtml.includes('css/globe-country-picker.css?v=20261011-arcgis-gate'), 'index.html loads the re-versioned css');
 assert(indexHtml.includes('css/maplibre-gl.css?v=5.24.0'), 'index.html loads local MapLibre CSS for the working-map globe');
 assert(indexHtml.includes('js/maplibre-gl.js?v=5.24.0'), 'index.html loads local MapLibre GL JS');
 assert(indexHtml.includes('js/leaflet-maplibre-gl.js?v=0.1.4'), 'index.html loads the Leaflet adapter');
@@ -26,7 +26,7 @@ assert(indexHtml.indexOf('js/maplibre-gl.js?v=5.24.0') < indexHtml.indexOf('js/l
        indexHtml.indexOf('js/leaflet-maplibre-gl.js?v=0.1.4') < indexHtml.indexOf('js/globe-base-layer.js?v=20261010-shared-overlay') &&
        indexHtml.indexOf('js/globe-base-layer.js?v=20261010-shared-overlay') < indexHtml.indexOf('js/map-app.js?v=20261010-lidar-zoom-gate'),
     'MapLibre runtime, adapter and globe base load before map-app.js');
-console.log('  ✓ index.html keeps the canvas gate and loads the separate MapLibre working-map base');
+console.log('  ✓ index.html keeps the canvas fallback and loads the separate MapLibre working-map base');
 
 // ── 2. Local assets exist ──
 ['js/d3.min.js', 'js/topojson-client.min.js', 'js/shapefile.js',
@@ -40,7 +40,7 @@ console.log('  ✓ local canvas-gate and MapLibre globe-base assets shipped');
 
 // ── 3. sw.js precache ──
 const swJs = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8');
-['js/globe-country-picker.js?v=20261010-gate-imagery', 'css/globe-country-picker.css?v=20261010-gate-imagery',
+['js/globe-country-picker.js?v=20261011-arcgis-gate', 'css/globe-country-picker.css?v=20261011-arcgis-gate',
  'js/d3.min.js?v=7.9.0', 'js/topojson-client.min.js?v=3.1.0',
  'data/countries-50m.json?v=20261008', 'js/maplibre-gl.js?v=5.24.0',
  'css/maplibre-gl.css?v=5.24.0', 'js/leaflet-maplibre-gl.js?v=0.1.4',

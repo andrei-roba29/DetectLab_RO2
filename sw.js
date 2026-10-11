@@ -415,12 +415,12 @@
 //   DetectLabGlobeBase.attachTileTwin), in pane_world_hillshade's shared overlay.
 //   country-dock.js is re-versioned and precached.
 // v180: index.html gives the LIDAR zoom message (#lidarZoomGateMsg) its PWA bottom offset.
-// v181: the globe country gate draws the same Esri World Imagery tiles as the working
-//   map's MapLibre globe (js/globe-country-picker.js samples them per pixel; the bundled
-//   Blue Marble texture is only a fallback) over the same background colour, so the
-//   basemap no longer changes when a country is picked. globe-country-picker.js/.css
-//   are re-versioned and precached.
-const CACHE_NAME = 'detectlab-v181-gate-imagery';
+// v181: the canvas gate shares Esri World Imagery with the working map.
+// v182: prefer a lazy ArcGIS SceneView country globe and a searchable, single-country
+//   checkbox list. The existing canvas picker remains the network/WebGL fallback;
+//   the ArcGIS CDN SDK/theme stay out of precache and load only when the gate opens.
+//   The local adapter, picker, CSS, and EN/RO copy are versioned and precached.
+const CACHE_NAME = 'detectlab-v182-arcgis-gate';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1022,12 +1022,9 @@ const PRECACHE_URLS = [
   'css/styles.css?v=20260927-sat-copernicus-vhr',
   'css/styles.css?v=20261002-european-lidar',
   'css/styles.css?v=20261008-roman-dare-icons',
-  'css/globe-country-picker.css?v=20261008',
-  'css/globe-country-picker.css?v=20261010-gate-imagery',
-  'js/globe-country-picker.js?v=20261008',
-  'js/globe-country-picker.js?v=20261008-country-bounds',
-  'js/globe-country-picker.js?v=20261009-globe-outline',
-  'js/globe-country-picker.js?v=20261010-gate-imagery',
+  'css/globe-country-picker.css?v=20261011-arcgis-gate',
+  'js/globe-arcgis-gate.js?v=20261011-arcgis-gate',
+  'js/globe-country-picker.js?v=20261011-arcgis-gate',
   // v167: country dock glued under the search bar (country switcher +
   // World-hillshade checkbox) and the “Exit view” button of the locked
   // country view. The hillshade tiles themselves stay network-only.
@@ -1040,7 +1037,7 @@ const PRECACHE_URLS = [
   'js/map-app.js?v=20261010-lidar-zoom-gate',
   'js/offline-maps.js?v=20261009-3d-globe',
   'js/translations.js?v=20261009-3d-globe',
-  'js/translations.js?v=20261010-lidar-zoom-gate',
+  'js/translations.js?v=20261011-arcgis-gate',
   'js/d3.min.js?v=7.9.0',
   'js/topojson-client.min.js?v=3.1.0',
   'data/countries-50m.json?v=20261008',
@@ -1068,7 +1065,10 @@ const PASSTHROUGH_HOSTS = [
   'r2.dev',             // Josephine / historical tiles + ONNX model
   'geo-spatial.org',    // heritage WMS + eharta
   'geo-spatial.ro',     // heritage WMS (eism)
-  'arcgisonline.com',   // Esri satellite tiles
+  'arcgisonline.com',   // Esri satellite tiles / legacy World Imagery
+  'js.arcgis.com',      // lazy ArcGIS Maps SDK (network-only, never app-shell cached)
+  'arcgis.com',         // Esri service APIs
+  'ibasemaps-api.arcgis.com', // keyed World Imagery service when configured
   'arcgisonline.nl',    // AHN6 DSM ImageServer
   'tiles.arcgis.com',   // LAKI III / MDH historical map tiles
   'raw.githubusercontent.com', // heritage images + geo-data JSON

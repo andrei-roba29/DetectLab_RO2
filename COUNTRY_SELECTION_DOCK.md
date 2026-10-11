@@ -41,12 +41,13 @@ another country was the “Change Country” pill. Now the choice *owns* the map
   belongs to the locked view only), and the permanent 3D globe basemap setup.
 - `js/globe-base-layer.js` plus local MapLibre GL assets — renders the Esri
   imagery on MapLibre's globe projection while keeping Leaflet as the map
-  interaction / overlay API. The country picker itself stays canvas-based.
+  interaction / overlay API. The temporary country gate prefers the lazy
+  ArcGIS SceneView (`js/globe-arcgis-gate.js`) and retains the canvas fallback.
 - `index.html` — the dock markup (inside `#mapSearchWrap`), the exit-view
   button (inside `.map-frame`), the CSS/JS tags.
 - `js/translations.js` — `country_dock_title`, `country_dock_hint`,
   `country_dock_hillshade`, `country_exit_view` (EN + RO).
-- `sw.js` — shell `v174`, precaches the dock and the local 3D globe runtime/assets.
+- `sw.js` — shell `v182`, precaches the dock, the local ArcGIS gate adapter, and local 3D globe assets (not the remote SDK).
 - `tools/country-dock-preview.html` — dev harness: the dock on a real Leaflet
   map with Esri imagery, no auth, no rest of the app.
 - `test-country-dock.js` — the regression suite.
@@ -140,16 +141,18 @@ lock was released).
 
 ## Notes for future changes
 
-- Run `node test-country-dock.js` (and `node test-globe-canvas-picker.js`,
-  which guards the gate itself) after touching any of this. The dock suite
-  covers the initials grid, hover names, the switch call, the hillshade layer
-  (single instance, own pane, persistence) and every exit-button transition.
+- Run `node test-country-dock.js` and `node test-globe-arcgis-gate.js` after
+  touching the country flow; `node test-globe-canvas-picker.js` continues to
+  guard the no-WebGL fallback. The dock suite covers the initials grid, hover
+  names, switch call, hillshade layer (single instance, own pane, persistence)
+  and every exit-button transition.
 - The dock's UI is intentionally free of `querySelectorAll`: it keeps an
   `iso → element` map (`_test.state.buttons`) so the headless suite can drive
   it with the same minimal DOM stub the other suites use.
-- Versioning: bump the `?v=20261008` query of `js/country-dock.js` /
-  `css/country-dock.css` in `index.html` **and** in `sw.js` precache together,
-  and raise `CACHE_NAME` (currently `detectlab-v174-…` or newer).
+- Versioning: bump the `?v=` query of a changed local asset in `index.html`
+  **and** the matching `sw.js` precache entry together, then raise
+  `CACHE_NAME` (currently `detectlab-v182-arcgis-gate`). The SDK/theme CDN stays
+  lazy and is not an app-shell precache entry.
 - Manual QA: `python3 -m http.server` at the repo root, open
   `/tools/country-dock-preview.html`; the overlay status line reports the lock,
   the zoom floor and the hillshade state while you click through.

@@ -27,7 +27,7 @@
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
     <link rel="stylesheet" href="css/styles.css?v=20261008-roman-dare-icons">
     <link rel="stylesheet" href="css/globe-base-layer.css?v=20261009-3d-globe">
-    <link rel="stylesheet" href="css/globe-country-picker.css?v=20261010-gate-imagery">
+    <link rel="stylesheet" href="css/globe-country-picker.css?v=20261011-arcgis-gate">
     <link rel="stylesheet" href="css/country-dock.css?v=20261008">
     <link rel="stylesheet" href="css/library-of-babel.css?v=20260917-babel-epochs">
     <link rel="stylesheet" href="css/tutorial.css?v=20260922-mobile-fs-controls">
@@ -1326,18 +1326,14 @@
                         <a href="#pricing" class="btn-primary t" data-key="lock_btn">View Plans</a>
                     </div>
 
-                    <!-- 3D Globe country gate — the first thing an authenticated
-                         visitor sees in the map card. An orthographic globe is
-                         drawn on a plain 2D canvas (d3-geo, no WebGL) from the
-                         same Esri World Imagery tiles the working map uses
-                         (the bundled Blue Marble texture is only a fallback),
-                         every European country tinted translucent grey-violet
-                         with a black border; hovering flips it to translucent
-                         neon-green. Picking one flies the camera there and
-                         hands off to the normal 2D map, locked to that
-                         country. See js/globe-country-picker.js. -->
+                    <!-- Country gate: a lazy-loaded ArcGIS SceneView is preferred;
+                         the existing no-WebGL canvas picker stays available when
+                         the SDK, network, or 3D context cannot start. Both renderers
+                         consume js/globe-country-picker.js's same 50-country / 10m
+                         geometry and preserve its single-country map lock. -->
                     <button type="button" class="globe-gate-reopen" id="globeGateReopenBtn" data-key="globe_gate_change_country">Change Country</button>
                     <div class="globe-gate hidden" id="globeGate" aria-hidden="true">
+                        <div class="globe-gate-arcgis" id="globeGateArcGIS" aria-label="Interactive country globe"></div>
                         <div class="globe-gate-canvas" id="globeGateCanvas"></div>
                         <div class="globe-gate-chrome">
                             <div class="globe-gate-title t" id="globeGateTitle" data-key="globe_gate_title">Choose your country</div>
@@ -1347,13 +1343,26 @@
                                 <span class="globe-gate-swatch globe-gate-swatch--hover"></span><span class="t" data-key="globe_gate_legend_hover">Hovered</span>
                             </div>
                         </div>
+                        <aside class="globe-gate-country-panel" id="globeGateCountryPanel" aria-label="Country selection">
+                            <div class="globe-gate-country-panel-head">
+                                <span class="globe-gate-country-panel-kicker">DetectLab</span>
+                                <span class="globe-gate-country-count" id="globeGateCountryCount" aria-live="polite">50 countries</span>
+                            </div>
+                            <label class="globe-gate-search" for="globeGateCountrySearch">
+                                <span aria-hidden="true">⌕</span>
+                                <input id="globeGateCountrySearch" type="search" autocomplete="off" spellcheck="false" placeholder="Search countries" data-placeholder-key="globe_gate_search" aria-label="Search countries">
+                            </label>
+                            <div class="globe-gate-country-list" id="globeGateCountryList" role="group" aria-label="Select one country"></div>
+                            <p class="globe-gate-selection-hint t" id="globeGateSelectionHint" data-key="globe_gate_selection_hint" role="status" aria-live="polite">Select one country to continue.</p>
+                            <button type="button" class="globe-gate-select-btn t" id="globeGateSelectBtn" data-key="globe_gate_continue" disabled>Continue to map</button>
+                        </aside>
                         <button type="button" id="globeGateCloseBtn" class="globe-gate-reopen" style="display:none;top:auto;right:auto;left:14px" aria-label="Close">✕</button>
                         <div class="globe-gate-zoom">
                             <button type="button" id="globeGateZoomIn" aria-label="Zoom in">+</button>
                             <button type="button" id="globeGateZoomOut" aria-label="Zoom out">−</button>
                         </div>
                         <div class="globe-gate-hint" id="globeGateHint"></div>
-                        <div class="globe-gate-attrib" id="globeGateAttrib" aria-label="Imagery attribution"></div>
+                        <div class="globe-gate-attrib" id="globeGateAttrib" aria-label="Imagery attribution">Imagery © Esri — World Imagery</div>
                         <div class="globe-gate-loading" id="globeGateLoading">
                             <span class="globe-gate-spinner" aria-hidden="true"></span>
                             <span class="t" data-key="globe_gate_loading">Loading world map…</span>
@@ -1362,9 +1371,8 @@
                             <p id="globeGateErrorText">The world map could not load. Please check your connection and try again.</p>
                             <button type="button" id="globeGateRetryBtn" class="t" data-key="globe_gate_retry">Retry</button>
                         </div>
-                        <!-- Plain country <select> used only when the canvas globe
-                             or its local geometry cannot load — keeps the picker
-                             reachable instead of hard-blocking the app. -->
+                        <!-- Secondary no-WebGL list retained as the last-resort picker
+                             if both the SceneView and 2D canvas cannot initialize. -->
                         <div class="globe-gate-fallback hidden" id="globeGateFallback">
                             <select id="globeGateFallbackSelect"></select>
                             <button type="button" id="globeGateFallbackBtn">OK</button>
@@ -4663,7 +4671,7 @@
         </div>
     </footer>
 
-    <script src="js/translations.js?v=20261010-lidar-zoom-gate"></script>
+    <script src="js/translations.js?v=20261011-arcgis-gate"></script>
 
     <!-- Leaflet JS (from qgis2web folder) -->
     <script src="js/leaflet.js"></script>
@@ -4739,7 +4747,9 @@
     <script src="js/lantmateriet-hojdmodell-layer.js?v=20261007-se-hojdmodell"></script>
     <!-- Physical-distance clustering for Patrimoniu pins and protection radiuses. -->
     <script src="js/patrimoniu-clustering.js?v=20260914-patrimoniu-cluster"></script>
-    <script src="js/globe-country-picker.js?v=20261010-gate-imagery"></script>
+    <!-- Lightweight local adapter only; the ArcGIS CDN SDK/theme are loaded after the gate opens. -->
+    <script src="js/globe-arcgis-gate.js?v=20261011-arcgis-gate"></script>
+    <script src="js/globe-country-picker.js?v=20261011-arcgis-gate"></script>
     <!-- Country dock: the slide-down country switcher glued under the search
          bar, the small World-hillshade overlay checkbox and the bottom-centre
          “Exit view” button. Loaded after the globe gate (it only talks to it
