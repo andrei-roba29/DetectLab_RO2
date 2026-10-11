@@ -1,0 +1,175 @@
+* { box-sizing: border-box; }
+html, body { width: 100%; height: 100%; margin: 0; }
+body {
+  overflow: hidden;
+  background: #04080f;
+  color: #e8eef6;
+  font: 14px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+button, input, select { font: inherit; }
+button, select, input[type="search"] { color: inherit; }
+button {
+  border: 1px solid rgba(119, 164, 210, .18);
+  border-radius: 7px;
+  padding: 7px 10px;
+  background: #24456c;
+  color: #e8eef6;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+button:hover { background: #2f5a8d; border-color: rgba(150, 192, 236, .4); }
+button:active { transform: translateY(1px); }
+button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible {
+  outline: 2px solid #b9ff00;
+  outline-offset: 2px;
+}
+input[type="search"], select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #284468;
+  border-radius: 7px;
+  padding: 8px 9px;
+  background: #0d1a2b;
+  color: #e8eef6;
+}
+input::placeholder { color: #71869e; }
+input[type="checkbox"] { accent-color: #c42b2b; }
+.atlas-shell { display: flex; width: 100%; height: 100%; min-height: 0; }
+#side {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex: 0 0 320px;
+  flex-direction: column;
+  gap: 9px;
+  width: 320px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 13px 12px 16px;
+  border-right: 1px solid #1d3552;
+  background: #101c2e;
+  scrollbar-color: #2a496b #101c2e;
+}
+.atlas-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.atlas-head > div { min-width: 0; }
+.atlas-head h1 { margin: 3px 0 0; font-size: 17px; line-height: 1.2; letter-spacing: -.01em; }
+.atlas-head > select { flex: 0 0 104px; width: 104px; padding: 6px 8px; font-size: 12px; }
+.back-link { color: #9fb3c9; font-size: 11px; text-decoration: none; }
+.back-link:hover { color: #e8eef6; text-decoration: underline; }
+fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid #284468;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+legend { padding: 0 5px; color: #9fb3c9; font-size: 12px; font-weight: 600; }
+.row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.opt { display: flex; align-items: flex-start; gap: 8px; min-width: 0; cursor: pointer; line-height: 1.35; }
+.opt input { flex: 0 0 auto; margin: 2px 0 0; }
+.opt strong { font-weight: 700; }
+.range-row { color: #9fb3c9; font-size: 11px; }
+.range-row input[type="range"] { flex: 1; min-width: 60px; accent-color: #cc2222; }
+.select-label { color: #9fb3c9; font-size: 11px; margin: 1px 0 -4px; }
+.country-actions button { flex: 1; }
+button.quiet { background: rgba(255,255,255,.055); color: #dce6f1; }
+button.quiet:hover { background: rgba(255,255,255,.12); }
+.info { min-height: 28px; max-height: 62px; overflow: auto; color: #b4c4d6; font-size: 11px; line-height: 1.45; }
+.country-list { flex: 0 1 auto; max-height: 220px; overflow: auto; padding-top: 3px; border-top: 1px solid #1d3552; }
+.country-list label { display: flex; align-items: center; gap: 8px; min-height: 27px; padding: 3px 5px; border-radius: 4px; cursor: pointer; }
+.country-list label:hover { background: #1a3250; }
+.country-list input { margin: 0; }
+.country-list .country-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note, .mut, .panel-footnote { color: #839ab2; font-size: 10.5px; line-height: 1.4; }
+.note { overflow-wrap: anywhere; }
+.mut a { color: #ff9a9a; }
+.status { min-height: 0; max-height: 56px; overflow: auto; }
+.attribution-copy { font-size: 10px; }
+details { min-width: 0; }
+details summary { color: #9fb3c9; cursor: pointer; font-size: 11px; }
+.category-actions { margin: 6px 0 1px; }
+.category-actions button { padding: 5px 9px; font-size: 11px; }
+.category-actions input { width: 108px; margin-left: auto; padding: 6px 7px; font-size: 11px; }
+.category-list { display: flex; flex-direction: column; gap: 1px; max-height: 210px; overflow-y: auto; }
+.category-list label { display: grid; grid-template-columns: 15px 22px minmax(0, 1fr); align-items: center; gap: 6px; min-height: 26px; cursor: pointer; font-size: 11px; }
+.category-list input { margin: 0; }
+.category-list img { display: block; width: 20px; height: 20px; }
+.file-pickers { display: flex; flex-direction: column; gap: 7px; font-size: 11px; }
+.file-picker { display: block; font-size: 11px; }
+.file-picker[hidden] { display: none !important; }
+.file-picker input, .file-pickers input { display: block; max-width: 100%; margin-top: 3px; font-size: 10px; }
+.panel-footnote { margin: 0; padding: 0 2px; }
+#viewDiv { position: relative; flex: 1 1 auto; min-width: 0; min-height: 0; overflow: hidden; background: #030916; }
+#viewDiv .esri-view, #viewDiv .esri-view-surface { width: 100%; height: 100%; }
+#viewDiv .esri-view-surface { touch-action: none; }
+#tip {
+  position: absolute;
+  z-index: 4;
+  display: none;
+  max-width: 270px;
+  padding: 8px 10px;
+  border: 1px solid #cc2222;
+  border-radius: 7px;
+  background: rgba(12, 17, 30, .94);
+  box-shadow: 0 5px 22px rgba(0,0,0,.35);
+  color: #e8eef6;
+  font-size: 11px;
+  line-height: 1.45;
+  pointer-events: auto;
+}
+#tip .tip-title { color: #fff; font: 600 14px Georgia, "Times New Roman", serif; }
+#tip a, #attrib a { color: #ff9a9a; }
+#attrib {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  z-index: 3;
+  display: none;
+  max-width: min(70%, 620px);
+  padding: 4px 8px;
+  border-radius: 5px;
+  background: rgba(12, 17, 30, .86);
+  color: #c9d6e6;
+  font-size: 10px;
+  line-height: 1.35;
+}
+#msg {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  padding: 24px;
+  background: rgba(0,0,0,.68);
+  color: #e8eef6;
+  text-align: center;
+  font-size: 13px;
+}
+#msg.hide { display: none; }
+.spinner { width: 22px; height: 22px; flex: 0 0 auto; border: 2px solid rgba(185,255,0,.22); border-top-color: #b9ff00; border-radius: 50%; animation: atlas-spin .8s linear infinite; }
+@keyframes atlas-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 700px) {
+  .atlas-shell { flex-direction: column-reverse; }
+  #side { flex: 0 0 42%; width: 100%; height: 42%; max-height: 48%; padding: 9px 10px calc(10px + env(safe-area-inset-bottom)); border-right: 0; border-top: 1px solid #1d3552; gap: 7px; }
+  #viewDiv { flex: 1 1 58%; height: 58%; min-height: 52%; }
+  .atlas-head h1 { font-size: 15px; }
+  fieldset { gap: 6px; padding: 7px; }
+  .country-list { max-height: 120px; }
+  .category-list { max-height: 130px; }
+  #attrib { max-width: calc(100% - 16px); font-size: 9px; }
+}
+@media (max-width: 380px) {
+  .atlas-head { align-items: center; }
+  .atlas-head h1 { font-size: 13px; }
+  #side { padding-right: 8px; padding-left: 8px; }
+  .category-actions input { width: 92px; }
+}
+
+.atlas-embedded .back-link { display: none; }

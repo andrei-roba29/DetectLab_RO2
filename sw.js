@@ -318,10 +318,8 @@
 // v150: cinci coordonate retrase din LIDAR Scanner sunt filtrate inclusiv din
 //   copiile vechi ale CSV-ului; lidar-scanner.js și DATA_URL sunt re-versionate.
 // v151: free European LiDAR catalogues and country-specific WMS controls.
-// v152: the flat Leaflet country picker is replaced by a real 3D globe gate
-//   (js/globe-country-picker.js, css/globe-country-picker.css) — a MapLibre GL
-//   "globe" projection shown the first time a logged-in visitor reaches the
-//   map. css/country-selector.css and js/country-selector.js are retired.
+// v152: introduced a globe-based country-selection step before the map; this
+//   legacy gate was retired in v183 in favour of the integrated ArcGIS atlas.
 // v153: Netherlands LiDAR now uses the AHN6 DSM 50 cm ArcGIS ImageServer
 //   (dynamic exportImage tiles in Web Mercator) instead of the older PDOK WMS.
 // v162: Sweden · Lantmäteriet terrängskuggning (höjdmodell 1 m) as live WMS
@@ -332,11 +330,11 @@
 //   client-side (js/dataforsyningen-dhm-layer.js); tiles go through the
 //   same-origin /api/geo/dk-dhm proxy (netlify/functions/dk-dhm.mjs or the
 //   Express geoProxy), which adds the token server-side.
-// v164: the globe country gate is re-engineered on a plain 2D canvas
-//   (d3-geo orthographic + per-pixel Blue Marble texture) — MapLibre GL is
-//   retired from the shell; js/d3.min.js, js/topojson-client.min.js and
-//   data/countries-50m.json ship locally instead.
-// v165: the search bar honours the globe-selected country — non-RO countries
+// v164–v167: the former globe gate and country-selection dock were retired
+//   in v183. The ArcGIS SceneView atlas now owns European country selection;
+//   its same-origin message bridge filters the optional Leaflet map. Local
+//   d3-geo/topojson assets remain where used by the atlas.
+// v165: the search bar honours the selected country — non-RO countries
 //   stream their localities from europe-places.geojsonseq (Supabase) while
 //   Romania keeps OSM.geojson (see osmPlaceLookup / europePlaceLookup in
 //   js/map-app.js). The places file itself is NOT precached (too large;
@@ -351,16 +349,8 @@
 //   Also: the Denmark LiDAR auth probe now reports a 404 from the proxy as
 //   "proxy not deployed" instead of leaving the layer silently blank (the
 //   production v161 deploy had no /api/geo/dk-dhm function at all).
-// v167: Country dock — once a country is picked on the globe, a slide-down
-//   country switcher is glued under the map search bar (current 2-letter code
-//   + the full list of country initials, full name on hover) together with a
-//   small "World hillshade" checkbox that lays the Esri World Hillshade tiles
-//   over whichever basemap is already on screen (a selection never switches
-//   the basemap any more — it only moves and locks the view). When the locked
-//   country view is zoomed all the way out, an "Exit view" button appears
-//   centred in the lower part of the screen: it releases the lock and reopens
-//   the globe so another country can be chosen. See COUNTRY_SELECTION_DOCK.md,
-//   js/country-dock.js and js/globe-country-picker.js.
+// v167: the former country-selection dock and globe-only basemap controls
+//   were retired in v183; country selection now lives in the ArcGIS atlas.
 // v168: Spain LiDAR switches from the IDEE WMTS relief cache
 //   (servicios.idee.es/wmts/mdt) to the official IDEE/IGN "Mapa LiDAR" WMS
 //   (wms-mapa-lidar.idee.es/lidar, layer EL.GridCoverage): the LiDAR surface
@@ -370,57 +360,18 @@
 //   recognised by the offline-tile lookup ("request=getmap") and fall straight
 //   through to the network on a cache miss, never into the app shell; idee.es
 //   is listed in PASSTHROUGH_HOSTS like the other WMS tile hosts.
-// v169: country-scoped layer window + visible country bounds. Once a country
-//   is selected, the layer panel keeps only the layers whose coverage
-//   partially or entirely overlaps the bounds of that country (rows outside
-//   the country get .country-layer-unavailable, hidden by css/styles.css while
-//   #transpPanel carries .country-filter-active; group rows hide too when no
-//   sublayer survives). The selection also draws the country bounds on the
-//   Leaflet map — the outline once the gate geometry is loaded, the bbox until
-//   then — in its own pane above the data layers; both belong to the locked
-//   view and go away on “Exit view”. See js/map-app.js (filterLayersForCountry
-//   / unfilterLayersForCountry) and js/globe-country-picker.js.
-// v173: the main Leaflet-controlled map now uses a single MapLibre GL 3D globe
-//   as its permanent basemap (local inline style + Esri imagery raster source).
-//   The existing canvas country gate remains WebGL-independent, country bounds
-//   still drive Leaflet's maxBounds/zoom floor, and offline cached satellite
-//   tiles are overlaid within their saved polygon instead of removing the globe.
-//   MapLibre runtime/binding/style assets and the re-versioned map, offline,
-//   dock and translation scripts are precached for installed PWAs.
-// v174: the selected-country outline and its highlight are projected with the
-//   same globe camera that draws the 3D basemap (DetectLabGlobeBase
-//   .createProjectedFeature in js/globe-base-layer.js) instead of Leaflet's
-//   Web Mercator, so they stay on the imagery when zoomed out and while the
-//   globe moves. The basemap style and imagery are unchanged; the outline falls
-//   back to Leaflet placement when no globe is live. The globe adapter now syncs
-//   its camera on every map move instead of every 32 ms. globe-base-layer.js and
-//   globe-country-picker.js are re-versioned and precached.
-// v175: Leaflet raster overlays (LIDAR, WMS, XYZ tiles) can get a MapLibre "globe twin"
-//   from DetectLabGlobeBase.attachTileTwin (js/globe-base-layer.js): the same tile URLs
-//   drawn on the globe camera in the layer's own pane, so they stay on the basemap when
-//   the globe moves or zooms. Not wired into any layer yet; globe-base-layer.js is
-//   re-versioned and precached.
-// v176: LIDAR layers get a globe twin when their URLs convert exactly
-//   (_lidarGlobeTwin in js/map-app.js, DetectLabGlobeBase.attachTileTwin in
-//   js/globe-base-layer.js). Layers that draw their own tiles, or whose requests
-//   cannot be expressed as a MapLibre template, stay Leaflet layers.
-// v177: canvas-drawn LIDAR sources (custom createTile: NL AHN, DK DHM, NO Hoydedata,
-//   ArcGIS ImageServer grids) are shown only from zoom 11 on the live globe, with a
-//   localised "zoom in more" message (_lidarApplyCanvasZoomGate in js/map-app.js).
-//   map-app.js and translations.js are re-versioned and precached.
-// v178: raster twins share one MapLibre overlay per Leaflet pane (globe-base-layer.js
-//   attachTileTwin / paneOverlayFor). Each twin is one raster source and layer in its
-//   pane's overlay, so the page holds one WebGL context per pane, not per twin.
-// v179: the world hillshade is a globe twin (country-dock.js ensureHillshadeLayer ->
-//   DetectLabGlobeBase.attachTileTwin), in pane_world_hillshade's shared overlay.
-//   country-dock.js is re-versioned and precached.
+// v169: the country-scoped layer window remains backward-compatible through
+//   filterLayersForCountry('IT'); a call with no argument restores the full
+//   catalogue. The ArcGIS atlas supplies the selected ISO/bounds to the
+//   embedded Leaflet map through the same-origin message bridge.
 // v180: index.html gives the LIDAR zoom message (#lidarZoomGateMsg) its PWA bottom offset.
-// v181: the canvas gate shares Esri World Imagery with the working map.
-// v182: prefer a lazy ArcGIS SceneView country globe and a searchable, single-country
-//   checkbox list. The existing canvas picker remains the network/WebGL fallback;
-//   the ArcGIS CDN SDK/theme stay out of precache and load only when the gate opens.
-//   The local adapter, picker, CSS, and EN/RO copy are versioned and precached.
-const CACHE_NAME = 'detectlab-v182-arcgis-gate';
+// v181: the country picker shares Esri World Imagery with the working map.
+// v182: the old country gate gained a lazy ArcGIS SceneView and searchable country list.
+// v183: retire the legacy MapLibre globe basemap and old globe gate. The 2D
+//   Leaflet map remains available as an alternate; the embedded ArcGIS SceneView
+//   is now primary and supplies country selection, Imagery/Topographic basemaps,
+//   hillshade, elevation terrain, and the Roman data layers. Precache the atlas.
+const CACHE_NAME = 'detectlab-v183-europe-roman-atlas';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -459,11 +410,15 @@ const PRECACHE_URLS = [
   'js/translations.js?v=20260918-report-evidence',
   '.',
   'index.html',
+  'europe-roman-atlas.html?embed=1',
+  'europe-roman-atlas.html',
+  'css/europe-roman-atlas.css?v=20261011-arcgis-primary',
+  'js/europe-roman-atlas.js?v=20261011-arcgis-primary',
+  'js/atlas-shell.js?v=20261011-arcgis-primary',
+  'css/styles.css?v=20261011-arcgis-primary',
   'css/styles.css',
   'css/styles.css?v=2026080502',
   'css/leaflet.css',
-  'css/maplibre-gl.css?v=5.24.0',
-  'css/globe-base-layer.css?v=20261009-3d-globe',
   'css/L.Control.Layers.Tree.css',
   'css/L.Control.Locate.min.css',
   'css/leaflet.photon.css',
@@ -475,13 +430,6 @@ const PRECACHE_URLS = [
   'js/translations.js?v=2026080702',
   'js/translations.js?v=20260811',
   'js/leaflet.js',
-  'js/maplibre-gl.js?v=5.24.0',
-  'js/leaflet-maplibre-gl.js?v=0.1.4',
-  'js/globe-base-layer.js?v=20261009-3d-globe',
-  'js/globe-base-layer.js?v=20261009-globe-outline',
-  'js/globe-base-layer.js?v=20261009-globe-raster-twin',
-  'js/globe-base-layer.js?v=20261009-lidar-globe-twin',
-  'js/globe-base-layer.js?v=20261010-shared-overlay',
   'js/L.Control.Layers.Tree.min.js',
   'js/L.Control.Locate.min.js',
   'js/leaflet-hash.js',
@@ -1022,25 +970,14 @@ const PRECACHE_URLS = [
   'css/styles.css?v=20260927-sat-copernicus-vhr',
   'css/styles.css?v=20261002-european-lidar',
   'css/styles.css?v=20261008-roman-dare-icons',
-  'css/globe-country-picker.css?v=20261011-arcgis-gate',
-  'js/globe-arcgis-gate.js?v=20261011-arcgis-gate',
-  'js/globe-country-picker.js?v=20261011-arcgis-gate',
-  // v167: country dock glued under the search bar (country switcher +
-  // World-hillshade checkbox) and the “Exit view” button of the locked
-  // country view. The hillshade tiles themselves stay network-only.
-  'css/country-dock.css?v=20261008',
-  'js/country-dock.js?v=20261008',
-  'js/country-dock.js?v=20261009-3d-globe',
-  'js/country-dock.js?v=20261010-hillshade-globe',
-  'js/map-app.js?v=20261009-3d-globe',
-  'js/map-app.js?v=20261009-lidar-globe-twin',
-  'js/map-app.js?v=20261010-lidar-zoom-gate',
-  'js/offline-maps.js?v=20261009-3d-globe',
-  'js/translations.js?v=20261009-3d-globe',
-  'js/translations.js?v=20261011-arcgis-gate',
+  // v183: current SceneView-first shell and the compatible 2D map assets.
+  'js/map-app.js?v=20261011-2d-basemap',
+  'js/offline-maps.js?v=20261011-2d-basemap',
+  'js/translations.js?v=20261011-arcgis-primary',
   'js/d3.min.js?v=7.9.0',
   'js/topojson-client.min.js?v=3.1.0',
   'data/countries-50m.json?v=20261008',
+  'data/countries-50m.json',
   'js/shapefile.js?v=0.6.6',
   'js/map-app.js?v=20260927-sat-copernicus-vhr',
   'js/map-app.js?v=20261002-european-lidar',

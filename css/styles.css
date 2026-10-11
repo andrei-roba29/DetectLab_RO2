@@ -8274,3 +8274,92 @@ a.dl-gmaps-directions-btn {
 
 /* DARE category badges provide their own circular SVG background. */
 .leaflet-div-icon.dare-icon-marker { background: transparent; border: 0; }
+
+/* ── ArcGIS SceneView as the primary map experience ─────────────────────── */
+.arcgis-atlas-stage {
+    position: absolute;
+    inset: 0;
+    z-index: 10050;
+    display: none;
+    overflow: hidden;
+    border: 1px solid rgba(184, 216, 240, 0.18);
+    border-radius: 12px;
+    background: #04080f;
+}
+
+.arcgis-atlas-stage .map-iframe {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: #04080f;
+}
+
+.map-frame.atlas-view {
+    height: min(82vh, 900px);
+    min-height: 620px;
+}
+
+.map-frame.atlas-view .arcgis-atlas-stage {
+    display: block;
+}
+
+#map-section.atlas-primary #mapLegendBar {
+    display: none !important;
+}
+
+#map-section.atlas-primary .legacy-map-tab {
+    display: none !important;
+}
+
+#atlasModeToggle {
+    color: #fff;
+    background: rgba(107, 63, 160, 0.35);
+    white-space: nowrap;
+}
+
+#atlasModeToggle:hover,
+#atlasModeToggle:focus-visible {
+    background: rgba(107, 63, 160, 0.58);
+}
+
+@media (max-width: 700px) {
+    .map-frame.atlas-view {
+        height: max(620px, 78vh);
+        min-height: 620px;
+    }
+    .arcgis-atlas-stage,
+    .arcgis-atlas-stage .map-iframe {
+        border-radius: 10px;
+    }
+}
+
+/* The regular map header is intentionally hidden in installed PWA mode. Keep
+   the map switch reachable there so the legacy analytical layers remain usable. */
+.atlas-mode-floating-toggle {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 10051;
+    display: none;
+    max-width: calc(100% - 20px);
+    border: 1px solid rgba(184, 216, 240, .3);
+    border-radius: 8px;
+    background: rgba(10, 20, 42, .92);
+    color: #fff;
+    white-space: nowrap;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, .35);
+}
+
+body.is-pwa .atlas-mode-floating-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* The ArcGIS iframe must not bypass the parent map's authentication or
+   members-only overlays in the embedded view. */
+#map-section.atlas-primary #mapAuthGate:not(.hidden),
+#map-section.atlas-primary #mapLock.show {
+    z-index: 10060;
+}

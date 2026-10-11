@@ -7,16 +7,16 @@
  *             MapServer WMS, layer "Image")
  *   2018    → GioLand/VHR_2018_WM   (image.discomap.eea.europa.eu, ImageServer WMS)
  *   2021    → GioLand/VHR_2021_LAEA (image.discomap.eea.europa.eu, ImageServer WMS)
- *   2025    → current Esri imagery on the permanent MapLibre 3D globe
+ *   2025    → current Esri imagery on the standard 2D Leaflet satellite base
  *
- *   The 3D globe remains the only basemap for every stop. The three historical
- *   Copernicus VHR mosaics are Leaflet overlays above it; changing the period
- *   never removes/replaces the globe. The 2016 orthophoto is retired.
+ *   The Esri satellite layer remains the base for every stop. The three
+ *   historical Copernicus VHR mosaics are Leaflet overlays above it; changing
+ *   the period never removes/replaces that base. The 2016 orthophoto is retired.
  *
  * Requirements covered:
  *   1. The Copernicus VHR mosaics are real WMS overlays owned by the Satellite
  *      layer — NOT sublayers in the panel; at most one historical overlay is
- *      active above the permanent 3D globe and the retired 2016 source stays gone.
+ *      active above the satellite raster and the retired 2016 source stays gone.
  *   2. The panel Satellite card carries a second slider titled "Istoric" with
  *      four stops (2012 / 2018 / 2021 / 2025); switching shows the matching
  *      map. The card also credits the Copernicus Land Monitoring Service in
@@ -96,9 +96,10 @@ console.log('[2] Period switching (setSatPeriod)');
         /SAT_PERIOD_ORDER\s*=\s*\[\s*'2012',\s*'2018',\s*'2021',\s*'prezent'\s*\]/.test(mapApp));
     check('the last stop index is derived from the order, not hard-coded',
         /SAT_PERIOD_LAST_INDEX\s*=\s*SAT_PERIOD_ORDER\.length - 1/.test(mapApp));
-    check('the 3D globe stays as the permanent base across all historical periods',
-        /Globul 3D rămâne singura bază/.test(mapApp) &&
-        /DetectLabGlobeBase\.create\(map/.test(mapApp) &&
+    check('the Esri imagery raster remains the standard base across historical periods',
+        /var SATELLITE_IMAGERY_URL\s*=\s*'https:\/\/server\.arcgisonline\.com\/ArcGIS\/rest\/services\/World_Imagery\/MapServer\/tile/.test(mapApp) &&
+        /var satelliteLayer\s*=\s*L\.tileLayer\(SATELLITE_IMAGERY_URL/.test(mapApp) &&
+        /\}\)\.addTo\(map\);\s*\n\s*window\._satLayer = satelliteLayer/.test(mapApp) &&
         !/map\.removeLayer\(satelliteLayer\)/.test(mapApp));
     check('historical WMS imagery is still added/removed as an overlay',
         /if \(p === period\)[\s\S]*?layer\.addTo\(map\)[\s\S]*?map\.removeLayer\(layer\)/.test(mapApp));
