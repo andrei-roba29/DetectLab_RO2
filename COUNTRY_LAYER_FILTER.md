@@ -2,8 +2,8 @@
 
 ## What changed
 
-Selecting a country scopes the alternate Leaflet catalogue to **that country's
-own layers** and passes its extent to the 2D map for framing:
+Selecting a country now *scopes* the layer catalogue to **that country's own
+layers** and keeps the selection visible on the map:
 
 - **The layer window only offers the layers that are aferente țării selectate.**
   Membership is decided by **country attribution**, not by rectangle
@@ -11,8 +11,8 @@ own layers** and passes its extent to the 2D map for framing:
   attributed to the selected country gets `.country-layer-unavailable` and is
   hidden (CSS rule under `#transpPanel.country-filter-active`). Neighbouring
   countries' rows never leak in just because their published box grazes the
-  country's bbox or because they happen to be visible at the edges of the
-  current viewport:
+  country's bbox or because those countries are visible at the edges of the
+  locked viewport:
   - **National services are strictly their own country.** The European LiDAR
     rows (`js/map-app.js` `LAYER_COUNTRIES`) — Denmark · DHM, Sweden ·
     Lantmäteriet, France · IGN MNT, Switzerland · swisstopo, Norway, Poland,
@@ -48,13 +48,27 @@ own layers** and passes its extent to the 2D map for framing:
   outside that analysis (Italy, Norway…) the sheets' own extents are used, and
   only a *substantial* overlap counts (≥ 5% of the country's box **or** ≥ 5%
   of the sheet's box) — a bbox graze is not "a map of this country".
-- **The ArcGIS SceneView atlas shows the selected country geometry directly.**
-  Clicking the map or checking the country list highlights that country's
-  outline and fill. When exactly one country is selected, the embedded atlas
-  sends its ISO-2 code and `[west, south, east, north]` bbox to `atlas-shell.js`;
-  the alternate Leaflet map uses that bbox for layer filtering, country-aware
-  place search, and `fitBounds`. Zero or multiple selections clear the legacy
-  map's single-country filter.
+- **The bounds of the selected country stay visible on the map.** The globe
+  gate draws them for the whole locked view: the real country outline (the
+  gate's geometry) once the atlas is loaded, the bbox rectangle until then (a
+  selection restored from `localStorage` starts with the rectangle and upgrades
+  as soon as `ensureReady()` / the 10 m shapefile refinement delivers geometry).
+  The outline and its highlight fill are one path. While the 3D globe basemap
+  is live on the same map (`window._detectlabGlobeBaseLayer`), that path is
+  **projected with the globe's own camera** (`DetectLabGlobeBase
+  .createProjectedFeature` for the outline, `createProjectedPolygon` over the
+  bbox corners for the rectangle), so it stays on the imagery when zoomed out
+  and while the globe moves. Without a live globe, Leaflet places it as before
+  (`L.geoJSON` / `L.rectangle`). The basemap itself is unchanged. The overlay
+  is non-interactive, sits in its own pane `pane_country_bounds` at z-index
+  **688** (above every data pane — LIDAR 610, historical maps ≤ 652 — under
+  tracks 690 / measure 700), is replaced on every new selection and removed on
+  unlock (“Exit view”, `reset()`).
+- **Scope of the projection.** Only the country-shaped vector overlay (the
+  outline and highlight) is projected onto the globe. The country-attributed
+  Leaflet *raster* layers (LIDAR, WMS/WMTS, UAT tiles, hillshade, Copernicus
+  VHR) keep Leaflet's Web Mercator placement, so they still differ from the
+  globe by a few pixels away from the view centre.
 
 ## Files
 
@@ -74,19 +88,25 @@ own layers** and passes its extent to the 2D map for framing:
   notes that premium-hosted sheets appear above.
 - `css/styles.css` — `#transpPanel.country-filter-active
   .country-layer-unavailable { display: none !important; }` (unchanged).
-- `js/europe-roman-atlas.js` — country geometry, selection highlighting and
-  the `[west, south, east, north]` bounds sent to the parent page.
-- `js/atlas-shell.js` — validates same-origin selection messages, updates the
-  legacy map's selected-country state, fits its bounds, and calls
-  `filterLayersForCountry` / `unfilterLayersForCountry`.
+- `js/globe-country-picker.js` — `showCountryBoundsLayer` /
+  `removeCountryBoundsLayer` / `refreshCountryBoundsLayer`, wired into
+  `restrictLeafletToCountry`, `unlockCountryView`, `ensureReady` and
+  `refineFromShapefile`; `state.boundsLayer` tracks the overlay. With a live
+  globe it builds the projected outline (see above).
+- `js/globe-base-layer.js` — `DetectLabGlobeBase.createProjectedPolygon` /
+  `createProjectedFeature`: a Leaflet polygon whose vertices come from the
+  globe camera (`gl.project`), re-projected on every pan, resize and zoom end.
+  Fall back to Leaflet placement when no globe is on the map.
+- `tools/country-dock-preview.html` — the dev harness implements the same
+  contract (national rows strict by ISO, `histEuRow` pan-European by coverage).
 - `test-country-layer-filter.js` — regression suite: Italy must not see
   France/Switzerland rows, Denmark must not see Sweden/Poland rows or the
-  Polish WIG sheets; curated premium sheets stay for their countries, and the
-  ArcGIS country-selection hand-off is checked.
+  Polish WIG sheets; curated premium sheets stay for their countries.
 - `test-historical-eu-maps.js` — curated-first catalog + a drift guard that
   asserts `SHARED_PREMIUM_COUNTRIES` mirrors `COUNTRIES_DATA` exactly.
-- `index.html` / `sw.js` — SceneView-first map, 2D-map toggle and PWA cache
-  version `v183`.
+- `index.html` / `sw.js` — version bumps
+  (`js/map-app.js?v=20261008-country-layers-strict`,
+  `js/historical-eu-maps.js?v=20261008-country-layers-strict`), shell `v172`.
 
 ## Semantics
 
@@ -98,23 +118,26 @@ own layers** and passes its extent to the 2D map for framing:
 - Substantial coverage fallback (unanalyzed countries only): the rectangles
   must intersect and the overlap must be ≥ 5% of the country's bbox area OR
   ≥ 5% of the sheet's bbox area.
-- Filtering does not change layer on/off state; when the single-country
-  selection is cleared or becomes multiple, the full catalogue returns with
-  each layer's prior visibility intact.
-- The filter applies only to the alternate Leaflet map when the ArcGIS atlas
-  reports exactly one selected country. The atlas remains navigable and is not
-  locked to that country's bounds.
+- Layer on/off state is not changed by the filter — the map is locked to the
+  country anyway, and switching back restores rows with their previous state.
+- The filter belongs to the locked view: it applies on every selection
+  (globe pick, dock switch, restored selection) and is released by
+  “Exit view” / `DetectLabGlobeGate.unlock()` / `reset()`.
 - Market note: attribution is market-independent. On the .eu market the Roman
   layers keep the Empire-wide box (kept for Italy/Denmark), while
   vegetation-fingerprint rows stay `['RO']` and hide abroad.
 
 ## Manual QA
 
-- Open the full app and use the ArcGIS atlas country list to select Italy.
-  Switch to the 2D map: the LiDAR group should be gone, while Mitteleuropa /
-  Reymann / KDR remain (they cover the Alps) and Romanian groups are gone.
-- Select Denmark: Danish LiDAR + Mitteleuropa/Chrzanowski/Reymann/KDR 100k
-  remain; Sweden/Poland LiDAR and the WIG sheets are gone. Clear the selection
-  or select multiple countries: all Leaflet layer rows return.
-- Run `node test-country-layer-filter.js`, `node test-historical-eu-maps.js`,
-  `node test-roman-reference-layer.js`, and `node test-layer-visibility.js`.
+- `python3 -m http.server` at the repo root → open
+  `/tools/country-dock-preview.html`: pick Italy → the mini panel loses every
+  national LiDAR row (including France/Switzerland); pick Denmark → only
+  "Denmark · DHM" remains of the national services; "Exit view" restores
+  everything.
+- In the full app: select Italy → the LiDAR group is gone, Mitteleuropa /
+  Reymann / KDR remain (they cover the Alps), the Romanian groups are gone.
+  Select Denmark → Danish LiDAR + Mitteleuropa/Chrzanowski/Reymann/KDR 100k
+  remain; Sweden/Poland LiDAR and the WIG sheets are gone.
+- Run `node test-country-layer-filter.js`, then `node test-historical-eu-maps.js`,
+  `node test-country-dock.js`, `node test-globe-canvas-picker.js` and
+  `node test-layer-visibility.js` after touching any of this.
