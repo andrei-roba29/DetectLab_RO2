@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#04080f">
+  <title>Atlas european și roman — DetectLab</title>
+  <link rel="stylesheet" href="https://js.arcgis.com/4.31/esri/themes/dark/main.css">
+  <script>if (new URLSearchParams(location.search).get('embed') === '1') document.documentElement.classList.add('atlas-embedded');</script>
+  <link rel="stylesheet" href="css/europe-roman-atlas.css?v=20261011-arcgis-primary">
+</head>
+<body>
+  <div class="atlas-shell">
+    <aside id="side" aria-label="Atlas controls">
+      <header class="atlas-head">
+        <div>
+          <a class="back-link" href="index.html#map-section">← DetectLab</a>
+          <h1 data-i18n="title">Atlas european și roman</h1>
+        </div>
+        <select id="lang" aria-label="Language">
+          <option value="ro">Română</option>
+          <option value="en">English</option>
+        </select>
+      </header>
+
+      <fieldset>
+        <legend data-i18n="countries">Țări europene</legend>
+        <input id="q" type="search" data-i18n-placeholder="searchCountry" placeholder="Caută o țară…" autocomplete="off">
+        <div class="row country-actions">
+          <button id="zoomSel" type="button" data-i18n="zoomSelection">Apropie selecția</button>
+          <button id="clear" type="button" class="quiet" data-i18n="clear">Șterge</button>
+        </div>
+        <div id="info" class="info" aria-live="polite"></div>
+        <div id="list" class="country-list" role="group" aria-label="European countries"></div>
+        <div id="note" class="note" aria-live="polite"></div>
+        <label id="shpPickerWrap" class="file-picker" hidden>
+          <span data-i18n="shpFallback">Încarcă manual fișierul .shp:</span>
+          <input id="shpFile" type="file" accept=".shp">
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend data-i18n="mapLayers">Straturi hartă</legend>
+        <label class="opt"><input type="checkbox" id="hs"><span data-i18n="hillshade">World Hillshade</span></label>
+        <div class="row range-row"><span data-i18n="opacity">Opacitate</span><input type="range" id="hsOp" min="0.1" max="1" step="0.05" value="0.7"></div>
+        <label class="opt"><input type="checkbox" id="terr"><span data-i18n="terrain">Relief 3D (elevație)</span></label>
+        <label class="select-label" for="bm" data-i18n="basemap">Hartă de bază</label>
+        <select id="bm">
+          <option value="img" data-i18n="imagery">Imagery</option>
+          <option value="topo" data-i18n="topographic">Topographic</option>
+        </select>
+      </fieldset>
+
+      <fieldset>
+        <legend>Roman Empire · DARE</legend>
+        <label class="opt"><input type="checkbox" id="rom"><strong data-i18n="dareSites">Situri romane DARE</strong> <span class="mut" data-i18n="allCategories">(20 categorii)</span></label>
+        <div class="row range-row"><span data-i18n="opacity">Opacitate</span><input type="range" id="romOp" min="0.1" max="1" step="0.05" value="0.7"></div>
+        <details>
+          <summary data-i18n="categoriesFilter">Categorii și filtru</summary>
+          <div class="row category-actions">
+            <button id="catAll" type="button" data-i18n="all">Toate</button>
+            <button id="catNone" type="button" class="quiet" data-i18n="none">Niciuna</button>
+            <input type="search" id="cc" maxlength="2" data-i18n-placeholder="countryIso" placeholder="ISO2 țară" aria-label="DARE country ISO2 filter">
+          </div>
+          <div id="cats" class="category-list"></div>
+        </details>
+        <label class="opt"><input type="checkbox" id="walls"><span data-i18n="walls">Ziduri (AWMC)</span></label>
+        <label class="opt"><input type="checkbox" id="regn"><span data-i18n="regionalNames">Nume regionale (AWMC)</span></label>
+        <label class="select-label" for="era" data-i18n="politicalShading">Extinderi istorice</label>
+        <select id="era"></select>
+        <div id="dareSt" class="mut status" aria-live="polite"></div>
+        <div class="mut attribution-copy">DARE — Digital Atlas of the Roman Empire (<a href="https://imperium.ahlfeldt.se" target="_blank" rel="noopener">imperium.ahlfeldt.se</a>), © Johan Ahlfeldt. Walls, regional names and political shading: AWMC.</div>
+      </fieldset>
+
+      <fieldset>
+        <legend data-i18n="romanLayer">Straturi romane</legend>
+        <label class="opt"><input type="checkbox" id="roads"><span data-i18n="romanRoads">Drumuri romane</span></label>
+        <label class="opt"><input type="checkbox" id="swap"><span data-i18n="swapRoadCoords">Inversează coordonatele din fișierul drumurilor</span></label>
+        <label class="opt"><input type="checkbox" id="places"><span data-i18n="pleiadesSites">Situri romane (Pleiades)</span></label>
+        <label class="select-label" for="period" data-i18n="sitePeriod">Perioada siturilor</label>
+        <select id="period">
+          <option value="R" data-i18n="periodR">Romane (30–300 e.n.)</option>
+          <option value="RH" data-i18n="periodRH">+ Republicane (din 330 î.e.n.)</option>
+          <option value="RL" data-i18n="periodRL">+ Antichitate târzie (până în 640 e.n.)</option>
+        </select>
+        <div id="romSt" class="mut status" aria-live="polite"></div>
+        <div id="romFiles" class="file-pickers"></div>
+      </fieldset>
+      <p class="panel-footnote" data-i18n="dataNote">Straturile sunt încărcate la cerere. Pentru DARE, apropie harta la nivelul 7 sau mai mult.</p>
+    </aside>
+
+    <main id="viewDiv" aria-label="Interactive Europe and Roman Empire map">
+      <div id="tip" role="status"></div>
+      <div id="attrib" aria-live="polite">DARE — Digital Atlas of the Roman Empire (<a href="https://imperium.ahlfeldt.se" target="_blank" rel="noopener">imperium.ahlfeldt.se</a>), © Johan Ahlfeldt · Walls, regional names and political shading: AWMC</div>
+      <div id="msg" role="status"><span class="spinner" aria-hidden="true"></span><span id="msgtxt">Se încarcă harta…</span></div>
+    </main>
+  </div>
+
+  <!-- Data libraries load before the ArcGIS AMD loader. -->
+  <script src="js/d3.min.js?v=7.9.0"></script>
+  <script src="js/topojson-client.min.js?v=3.1.0"></script>
+  <script src="js/shapefile.js?v=0.6.6"></script>
+  <script src="https://js.arcgis.com/4.31/"></script>
+  <script src="js/europe-roman-atlas.js?v=20261011-arcgis-primary"></script>
+</body>
+</html>

@@ -200,10 +200,9 @@
             // alte funcționalități (ex. „Biblioteca din Babel”), ca toate să
             // găsească aceleași localități, insensibil la diacritice.
             function osmPlaceLookup(term, limit) {
-                // Cu o țară non-RO aleasă pe glob, căutarea folosește setul
-                // european (europe-places.geojsonseq, filtrat pe acea țară).
-                // România rămâne pe OSM.geojson — are județe reale și
-                // completările manuale din OSM_MANUAL_PLACES.
+                // For a selected non-RO country, search uses the European
+                // europe-places.geojsonseq dataset filtered to that country.
+                // Romania keeps OSM.geojson, real counties, and manual place entries.
                 var selIso = String((window && window._detectlabSelectedCountry) || '').toUpperCase();
                 if (selIso && selIso !== 'RO' && EU_COUNTRY_TOKENS[selIso]) {
                     return europePlaceLookup(selIso, term, limit);
@@ -363,23 +362,18 @@
             loadOsmGeojson();
 
             // ── LOCALITĂȚI EUROPENE (europe-places.geojsonseq — Supabase) ─────
-            // După alegerea unei țări pe glob (js/globe-country-picker.js), bara
-            // de search trebuie să găsească localitățile ȚĂRII SELECTATE, nu doar
-            // pe cele din România (OSM.geojson acoperă doar RO). Sursa: fișierul
-            // NDJSON / GeoJSON Text Sequence cu localități europene din bucketul
-            // Supabase al proiectului. Fișierul e stream-uit (linie cu linie, cu
-            // suport pentru prefixul RS \x1e din RFC 8142) o singură dată per
-            // țară, iar DOAR localitățile țării selectate rămân în memorie.
-            // România păstrează sursa OSM.geojson (are județe reale + completările
-            // din OSM_MANUAL_PLACES) — vezi ghidul din osmPlaceLookup().
+            // When a selected-country event is available, search matches that
+            // country's localities instead of only the Romanian OSM dataset.
+            // European places stream from Supabase once per selected country;
+            // only that country's matches stay in memory. Romania keeps OSM.geojson.
             var EUROPE_PLACES_URL = 'https://dacboefvooxgsngxkavx.supabase.co/storage/v1/object/public/Harti/europe-places.geojsonseq';
             var EUROPE_PLACES_MAX = 150000;    // plafon de memorie per țară
             var _euPlacesByIso = {};           // ISO2 -> features anotate
             var _euPlacesPromises = {};        // ISO2 -> promisiune în curs
 
-            // ISO2 -> [ISO3 + nume englezești] pentru aceleași 50 de țări ca
-            // globul de selecție. Proprietatea de țară din fișier poate fi cod
-            // ISO2, cod ISO3 sau numele țării — toate se rezolvă la ISO2.
+            // ISO2 -> [ISO3 + English names] for the ArcGIS atlas country list.
+            // The source file may identify a country by ISO2, ISO3, or name;
+            // all are normalised to ISO2 here.
             var EU_COUNTRY_TOKENS = {
                 AL: ['ALB', 'albania'], AD: ['AND', 'andorra'], AM: ['ARM', 'armenia'],
                 AT: ['AUT', 'austria'], AZ: ['AZE', 'azerbaijan'], BY: ['BLR', 'belarus'],
@@ -500,8 +494,8 @@
             // Decide dacă o înregistrare aparține țării selectate și o anotează
             // pentru search (nume/regiune normalizate — același tratament ca
             // _annotateOsmFeature pentru sursa RO). Țara se ia din proprietăți;
-            // fără nicio proprietate de țară, cade pe testul bbox al țării
-            // selectate (bbox-ul predat de glob la selecție), cu o margine mică.
+            // without country attribution, fall back to a small-margin bbox
+            // test using the selected country's bounds from the ArcGIS atlas.
             function _euAcceptPlace(obj, iso, bbox) {
                 if (!obj || !obj.geometry) return null;
                 var pt = _euPlacePoint(obj.geometry);
@@ -661,9 +655,8 @@
                 _cache: _euPlacesByIso
             };
 
-            // Pre-încărcăm localitățile imediat ce globul predă o țară (inclusiv
-            // selecția restaurată din localStorage — applySelection() din gate
-            // dispatch-uiește același eveniment), ca prima căutare să fie rapidă.
+            // Preload the selected country's localities as soon as the ArcGIS
+            // atlas sends its selection, so the first search is fast.
             document.addEventListener('detectlab:country-selected', function (e) {
                 var iso = e && e.detail && String(e.detail.iso || '').toUpperCase();
                 if (iso && iso !== 'RO' && EU_COUNTRY_TOKENS[iso]) {
@@ -1367,9 +1360,9 @@
                     return;
                 }
 
-                // Rezultatele depind de țara selectată pe glob (RO → OSM.geojson,
-                // restul → europe-places.geojsonseq), deci cheia de cache o
-                // include; altfel schimbarea țării ar servi rezultate vechi.
+                // Results depend on the selected country (RO → OSM.geojson,
+                // others → europe-places.geojsonseq), so include its ISO code in
+                // the cache key to avoid stale results after changing countries.
                 var cacheKey = String(window._detectlabSelectedCountry || '') + '|' +
                     normalizeRoDiacritics(searchTerm.toLowerCase());
 
@@ -1595,26 +1588,6 @@
                 fadeAnimation: true,
                 zoomAnimationThreshold: 10
             }).setView([51, 12], 3);
-
-            // Country selection now happens one layer up, on a real 3D globe
-            // (js/globe-country-picker.js) shown the first time an authenticated
-            // visitor reaches the map. attach() restores a previously chosen
-            // country instantly (no globe flash) or opens the globe gate once
-            // the user is confirmed logged in. Once a country is picked the
-            // gate hands this Leaflet instance a locked maxBounds/minZoom and
-            // calls filterLayersForCountry() exactly like the retired picker did.
-            if (window.DetectLabGlobeGate) {
-                window.DetectLabGlobeGate.attach(map);
-            }
-
-            // Country dock (js/country-dock.js): the slide-down country
-            // switcher + World-hillshade checkbox glued under the search bar
-            // and the bottom-centre “Exit view” button of the locked country
-            // view. It reads the country list / lock state from the gate, so
-            // it must be attached after it.
-            if (window.DetectLabCountryDock) {
-                window.DetectLabCountryDock.attach(map);
-            }
 
             // ── GLOBAL TILE GOVERNOR ──
             // js/tile-perf.js patches every tile layer of the app (LIDAR,
@@ -2199,7 +2172,7 @@
                     var trackStartTime = null;
 
                     // The recorded trail MUST live in its own high pane. The default
-                    // overlayPane sits above the globe base (z-index 398) but beneath the
+                    // overlayPane sits above the satellite base (z-index 398) but beneath the
                     // historical raster panes (610-651). Because those panes are created
                     // after overlayPane they win the paint order, so a polyline added with
                     // the default pane was drawn but completely hidden behind the imagery:
@@ -3123,17 +3096,10 @@
                 };
             })();
 
-            // ── SINGURA BAZĂ: GLOB 3D CU IMAGINI ESRI ──
-            // Esri World Imagery este randată pe sfera nativă MapLibre (projection:
-            // globe). Toate controalele și layerele Leaflet rămân pe aceeași instanță,
-            // iar adapterul sincronizează centrul/zoom-ul cu globul; la zoom local
-            // proiecția MapLibre se aplatizează gradual ca layerele existente să rămână
-            // aliniate. COUNTRY picker-ul și lock-ul pe bounds folosesc în continuare
-            // aceeași hartă Leaflet și același contract.
-            //
-            // Esri răspunde cu placeholder-e după nivelul nativ 18. Valoarea se aplică
-            // drept maxzoom al sursei raster, atât pe glob cât și în fallback-ul 2D.
-            // Reglabil live din consolă: window.SATELLITE_MAX_NATIVE_Z.
+            // ── Legacy 2D satellite basemap (Web Mercator) ──
+            // Leaflet remains available behind the primary ArcGIS SceneView for
+            // existing analytical layers and offline-map tools. The ArcGIS atlas
+            // also embeds here with its country picker and Roman-world controls.
             var SATELLITE_LAST_NATIVE_Z =
                 (window.SATELLITE_MAX_NATIVE_Z !== undefined) ? window.SATELLITE_MAX_NATIVE_Z : 18;
             var SATELLITE_IMAGERY_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
@@ -3142,34 +3108,14 @@
             map.createPane('pane_satellite');
             map.getPane('pane_satellite').style.zIndex = 398;
             map.getPane('pane_satellite').style.pointerEvents = 'none';
-            var satelliteLayer = null;
-            if (window.DetectLabGlobeBase && typeof window.DetectLabGlobeBase.create === 'function') {
-                try {
-                    satelliteLayer = window.DetectLabGlobeBase.create(map, {
-                        pane: 'pane_satellite',
-                        opacity: 1.0,
-                        tileUrl: SATELLITE_IMAGERY_URL,
-                        maxNativeZoom: SATELLITE_LAST_NATIVE_Z
-                    });
-                } catch (globeError) {
-                    console.warn('[DetectLab] 3D globe basemap could not start; using the compatible raster fallback.', globeError);
-                }
-            }
-            if (!satelliteLayer) {
-                // WebGL is unavailable/blocked: keep the map and country lock usable.
-                satelliteLayer = L.tileLayer(SATELLITE_IMAGERY_URL, {
-                    pane: 'pane_satellite',
-                    opacity: 1.0,
-                    attribution: SATELLITE_ATTRIBUTION,
-                    minZoom: 1,
-                    maxZoom: 20,
-                    maxNativeZoom: SATELLITE_LAST_NATIVE_Z
-                }).addTo(map);
-                window._detectlabGlobeBaseUnavailable = true;
-            } else {
-                window._detectlabGlobeBaseUnavailable = false;
-            }
-            window._detectlabGlobeBaseLayer = satelliteLayer;
+            var satelliteLayer = L.tileLayer(SATELLITE_IMAGERY_URL, {
+                pane: 'pane_satellite',
+                opacity: 1.0,
+                attribution: SATELLITE_ATTRIBUTION,
+                minZoom: 1,
+                maxZoom: 20,
+                maxNativeZoom: SATELLITE_LAST_NATIVE_Z
+            }).addTo(map);
             window._satLayer = satelliteLayer;
 
             // ── SATELIT / ISTORIC — mozaicurile Copernicus VHR (EEA discomap) ──
@@ -3249,9 +3195,9 @@
                 var period = SAT_PERIOD_ORDER[idx];
                 window._satPeriod = period;
 
-                // Globul 3D rămâne singura bază pentru toate perioadele. Mozaicul
-                // istoric ales este doar un overlay geografic peste glob; schimbarea
-                // anului nu mai înlocuiește și nu mai dezactivează baza.
+                // Baza satelitară raster rămâne activă pentru toate perioadele;
+                // mozaicul istoric ales este un overlay, iar schimbarea anului nu
+                // dezactivează stratul de bază.
                 SAT_PERIOD_ORDER.slice(0, SAT_PERIOD_LAST_INDEX).forEach(function (p) {
                     var layer = SAT_HIST_PERIODS[p];
                     if (!layer) return;
@@ -3311,12 +3257,10 @@
                 if (typeof window.showLayerInfo !== 'function') return;
                 var lang = (typeof window._currentLang === 'function') ? window._currentLang() : 'ro';
                 var description = (lang === 'en')
-                    ? 'The 3D globe is the permanent basemap. The „Historic” slider overlays the ' +
-                      'Copernicus VHR mosaics — 2012 (2.5 m), 2018 and 2021 (2 m) — over the globe; ' +
-                      '2025 shows the current Esri imagery on that same globe.'
-                    : 'Globul 3D este harta de bază permanentă. Sliderul „Istoric” suprapune mozaicurile ' +
-                      'Copernicus VHR — 2012 (2,5 m), 2018 și 2021 (2 m) — peste glob; 2025 afișează ' +
-                      'imaginile Esri actuale pe același glob.';
+                    ? 'The working map uses standard 2D Esri World Imagery. The „Historic” slider overlays ' +
+                      'Copernicus VHR mosaics — 2012 (2.5 m), 2018 and 2021 (2 m); 2025 shows current Esri imagery.'
+                    : 'Harta de lucru folosește imagini Esri World Imagery în 2D. Sliderul „Istoric” suprapune ' +
+                      'mozaicurile Copernicus VHR — 2012 (2,5 m), 2018 și 2021 (2 m); 2025 afișează imaginile Esri actuale.';
                 window.showLayerInfo(
                     (lang === 'en') ? 'Satellite' : 'Satelit',
                     '\u00a9 Esri, Maxar, Earthstar Geographics \u00b7 ' +
@@ -3328,7 +3272,7 @@
             // FeatureServer/tile nu este activat pe acest serviciu (HTTP 400).
             // Folosim query REST direct: fetch features pe bbox vizibil, randăm ca L.circleMarker.
             map.createPane('pane_osm_places');
-            map.getPane('pane_osm_places').style.zIndex = 401; // above the globe base (398) and imagery overlays
+            map.getPane('pane_osm_places').style.zIndex = 401; // above the 2D satellite base (398) and imagery overlays
 
             var _osmPlacesGroup = L.layerGroup([], { pane: 'pane_osm_places' });
             var _osmPlacesVisible = false;
@@ -6915,57 +6859,6 @@
                 return null;
             }
 
-            // Gives a LIDAR layer a globe twin when its URLs convert exactly (see
-            // DetectLabGlobeBase.attachTileTwin in js/globe-base-layer.js). Layers that
-            // do not convert, or draw their own tiles, come back unchanged and keep
-            // Leaflet's own tiles.
-            function _lidarGlobeTwin(layer) {
-                var globe = window.DetectLabGlobeBase;
-                if (layer && globe && typeof globe.attachTileTwin === 'function') {
-                    try { globe.attachTileTwin(layer); } catch (e) { /* Leaflet tiles stay */ }
-                }
-                return _lidarApplyCanvasZoomGate(layer);
-            }
-
-            // Canvas-drawn LIDAR sources (a custom createTile: NL AHN, DK DHM, NO
-            // Hoydedata and the ArcGIS ImageServer grids) cannot become raster twins,
-            // so on the live 3D globe they stay on Leaflet's Web Mercator placement,
-            // which drifts from the globe basemap. Measured over the whole viewport
-            // (median drift): 0.7 px at zoom 11 and 1.2 px at zoom 10, against 36 px
-            // at zoom 5 and 125 px at zoom 3 (0.5 px is the floor). These sources are
-            // therefore shown only from zoom 11, and a "zoom in more" message says so.
-            // The gate works per tile, not with options.minZoom: Leaflet raises the
-            // whole map to the smallest minZoom of any layer on it, and would not let
-            // the user zoom out past it while the layer is on.
-            var LIDAR_CANVAS_MIN_ZOOM = 11;
-            function _lidarIsCanvasSource(layer) {
-                var base = window.L && window.L.TileLayer && window.L.TileLayer.prototype.createTile;
-                return !!(layer && base && layer.createTile !== base);
-            }
-            function _globeIsLive() {
-                var globe = window._detectlabGlobeBaseLayer;
-                return !!(globe && globe._map === map && typeof globe.getMaplibreMap === 'function' && window.DetectLabGlobeBase);
-            }
-            function _lidarCanvasZoomOpen() {
-                return Math.round(map.getZoom()) >= LIDAR_CANVAS_MIN_ZOOM;
-            }
-            function _lidarApplyCanvasZoomGate(layer) {
-                if (!layer || !_lidarIsCanvasSource(layer) || !_globeIsLive() || layer._detectlabCanvasZoomGate) return layer;
-                var draw = layer.createTile;
-                layer.createTile = function (coords, done) {
-                    // Below the gate a tile is an empty placeholder: nothing is requested or
-                    // drawn, and it is reported ready at once so Leaflet's bookkeeping holds.
-                    if (coords && coords.z < LIDAR_CANVAS_MIN_ZOOM) {
-                        var empty = document.createElement('div');
-                        if (typeof done === 'function') setTimeout(function () { done(null, empty); }, 0);
-                        return empty;
-                    }
-                    return draw.call(this, coords, done);
-                };
-                layer._detectlabCanvasZoomGate = true;
-                return layer;
-            }
-
             function _buildLidarLeafletLayer(key, cfg) {
                 // ── Gesture-safe tile options for the LIDAR stack ──
                 // LIDAR sub-layers are dense (HD/AR/AB/BH/CS + "Romania 1m" +
@@ -7219,7 +7112,7 @@
                     Object.keys(LIDAR_SUB_LAYERS).forEach(function(key) {
                         var cfg = LIDAR_SUB_LAYERS[key];
                         if (cfg.enabled && !cfg.leafletLayer) {
-                            cfg.leafletLayer = _lidarGlobeTwin(_buildLidarLeafletLayer(key, cfg));
+                            cfg.leafletLayer = _buildLidarLeafletLayer(key, cfg);
                             _lidarGroup.addLayer(cfg.leafletLayer);
                         } else if (cfg.enabled && cfg.leafletLayer && !_lidarGroup.hasLayer(cfg.leafletLayer)) {
                             _lidarGroup.addLayer(cfg.leafletLayer);
@@ -7257,7 +7150,7 @@
                 if (!_lidarVisible) return;
                 if (on) {
                     if (!cfg.leafletLayer) {
-                        cfg.leafletLayer = _lidarGlobeTwin(_buildLidarLeafletLayer(key, cfg));
+                        cfg.leafletLayer = _buildLidarLeafletLayer(key, cfg);
                     }
                     if (!_lidarGroup.hasLayer(cfg.leafletLayer)) {
                         _lidarGroup.addLayer(cfg.leafletLayer);
@@ -7324,7 +7217,7 @@
                 cfg.mode = mode;
                 if (cfg.leafletLayer) {
                     if (_lidarGroup.hasLayer(cfg.leafletLayer)) _lidarGroup.removeLayer(cfg.leafletLayer);
-                    cfg.leafletLayer = _lidarGlobeTwin(_buildLidarLeafletLayer(key, cfg));
+                    cfg.leafletLayer = _buildLidarLeafletLayer(key, cfg);
                     if (cfg.leafletLayer) {
                         cfg.leafletLayer.setOpacity(cfg.opacity);
                         if (_lidarVisible && cfg.enabled) _lidarGroup.addLayer(cfg.leafletLayer);
@@ -13564,7 +13457,7 @@
                         var c = String(p.ISO_A2 || p.iso_a2 || p.ISO2 || p.iso2 || p.ISO_A3 || '').toUpperCase();
                         if (c === iso && featureLayer.getBounds) countryBounds = featureLayer.getBounds();
                     });
-                    // Fallback: the selection bbox stored by the globe gate.
+                    // Fallback: the selected-country bbox received from the ArcGIS atlas.
                     if (!countryBounds && Array.isArray(window._detectlabCountryBounds) &&
                         window._detectlabCountryBounds.length === 4) {
                         try {
@@ -13640,10 +13533,7 @@
                     if (panel) panel.classList.add('country-filter-active');
                 };
 
-                // Leaving the locked country view (the “Exit view” button of
-                // js/country-dock.js) restores the full layer catalogue: the
-                // coverage filtering above only makes sense while the map is
-                // pinned to one country.
+                // Leaving a country-scoped view restores the full catalogue.
                 window.unfilterLayersForCountry = function () {
                     if (window.DetectLabEuMaps && typeof window.DetectLabEuMaps.filterForCountry === 'function') {
                         window.DetectLabEuMaps.filterForCountry(null, null);

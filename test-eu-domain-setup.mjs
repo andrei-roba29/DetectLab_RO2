@@ -72,7 +72,8 @@ console.log('[Test] detectlab.eu dual-domain setup...');
   // Roman Empire & DARE on .eu vs .ro:
   assert.match(source, /function _isEuropeMarket\(\)/, 'map-app checks for .eu market');
   assert.match(source, /if \(_isEuropeMarket\(\)\) return true;/, 'Roman features in bounds returns true for .eu (full original scale)');
-  assert.match(source, /var ccParam = isEu \? '' : '&cc=RO';/, 'DARE query does not restrict to cc=RO on .eu');
+  assert.match(source, /if \(!cc && !_isEuropeMarket\(\)\) cc = 'RO';/, 'DARE defaults to Romania only on the .ro market');
+  assert.match(source, /var ccParam = cc \? '&cc=' \+ encodeURIComponent\(cc\) : '';/, 'an explicit DARE country filter is optional on .eu');
 
   // Vegetation Fingerprint (Amprenta Vegetației) on .eu vs .ro:
   assert.match(source, /VEGFP_EU_TILE_BOUNDS/, 'VEGFP European tile bounds defined');
@@ -86,7 +87,7 @@ console.log('[Test] detectlab.eu dual-domain setup...');
 
   // 1960s Satellite Imagery (CORONA) European scale on .eu:
   assert.match(source, /premiumMapCoverageBounds\.satellite60s/, 'Satellite 60s coverage bounds configured dynamically');
-  assert.match(source, /layerBounds\s*=\s*L\.latLngBounds\(\[\[34\.0,\s*15\.0\],\s*\[58\.0,\s*38\.0\]\]\)/, 'Satellite 60s uses European extent on .eu');
+  assert.match(source, /satellite60s:\s*\{[\s\S]*?bounds:\s*\[\[34\.0,\s*-25\.0\],\s*\[72\.0,\s*60\.0\]\]/, 'Satellite 60s country coverage uses the full European CORONA catalogue extent');
 }
 
 {

@@ -1189,9 +1189,8 @@
             // subscription gate after the subscription expires.
             if (source.requiresPremium && !isPremium()) return;
             var online = onlineLayerFor(source);
-            // The 3D globe is the permanent basemap. Cached satellite tiles are
-            // drawn above it only inside the downloaded polygon instead of
-            // removing the globe (which would also discard its global context).
+            // The Esri satellite raster remains the normal 2D basemap. Offline
+            // satellite tiles are drawn above it only inside the downloaded area.
             if (source.id !== 'satellite' && online && state.map.hasLayer(online)) {
                 state.map.removeLayer(online);
                 state.hiddenOnlineLayers.push(online);

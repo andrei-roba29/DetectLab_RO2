@@ -8,12 +8,10 @@
 //      Neighbouring countries' rows that are merely visible in the locked
 //      viewport never leak in. A group row hides too when none of its
 //      sublayers survives;
-//   2. the bounds of the selected country stay visible on the Leaflet map —
-//      the country outline once the gate geometry is loaded, the bbox
-//      rectangle until then — drawn non-interactive in its own pane above the
-//      data layers, replaced on every selection and removed on unlock.
-// Covers js/map-app.js (filterLayersForCountry / unfilterLayersForCountry),
-// js/globe-country-picker.js (bounds overlay), css/styles.css and sw.js.
+//   2. the ArcGIS SceneView atlas sends a single selected country's ISO code
+//      and bbox to the parent app, which filters/zooms the alternate Leaflet map.
+// Covers map-app.js country filtering, atlas-shell.js messaging, atlas selection,
+// css/styles.css and the service-worker shell.
 // No network, account or npm dependencies.
 // Usage: node test-country-layer-filter.js
 'use strict';
@@ -23,11 +21,10 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-console.log('[Test] Country-scoped layer window + visible country bounds...');
+console.log('[Test] Country-scoped layers + ArcGIS atlas hand-off...');
 
 const read = file => fs.readFileSync(path.join(__dirname, file), 'utf8');
 const source = read('js/map-app.js');
-const gateSource = read('js/globe-country-picker.js');
 const html = read('index.html');
 const css = read('css/styles.css');
 const sw = read('sw.js');
@@ -45,19 +42,21 @@ const CA_BBOX = [-141.0, 41.0, -52.0, 83.0];    // Canada (group availability fa
    ══════════════════════════════════════════════════════════════ */
 assert(/#transpPanel\.country-filter-active \.country-layer-unavailable\s*\{\s*display:\s*none\s*!important/.test(css),
     'styles.css hides rows marked country-layer-unavailable while the filter is active');
-assert(html.includes('css/styles.css?v=20261008-roman-dare-icons'), 'index.html loads the re-versioned styles.css');
-assert(html.includes('js/map-app.js?v=20261010-lidar-zoom-gate'), 'index.html loads the 3D globe map-app.js');
+assert(html.includes('css/styles.css?v=20261011-arcgis-primary'), 'index.html loads the ArcGIS-primary styles.css');
+assert(html.includes('js/map-app.js?v=20261011-2d-basemap'), 'index.html loads the alternate 2D map module');
 assert(html.includes('js/historical-eu-maps.js?v=20261008-country-layers-strict'), 'index.html loads the country-attribution catalog');
-assert(html.includes('js/globe-country-picker.js?v=20261011-arcgis-gate'), 'index.html loads the re-versioned picker');
-['css/styles.css?v=20261008-roman-dare-icons',
- 'js/map-app.js?v=20261010-lidar-zoom-gate',
+assert(html.includes('europe-roman-atlas.html?embed=1'), 'index.html embeds the ArcGIS atlas');
+assert(html.includes('js/atlas-shell.js?v=20261011-arcgis-primary'), 'index.html loads the atlas-to-Leaflet bridge');
+['css/styles.css?v=20261011-arcgis-primary',
+ 'js/map-app.js?v=20261011-2d-basemap',
  'js/historical-eu-maps.js?v=20261008-country-layers-strict',
- 'js/globe-country-picker.js?v=20261011-arcgis-gate'].forEach(function (p) {
+ 'js/atlas-shell.js?v=20261011-arcgis-primary',
+ 'js/europe-roman-atlas.js?v=20261011-arcgis-primary'].forEach(function (p) {
     assert(sw.includes("'" + p + "'"), 'sw.js precaches ' + p);
 });
 const shellVersion = Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
-assert(shellVersion >= 172, 'sw.js cache is v172 or newer (got v' + shellVersion + ')');
-console.log('  ✓ hiding CSS, country-attribution assets and sw.js v' + shellVersion + ' precache verified');
+assert(shellVersion >= 183, 'sw.js cache is v183 or newer (got v' + shellVersion + ')');
+console.log('  ✓ ArcGIS atlas wiring, country-attribution assets and sw.js v' + shellVersion + ' precache verified');
 
 /* ══════════════════════════════════════════════════════════════
    2. Sandbox for the map-app.js layer-filter section
@@ -406,140 +405,20 @@ function groupRowOf(document, iconId) {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   6. The gate draws the country bounds on the Leaflet map
+   6. ArcGIS country selections cross the embedded view boundary
    ══════════════════════════════════════════════════════════════ */
-function makeStubElement() {
-    return {
-        classList: { add() {}, remove() {}, toggle() {}, contains() { return true; } },
-        style: {},
-        setAttribute() {}, getAttribute() { return null; },
-        addEventListener() {}, appendChild() {},
-        getBoundingClientRect() { return { width: 800, height: 600, left: 0, top: 0 }; },
-        options: [], textContent: '', innerHTML: ''
-    };
-}
-class MockMap {
-    constructor() {
-        this.options = { minZoom: 2, maxZoom: 20 };
-        this.added = []; this.removed = []; this.panes = {};
-        this.maxBounds = 'unset'; this.fitCalls = [];
-    }
-    setMaxBounds(b) { this.maxBounds = b; }
-    setMinZoom(z) { this.minZoom = z; }
-    setMaxZoom(z) { this.maxZoom = z; }
-    getBoundsZoom() { return 6; }
-    fitBounds(b, o) { this.fitCalls.push([b, o]); }
-    addLayer(l) { this.added.push(l); }
-    removeLayer(l) { this.removed.push(l); }
-    getPane(n) { return this.panes[n] || null; }
-    createPane(n) { this.panes[n] = { style: {} }; return this.panes[n]; }
-    setView() {}
-}
-const gateListeners = {};
-const gateSandbox = {
-    console: console,
-    setTimeout, clearTimeout, setInterval, clearInterval,
-    performance: { now: () => Date.now() },
-    fetch() { return Promise.reject(new Error('no network in tests')); },
-    Image: function () { return {}; }
-};
-gateSandbox.window = gateSandbox;
-gateSandbox.self = gateSandbox;
-gateSandbox.globalThis = gateSandbox;
-gateSandbox.requestAnimationFrame = cb => setTimeout(cb, 0);
-gateSandbox.cancelAnimationFrame = id => clearTimeout(id);
-gateSandbox.localStorage = { getItem() { return null; }, setItem() {}, removeItem() {} };
-gateSandbox.document = {
-    documentElement: { lang: 'en', classList: { add() {}, remove() {} } },
-    body: { classList: { add() {}, remove() {} } },
-    hidden: false,
-    getElementById() { return makeStubElement(); },
-    createElement() { return makeStubElement(); },
-    querySelector() { return null; },
-    head: { appendChild() {} },
-    addEventListener(t, fn) { (gateListeners[t] = gateListeners[t] || []).push(fn); },
-    dispatchEvent() {}, createEvent() { return { initCustomEvent() {} }; }
-};
-gateSandbox.addEventListener = function (t, fn) { (gateListeners[t] = gateListeners[t] || []).push(fn); };
-// Minimal Leaflet: the gate only needs bounds, rectangles and GeoJSON.
-gateSandbox.L = {
-    latLng(lat, lng) { return { lat, lng }; },
-    latLngBounds(a, b) {
-        const pts = (b === undefined) ? a : [a, b];
-        const p1 = normPt(pts[0]), p2 = normPt(pts[1]);
-        const bounds = {
-            south: Math.min(p1.lat, p2.lat), west: Math.min(p1.lng, p2.lng),
-            north: Math.max(p1.lat, p2.lat), east: Math.max(p1.lng, p2.lng),
-            pad() { return bounds; },
-            intersects(o) {
-                return o.north >= bounds.south && o.south <= bounds.north &&
-                    o.east >= bounds.west && o.west <= bounds.east;
-            }
-        };
-        return bounds;
-    },
-    geoJSON(feature, options) { return { kind: 'geojson', feature, options }; },
-    rectangle(bounds, options) { return { kind: 'rectangle', bounds, options }; }
-};
-vm.createContext(gateSandbox);
-vm.runInContext(gateSource, gateSandbox);
-
-const gate = gateSandbox.DetectLabGlobeGate;
-const T = gate._test;
-assert(typeof T.showCountryBoundsLayer === 'function', 'showCountryBoundsLayer exposed for tests');
-assert(typeof T.removeCountryBoundsLayer === 'function', 'removeCountryBoundsLayer exposed for tests');
-assert(typeof T.refreshCountryBoundsLayer === 'function', 'refreshCountryBoundsLayer exposed for tests');
-
 {
-    const map = new MockMap();
-    gateSandbox._dlMap = map;
-    gateSandbox._detectlabSelectedCountry = 'IT';
-    gateSandbox._detectlabCountryBounds = IT_BBOX;
-
-    // Lock to Italy before any geometry is loaded → bbox rectangle.
-    T.restrictLeafletToCountry(map, IT_BBOX);
-    assert.equal(T.state.locked, true, 'selection locks the view');
-    assert.equal(map.added.length, 1, 'the bounds layer is added to the map');
-    assert.equal(map.added[0].kind, 'rectangle', 'no geometry yet → the bbox rectangle is drawn');
-    assert.equal(map.added[0].options.interactive, false, 'the bounds layer never captures clicks');
-    assert.equal(map.added[0].options.pane, T.BOUNDS_PANE, 'drawn in the dedicated pane');
-    assert.equal(map.panes[T.BOUNDS_PANE].style.zIndex, T.BOUNDS_PANE_Z, 'pane sits above the data panes');
-    assert(T.BOUNDS_PANE_Z > 652, 'pane z-index above the highest data pane (652)');
-    assert.deepEqual(map.added[0].bounds, [[IT_BBOX[1], IT_BBOX[0]], [IT_BBOX[3], IT_BBOX[2]]], 'rectangle matches the country bbox');
-
-    // The atlas arrives (dock prefetch / globe open): outline replaces the box.
-    const itFeature = {
-        type: 'Feature', properties: { iso: 'IT' },
-        geometry: { type: 'MultiPolygon', coordinates: [[[[6.7, 36], [17, 38], [12, 46], [6.7, 36]]]] }
-    };
-    T.G.byIso['IT'] = { feature: itFeature };
-    T.refreshCountryBoundsLayer();
-    assert.equal(map.removed.length, 1, 'the rectangle is removed on upgrade');
-    assert.equal(map.removed[0].kind, 'rectangle', 'the removed layer is the old rectangle');
-    assert.equal(T.state.boundsLayer.kind, 'geojson', 'the country outline takes over');
-    assert.equal(T.state.boundsLayer.feature, itFeature, 'outline uses the gate geometry');
-    assert.equal(T.state.boundsLayer.options.pane, T.BOUNDS_PANE, 'outline stays in the dedicated pane');
-
-    // Switching country replaces the outline with the new country's bounds.
-    gateSandbox._detectlabSelectedCountry = 'DK';
-    gateSandbox._detectlabCountryBounds = DK_BBOX;
-    T.restrictLeafletToCountry(map, DK_BBOX);
-    assert.equal(T.state.boundsLayer.kind, 'rectangle', 'Denmark has no geometry yet → rectangle again');
-    assert(map.removed.some(l => l.kind === 'geojson'), 'the Italian outline was removed on the switch');
-    assert.equal(map.added.length, 3, 'exactly one bounds layer per selection');
-
-    // “Exit view” / unlock clears the bounds from the map.
-    T.unlockCountryView();
-    assert.equal(T.state.locked, false, 'view unlocked');
-    assert.equal(T.state.boundsLayer, null, 'bounds layer forgotten');
-    assert.equal(map.removed.length, 3, 'the Denmark rectangle removed on unlock');
-    assert.equal(map.maxBounds, null, 'maxBounds released');
-
-    // Removing twice / without a map is harmless.
-    assert.doesNotThrow(() => T.removeCountryBoundsLayer(), 'double remove is a no-op');
-    gateSandbox._dlMap = null;
-    assert.doesNotThrow(() => T.removeCountryBoundsLayer(), 'no map, no crash');
-    console.log('  ✓ bounds overlay: rectangle → outline upgrade, replaced on switch, cleared on unlock');
+    const atlas = read('js/europe-roman-atlas.js');
+    const shell = read('js/atlas-shell.js');
+    assert(atlas.includes('boundsOfPolygons(candidates)'), 'ArcGIS country geometry carries a transferable bbox');
+    assert(atlas.includes("type: 'detectlab-atlas-country-selected'"), 'the SceneView posts country-selection state');
+    assert(atlas.includes('selectionCount: selected.size'), 'multi-select state is included in the message');
+    assert(shell.includes("data.type !== 'detectlab-atlas-country-selected'"), 'the parent validates the atlas message type');
+    assert(shell.includes("new CustomEvent('detectlab:country-selected'"), 'the parent emits the app country event');
+    assert(shell.includes('window.filterLayersForCountry(iso)'), 'a single selected country filters the Leaflet layer list');
+    assert(shell.includes('window.unfilterLayersForCountry()'), 'zero/multiple selections restore the full Leaflet layer list');
+    assert(shell.includes('map.fitBounds([[bounds[1], bounds[0]], [bounds[3], bounds[2]]'), 'the legacy map receives the selected-country extent');
+    console.log('  ✓ country ISO/bbox and single-vs-multiple selection are bridged to the legacy map');
 }
 
-console.log('\nAll country layer-filter + bounds tests passed ✔');
+console.log('\nAll country layer-filter + ArcGIS hand-off tests passed ✔');
