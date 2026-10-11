@@ -415,7 +415,12 @@
 //   DetectLabGlobeBase.attachTileTwin), in pane_world_hillshade's shared overlay.
 //   country-dock.js is re-versioned and precached.
 // v180: index.html gives the LIDAR zoom message (#lidarZoomGateMsg) its PWA bottom offset.
-const CACHE_NAME = 'detectlab-v180-hillshade-globe';
+// v181: the globe country gate draws the same Esri World Imagery tiles as the working
+//   map's MapLibre globe (js/globe-country-picker.js samples them per pixel; the bundled
+//   Blue Marble texture is only a fallback) over the same background colour, so the
+//   basemap no longer changes when a country is picked. globe-country-picker.js/.css
+//   are re-versioned and precached.
+const CACHE_NAME = 'detectlab-v181-gate-imagery';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1018,9 +1023,11 @@ const PRECACHE_URLS = [
   'css/styles.css?v=20261002-european-lidar',
   'css/styles.css?v=20261008-roman-dare-icons',
   'css/globe-country-picker.css?v=20261008',
+  'css/globe-country-picker.css?v=20261010-gate-imagery',
   'js/globe-country-picker.js?v=20261008',
   'js/globe-country-picker.js?v=20261008-country-bounds',
   'js/globe-country-picker.js?v=20261009-globe-outline',
+  'js/globe-country-picker.js?v=20261010-gate-imagery',
   // v167: country dock glued under the search bar (country switcher +
   // World-hillshade checkbox) and the “Exit view” button of the locked
   // country view. The hillshade tiles themselves stay network-only.

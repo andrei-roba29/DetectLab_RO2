@@ -27,7 +27,7 @@
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
     <link rel="stylesheet" href="css/styles.css?v=20261008-roman-dare-icons">
     <link rel="stylesheet" href="css/globe-base-layer.css?v=20261009-3d-globe">
-    <link rel="stylesheet" href="css/globe-country-picker.css?v=20261008">
+    <link rel="stylesheet" href="css/globe-country-picker.css?v=20261010-gate-imagery">
     <link rel="stylesheet" href="css/country-dock.css?v=20261008">
     <link rel="stylesheet" href="css/library-of-babel.css?v=20260917-babel-epochs">
     <link rel="stylesheet" href="css/tutorial.css?v=20260922-mobile-fs-controls">
@@ -1328,13 +1328,14 @@
 
                     <!-- 3D Globe country gate — the first thing an authenticated
                          visitor sees in the map card. An orthographic globe is
-                         drawn on a plain 2D canvas (d3-geo, no WebGL): Blue
-                         Marble texture + hillshade, every European country
-                         tinted translucent grey-violet with a black border;
-                         hovering flips it to translucent neon-green. Picking
-                         one flies the camera there and hands off to the normal
-                         2D map, locked to that country. See
-                         js/globe-country-picker.js. -->
+                         drawn on a plain 2D canvas (d3-geo, no WebGL) from the
+                         same Esri World Imagery tiles the working map uses
+                         (the bundled Blue Marble texture is only a fallback),
+                         every European country tinted translucent grey-violet
+                         with a black border; hovering flips it to translucent
+                         neon-green. Picking one flies the camera there and
+                         hands off to the normal 2D map, locked to that
+                         country. See js/globe-country-picker.js. -->
                     <button type="button" class="globe-gate-reopen" id="globeGateReopenBtn" data-key="globe_gate_change_country">Change Country</button>
                     <div class="globe-gate hidden" id="globeGate" aria-hidden="true">
                         <div class="globe-gate-canvas" id="globeGateCanvas"></div>
@@ -1352,6 +1353,7 @@
                             <button type="button" id="globeGateZoomOut" aria-label="Zoom out">−</button>
                         </div>
                         <div class="globe-gate-hint" id="globeGateHint"></div>
+                        <div class="globe-gate-attrib" id="globeGateAttrib" aria-label="Imagery attribution"></div>
                         <div class="globe-gate-loading" id="globeGateLoading">
                             <span class="globe-gate-spinner" aria-hidden="true"></span>
                             <span class="t" data-key="globe_gate_loading">Loading world map…</span>
@@ -4737,7 +4739,7 @@
     <script src="js/lantmateriet-hojdmodell-layer.js?v=20261007-se-hojdmodell"></script>
     <!-- Physical-distance clustering for Patrimoniu pins and protection radiuses. -->
     <script src="js/patrimoniu-clustering.js?v=20260914-patrimoniu-cluster"></script>
-    <script src="js/globe-country-picker.js?v=20261009-globe-outline"></script>
+    <script src="js/globe-country-picker.js?v=20261010-gate-imagery"></script>
     <!-- Country dock: the slide-down country switcher glued under the search
          bar, the small World-hillshade overlay checkbox and the bottom-centre
          “Exit view” button. Loaded after the globe gate (it only talks to it

@@ -22,7 +22,7 @@ console.log('[Test] Globe-projected country outline...');
 
 // ── Page wiring and release bookkeeping ───────────────────────────────────
 const BASE_URL = 'js/globe-base-layer.js?v=20261010-shared-overlay';
-const PICKER_URL = 'js/globe-country-picker.js?v=20261009-globe-outline';
+const PICKER_URL = 'js/globe-country-picker.js?v=20261010-gate-imagery';
 assert(html.includes(BASE_URL) && html.includes(PICKER_URL), 'index.html loads the re-versioned globe scripts');
 assert(sw.includes("'" + BASE_URL + "'") && sw.includes("'" + PICKER_URL + "'"), 'sw.js precaches the re-versioned globe scripts');
 const shellVersion = Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1] || 0);

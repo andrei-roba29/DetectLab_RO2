@@ -23,6 +23,15 @@ bounds (tight `maxBounds` + zoom floor) while keeping the same 3D globe base.
 The search-bar country dock takes over switching from there — see
 **COUNTRY_SELECTION_DOCK.md**.
 
+The gate and the working map share **one basemap**: the canvas globe samples
+the same Esri World Imagery tiles (`IMAGERY_URL` in the picker =
+`WORLD_IMAGERY_URL` in `globe-base-layer.js`) over the same background colour
+(`#030916`), drawn flat like MapLibre draws them — no hillshade, no
+limb darkening, no atmosphere halo. The bundled Blue Marble texture is kept
+only as a fallback for when the tile service cannot be reached (see "Base
+layer" below), and the gate shows the imagery credit in its bottom-left
+corner (`#globeGateAttrib`).
+
 Files:
 
 - `js/globe-country-picker.js` — the canvas gate (hover/click picking,
@@ -45,7 +54,8 @@ Files:
 - `data/countries-50m.json` — world-atlas 2 TopoJSON, the primary country
   geometry, shipped with the site (public CDN mirror as fallback).
 - `images/globe/earth-blue-marble.jpg`, `images/globe/earth-topology.png` —
-  the Earth texture and the elevation map used for hillshading.
+  the fallback Earth texture (and its elevation map), used only when the
+  World Imagery tile service is unreachable.
 - `tools/globe-gate-preview.html` — dev-only harness that opens the gate
   without auth/Leaflet for visual checks.
 - `js/maplibre-gl.js` / `css/maplibre-gl.css` — **deleted**.
@@ -53,13 +63,31 @@ Files:
 ## How the globe is drawn
 
 1. **Base layer (raster).** For every canvas pixel inside the globe disc the
-   inverse orthographic mapping gives a lon/lat, which samples a 2048×1024
-   Blue Marble texture; a hillshade factor derived from `earth-topology.png`
-   and a limb-darkening term shade it. The base layer is cached on an
-   offscreen canvas and only rebuilt when rotation/zoom/size change —
+   inverse orthographic mapping gives a lon/lat, which is converted to Web
+   Mercator and sampled (bilinear) from the **Esri World Imagery** tile
+   covering it — the same tiles the working map's MapLibre globe draws, so
+   the picture does not change at the hand-off. Per frame the picker builds a
+   tile plan (`chooseImageryRange` → `planImagery` → `buildImageryGrid`):
+   the finest zoom follows the least-stretched latitude in view and the
+   sampling step of the frame (the coarse frames drawn while spinning or
+   dragging never ask for finer tiles than the refined frame needs), each
+   Mercator row nearer a pole steps down to the zoom whose
+   texels match the screen there, only cells on the front hemisphere are
+   requested, at most 128 distinct tiles per frame (the zoom steps down until
+   the view fits), and a cell whose tile is still downloading is drawn from
+   its nearest loaded ancestor — the same progressive refinement MapLibre
+   does. z0–z2 are loaded as soon as the gate opens and never evicted, so
+   every pixel has imagery within a moment; the other tiles live in an LRU
+   cache (400 images / 160 decoded buffers). Tiles are drawn as they are: no
+   hillshade, no limb darkening, no atmosphere halo; the pole caps repeat the
+   outermost Mercator row. The base layer is cached on an offscreen canvas
+   and only rebuilt when rotation/zoom/size change (or new tiles arrive) —
    coarse (step 3) while dragging, refined to full resolution ~140 ms after
-   the interaction stops. If the texture can't load, countries render over a
-   flat land fill (`topojson.merge` of the atlas) — the gate never blocks on
+   the interaction stops. If the tile service is unreachable (the first tiles
+   all fail and nothing has loaded, or the canvas gets tainted) the picker
+   falls back to the bundled 2048×1024 Blue Marble texture (with its
+   hillshade), and if even that can't load, countries render over a flat
+   land fill (`topojson.merge` of the atlas) — the gate never blocks on
    images.
 2. **Vector overlay.** Every European country (same 50-ISO list as the
    retired flat picker) is drawn per frame with `d3.geoPath`: translucent
