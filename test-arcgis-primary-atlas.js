@@ -64,7 +64,7 @@ assert.match(index, /id="mapLock"/, 'the members-only lock overlay is restored')
 /* ── 4. Script order: gate → dock → map-app (ArcGIS basemap) ── */
 const order = [
     'js/translations.js?v=20261011-arcgis-gate',
-    'js/globe-arcgis-gate.js?v=20261011-arcgis-gate',
+    'js/globe-arcgis-gate.js?v=20261012-gate-layout',
     'js/globe-country-picker.js?v=20261011-arcgis-gate',
     'js/country-dock.js?v=20261010-hillshade-globe',
     'js/map-app.js?v=20261011-arcgis-basemap',
@@ -116,9 +116,9 @@ assert.match(atlasJs, /route-segments-all-/, 'Roman-road data is wired');
 assert.match(atlasJs, /pleiades-places-latest/, 'Pleiades sites are wired');
 assert.match(atlasCss, /\.atlas-embedded \.back-link\s*\{\s*display:\s*none/, 'embedded atlas hides its standalone back link');
 
-/* ── 7. Service worker: v184+ shell, atlas + gate/dock precached ── */
+/* ── 7. Service worker: v185+ shell, atlas + gate/dock precached ── */
 const cacheVersion = Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
-assert(cacheVersion >= 184, 'the PWA shell version was bumped to v184 for the fixed integration');
+assert(cacheVersion >= 185, 'the PWA shell version was bumped to v185 for the gate layout fix');
 [
   'europe-roman-atlas.html?embed=1',
   'europe-roman-atlas.html',
@@ -126,8 +126,8 @@ assert(cacheVersion >= 184, 'the PWA shell version was bumped to v184 for the fi
   'js/europe-roman-atlas.js?v=20261011-arcgis-primary',
   'js/atlas-shell.js?v=20261011-arcgis-primary',
   'css/styles.css?v=20261008-roman-dare-icons',
-  'css/globe-country-picker.css?v=20261011-arcgis-gate',
-  'js/globe-arcgis-gate.js?v=20261011-arcgis-gate',
+  'css/globe-country-picker.css?v=20261012-gate-layout',
+  'js/globe-arcgis-gate.js?v=20261012-gate-layout',
   'js/globe-country-picker.js?v=20261011-arcgis-gate',
   'css/country-dock.css?v=20261008',
   'js/country-dock.js?v=20261010-hillshade-globe',

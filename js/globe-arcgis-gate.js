@@ -551,8 +551,81 @@
         return { map: map, view: view, imagery: imagery, layers: layers };
     }
 
+    /* ── Drawable-surface guard ──────────────────────────────────────────
+       A SceneView can report itself ready while its surface has no height at
+       all (e.g. a stylesheet overrides the container's `display: flex`, which
+       is what stretches the SDK's view root and surface). In that state the
+       SDK keeps its 300×150 fallback canvas, renders nothing, and the gate
+       would be a black panel with just the country list. So the adapter
+       measures the surface before it reports the globe as usable: it restores
+       the documented layout once, and if the surface is still collapsed it
+       rejects — js/globe-country-picker.js then opens the canvas globe
+       instead of leaving the visitor on a black screen. */
+    function surfaceElement(instance) {
+        var container = instance && instance.container;
+        if (!container || typeof container.querySelector !== 'function') return null;
+        return container.querySelector('.esri-view-surface') || container.querySelector('canvas');
+    }
+
+    function elementRect(element) {
+        if (!element || typeof element.getBoundingClientRect !== 'function') return null;
+        try { return element.getBoundingClientRect(); } catch (e) { return null; }
+    }
+
+    // true = surface fills the host, false = collapsed, null = not measurable
+    // (layout APIs unavailable, or the host itself is hidden so there is
+    // nothing to compare against).
+    function surfaceCoversHost(instance) {
+        var host = elementRect(instance && instance.container);
+        var surface = elementRect(surfaceElement(instance));
+        if (!host || !surface) return null;
+        if (host.width < 2 || host.height < 2) return null;
+        return surface.height >= host.height * 0.5 && surface.width >= host.width * 0.5;
+    }
+
+    // Waits for the browser to lay the new view out. Two frames normally; the
+    // timeout is the guarantee that a throttled rAF (hidden tab, background
+    // iframe) can never leave the gate waiting on this check.
+    function afterLayout() {
+        return new Promise(function (resolve) {
+            var done = false;
+            var finish = function () { if (done) return; done = true; resolve(); };
+            window.setTimeout(finish, 400);
+            if (typeof window.requestAnimationFrame === 'function') {
+                window.requestAnimationFrame(function () {
+                    window.requestAnimationFrame(finish);
+                });
+            }
+        });
+    }
+
+    function restoreContainerLayout(instance) {
+        // The SDK documents `display: flex` on its view container; re-assert it
+        // (and resize) when something else collapsed the surface. Cleared again
+        // by destroyInstance(), and `.globe-gate.is-canvas .globe-gate-arcgis`
+        // keeps `display: none !important` so the canvas fallback stays clean.
+        if (!instance || !instance.container || !instance.container.style) return false;
+        instance.container.style.display = 'flex';
+        try {
+            if (instance.view && typeof instance.view.resize === 'function') instance.view.resize();
+        } catch (e) {}
+        return true;
+    }
+
+    function ensureDrawableSurface(instance, label) {
+        return afterLayout().then(function () {
+            if (surfaceCoversHost(instance) !== false) return true;
+            if (!restoreContainerLayout(instance)) throw new Error(label);
+            return afterLayout().then(function () {
+                if (surfaceCoversHost(instance) !== false) return true;
+                throw new Error(label);
+            });
+        });
+    }
+
     function destroyInstance(instance) {
         if (!instance) return;
+        if (instance.container && instance.container.style) instance.container.style.display = '';
         (instance.handles || []).forEach(function (handle) {
             try { if (handle && typeof handle.remove === 'function') handle.remove(); } catch (e) {}
         });
@@ -597,6 +670,10 @@
                 // a stored country is highlighted but does not recenter re-entry.
                 var start = { center: [14, 40], zoom: 2.35, heading: 0, tilt: 0 };
                 return Promise.resolve(instance.view.goTo(start, { animate: false })).catch(function () {}).then(function () {
+                    if (current !== instance || myGeneration !== generation) throw new Error('ArcGIS globe open was cancelled');
+                    // Never hand a black, drawable-less globe back to the gate.
+                    return ensureDrawableSurface(instance, 'ArcGIS SceneView surface has no size inside the gate');
+                }).then(function () {
                     if (current !== instance || myGeneration !== generation) throw new Error('ArcGIS globe open was cancelled');
                     drawFocus(instance);
                     return true;
@@ -689,6 +766,9 @@
             isMicroState: isMicroState,
             zoomFor: zoomFor,
             countryGoToTarget: countryGoToTarget,
+            surfaceCoversHost: surfaceCoversHost,
+            restoreContainerLayout: restoreContainerLayout,
+            ensureDrawableSurface: ensureDrawableSurface,
             getCurrent: function () { return current; },
             loadSdk: loadSdk,
             reset: function () { close(); sdkPromise = null; cssPromise = null; }

@@ -20,9 +20,9 @@ const translations = read('js/translations.js');
 console.log('[Test] Lazy ArcGIS country gate...');
 
 // Page and service-worker wiring: adapter before the public gate, no eager CDN.
-const adapterUrl = 'js/globe-arcgis-gate.js?v=20261011-arcgis-gate';
+const adapterUrl = 'js/globe-arcgis-gate.js?v=20261012-gate-layout';
 const pickerUrl = 'js/globe-country-picker.js?v=20261011-arcgis-gate';
-const cssUrl = 'css/globe-country-picker.css?v=20261011-arcgis-gate';
+const cssUrl = 'css/globe-country-picker.css?v=20261012-gate-layout';
 const translationsUrl = 'js/translations.js?v=20261011-arcgis-gate';
 for (const asset of [adapterUrl, pickerUrl, cssUrl, translationsUrl]) {
     assert(html.includes(asset), 'index.html references ' + asset);
@@ -35,7 +35,7 @@ assert(adapter.includes("var SDK_ROOT = 'https://js.arcgis.com/4.31/'"), 'the ad
 assert(adapter.includes("var SDK_CSS = SDK_ROOT + 'esri/themes/dark/main.css'"), 'the ArcGIS theme is dynamically loaded');
 assert(adapter.includes('script.src = SDK_ROOT') && adapter.includes('loadTheme().then'), 'SDK and CSS are created only from the lazy open path');
 assert(!sw.includes("'https://js.arcgis.com/4.31/"), 'the external SDK is not precached');
-assert(/const CACHE_NAME = 'detectlab-v(18[4-9]|19\d|[2-9]\d\d)-arcgis-basemap'/.test(sw), 'the app-shell cache is bumped past v183 for the restored gate');
+assert(/const CACHE_NAME = 'detectlab-v(18[5-9]|19\d|[2-9]\d\d)-/.test(sw), 'the app-shell cache is bumped past v184 for the gate layout fix');
 for (const host of ['js.arcgis.com', 'arcgis.com', 'ibasemaps-api.arcgis.com']) {
     assert(sw.includes("'" + host + "'"), 'service-worker passthrough list includes ' + host);
 }
@@ -62,6 +62,27 @@ assert(picker.includes('DetectLabArcGISGate.goToCountry(iso)') && picker.include
 assert(picker.includes('activateCanvasFallback(error)') && picker.includes('buildCanvas()') && picker.includes('startImagery()'), 'SceneView failures fall back to the existing canvas renderer');
 assert(picker.includes('normalizeName(text).indexOf(query)') && picker.includes('[item.iso, item.name, item.en, item.ro]'), 'country search is accent-normalized and checks both EN/RO names plus ISO');
 assert(css.includes('.globe-gate.is-arcgis .globe-gate-canvas') && css.includes('.globe-gate.is-canvas .globe-gate-arcgis'), 'ArcGIS and canvas surfaces can be switched independently');
+
+// v185 regression: #globeGateArcGIS is the SceneView's own container, so the
+// SDK's `.esri-view` rule (display: flex) must not be overridden — `display:
+// block` there collapsed the view root to 0 px and the gate opened black with
+// nothing but the country list. The adapter also refuses to hand back a globe
+// without a drawable surface.
+assert(html.includes('id="globeGateArcGIS"'), 'the ArcGIS container is the one the SceneView is created in');
+assert(/\.globe-gate\.is-arcgis \.globe-gate-arcgis\s*\{\s*display:\s*flex;/.test(css),
+    'the ArcGIS host keeps the SDK layout (display: flex) when the gate is in ArcGIS mode');
+assert(!/\.globe-gate\.is-arcgis \.globe-gate-arcgis\s*\{\s*display:\s*block/.test(css),
+    'the ArcGIS host is never collapsed back to display: block');
+assert(/\.globe-gate-arcgis \.esri-view-root\s*\{[^}]*flex:\s*100%/.test(css),
+    'the gate CSS restates the SDK view-root sizing (flex: 100%)');
+assert(adapter.includes('function ensureDrawableSurface') && adapter.includes('surfaceCoversHost'),
+    'the adapter measures the drawable view surface');
+assert(adapter.includes("instance.container.style.display = 'flex'") && adapter.includes('view.resize()'),
+    'a collapsed view container is repaired with the documented flex layout before giving up');
+assert(adapter.includes("ensureDrawableSurface(instance, 'ArcGIS SceneView surface has no size inside the gate')"),
+    'a SceneView without a sized surface rejects, so the canvas globe is opened instead of a black gate');
+assert(/\.globe-gate\.is-canvas \.globe-gate-arcgis \{\s*display: none !important;/.test(css),
+    'the canvas fallback always hides the ArcGIS host, even after an inline layout repair');
 console.log('  ✓ flat globe, country styling, single-selection flow, and canvas failover');
 
 // Ring winding, multi-polygon flattening, micro-state classification, and zoom.
@@ -123,6 +144,7 @@ SceneView.prototype.goTo = function (target) {
     if (Array.isArray(target.center)) this.center = { longitude: target.center[0], latitude: target.center[1] };
     return Promise.resolve();
 };
+SceneView.prototype.resize = function () { this.resizes = (this.resizes || 0) + 1; };
 SceneView.prototype.destroy = function () {};
 const fakeModules = [
     { apiKey: null }, Map, Basemap, SceneView, TileLayer, GraphicsLayer, Graphic, Polygon, Point
@@ -219,7 +241,66 @@ const countries = [
     assert.equal(keyed.modules.esriConfig.apiKey, 'referrer-restricted-test-key');
     assert.equal(keyed.imagery.options.url, api.constants.keyedImageryService);
     api.close();
-    console.log('  ✓ lazy mocked AMD load, SceneView setup, graphics, hit-test, zoom, and runtime key path');
+
+    // v185: a SceneView that reports "ready" but never gets a drawable surface
+    // must never be handed to the gate — that was the black screen with only
+    // the country list visible.
+    const box = (width, height) => ({ width, height, top: 0, left: 0, right: width, bottom: height });
+    const layoutContainer = (hostSize, surfaceSize, heal) => {
+        const state = { display: '', surface: box(surfaceSize.width, surfaceSize.height) };
+        const surface = { getBoundingClientRect: () => ({ ...state.surface }) };
+        const element = {
+            style: {}, addEventListener() {}, removeEventListener() {}, layoutRepairs: 0,
+            getBoundingClientRect: () => ({ ...box(hostSize.width, hostSize.height) }),
+            querySelector: selector => (selector === '.esri-view-surface' ? surface : null)
+        };
+        // A real browser re-lays the view out as soon as the container is a flex
+        // box again; `heal` emulates that for the successful-repair case.
+        Object.defineProperty(element.style, 'display', {
+            get() { return state.display; },
+            set(value) {
+                state.display = value;
+                if (value !== 'flex') return;
+                element.layoutRepairs++;
+                if (heal) state.surface = box(hostSize.width, hostSize.height);
+            }
+        });
+        return element;
+    };
+    assert.equal(api._test.surfaceCoversHost({
+        container: layoutContainer({ width: 900, height: 600 }, { width: 900, height: 600 })
+    }), true, 'a full-size view surface is accepted');
+    assert.equal(api._test.surfaceCoversHost({
+        container: layoutContainer({ width: 900, height: 600 }, { width: 300, height: 150 })
+    }), false, 'a collapsed 0-height view surface is detected');
+    const hidden = layoutContainer({ width: 0, height: 0 }, { width: 300, height: 150 });
+    assert.equal(api._test.surfaceCoversHost({ container: hidden }), null,
+        'an unmeasurable (hidden) host is not reported as broken');
+    assert.equal(await api._test.ensureDrawableSurface({ container: hidden, view: {} }, 'unused'), true,
+        'a hidden host never triggers the layout repair or the fallback');
+    assert.equal(hidden.layoutRepairs, 0, 'an unmeasurable host is left alone');
+
+    const collapsed = layoutContainer({ width: 1050, height: 558 }, { width: 300, height: 150 });
+    let refused = false;
+    try {
+        await api.open(collapsed, countries, {});
+    } catch (error) {
+        refused = /no size inside the gate/.test(error.message);
+    }
+    assert(refused, 'an unsized SceneView rejects, so the picker opens the canvas globe instead of a black gate');
+    assert.equal(collapsed.layoutRepairs, 1, 'the documented flex layout is restored once before giving up');
+    assert.equal(collapsed.style.display, '', 'the failed attempt leaves no inline layout behind');
+    assert.equal(api.isActive(), false, 'the unusable SceneView is destroyed while the gate falls back');
+
+    const healable = layoutContainer({ width: 1050, height: 558 }, { width: 300, height: 150 }, true);
+    await api.open(healable, countries, {});
+    assert.equal(healable.layoutRepairs, 1, 'a collapsed gate container is repaired in place');
+    assert.equal(healable.style.display, 'flex', 'the repair keeps the SDK flex layout while the globe is open');
+    assert.equal(api._test.getCurrent().view.resizes, 1, 'the repaired view is resized once');
+    assert(api.isActive(), 'a repaired SceneView stays the gate renderer');
+    api.close();
+    assert.equal(healable.style.display, '', 'close() clears the inline layout repair');
+    console.log('  ✓ lazy mocked AMD load, SceneView setup, drawable-surface guard, graphics, hit-test, zoom, and runtime key path');
 })().catch(function (error) {
     console.error(error);
     process.exitCode = 1;
