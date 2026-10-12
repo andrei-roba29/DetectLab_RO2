@@ -18,7 +18,7 @@ assert(indexHtml.includes('id="globeGateZoomIn"'), 'index.html contains globeGat
 assert(indexHtml.includes('id="globeGateZoomOut"'), 'index.html contains globeGateZoomOut');
 assert(indexHtml.includes('id="globeGateFallbackSelect"'), 'index.html keeps the no-canvas fallback select');
 assert(indexHtml.includes('js/globe-country-picker.js?v=20261011-arcgis-gate'), 'index.html loads the re-versioned picker');
-assert(indexHtml.includes('css/globe-country-picker.css?v=20261011-arcgis-gate'), 'index.html loads the re-versioned css');
+assert(indexHtml.includes('css/globe-country-picker.css?v=20261012-gate-layout'), 'index.html loads the re-versioned css');
 assert(indexHtml.indexOf('js/globe-country-picker.js?v=20261011-arcgis-gate') <
        indexHtml.indexOf('js/country-dock.js?v=20261010-hillshade-globe') &&
        indexHtml.indexOf('js/country-dock.js?v=20261010-hillshade-globe') <
@@ -38,15 +38,15 @@ console.log('  ✓ local canvas-gate assets shipped');
 
 // ── 3. sw.js precache ──
 const swJs = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8');
-['js/globe-country-picker.js?v=20261011-arcgis-gate', 'css/globe-country-picker.css?v=20261011-arcgis-gate',
- 'js/globe-arcgis-gate.js?v=20261011-arcgis-gate',
+['js/globe-country-picker.js?v=20261011-arcgis-gate', 'css/globe-country-picker.css?v=20261012-gate-layout',
+ 'js/globe-arcgis-gate.js?v=20261012-gate-layout',
  'js/d3.min.js?v=7.9.0', 'js/topojson-client.min.js?v=3.1.0',
  'data/countries-50m.json?v=20261008',
  'js/map-app.js?v=20261011-arcgis-basemap'].forEach(function (p) {
     assert(swJs.includes("'" + p + "'"), 'sw.js precaches ' + p);
 });
 const shellVersion = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
-assert(shellVersion >= 184, 'sw.js cache must be v184 or newer so the restored gate + ArcGIS basemap ship in installed PWAs');
+assert(shellVersion >= 185, 'sw.js cache must be v185 or newer so the gate layout fix ships to installed PWAs');
 assert(swJs.includes('arcgisonline.com'), 'sw.js passes the Esri World Imagery host through (gate + working map tiles)');
 console.log('  ✓ sw.js precache includes the canvas gate and the ArcGIS basemap app');
 

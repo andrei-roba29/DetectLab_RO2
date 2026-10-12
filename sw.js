@@ -404,7 +404,16 @@
 //   hillshade, elevation terrain, Roman layers) stays available in the
 //   country-selection gate (lazy) and the full-screen europe-roman-atlas.html
 //   page. The gate/dock/gate-CSS assets are re-precached for installed PWAs.
-const CACHE_NAME = 'detectlab-v184-arcgis-basemap';
+// v185: fix the "black screen" country gate. The gate host (#globeGateArcGIS)
+//   is the ArcGIS SceneView's own container, so the SDK adds `.esri-view`
+//   (display: flex) to it; the gate CSS overrode that with `display: block`,
+//   which collapsed `.esri-view-root` to 0 px. The SceneView then kept its
+//   300×150 fallback canvas, rendered nothing, and the visitor saw only the
+//   country list on a black panel. The gate now uses `display: flex`, and
+//   js/globe-arcgis-gate.js measures the drawable surface after open (and
+//   restores the layout once) so a collapsed SceneView falls back to the
+//   canvas globe instead of showing an empty gate.
+const CACHE_NAME = 'detectlab-v185-gate-layout';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1007,8 +1016,8 @@ const PRECACHE_URLS = [
   // v184: the ArcGIS-basemap working map, restored country gate (lazy ArcGIS
   // SceneView + canvas fallback) and country dock, in the documented load
   // order (gate → dock → map-app).
-  'css/globe-country-picker.css?v=20261011-arcgis-gate',
-  'js/globe-arcgis-gate.js?v=20261011-arcgis-gate',
+  'css/globe-country-picker.css?v=20261012-gate-layout',
+  'js/globe-arcgis-gate.js?v=20261012-gate-layout',
   'js/globe-country-picker.js?v=20261011-arcgis-gate',
   // v167: country dock glued under the search bar (country switcher +
   // World-hillshade checkbox) and the “Exit view” button of the locked

@@ -288,7 +288,17 @@ body.country-selected .globe-gate-reopen { display: inline-flex; }
     .globe-gate-chrome { padding: 14px 14px 10px; }
 }
 
-/* ── Optional ArcGIS SceneView surface ── */
+/* ── Optional ArcGIS SceneView surface ──
+   #globeGateArcGIS *is* the ArcGIS view container: once the SceneView is
+   created the SDK adds its own `.esri-view` class to this very element, and
+   that class carries `display: flex` — the value the SDK's layout depends on.
+   `.esri-view-root` (the SDK's child, `flex: 100%`) is stretched to the host
+   height by that flex context, and `.esri-view-surface`/the drawing canvas
+   then fill the root. Overriding the container's display (e.g. `block`, the
+   pre-2026-10-12 rule) collapses the root to 0 px: the SDK keeps its fallback
+   300×150 canvas, never resizes it, and the gate renders as a flat black
+   panel that only shows its own chrome and the country list — the "black
+   screen, no globe" regression. Same display value, both axes: flex. */
 .globe-gate-arcgis {
     display: none;
     position: absolute;
@@ -297,8 +307,10 @@ body.country-selected .globe-gate-reopen { display: inline-flex; }
     overflow: hidden;
     background: #030916;
 }
-.globe-gate.is-arcgis .globe-gate-arcgis { display: block; }
-.globe-gate-arcgis .esri-view,
+.globe-gate.is-arcgis .globe-gate-arcgis { display: flex; }
+/* The SDK's .esri-view-root sizing (flex: 100%) is re-stated so the gate keeps
+   working with a theme/base stylesheet that failed to load. */
+.globe-gate-arcgis .esri-view-root { flex: 100%; position: relative; }
 .globe-gate-arcgis .esri-view-surface,
 .globe-gate-arcgis canvas {
     width: 100%;

@@ -88,9 +88,39 @@ still applies the standard one-country map lock, but naturally has no globe
 animation or imagery. The gate should never hard-lock the map solely because a
 renderer failed.
 
+## Drawable-surface guard (v185 — “black screen, only the country list”)
+
+`#globeGateArcGIS` is not a wrapper around the SceneView — it **is** the view's
+container, so the SDK tags the element with `.esri-view`, whose own stylesheet
+says `display: flex`. `.esri-view-root` (the SDK's child) sizes itself with
+`flex: 100%`, so that flex context is what stretches the view root — and only
+then does `.esri-view-surface` and the drawing canvas get a real height.
+
+If anything overrides the container's display (the gate CSS used `display:
+block` until v185), the root collapses to `0 px`, the SDK keeps its fallback
+300×150 canvas and never resizes it, and the gate opens as a flat `#030916`
+panel: no globe, no country outlines, only the gate chrome, the list, and the
+zoom buttons — the reported black screen. The fix keeps the SDK contract:
+
+- the gate CSS uses `display: flex` for `.globe-gate.is-arcgis
+  .globe-gate-arcgis` and restates `.esri-view-root { flex: 100%; position:
+  relative; }` so a theme stylesheet failure cannot re-collapse the view;
+- `js/globe-arcgis-gate.js` measures the drawable surface after `open()`
+  (`surfaceCoversHost()`, `requestAnimationFrame`-deferred so the layout has
+  settled). If the surface is collapsed it restores the documented flex layout
+  once (plus `view.resize()`), re-measures, and — if it is still unsized —
+  rejects. `js/globe-country-picker.js` then activates the canvas globe, so a
+  broken SceneView can no longer leave the visitor on an empty gate.
+
+The guard is only active when the host itself has a measurable size, so a hidden
+or `display: none` host (the canvas fallback, background pre-warm of the
+geometry) is never treated as broken. Regression coverage:
+`test-globe-arcgis-gate.js` (CSS contract, `surfaceCoversHost()`, repair path,
+and the reject → canvas-fallback path).
+
 ## PWA, network, licensing, and device constraints
 
-`sw.js` uses shell cache `detectlab-v182-arcgis-gate`. The local adapter, picker,
+`sw.js` uses shell cache `detectlab-v185-gate-layout`. The local adapter, picker,
 CSS, translations, and country data remain in the app shell. The external
 ArcGIS SDK/theme and imagery services are **not** precached; cross-origin
 requests pass through the service worker's network path. `js.arcgis.com`,
@@ -482,14 +512,16 @@ for conversion, and any canvas-drawn source gets the zoom gate, not a twin.
 
 ## Gate deployment and regression checks
 
-`sw.js` cache `v182` precaches the local ArcGIS adapter, picker, styles,
-translations, 50m atlas, and existing MapLibre assets. The remote ArcGIS SDK,
+`sw.js` cache `v185` precaches the local ArcGIS adapter, picker, styles,
+translations and the 50m atlas (the retired MapLibre globe assets are no longer
+part of the shell). The remote ArcGIS SDK,
 theme, imagery, and the two optional canvas texture images are intentionally
 not precached. The canvas can still show atlas land if those texture images are
 unavailable.
 
 The key suites are `node test-globe-arcgis-gate.js` (lazy loading, SceneView
-configuration, country graphics and single-select flow),
+configuration, the v185 drawable-surface guard, country graphics and
+single-select flow),
 `node test-globe-canvas-picker.js` (fallback picking, shared geometry and
 imagery math), `node test-globe-base-layer.js` (unchanged MapLibre working-map
 base), and `node test-country-dock.js` (public API, lock, dock, and re-entry).

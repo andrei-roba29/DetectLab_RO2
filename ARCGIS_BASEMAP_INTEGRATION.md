@@ -1,4 +1,18 @@
-# ArcGIS basemap integration (PR #283 fix — v184)
+# ArcGIS basemap integration (PR #283 fix — v184, gate layout v185)
+
+## v185 — country gate "black screen" fix
+
+After v184 the country gate could open as a flat black panel with only the
+country list: `#globeGateArcGIS` is the SceneView's own container, so the SDK
+tags it with `.esri-view` (`display: flex`), and the gate CSS overrode that with
+`display: block`. `.esri-view-root` (`flex: 100%`) then collapsed to 0 px, the
+SDK kept its 300×150 fallback canvas and never resized it, and nothing was
+drawn. v185 keeps `display: flex` on the ArcGIS host, restates the view-root
+sizing in the gate stylesheet, and has `js/globe-arcgis-gate.js` measure the
+drawable surface after `open()` — repairing the layout once and, if it is still
+collapsed, rejecting so the gate opens the canvas globe instead of an empty
+screen. Full explanation and the regression checks:
+`GLOBE_COUNTRY_GATE.md` → “Drawable-surface guard”.
 
 PR #283 replaced the working map with an embedded ArcGIS SceneView atlas
 (`europe-roman-atlas.html?embed=1` in an iframe with `z-index: 10050`) and put
@@ -74,7 +88,9 @@ zoom-11 gate because there is no globe camera to drift from.
 
 ## PWA / service worker
 
-- `sw.js` is bumped to **v184** (`detectlab-v184-arcgis-basemap`).
+- `sw.js` is bumped to **v185** (`detectlab-v185-gate-layout`, replacing
+  `detectlab-v184-arcgis-basemap`), so installed PWAs pick up the gate layout
+  fix along with the v184 integration.
 - The retired MapLibre/globe assets stay out of the precache; the restored
   gate/dock assets and the new `js/map-app.js?v=20261011-arcgis-basemap`
   are precached; the atlas page assets remain precached.
@@ -86,6 +102,9 @@ zoom-11 gate because there is no globe camera to drift from.
 
 - `node test-arcgis-primary-atlas.js` — integration checks for this fix
   (primary UI, no iframe, ArcGIS basemap stack, SceneView preserved).
+- `node test-globe-arcgis-gate.js` — v185: the gate keeps the SceneView's
+  `display: flex` contract, the adapter refuses a collapsed (undrawable)
+  surface and repairs the layout once before falling back to the canvas globe.
 - Restored suites: `test-globe-arcgis-gate.js`, `test-globe-canvas-picker.js`,
   `test-country-dock.js`, `test-country-layer-filter.js`,
   `test-globe-lockin-logic.mjs`.
