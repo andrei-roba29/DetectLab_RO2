@@ -17,14 +17,18 @@
     <link rel="apple-touch-icon" href="images/pwa-icon-192.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <!-- Leaflet renders the working map as a standard 2D Web Mercator map. -->
+    <!-- Leaflet renders the working map on the ArcGIS basemap stack (World
+         Imagery / Topographic / Terrain tiles), keeping every existing
+         overlay layer functional. -->
     <link rel="stylesheet" href="css/leaflet.css">
     <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
     <link rel="stylesheet" href="css/L.Control.Locate.min.css">
     <link rel="stylesheet" href="css/leaflet.photon.css">
     <link rel="stylesheet" href="css/leaflet-measure.css">
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
-    <link rel="stylesheet" href="css/styles.css?v=20261011-arcgis-primary">
+    <link rel="stylesheet" href="css/styles.css?v=20261008-roman-dare-icons">
+    <link rel="stylesheet" href="css/globe-country-picker.css?v=20261011-arcgis-gate">
+    <link rel="stylesheet" href="css/country-dock.css?v=20261008">
     <link rel="stylesheet" href="css/library-of-babel.css?v=20260917-babel-epochs">
     <link rel="stylesheet" href="css/tutorial.css?v=20260922-mobile-fs-controls">
     <link rel="stylesheet" href="css/offline-maps.css?v=20260916-pwa-panel-offline-exit">
@@ -763,6 +767,59 @@
                 display: none;
             }
         }
+
+        /* ── ArcGIS basemap switcher (World Imagery / Topographic / Terrain) ──
+           A compact glass control pinned bottom-left. It is a Leaflet control,
+           so it rides the map's own z-stack (well under the search bar, layer
+           panel, auth/members overlays and PWA action dock) and never covers
+           the interface. It replaces the retired MapLibre globe as the basemap
+           engine: same ArcGIS World Imagery data, plus Topographic and Terrain
+           options and the World Hillshade relief toggle. */
+        .arcgis-basemap-ctrl {
+            background: rgba(8, 14, 28, 0.9);
+            border: 1px solid rgba(184, 216, 240, 0.28);
+            border-radius: 10px;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+            overflow: hidden;
+            min-width: 164px;
+            font-family: 'Outfit', sans-serif;
+        }
+        .arcgis-basemap-btn {
+            display: block;
+            width: 100%;
+            padding: 6px 10px;
+            border: 0;
+            border-bottom: 1px solid rgba(184, 216, 240, 0.12);
+            background: transparent;
+            color: rgba(245, 240, 235, 0.85);
+            font-size: 0.72rem;
+            font-weight: 500;
+            line-height: 1.3;
+            text-align: left;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .arcgis-basemap-btn:hover { background: rgba(184, 216, 240, 0.1); color: #fff; }
+        .arcgis-basemap-btn.active {
+            background: rgba(107, 63, 160, 0.35);
+            color: #fff;
+            box-shadow: inset 2px 0 0 rgba(185, 255, 0, 0.65);
+        }
+        .arcgis-basemap-hs {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            color: rgba(245, 240, 235, 0.85);
+            font-size: 0.72rem;
+            font-weight: 500;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .arcgis-basemap-hs input { margin: 0; accent-color: #b9ff14; }
+        @media (max-width: 700px) {
+            .arcgis-basemap-ctrl { min-width: 0; }
+        }
     </style>
     <script>
         // Standalone (installed PWA) layout. `?pwa=1` forces the same layout in a
@@ -1067,21 +1124,20 @@
     </section>
 
     <!-- MAP -->
-    <section id="map-section" class="atlas-primary">
+    <section id="map-section">
         <div class="container">
             <div class="map-header">
                 <div>
                     <p class="section-label t" data-key="map_label">Live Map</p>
-                    <h2 class="section-title t" style="margin-bottom:0" data-key="map_title">Explore the <span class="hl">Map</span></h2>
+                    <h2 class="section-title t" style="margin-bottom:0" data-key="map_title">Explore the <span class="hl">APM Layer</span></h2>
                 </div>
                 <div class="map-tabs" aria-label="Map view">
-                    <button class="map-tab" id="atlasModeToggle" type="button" aria-pressed="false">🗺 2D map &amp; layers</button>
-                    <a class="map-tab roman-atlas-link" href="europe-roman-atlas.html" target="_blank" rel="noopener" title="Open the ArcGIS atlas in a new tab" style="display:inline-flex;align-items:center;text-decoration:none;white-space:nowrap">↗ Full-screen atlas</a>
-                    <button class="map-tab legacy-map-tab active t" data-key="tab_free" onclick="switchTab(this,'free')">🔓 Free Preview</button>
-                    <button class="map-tab legacy-map-tab" id="tabWeather" onclick="switchTab(this,'weather')">🌤 Vreme</button>
+                    <button class="map-tab active t" data-key="tab_free" onclick="switchTab(this,'free')">🔓 Free Preview</button>
+                    <button class="map-tab" id="tabWeather" onclick="switchTab(this,'weather')">🌤 Vreme</button>
+                    <a class="map-tab roman-atlas-link" href="europe-roman-atlas.html" target="_blank" rel="noopener" title="Open the ArcGIS SceneView atlas in a new tab" style="display:inline-flex;align-items:center;text-decoration:none;white-space:nowrap">↗ 3D ArcGIS atlas</a>
                 </div>
             </div>
-            <div class="map-frame atlas-view">
+            <div class="map-frame">
                 <div class="map-wrapper">
                     <div id="detectlab-map" style="width:100%;height:100%;"></div>
                     <div id="lidarScannerLoading" class="lidar-scanner-loading" aria-live="polite"><span class="lidar-scanner-ring" aria-hidden="true"></span></div>
@@ -1230,6 +1286,57 @@
                             <button class="map-search-clear" id="searchClearBtn" onclick="clearSearch()" title="Clear">✕</button>
                         </div>
                         <ul class="map-search-results" id="mapSearchResults"></ul>
+
+                        <!-- Country dock — glued under the search bar once a
+                             country has been picked on the globe: the
+                             slide-down button shows the current 2-letter code
+                             and drops open the full initials list (hover = full
+                             name), next to the small World-hillshade overlay
+                             checkbox. The permanent 3D globe base is never
+                             switched by a country selection. js/country-dock.js. -->
+                        <div class="country-dock" id="countryDock">
+                            <div class="country-dock-row">
+                                <button type="button" class="country-dock-btn" id="countryDockBtn"
+                                        aria-expanded="false" aria-controls="countryDockPanel"
+                                        title="Change country — the map view stays locked to the country you pick">
+                                    <span class="country-dock-globe" aria-hidden="true">🌍</span>
+                                    <span class="country-dock-code" id="countryDockCode">—</span>
+                                    <span class="country-dock-caret" aria-hidden="true">▾</span>
+                                </button>
+                                <label class="country-dock-hs" id="countryDockHillshadeWrap"
+                                       title="World Hillshade (Esri · USGS · NOAA, 30 m) — terrain shading over the permanent 3D globe">
+                                    <input type="checkbox" id="countryDockHillshade">
+                                    <span class="t" data-key="country_dock_hillshade">World hillshade</span>
+                                </label>
+                                <button type="button" class="country-dock-info" id="countryDockHsInfo"
+                                        title="Layer info — source and credits" aria-label="Layer info">ⓘ</button>
+                            </div>
+                            <div class="country-dock-panel" id="countryDockPanel" hidden>
+                                <div class="country-dock-panel-head">
+                                    <span class="t" data-key="country_dock_title">Change country</span>
+                                    <button type="button" class="country-dock-x" id="countryDockClose"
+                                            aria-label="Close">✕</button>
+                                </div>
+                                <div class="country-dock-grid" id="countryDockGrid" role="listbox"
+                                     aria-label="Countries"></div>
+                                <div class="country-dock-name" id="countryDockName" aria-live="polite"></div>
+                                <p class="country-dock-hint t" data-key="country_dock_hint">Hover a code for the country name. Picking one moves and locks the map view to it — the 3D globe stays in place.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- “Exit view” — appears in the middle of the lower edge
+                         only once the locked country view is zoomed all the
+                         way out; it releases the lock and reopens the globe so
+                         another country can be chosen. js/country-dock.js -->
+                    <button type="button" class="country-exit-view" id="countryExitViewBtn" hidden
+                            title="Leave the locked country view and choose another country">
+                        <span aria-hidden="true">✕</span>
+                        <span class="t" data-key="country_exit_view">Exit view</span>
+                    </button>
+
+
+
                     <!-- Radius loading overlay -->
                     <div class="map-radius-loader" id="mapRadiusLoader">
                         <div class="map-radius-loader-ring">
@@ -1274,7 +1381,58 @@
                         <a href="#pricing" class="btn-primary t" data-key="lock_btn">View Plans</a>
                     </div>
 
-
+                    <!-- Country gate: a lazy-loaded ArcGIS SceneView is preferred;
+                         the existing no-WebGL canvas picker stays available when
+                         the SDK, network, or 3D context cannot start. Both renderers
+                         consume js/globe-country-picker.js's same 50-country / 10m
+                         geometry and preserve its single-country map lock. -->
+                    <button type="button" class="globe-gate-reopen" id="globeGateReopenBtn" data-key="globe_gate_change_country">Change Country</button>
+                    <div class="globe-gate hidden" id="globeGate" aria-hidden="true">
+                        <div class="globe-gate-arcgis" id="globeGateArcGIS" aria-label="Interactive country globe"></div>
+                        <div class="globe-gate-canvas" id="globeGateCanvas"></div>
+                        <div class="globe-gate-chrome">
+                            <div class="globe-gate-title t" id="globeGateTitle" data-key="globe_gate_title">Choose your country</div>
+                            <p class="globe-gate-desc t" id="globeGateDesc" data-key="globe_gate_desc">Spin the globe and select a European country to start mapping.</p>
+                            <div class="globe-gate-legend">
+                                <span class="globe-gate-swatch globe-gate-swatch--default"></span><span class="t" data-key="globe_gate_legend_default">Available country</span>
+                                <span class="globe-gate-swatch globe-gate-swatch--hover"></span><span class="t" data-key="globe_gate_legend_hover">Hovered</span>
+                            </div>
+                        </div>
+                        <aside class="globe-gate-country-panel" id="globeGateCountryPanel" aria-label="Country selection">
+                            <div class="globe-gate-country-panel-head">
+                                <span class="globe-gate-country-panel-kicker">DetectLab</span>
+                                <span class="globe-gate-country-count" id="globeGateCountryCount" aria-live="polite">50 countries</span>
+                            </div>
+                            <label class="globe-gate-search" for="globeGateCountrySearch">
+                                <span aria-hidden="true">⌕</span>
+                                <input id="globeGateCountrySearch" type="search" autocomplete="off" spellcheck="false" placeholder="Search countries" data-placeholder-key="globe_gate_search" aria-label="Search countries">
+                            </label>
+                            <div class="globe-gate-country-list" id="globeGateCountryList" role="group" aria-label="Select one country"></div>
+                            <p class="globe-gate-selection-hint t" id="globeGateSelectionHint" data-key="globe_gate_selection_hint" role="status" aria-live="polite">Select one country to continue.</p>
+                            <button type="button" class="globe-gate-select-btn t" id="globeGateSelectBtn" data-key="globe_gate_continue" disabled>Continue to map</button>
+                        </aside>
+                        <button type="button" id="globeGateCloseBtn" class="globe-gate-reopen" style="display:none;top:auto;right:auto;left:14px" aria-label="Close">✕</button>
+                        <div class="globe-gate-zoom">
+                            <button type="button" id="globeGateZoomIn" aria-label="Zoom in">+</button>
+                            <button type="button" id="globeGateZoomOut" aria-label="Zoom out">−</button>
+                        </div>
+                        <div class="globe-gate-hint" id="globeGateHint"></div>
+                        <div class="globe-gate-attrib" id="globeGateAttrib" aria-label="Imagery attribution">Imagery © Esri — World Imagery</div>
+                        <div class="globe-gate-loading" id="globeGateLoading">
+                            <span class="globe-gate-spinner" aria-hidden="true"></span>
+                            <span class="t" data-key="globe_gate_loading">Loading world map…</span>
+                        </div>
+                        <div class="globe-gate-error hidden" id="globeGateError">
+                            <p id="globeGateErrorText">The world map could not load. Please check your connection and try again.</p>
+                            <button type="button" id="globeGateRetryBtn" class="t" data-key="globe_gate_retry">Retry</button>
+                        </div>
+                        <!-- Secondary no-WebGL list retained as the last-resort picker
+                             if both the SceneView and 2D canvas cannot initialize. -->
+                        <div class="globe-gate-fallback hidden" id="globeGateFallback">
+                            <select id="globeGateFallbackSelect"></select>
+                            <button type="button" id="globeGateFallbackBtn">OK</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Harta Iosefină — fixed față de map-frame, nu se mișcă cu pana -->
@@ -3720,12 +3878,6 @@
                     <div class="transp-divider" data-category="premium"></div>
 
                 </div><!-- /transpPanel -->
-
-                <div class="arcgis-atlas-stage" id="arcgisAtlasStage" aria-label="European Roman ArcGIS atlas">
-                    <iframe class="map-iframe" id="arcgisAtlasFrame" src="europe-roman-atlas.html?embed=1"
-                            title="European and Roman ArcGIS atlas" loading="eager" allow="fullscreen"></iframe>
-                </div>
-                <button class="map-tab atlas-mode-floating-toggle" id="atlasModeFloatingToggle" type="button" aria-pressed="false">🗺 2D map &amp; layers</button>
             </div><!-- /map-frame -->
             <div class="map-legend-bar" id="mapLegendBar">
                 <span style="font-size:0.78rem;color:rgba(245,240,235,0.4);margin-right:6px" class="t" data-key="apm_score">APM Score:</span>
@@ -4573,7 +4725,7 @@
         </div>
     </footer>
 
-    <script src="js/translations.js?v=20261011-arcgis-primary"></script>
+    <script src="js/translations.js?v=20261011-arcgis-gate"></script>
 
     <!-- Leaflet JS (from qgis2web folder) -->
     <script src="js/leaflet.js"></script>
@@ -4644,9 +4796,18 @@
     <script src="js/lantmateriet-hojdmodell-layer.js?v=20261007-se-hojdmodell"></script>
     <!-- Physical-distance clustering for Patrimoniu pins and protection radiuses. -->
     <script src="js/patrimoniu-clustering.js?v=20260914-patrimoniu-cluster"></script>
-    <script src="js/map-app.js?v=20261011-2d-basemap"></script>
+    <!-- Lightweight local adapter only; the ArcGIS CDN SDK/theme are loaded after the gate opens. -->
+    <script src="js/globe-arcgis-gate.js?v=20261011-arcgis-gate"></script>
+    <script src="js/globe-country-picker.js?v=20261011-arcgis-gate"></script>
+    <!-- Country dock: the slide-down country switcher glued under the search
+         bar, the small World-hillshade overlay checkbox and the bottom-centre
+         “Exit view” button. Loaded after the globe gate (it only talks to it
+         through window.DetectLabGlobeGate) and before map-app.js, which
+         attaches it to the Leaflet map. -->
+    <script src="js/country-dock.js?v=20261010-hillshade-globe"></script>
+    <script src="js/map-app.js?v=20261011-arcgis-basemap"></script>
     <script src="js/historical-eu-maps.js?v=20261008-country-layers-strict"></script>
-    <script src="js/offline-maps.js?v=20261011-2d-basemap"></script>
+    <script src="js/offline-maps.js?v=20261009-3d-globe"></script>
     <script src="js/battles-layer.js?v=20260902-battles-label-anchor"></script>
     <script src="js/vertical-opacity-control.js?v=20261002-persistent-layer-actions-v2"></script>
     <!-- leaflet-heat rămâne în shell (pre-cache), dar nu mai e folosit de
@@ -5816,7 +5977,6 @@
         });
     }
 </script>
-<script src="js/atlas-shell.js?v=20261011-arcgis-primary"></script>
 <script src="js/hybrid-tile-switch.js"></script>
 </body>
 </html>

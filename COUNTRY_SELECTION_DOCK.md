@@ -1,9 +1,3 @@
-# Archived: legacy country dock
-
-> **Retired 2026-10-11.** The old Leaflet country dock, hillshade checkbox and “Exit view” lock were removed alongside the separate globe gate. Their replacement controls are part of the ArcGIS SceneView atlas (`europe-roman-atlas.html`): country selection, World Hillshade and elevation terrain are available there. This document is retained as historical notes only.
-
----
-
 # Country dock — search-bar country switcher, World hillshade & “Exit view”
 
 ## What changed

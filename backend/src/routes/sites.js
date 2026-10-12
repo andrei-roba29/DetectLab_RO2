@@ -11,7 +11,7 @@ let cache = null; // { data, cachedAt }
 
 /**
  * Serves the current live snapshot as a standard GeoJSON FeatureCollection
- * for the frontend map layers. This always reads
+ * — exactly what MapLibre expects for a GeoJSON source. This always reads
  * from the "archaeological_sites" view, so it automatically reflects
  * whichever buffer table the last successful sync published, with zero
  * awareness (or dependency) on the government server at request time.

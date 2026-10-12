@@ -1,9 +1,3 @@
-# Archived: legacy country-selection gate
-
-> **Retired 2026-10-11.** The legacy authenticated globe gate and canvas fallback were removed from the main app. Country selection now lives in the ArcGIS SceneView atlas (`europe-roman-atlas.html` / `js/europe-roman-atlas.js`), which is the default view in `index.html`; `js/atlas-shell.js` bridges one-country selections to the optional Leaflet map. This document is retained only as historical implementation notes.
-
----
-
 # Country-selection gate (ArcGIS SceneView + canvas fallback)
 
 ## Renderer choice

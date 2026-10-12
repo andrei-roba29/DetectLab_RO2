@@ -1589,6 +1589,26 @@
                 zoomAnimationThreshold: 10
             }).setView([51, 12], 3);
 
+            // Country selection happens in the globe gate (js/globe-country-picker.js,
+            // lazy ArcGIS SceneView renderer + canvas fallback), shown the first
+            // time an authenticated visitor reaches the map. attach() restores a
+            // previously chosen country instantly (no gate flash) or opens the gate
+            // once the user is confirmed logged in. Once a country is picked the
+            // gate hands this Leaflet instance a locked maxBounds/minZoom and
+            // calls filterLayersForCountry().
+            if (window.DetectLabGlobeGate) {
+                window.DetectLabGlobeGate.attach(map);
+            }
+
+            // Country dock (js/country-dock.js): the slide-down country
+            // switcher + World-hillshade checkbox glued under the search bar
+            // and the bottom-centre “Exit view” button of the locked country
+            // view. It reads the country list / lock state from the gate, so
+            // it must be attached after it.
+            if (window.DetectLabCountryDock) {
+                window.DetectLabCountryDock.attach(map);
+            }
+
             // ── GLOBAL TILE GOVERNOR ──
             // js/tile-perf.js patches every tile layer of the app (LIDAR,
             // historical maps, APM 2.0, CORONA, basemap…) with gesture-safe
@@ -3096,14 +3116,25 @@
                 };
             })();
 
-            // ── Legacy 2D satellite basemap (Web Mercator) ──
-            // Leaflet remains available behind the primary ArcGIS SceneView for
-            // existing analytical layers and offline-map tools. The ArcGIS atlas
-            // also embeds here with its country picker and Roman-world controls.
+            // ── ArcGIS basemap (World Imagery / Topographic / Terrain) ──
+            // The working map's base is the ArcGIS basemap stack: the same Esri
+            // tile services the ArcGIS SceneView atlas (europe-roman-atlas.html)
+            // and the country gate use, served as plain Web Mercator tiles so
+            // every existing Leaflet overlay (APM, LIDAR, historical maps,
+            // DARE/Roman, reports, offline maps) stays fully functional on top
+            // of it. The full 3D SceneView experience (Imagery/Topographic,
+            // hillshade, elevation terrain, Roman layers) remains available on
+            // the separate atlas page and in the lazy country gate; this 2D
+            // stack is the engine that hosts the analytical layers. The retired
+            // MapLibre 3D globe is gone — nothing else in the app references it.
             var SATELLITE_LAST_NATIVE_Z =
                 (window.SATELLITE_MAX_NATIVE_Z !== undefined) ? window.SATELLITE_MAX_NATIVE_Z : 18;
             var SATELLITE_IMAGERY_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+            var ARCGIS_TOPOGRAPHIC_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}';
+            var ARCGIS_TERRAIN_BASE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}';
+            var ARCGIS_TERRAIN_RELIEF_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Shaded_Relief/MapServer/tile/{z}/{y}/{x}';
             var SATELLITE_ATTRIBUTION = 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community';
+            var ARCGIS_BASEMAP_STORAGE_KEY = 'detectlab_arcgis_basemap_v1';
 
             map.createPane('pane_satellite');
             map.getPane('pane_satellite').style.zIndex = 398;
@@ -3117,6 +3148,131 @@
                 maxNativeZoom: SATELLITE_LAST_NATIVE_Z
             }).addTo(map);
             window._satLayer = satelliteLayer;
+
+            // World Topographic and the World Terrain pair (base + shaded
+            // relief) share the satellite pane, so every data pane (OSM places
+            // 401, UAT 402, LIDAR 610, historical maps 640+…) paints above
+            // whichever ArcGIS basemap is active.
+            function _arcgisBasemapTile(url, extra) {
+                var opts = {
+                    pane: 'pane_satellite',
+                    opacity: 1.0,
+                    attribution: SATELLITE_ATTRIBUTION,
+                    minZoom: 1,
+                    maxZoom: 20,
+                    maxNativeZoom: SATELLITE_LAST_NATIVE_Z
+                };
+                if (extra) Object.keys(extra).forEach(function (k) { opts[k] = extra[k]; });
+                return L.tileLayer(url, opts);
+            }
+            var topographicLayer = _arcgisBasemapTile(ARCGIS_TOPOGRAPHIC_URL);
+            var terrainBaseLayer = _arcgisBasemapTile(ARCGIS_TERRAIN_BASE_URL, { maxNativeZoom: 9 });
+            var terrainReliefLayer = _arcgisBasemapTile(ARCGIS_TERRAIN_RELIEF_URL, { maxNativeZoom: 9 });
+
+            var ARCGIS_BASEMAPS = {
+                imagery: { layers: [satelliteLayer] },
+                topographic: { layers: [topographicLayer] },
+                terrain: { layers: [terrainBaseLayer, terrainReliefLayer] }
+            };
+            var _arcgisCurrentBasemap = 'imagery';
+            try {
+                var _storedBasemap = window.localStorage.getItem(ARCGIS_BASEMAP_STORAGE_KEY);
+                if (_storedBasemap && ARCGIS_BASEMAPS[_storedBasemap]) _arcgisCurrentBasemap = _storedBasemap;
+            } catch (e) {}
+
+            function _syncArcgisBasemapControl(key) {
+                var ctrl = document.getElementById('arcgisBasemapCtrl');
+                if (!ctrl) return;
+                Array.prototype.forEach.call(ctrl.querySelectorAll('[data-arcgis-basemap]'), function (btn) {
+                    var isCurrent = btn.getAttribute('data-arcgis-basemap') === key;
+                    btn.classList.toggle('active', isCurrent);
+                    btn.setAttribute('aria-pressed', isCurrent ? 'true' : 'false');
+                });
+                var hsBox = document.getElementById('arcgisBasemapHillshade');
+                if (hsBox && window.DetectLabCountryDock) {
+                    try { hsBox.checked = !!window.DetectLabCountryDock.isHillshadeOn(); } catch (e) {}
+                }
+            }
+
+            window.setArcgisBasemap = function (key) {
+                if (!ARCGIS_BASEMAPS[key]) return _arcgisCurrentBasemap;
+                Object.keys(ARCGIS_BASEMAPS).forEach(function (k) {
+                    ARCGIS_BASEMAPS[k].layers.forEach(function (layer) {
+                        if (k === key && !map.hasLayer(layer)) layer.addTo(map);
+                        else if (k !== key && map.hasLayer(layer)) map.removeLayer(layer);
+                    });
+                });
+                _arcgisCurrentBasemap = key;
+                try { window.localStorage.setItem(ARCGIS_BASEMAP_STORAGE_KEY, key); } catch (e) {}
+                _syncArcgisBasemapControl(key);
+                return key;
+            };
+            window.getArcgisBasemap = function () { return _arcgisCurrentBasemap; };
+
+            // ── ArcGIS basemap switcher (bottom-left glass control) ──
+            // Imagery / Topographic / Terrain buttons + a World Hillshade
+            // checkbox. The checkbox drives the same overlay the country dock
+            // owns (window.toggleWorldHillshade) and stays in sync with the
+            // dock's checkbox. The control sits bottom-left, clear of the
+            // search bar (top-centre), the layer panel (right) and the PWA
+            // action dock (bottom-right), so it never covers the interface.
+            (function addArcgisBasemapControl() {
+                var labels = {
+                    imagery: { ro: 'Imagery (ArcGIS)', en: 'Imagery (ArcGIS)' },
+                    topographic: { ro: 'Topographic (ArcGIS)', en: 'Topographic (ArcGIS)' },
+                    terrain: { ro: 'Teren (ArcGIS)', en: 'Terrain (ArcGIS)' },
+                    hillshade: { ro: 'Hillshade (relief)', en: 'Hillshade (terrain)' }
+                };
+                var container = L.DomUtil.create('div', 'arcgis-basemap-ctrl');
+                container.id = 'arcgisBasemapCtrl';
+                container.setAttribute('role', 'group');
+                container.setAttribute('aria-label', 'ArcGIS basemap');
+                ['imagery', 'topographic', 'terrain'].forEach(function (key) {
+                    var btn = L.DomUtil.create('button', 'arcgis-basemap-btn', container);
+                    btn.type = 'button';
+                    btn.setAttribute('data-arcgis-basemap', key);
+                    btn.title = labels[key].en;
+                    btn.textContent = labels[key].en;
+                    btn.addEventListener('click', function () {
+                        if (typeof window.setArcgisBasemap === 'function') window.setArcgisBasemap(key);
+                    });
+                });
+                var hsLabel = L.DomUtil.create('label', 'arcgis-basemap-hs', container);
+                var hsBox = document.createElement('input');
+                hsBox.type = 'checkbox';
+                hsBox.id = 'arcgisBasemapHillshade';
+                hsLabel.appendChild(hsBox);
+                var hsText = document.createElement('span');
+                hsText.textContent = labels.hillshade.en;
+                hsLabel.appendChild(hsText);
+                hsBox.addEventListener('change', function () {
+                    if (typeof window.toggleWorldHillshade === 'function') {
+                        try { window.toggleWorldHillshade(!!hsBox.checked); } catch (e) {}
+                    }
+                });
+                // Keep the dock's hillshade checkbox and this one in sync.
+                var dockHs = document.getElementById('countryDockHillshade');
+                if (dockHs) dockHs.addEventListener('change', function () {
+                    if (window.DetectLabCountryDock) {
+                        try { hsBox.checked = !!window.DetectLabCountryDock.isHillshadeOn(); } catch (e) {}
+                    }
+                });
+                document.addEventListener('detectlab:langchange', function () {
+                    var lang = (typeof window._currentLang === 'function') ? window._currentLang() : 'en';
+                    var useRo = String(lang).toLowerCase().indexOf('ro') === 0;
+                    Array.prototype.forEach.call(container.querySelectorAll('[data-arcgis-basemap]'), function (btn) {
+                        var key = btn.getAttribute('data-arcgis-basemap');
+                        btn.textContent = labels[key][useRo ? 'ro' : 'en'];
+                        btn.title = btn.textContent;
+                    });
+                    hsText.textContent = labels.hillshade[useRo ? 'ro' : 'en'];
+                    container.setAttribute('aria-label', useRo ? 'Hartă de bază ArcGIS' : 'ArcGIS basemap');
+                });
+                _syncArcgisBasemapControl(window.getArcgisBasemap());
+                var control = L.control({ position: 'bottomleft' });
+                control.onAdd = function () { return container; };
+                control.addTo(map);
+            })();
 
             // ── SATELIT / ISTORIC — mozaicurile Copernicus VHR (EEA discomap) ──
             // Stratul „Satelit” are patru perioade, comutate din sliderul „Istoric”:
