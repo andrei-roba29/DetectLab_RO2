@@ -28,7 +28,7 @@ assert(indexHtml.includes('js/country-dock.js?v=20261013-country-2d'), 'index.ht
 assert(indexHtml.indexOf('js/globe-country-picker.js?v=20261013-no-change-pill') <
     indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d'), 'globe gate loads before the dock');
 assert(indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d') <
-    indexHtml.indexOf('js/map-app.js?v=20261013-wms-guard'), 'dock loads before map-app.js');
+    indexHtml.indexOf('js/map-app.js?v=20261013-fr-lidar'), 'dock loads before map-app.js');
 // The dock lives *inside* the search wrap so it stays glued to the search bar.
 const wrapIdx = indexHtml.indexOf('id="mapSearchWrap"');
 const dockIdx = indexHtml.indexOf('id="countryDock"');

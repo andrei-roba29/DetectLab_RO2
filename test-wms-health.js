@@ -25,16 +25,17 @@ const indexHtml = read('index.html');
 const swJs = read('sw.js');
 const mapApp = read('js/map-app.js');
 const histEu = read('js/historical-eu-maps.js');
+const registry = read('js/layer-registry.js');
 
 const guardTag = indexHtml.indexOf('js/wms-health.js?v=20261013-wms-guard');
 assert(guardTag !== -1, 'index.html loads the versioned WMS guard');
 assert(guardTag > indexHtml.indexOf('js/leaflet.js'), 'the guard loads after Leaflet');
-assert(guardTag < indexHtml.indexOf('js/map-app.js?v=20261013-wms-guard'),
+assert(guardTag < indexHtml.indexOf('js/map-app.js?v=20261013-fr-lidar'),
     'the guard loads before map-app.js creates the CENAGIS layers');
 assert(guardTag < indexHtml.indexOf('js/historical-eu-maps.js?v=20261013-flat-hist-maps'),
     'the guard loads before the country-map catalog wraps it');
 assert(swJs.includes('js/wms-health.js?v=20261013-wms-guard'), 'sw.js precaches the guard');
-assert(swJs.includes('js/map-app.js?v=20261013-wms-guard'), 'sw.js precaches the re-versioned map app');
+assert(swJs.includes('js/map-app.js?v=20261013-fr-lidar'), 'sw.js precaches the re-versioned map app');
 assert(swJs.includes('js/historical-eu-maps.js?v=20261013-flat-hist-maps'), 'sw.js precaches the re-versioned catalog');
 const shellVersion = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
 assert(shellVersion >= 191, 'sw.js cache is v191 or newer so installed PWAs pick the guard up');
@@ -47,8 +48,16 @@ console.log('  ✓ index.html / sw.js load and precache the guard in order');
 });
 assert(!/layers:\s*'topp:/.test(mapApp) && !/layers:\s*'topp:/.test(histEu),
     'no CENAGIS request is built with the stock "topp:" workspace prefix');
-assert(histEu.includes("layers: 'ihpan:' + mapMeta.wms_layer"),
-    'the country catalog asks the ihpan workspace it actually publishes');
+/* The catalogue itself now lives in js/layer-registry.js, which the 2D view and
+ * the 3D terrain view share — so the workspace-qualified layer name and the row
+ * metadata are asserted there, and the catalog is asserted to consume them. */
+assert(/workspace:\s*'ihpan'/.test(registry) &&
+       registry.includes("var layerName = CENAGIS.workspace + ':' + meta.wms_layer;"),
+    'the shared registry asks the ihpan workspace the catalogue actually publishes');
+assert(histEu.includes('REGISTRY.cenagisCatalog()'),
+    'the country catalog renders the sheets defined in the shared registry');
+assert(histEu.includes("REGISTRY.wms2dOptions('cenagis.' + mapKey"),
+    'the country catalog builds each sheet from its shared registry entry');
 assert(histEu.includes('layer._detectlabUiKeys = [mapKey];') &&
        histEu.includes('layer._detectlabUiTitle = mapMeta.title'),
     'the country catalog hands the guard its row key and display title');

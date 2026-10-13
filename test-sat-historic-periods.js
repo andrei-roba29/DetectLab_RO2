@@ -42,6 +42,10 @@ const indexHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 const stylesCss = fs.readFileSync(path.join(__dirname, 'css/styles.css'), 'utf8');
 const translations = fs.readFileSync(path.join(__dirname, 'js/translations.js'), 'utf8');
 const swJs = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8');
+// The three Copernicus mosaics are DEFINED in the shared registry
+// (js/layer-registry.js), which the 2D map, the 3D terrain view and the tile
+// proxy all read — so the service facts are asserted there.
+const registry = require('./js/layer-registry.js');
 
 let failures = 0;
 let checks = 0;
@@ -62,21 +66,33 @@ console.log('[1] WMS layers for the Copernicus VHR mosaics (2016 orthophoto remo
         /'2012':/.test(histBlock) && /'2018':/.test(histBlock) && /'2021':/.test(histBlock),
         histBlock.slice(0, 200));
     check('2012 uses the Copernicus VeryHighResolution2012 MapServer WMS',
-        /copernicus\.discomap\.eea\.europa\.eu\/arcgis\/services\/GioLand\/VeryHighResolution2012\/MapServer\/WMSServer/.test(mapApp) &&
-        /'Image'\)/.test(histBlock));
+        registry.get('sat.vhr-2012').url ===
+            'https://copernicus.discomap.eea.europa.eu/arcgis/services/GioLand/VeryHighResolution2012/MapServer/WMSServer' &&
+        registry.get('sat.vhr-2012').layer === 'Image' &&
+        /_satVhrWms\('sat\.vhr-2012'\)/.test(histBlock));
     check('2018 uses the VHR_2018_WM ImageServer WMS',
-        /image\.discomap\.eea\.europa\.eu\/arcgis\/services\/GioLand\/VHR_2018_WM\/ImageServer\/WMSServer/.test(mapApp) &&
-        /'VHR_2018_WM'\)/.test(histBlock));
+        registry.get('sat.vhr-2018').url ===
+            'https://image.discomap.eea.europa.eu/arcgis/services/GioLand/VHR_2018_WM/ImageServer/WMSServer' &&
+        registry.get('sat.vhr-2018').layer === 'VHR_2018_WM' &&
+        /_satVhrWms\('sat\.vhr-2018'\)/.test(histBlock));
     check('2021 uses the VHR_2021_LAEA ImageServer WMS',
-        /image\.discomap\.eea\.europa\.eu\/arcgis\/services\/GioLand\/VHR_2021_LAEA\/ImageServer\/WMSServer/.test(mapApp) &&
-        /'VHR_2021_LAEA'\)/.test(histBlock));
+        registry.get('sat.vhr-2021').url ===
+            'https://image.discomap.eea.europa.eu/arcgis/services/GioLand/VHR_2021_LAEA/ImageServer/WMSServer' &&
+        registry.get('sat.vhr-2021').layer === 'VHR_2021_LAEA' &&
+        /_satVhrWms\('sat\.vhr-2021'\)/.test(histBlock));
     check('the VHR requests go out as WMS 1.1.1 JPEG tiles on the historical pane',
-        /version:\s*'1\.1\.1'/.test(mapApp) &&
-        /format:\s*'image\/jpeg'/.test(mapApp) &&
-        /pane:\s*'pane_sat_hist'/.test(mapApp));
+        ['sat.vhr-2012', 'sat.vhr-2018', 'sat.vhr-2021'].every(function (id) {
+            const def = registry.get(id);
+            return def.version === '1.1.1' && def.format === 'image/jpeg' && def.transparent === false;
+        }) &&
+        /pane:\s*'pane_sat_hist'/.test(mapApp) &&
+        /transparent:\s*false/.test(mapApp));
     check('every VHR mosaic carries the Copernicus attribution',
-        /var COPERNICUS_LAND_ATTRIBUTION\s*=\s*\n?\s*"&copy; European Union's Copernicus Land Monitoring Service information"/.test(mapApp) &&
-        /attribution:\s*COPERNICUS_LAND_ATTRIBUTION/.test(mapApp));
+        ['sat.vhr-2012', 'sat.vhr-2018', 'sat.vhr-2021'].every(function (id) {
+            return registry.get(id).attribution ===
+                "&copy; European Union's Copernicus Land Monitoring Service information";
+        }) &&
+        /var COPERNICUS_LAND_ATTRIBUTION\s*=\s*\n?\s*"&copy; European Union's Copernicus Land Monitoring Service information"/.test(mapApp));
     // The prose comment may still name the dropped layer; no CODE may use it.
     check('the 2016 orthophoto is gone from the base layer',
         !/layers:\s*'geospatial:of_2017_2020'/.test(mapApp) &&

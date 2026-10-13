@@ -27,6 +27,11 @@
     <link rel="stylesheet" href="css/leaflet-measure.css">
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
     <link rel="stylesheet" href="css/styles.css?v=20261008-roman-dare-icons">
+    <!-- 3D TERRAIN VIEW (2D ⇄ 3D) — MapLibre GL JS, vendored like Leaflet.
+         maplibre-gl.css must come before our own sheet, which re-skins its
+         controls; the SDK itself is only downloaded when 3D is opened. -->
+    <link rel="stylesheet" href="css/maplibre-gl.css?v=20261013-3d-terrain">
+    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261013-3d-position">
     <link rel="stylesheet" href="css/globe-country-picker.css?v=20261013-no-change-pill">
     <link rel="stylesheet" href="css/country-dock.css?v=20261008">
     <link rel="stylesheet" href="css/library-of-babel.css?v=20260917-babel-epochs">
@@ -4802,8 +4807,19 @@
          through window.DetectLabGlobeGate) and before map-app.js, which
          attaches it to the Leaflet map. -->
     <script src="js/country-dock.js?v=20261013-country-2d"></script>
-    <script src="js/map-app.js?v=20261013-wms-guard"></script>
+    <!-- Single shared layer registry (js/layer-registry.js): every raster
+         layer — historical WMS sheets, R2/Supabase tile pyramids, LiDAR
+         relief, CORONA, VEG-FP, base imagery — is defined ONCE here. The 2D
+         map, the 3D terrain view and the tile proxy all read it, so the two
+         views can never drift apart. Must load before map-app.js and
+         historical-eu-maps.js. -->
+    <script src="js/layer-registry.js?v=20261013-3d-lidar"></script>
+    <script src="js/map-app.js?v=20261013-fr-lidar"></script>
     <script src="js/historical-eu-maps.js?v=20261013-flat-hist-maps"></script>
+    <!-- 2D ⇄ 3D: MapLibre GL viewer draped over the DEM, mirroring the 2D
+         camera and every active layer/opacity. Loads MapLibre GL itself only
+         when 3D is opened (see js/map3d-terrain.js). -->
+    <script src="js/map3d-terrain.js?v=20261013-3d-lidar"></script>
     <script src="js/offline-maps.js?v=20261009-3d-globe"></script>
     <script src="js/battles-layer.js?v=20260902-battles-label-anchor"></script>
     <script src="js/vertical-opacity-control.js?v=20261002-persistent-layer-actions-v2"></script>

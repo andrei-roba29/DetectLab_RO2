@@ -1,0 +1,274 @@
+/* ============================================================================
+ * map3d-terrain.css — styles for the optional 3D terrain view
+ * ----------------------------------------------------------------------------
+ * Scope rule: every selector in this file is namespaced (#map3d-*) or hangs off
+ * a body class (.is-3d) so the existing 2D map, its controls and the layer
+ * panel are never restyled. The 3D surface is an overlay on top of
+ * #detectlab-map, inside .map-wrapper, so PWA/fullscreen sizing comes for free.
+ * ========================================================================== */
+
+/* ── the surface itself ─────────────────────────────────────────────────── */
+#map3d-surface {
+    position: absolute;
+    inset: 0;
+    /* Leaflet panes (401–660), the Josephine transition (950), the layer panel
+     * (1001/1002) and the search bar (≥1000) all compete in this same stacking
+     * context — see css/styles.css. 700 puts the 3D canvas above every Leaflet
+     * pane and below every piece of DetectLab chrome, so the layer panel, the
+     * search bar and the dock stay usable while 3D is on. */
+    z-index: 700;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #060E1E;
+    display: none;
+}
+
+/* While 3D is on, the Leaflet panes keep their state but stop painting: the
+ * MapLibre canvas is the only map the user sees, and the browser is not asked
+ * to rasterise two full maps at once. Everything comes back instantly when 3D
+ * is closed — this is a paint-side switch, not a teardown. */
+body.is-3d #detectlab-map .leaflet-pane { visibility: hidden; }
+
+/* Leaflet's own controls (zoom, locate, measure) drive the *2D* map, and
+ * Leaflet pins them at z-index 1000 — above this canvas. Hidden while 3D is
+ * on, so nobody clicks a button that moves a map they cannot see; MapLibre
+ * brings its own navigation, pitch/terrain and scale controls. The live
+ * location control that the PWA appends to its own stack is hidden for the
+ * same reason (it moves the 2D camera). */
+body.is-3d #detectlab-map .leaflet-control-container,
+body.is-3d #pwa-br-stack .leaflet-control { visibility: hidden; }
+
+body.is-3d #map3d-surface { display: block; }
+
+body.is-3d .map-wrapper.is-fullscreen #map3d-surface,
+body.is-pwa.is-3d #map3d-surface {
+    border-radius: 0;
+}
+
+#map3d-surface canvas { outline: none; }
+
+/* ── loading / error veil ──────────────────────────────────────────────── */
+#map3d-veil {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+    padding: 24px;
+    background: rgba(6, 14, 30, 0.82);
+    color: rgba(245, 240, 235, 0.9);
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.86rem;
+    line-height: 1.5;
+    backdrop-filter: blur(2px);
+}
+
+#map3d-surface.is-busy #map3d-veil,
+#map3d-surface.is-error #map3d-veil { display: flex; }
+
+#map3d-veil .m3d-ring {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 2px solid rgba(184, 216, 240, 0.25);
+    border-top-color: #c8a96e;
+    animation: map3d-spin 0.9s linear infinite;
+}
+
+@keyframes map3d-spin { to { transform: rotate(360deg); } }
+
+#map3d-veil .m3d-veil-title { font-weight: 600; letter-spacing: 0.02em; }
+#map3d-veil .m3d-veil-detail { font-size: 0.78rem; color: rgba(245, 240, 235, 0.65); max-width: 30rem; }
+#map3d-veil .m3d-veil-action {
+    margin-top: 4px;
+    padding: 7px 14px;
+    border-radius: 6px;
+    border: 1px solid rgba(200, 169, 110, 0.45);
+    background: rgba(200, 169, 110, 0.14);
+    color: #f5f0eb;
+    font: inherit;
+    cursor: pointer;
+}
+#map3d-veil .m3d-veil-action:hover { background: rgba(200, 169, 110, 0.26); }
+
+/* ── the 2D/3D switch (visible in both modes) ──────────────────────────── */
+#map3d-toggle {
+    /* Bottom-centre, 66px up: the top corners are taken by Leaflet's
+     * zoom/locate controls (topleft) and the measure control (topright), the
+     * search bar sits at the top centre, the opacity mirror and the layer panel
+     * on the right edge, and the country “Exit view” pill occupies the very
+     * bottom centre in the locked-country view (66px clears it, and stays under
+     * the “zoom in” hint at 96px). 960 keeps it clickable above that pill (950)
+     * while everything the user must keep reaching stays at 1000+. */
+    position: absolute;
+    bottom: 66px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 960;               /* above the 3D surface, below the app chrome */
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(184, 216, 240, 0.28);
+    background: rgba(6, 14, 30, 0.78);
+    color: rgba(245, 240, 235, 0.92);
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.74rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+#map3d-toggle:hover { background: rgba(12, 26, 48, 0.9); border-color: rgba(200, 169, 110, 0.6); }
+#map3d-toggle .m3d-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: rgba(184, 216, 240, 0.5);
+}
+body.is-3d #map3d-toggle .m3d-dot { background: #c8a96e; box-shadow: 0 0 8px rgba(200, 169, 110, 0.8); }
+#map3d-toggle[disabled] { opacity: 0.6; cursor: progress; }
+
+/* ── the 3D control bar (only while 3D is on) ───────────────────────────── */
+#map3d-bar {
+    /* Bottom-left. The right edge belongs to the layer panel (1001, full
+     * height) and the opacity mirror, the top centre to the search bar, and the
+     * bottom centre to the 3D toggle — the left edge is the only strip that
+     * stays free once 3D is on (Leaflet's own zoom/locate controls are hidden
+     * in 3D, and MapLibre's scale control sits below this 34px offset). */
+    position: absolute;
+    left: 10px;
+    bottom: 34px;
+    z-index: 960;               /* above the 3D surface, below the app chrome */
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    width: 208px;
+    max-width: calc(100% - 20px);
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(184, 216, 240, 0.22);
+    background: rgba(6, 14, 30, 0.86);
+    color: rgba(245, 240, 235, 0.92);
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.72rem;
+    backdrop-filter: blur(6px);
+    max-height: calc(100% - 46px);
+    overflow-y: auto;
+}
+
+body.is-3d #map3d-bar { display: flex; }
+
+#map3d-bar.collapsed .m3d-row,
+#map3d-bar.collapsed #map3d-status { display: none; }
+
+.m3d-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 0.66rem;
+    color: rgba(200, 169, 110, 0.95);
+}
+
+.m3d-head button {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    padding: 2px 4px;
+}
+
+.m3d-row { display: flex; flex-direction: column; gap: 4px; }
+.m3d-row > label { display: flex; justify-content: space-between; gap: 6px; opacity: 0.85; }
+.m3d-row input[type="range"] { width: 100%; accent-color: #c8a96e; }
+
+.m3d-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.m3d-actions button {
+    flex: 1 1 auto;
+    padding: 5px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(184, 216, 240, 0.24);
+    background: rgba(184, 216, 240, 0.08);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.m3d-actions button:hover { background: rgba(184, 216, 240, 0.18); }
+
+#map3d-status { display: flex; flex-direction: column; gap: 3px; }
+#map3d-status .m3d-st {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    line-height: 1.35;
+    color: rgba(245, 240, 235, 0.75);
+}
+#map3d-status .m3d-st b { font-weight: 600; color: rgba(245, 240, 235, 0.92); }
+#map3d-status .m3d-st.is-warn { color: #f0c98a; }
+#map3d-status .m3d-st.is-bad { color: #f08a8a; }
+#map3d-status .m3d-st.is-proxy { color: #9ad8f5; }
+#map3d-status .m3d-sum { margin-top: 4px; opacity: 0.6; }
+
+/* MapLibre's own controls inside the surface */
+#map3d-surface .maplibregl-ctrl-group { background: rgba(6, 14, 30, 0.82); }
+#map3d-surface .maplibregl-ctrl-group button + button { border-top-color: rgba(184, 216, 240, 0.18); }
+#map3d-surface .maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(0.92) hue-rotate(180deg); }
+#map3d-surface .maplibregl-ctrl-attrib {
+    background: rgba(6, 14, 30, 0.72);
+    color: rgba(245, 240, 235, 0.8);
+    font-size: 0.62rem;
+}
+#map3d-surface .maplibregl-ctrl-attrib a { color: rgba(200, 169, 110, 0.95); }
+#map3d-surface .maplibregl-ctrl-scale {
+    background: rgba(6, 14, 30, 0.6);
+    color: rgba(245, 240, 235, 0.85);
+    border-color: rgba(184, 216, 240, 0.4);
+}
+
+/* ── narrow screens ────────────────────────────────────────────────────── */
+@media (max-width: 720px) {
+    #map3d-bar {
+        width: 168px;
+        font-size: 0.68rem;
+        padding: 8px;
+        top: 8px;
+        right: 8px;
+    }
+    #map3d-toggle {
+        bottom: 58px;
+        font-size: 0.68rem;
+        padding: 5px 8px;
+    }
+    /* On phones the search bar owns the top of the map and the country pill the
+     * bottom edge: the bar tucks under the search bar on the left, the toggle
+     * stays bottom-centre, and the two never collide. */
+    #map3d-bar {
+        top: 56px;
+        left: 8px;
+        bottom: auto;
+        max-height: calc(100% - 92px);
+    }
+    /* Keep MapLibre's own controls out of the way on phones. */
+    #map3d-surface .maplibregl-ctrl-top-right { display: none; }
+    #map3d-surface .maplibregl-ctrl-bottom-left { display: none; }
+    #map3d-surface .maplibregl-ctrl-bottom-left,
+    #map3d-surface .maplibregl-ctrl-bottom-right { font-size: 0.6rem; }
+}
+
+@media (max-height: 420px) {
+    #map3d-bar { max-height: calc(100% - 16px); }
+}

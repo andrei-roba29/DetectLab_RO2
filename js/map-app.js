@@ -1555,6 +1555,19 @@
                     removeSearchMarker();
                 };
             }
+            // ── SHARED LAYER REGISTRY (js/layer-registry.js) ─────────────────
+            // Every raster layer below is DEFINED ONCE in js/layer-registry.js:
+            // the service (URL, LAYERS, FORMAT, VERSION, transparency, custom
+            // params, bounds, attribution) comes from the registry, while this
+            // file keeps the view wiring (panes, toggles, coverage). The same
+            // definitions build the 3D terrain view (js/map3d-terrain.js) and
+            // the tile proxy (netlify/lib/map3d-tile.mjs) — no layer is defined
+            // twice, so 2D and 3D cannot drift apart.
+            var DL = window.DetectLabLayers;
+            if (!DL) {
+                console.error('[DetectLab] js/layer-registry.js must load before js/map-app.js');
+            }
+
             // APM image bounds [[south,west],[north,east]] in EPSG:4326
             var APM_BOUNDS = [
                 [42.8657855276803872, 19.9018464511967004],
@@ -3307,14 +3320,13 @@
 
             var SAT_HIST_LAST_NATIVE_Z = 17;
 
-            function _satVhrWms(url, layers) {
-                return L.tileLayer.wms(url, {
-                    layers: layers,
-                    format: 'image/jpeg',
-                    transparent: false,
-                    // 1.1.1 trimite SRS= (nu CRS=) și păstrează ordinea axelor
-                    // minx,miny,maxx,maxy, deci nu depinde de axis-order-ul 1.3.0.
-                    version: '1.1.1',
+            /* The three Copernicus mosaics are DEFINED in the shared registry
+             * (sat.vhr-2012 / sat.vhr-2018 / sat.vhr-2021): URL, LAYERS,
+             * FORMAT, TRANSPARENT and VERSION live there and are reused by the
+             * 3D view, which reaches them through the same-origin proxy because
+             * discomap does not guarantee CORS headers. */
+            function _satVhrWms(id) {
+                return L.tileLayer.wms(DL.url2d(id), DL.wms2dOptions(id, {
                     pane: 'pane_sat_hist',
                     minZoom: 1,
                     maxZoom: 20,
@@ -3322,20 +3334,14 @@
                     // Fără crossOrigin: discomap nu garantează antetele CORS, iar
                     // un <img crossorigin> respins nu s-ar mai afișa deloc. Nimic
                     // din aplicație nu eșantionează aceste tile-uri în canvas.
-                    attribution: COPERNICUS_LAND_ATTRIBUTION
-                });
+                    transparent: false
+                }));
             }
 
             var SAT_HIST_PERIODS = {
-                '2012': _satVhrWms(
-                    'https://copernicus.discomap.eea.europa.eu/arcgis/services/GioLand/VeryHighResolution2012/MapServer/WMSServer',
-                    'Image'),
-                '2018': _satVhrWms(
-                    'https://image.discomap.eea.europa.eu/arcgis/services/GioLand/VHR_2018_WM/ImageServer/WMSServer',
-                    'VHR_2018_WM'),
-                '2021': _satVhrWms(
-                    'https://image.discomap.eea.europa.eu/arcgis/services/GioLand/VHR_2021_LAEA/ImageServer/WMSServer',
-                    'VHR_2021_LAEA')
+                '2012': _satVhrWms('sat.vhr-2012'),
+                '2018': _satVhrWms('sat.vhr-2018'),
+                '2021': _satVhrWms('sat.vhr-2021')
             };
             window._satHistPeriods = SAT_HIST_PERIODS;
 
@@ -6476,7 +6482,10 @@
                 (window.EaLidarWmts && window.EaLidarWmts.CONFIG.HOST) || 'https://environment.data.gov.uk';
             var UK_LIDAR_DEFAULT_MODE =
                 (window.EaLidarWmts && window.EaLidarWmts.CONFIG.DEFAULT_MODE) || 'hillshade';
-            var FRANCE_LIDAR_WMS_URL = 'https://data.geopf.fr/wms-r/wms';
+            // France: the endpoint and the per-product layer names are owned by
+            // the shared registry (js/layer-registry.js) — the same definition
+            // the 3D terrain view drapes, so the two can never drift apart.
+            var FRANCE_LIDAR_WMS_URL = (DL && DL.url2d('lidar.fr-mnh')) || '';
             // Denmark now streams Danmarks Højdemodel from Dataforsyningen
             // through the site's own token-adding proxy (see
             // js/dataforsyningen-dhm-layer.js). The old Datafordeler WMS
@@ -6537,11 +6546,7 @@
             window.POLAND_NMT_WMS_BASE = POLAND_NMT_WMS_BASE;
             window.POLAND_LIDAR_MODES = POLAND_LIDAR_MODES;
 
-            var FRANCE_LIDAR_MODES = {
-                terrain: { label: 'MNT · Terrain', layers: 'IGNF_LIDAR-HD_MNT_ELEVATION.ELEVATIONGRIDCOVERAGE.SHADOW' },
-                surface: { label: 'MNS · Surface', layers: 'IGNF_LIDAR-HD_MNS_ELEVATION.ELEVATIONGRIDCOVERAGE.SHADOW' },
-                height: { label: 'MNH · Height', layers: 'IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.SHADOW' }
-            };
+            var FRANCE_LIDAR_MODES = (DL && DL.modes && DL.modes('lidar.fr-mnh')) || {};
             // England: layer identifiers, zoom caps and extents all come from
             // the live GetCapabilities (see js/ea-lidar-wmts-layer.js).
             var UK_LIDAR_MODES = (window.EaLidarWmts && window.EaLidarWmts.MODES) || {};
@@ -6959,7 +6964,11 @@
                 }
                 if (cfg.factory === 'france') {
                     mode = FRANCE_LIDAR_MODES[cfg.mode] || FRANCE_LIDAR_MODES.terrain;
-                    return _createFreeLidarWmsLayer(FRANCE_LIDAR_WMS_URL, mode.layers, {
+                    if (!mode || !FRANCE_LIDAR_WMS_URL) {
+                        console.warn('[DetectLab] France LiDAR unavailable — the shared layer registry did not load');
+                        return null;
+                    }
+                    return _createFreeLidarWmsLayer(FRANCE_LIDAR_WMS_URL, mode.layer || mode.layers, {
                         opacity: cfg.opacity,
                         attribution: cfg.attribution
                     });
@@ -9203,10 +9212,9 @@
                 // This is a deterministic geometric viewport/polygon intersection test.
                 // It intentionally does not depend on opaque-black tile borders, alpha
                 // probing, or whether a sheet edge happens to be visible.
-                var JOSEPHINE_CLOUDFLARE_TILE_URL =
-                    'https://pub-638f9319d3994d9ba6b7c4ce178867fd.r2.dev/Josephine/{z}/{x}/{y}.jpg';
-                var JOSEPHINE_SUPABASE_TILE_URL =
-                    'https://dacboefvooxgsngxkavx.supabase.co/storage/v1/object/public/Harti/Joseph/{z}/{x}/{y}.png';
+                /* Both pyramids are DEFINED in the shared registry (premium.josephine). */
+                var JOSEPHINE_CLOUDFLARE_TILE_URL = DL.url2d('premium.josephine');
+                var JOSEPHINE_SUPABASE_TILE_URL = DL.url2d('premium.josephine', 'supabase');
                 var JOSEPHINE_SUPABASE_MIN_NATIVE_Z = 10;
                 var JOSEPHINE_SUPABASE_MAX_NATIVE_Z = 14;
                 var JOSEPHINE_TILE_SIZE = 256;
@@ -9867,7 +9875,7 @@
                 // IMPORTANT: this deliberately stays on Cloudflare.  The visual premium
                 // layer may switch to Supabase at a map boundary, but "Clădiri dispărute"
                 // must always analyse the established Cloudflare Josephine imagery.
-                var TILE_URL_JOSEPHINE_PLUS = 'https://pub-638f9319d3994d9ba6b7c4ce178867fd.r2.dev/Josephine/{z}/{x}/{y}.jpg';
+                var TILE_URL_JOSEPHINE_PLUS = DL.url2d('premium.josephine');
                 var JOSEPHINE_MAX_NATIVE_Z = 15; // ultimul nivel cu tile-uri reale generate static în R2
                 var TILE_SIZE  = 256;
                 var GRID       = 4;
@@ -11476,18 +11484,9 @@
                 map.getPane('pane_austrian').style.zIndex = 640;
                 map.getPane('pane_austrian').style.pointerEvents = 'none';
 
-                window._austrianMapLayer = L.tileLayer.wms(
-                    'https://services.geo-spatial.org/geoserver/eharta/wms',
-                    {
-                        layers: 'eharta:mozaic_austrian_200k',
-                        format: 'image/png',
-                        transparent: true,
-                        version: '1.1.0',
-                        opacity: 0.80,
-                        pane: 'pane_austrian',
-                        attribution: '© geo-spatial.org / Harta Austriacă 1910'
-                    }
-                );
+                window._austrianMapLayer = L.tileLayer.wms(DL.url2d('hist.austrian'), DL.wms2dOptions('hist.austrian', {
+                    pane: 'pane_austrian'
+                }));
 
                 window.toggleAustrianMap = function (on) {
                     var histToggle = document.getElementById('histToggle');
@@ -12673,18 +12672,9 @@
                 map.getPane('pane_firingplans').style.zIndex = 641;
                 map.getPane('pane_firingplans').style.pointerEvents = 'none';
 
-                window._firingPlansLayer = L.tileLayer.wms(
-                    'https://services.geo-spatial.org/geoserver/eharta/wms',
-                    {
-                        layers: 'eharta:mozaic_planuri_tragere_20k',
-                        format: 'image/png',
-                        transparent: true,
-                        version: '1.1.0',
-                        opacity: 0.80,
-                        pane: 'pane_firingplans',
-                        attribution: '© geo-spatial.org / Planuri de Tragere'
-                    }
-                );
+                window._firingPlansLayer = L.tileLayer.wms(DL.url2d('hist.firing-plans'), DL.wms2dOptions('hist.firing-plans', {
+                    pane: 'pane_firingplans'
+                }));
 
                 window.toggleFiringPlans = function (on) {
                     var histToggle = document.getElementById('histToggle');
@@ -12713,18 +12703,9 @@
                 map.getPane('pane_sovietmap').style.zIndex = 642;
                 map.getPane('pane_sovietmap').style.pointerEvents = 'none';
 
-                window._sovietMapLayer = L.tileLayer.wms(
-                    'https://services.geo-spatial.org/geoserver/eharta/wms',
-                    {
-                        layers: 'eharta:mozaic_soviet100k',
-                        format: 'image/png',
-                        transparent: true,
-                        version: '1.1.0',
-                        opacity: 0.80,
-                        pane: 'pane_sovietmap',
-                        attribution: '© geo-spatial.org / Harta Sovietică 1970'
-                    }
-                );
+                window._sovietMapLayer = L.tileLayer.wms(DL.url2d('hist.soviet-1970'), DL.wms2dOptions('hist.soviet-1970', {
+                    pane: 'pane_sovietmap'
+                }));
 
                 window.toggleSovietMap = function (on) {
                     var histToggle = document.getElementById('histToggle');
@@ -13800,18 +13781,11 @@
                 // presupune că sursa nu are acoperire acolo.
                 window.BUCOVINA_TILE_MAX_NATIVE_Z = (window.BUCOVINA_TILE_MAX_NATIVE_Z !== undefined) ? window.BUCOVINA_TILE_MAX_NATIVE_Z : 15;
 
-                window._bucovinaMapLayer = L.tileLayer(
-                    'https://pub-638f9319d3994d9ba6b7c4ce178867fd.r2.dev/Galitzien_and_Bukovina-1861-1864/Galitzien_and_Bukovina-1861-1864/{z}/{x}/{y}.jpg',
-                    {
-                        minZoom: 8,
-                        maxZoom: 20,
-                        maxNativeZoom: window.BUCOVINA_TILE_MAX_NATIVE_Z,
-                        tileSize: 256,
-                        opacity: 0.80,
-                        pane: 'pane_bucovina',
-                        attribution: '© Bucovina 1861-1864'
-                    }
-                );
+                window._bucovinaMapLayer = L.tileLayer(DL.url2d('premium.bucovina'), DL.tile2dOptions('premium.bucovina', {
+                    minZoom: 8, maxZoom: 20,
+                    maxNativeZoom: window.BUCOVINA_TILE_MAX_NATIVE_Z,
+                    pane: 'pane_bucovina'
+                }));
 
                 window.toggleBucovinaMap = function (on) {
                     if (on) {
@@ -13846,18 +13820,11 @@
                 // Dacă apar și la zoom mai mare, crește valoarea aici.
                 window.AUSTROHU_TILE_MAX_NATIVE_Z = (window.AUSTROHU_TILE_MAX_NATIVE_Z !== undefined) ? window.AUSTROHU_TILE_MAX_NATIVE_Z : 13;
 
-                window._austrohuMapLayer = L.tileLayer(
-                    'https://pub-638f9319d3994d9ba6b7c4ce178867fd.r2.dev/Galitzien_and_Bukovina-1861-1864/1869-1912/{z}/{x}/{y}.jpg',
-                    {
-                        minZoom: 8,
-                        maxZoom: 20,
-                        maxNativeZoom: window.AUSTROHU_TILE_MAX_NATIVE_Z,
-                        tileSize: 256,
-                        opacity: 0.80,
-                        pane: 'pane_austrohu',
-                        attribution: '© Austro-Hungarian Map 1861-1864'
-                    }
-                );
+                window._austrohuMapLayer = L.tileLayer(DL.url2d('premium.austro-hungarian'), DL.tile2dOptions('premium.austro-hungarian', {
+                    minZoom: 8, maxZoom: 20,
+                    maxNativeZoom: window.AUSTROHU_TILE_MAX_NATIVE_Z,
+                    pane: 'pane_austrohu'
+                }));
 
                 window.toggleAustrohuMap = function (on) {
                     if (on) {
@@ -13892,18 +13859,11 @@
                 // Dacă apar și la zoom mai mare, crește valoarea aici.
                 window.MOLDOVA1868_TILE_MAX_NATIVE_Z = (window.MOLDOVA1868_TILE_MAX_NATIVE_Z !== undefined) ? window.MOLDOVA1868_TILE_MAX_NATIVE_Z : 13;
 
-                window._moldova1868MapLayer = L.tileLayer(
-                    'https://pub-638f9319d3994d9ba6b7c4ce178867fd.r2.dev/Galitzien_and_Bukovina-1861-1864/moldova-1868/{z}/{x}/{y}.jpg',
-                    {
-                        minZoom: 8,
-                        maxZoom: 20,
-                        maxNativeZoom: window.MOLDOVA1868_TILE_MAX_NATIVE_Z,
-                        tileSize: 256,
-                        opacity: 0.80,
-                        pane: 'pane_moldova1868',
-                        attribution: '© Moldova 1868'
-                    }
-                );
+                window._moldova1868MapLayer = L.tileLayer(DL.url2d('premium.moldova-1868'), DL.tile2dOptions('premium.moldova-1868', {
+                    minZoom: 8, maxZoom: 20,
+                    maxNativeZoom: window.MOLDOVA1868_TILE_MAX_NATIVE_Z,
+                    pane: 'pane_moldova1868'
+                }));
 
                 window.toggleMoldova1868Map = function (on) {
                     if (on) {
@@ -13934,18 +13894,11 @@
 
                 window.MOLDOVA1771_TILE_MAX_NATIVE_Z = (window.MOLDOVA1771_TILE_MAX_NATIVE_Z !== undefined) ? window.MOLDOVA1771_TILE_MAX_NATIVE_Z : 15;
 
-                window._moldova1771MapLayer = L.tileLayer(
-                    'https://pub-638f9319d3994d9ba6b7c4ce178867fd.r2.dev/Moldova_1771/{z}/{x}/{y}.jpg',
-                    {
-                        minZoom: 8,
-                        maxZoom: 20,
-                        maxNativeZoom: window.MOLDOVA1771_TILE_MAX_NATIVE_Z,
-                        tileSize: 256,
-                        opacity: 0.80,
-                        pane: 'pane_moldova1771',
-                        attribution: '© Národní knihovna České republiky'
-                    }
-                );
+                window._moldova1771MapLayer = L.tileLayer(DL.url2d('premium.moldova-1771'), DL.tile2dOptions('premium.moldova-1771', {
+                    minZoom: 8, maxZoom: 20,
+                    maxNativeZoom: window.MOLDOVA1771_TILE_MAX_NATIVE_Z,
+                    pane: 'pane_moldova1771'
+                }));
 
                 window.toggleMoldova1771Map = function (on) {
                     if (on) {
@@ -13980,18 +13933,11 @@
                 // Dacă apar și la zoom mai mare, crește valoarea aici.
                 window.MOLDOVAWWII_TILE_MAX_NATIVE_Z = (window.MOLDOVAWWII_TILE_MAX_NATIVE_Z !== undefined) ? window.MOLDOVAWWII_TILE_MAX_NATIVE_Z : 13;
 
-                window._moldovaWwiiMapLayer = L.tileLayer(
-                    'https://pub-638f9319d3994d9ba6b7c4ce178867fd.r2.dev/Galitzien_and_Bukovina-1861-1864/moldova-wwii/{z}/{x}/{y}.jpg',
-                    {
-                        minZoom: 8,
-                        maxZoom: 20,
-                        maxNativeZoom: window.MOLDOVAWWII_TILE_MAX_NATIVE_Z,
-                        tileSize: 256,
-                        opacity: 0.80,
-                        pane: 'pane_moldovawwii',
-                        attribution: '© Moldova WWII'
-                    }
-                );
+                window._moldovaWwiiMapLayer = L.tileLayer(DL.url2d('premium.moldova-wwii'), DL.tile2dOptions('premium.moldova-wwii', {
+                    minZoom: 8, maxZoom: 20,
+                    maxNativeZoom: window.MOLDOVAWWII_TILE_MAX_NATIVE_Z,
+                    pane: 'pane_moldovawwii'
+                }));
 
                 window.toggleMoldovaWwiiMap = function (on) {
                     if (on) {
@@ -14026,18 +13972,11 @@
                 // Dacă apar și la zoom mai mare, crește valoarea aici.
                 window.POLISHTACTICAL1933_TILE_MAX_NATIVE_Z = (window.POLISHTACTICAL1933_TILE_MAX_NATIVE_Z !== undefined) ? window.POLISHTACTICAL1933_TILE_MAX_NATIVE_Z : 13;
 
-                window._polishTactical1933MapLayer = L.tileLayer(
-                    'https://pub-638f9319d3994d9ba6b7c4ce178867fd.r2.dev/Galitzien_and_Bukovina-1861-1864/ukraine_zapad_pl-1933/{z}/{x}/{y}.jpg',
-                    {
-                        minZoom: 8,
-                        maxZoom: 20,
-                        maxNativeZoom: window.POLISHTACTICAL1933_TILE_MAX_NATIVE_Z,
-                        tileSize: 256,
-                        opacity: 0.80,
-                        pane: 'pane_polishtactical1933',
-                        attribution: '© Tactical Polish Map 1933'
-                    }
-                );
+                window._polishTactical1933MapLayer = L.tileLayer(DL.url2d('premium.polish-tactical-1933'), DL.tile2dOptions('premium.polish-tactical-1933', {
+                    minZoom: 8, maxZoom: 20,
+                    maxNativeZoom: window.POLISHTACTICAL1933_TILE_MAX_NATIVE_Z,
+                    pane: 'pane_polishtactical1933'
+                }));
 
                 window.togglePolishTactical1933Map = function (on) {
                     if (on) {
@@ -14072,18 +14011,11 @@
                 // Dacă apar și la zoom mai mare, crește valoarea aici.
                 window.WW1_TILE_MAX_NATIVE_Z = (window.WW1_TILE_MAX_NATIVE_Z !== undefined) ? window.WW1_TILE_MAX_NATIVE_Z : 11;
 
-                window._ww1MapLayer = L.tileLayer(
-                    'https://pub-638f9319d3994d9ba6b7c4ce178867fd.r2.dev/Galitzien_and_Bukovina-1861-1864/ww1/{z}/{x}/{y}.jpg',
-                    {
-                        minZoom: 8,
-                        maxZoom: 20,
-                        maxNativeZoom: window.WW1_TILE_MAX_NATIVE_Z,
-                        tileSize: 256,
-                        opacity: 0.80,
-                        pane: 'pane_ww1',
-                        attribution: '© WWI'
-                    }
-                );
+                window._ww1MapLayer = L.tileLayer(DL.url2d('premium.ww1'), DL.tile2dOptions('premium.ww1', {
+                    minZoom: 8, maxZoom: 20,
+                    maxNativeZoom: window.WW1_TILE_MAX_NATIVE_Z,
+                    pane: 'pane_ww1'
+                }));
 
                 window.toggleWw1Map = function (on) {
                     if (on) {
@@ -14118,18 +14050,11 @@
                 // Dacă apar și la zoom mai mare, crește valoarea aici.
                 window.WW2_TILE_MAX_NATIVE_Z = (window.WW2_TILE_MAX_NATIVE_Z !== undefined) ? window.WW2_TILE_MAX_NATIVE_Z : 10;
 
-                window._ww2MapLayer = L.tileLayer(
-                    'https://pub-638f9319d3994d9ba6b7c4ce178867fd.r2.dev/Galitzien_and_Bukovina-1861-1864/ww2/{z}/{x}/{y}.jpg',
-                    {
-                        minZoom: 8,
-                        maxZoom: 20,
-                        maxNativeZoom: window.WW2_TILE_MAX_NATIVE_Z,
-                        tileSize: 256,
-                        opacity: 0.80,
-                        pane: 'pane_ww2',
-                        attribution: '© WWII'
-                    }
-                );
+                window._ww2MapLayer = L.tileLayer(DL.url2d('premium.ww2'), DL.tile2dOptions('premium.ww2', {
+                    minZoom: 8, maxZoom: 20,
+                    maxNativeZoom: window.WW2_TILE_MAX_NATIVE_Z,
+                    pane: 'pane_ww2'
+                }));
 
                 window.toggleWw2Map = function (on) {
                     if (on) {
@@ -14164,18 +14089,11 @@
                 // Zoom-urile disponibile sunt 11-15.
                 window.BANAT_TILE_MAX_NATIVE_Z = (window.BANAT_TILE_MAX_NATIVE_Z !== undefined) ? window.BANAT_TILE_MAX_NATIVE_Z : 15;
 
-                window._banatMapLayer = L.tileLayer(
-                    'https://dacboefvooxgsngxkavx.supabase.co/storage/v1/object/public/Harti/Banat/{z}/{x}/{y}.png',
-                    {
-                        minZoom: 11,
-                        maxZoom: 20,
-                        maxNativeZoom: window.BANAT_TILE_MAX_NATIVE_Z,
-                        tileSize: 256,
-                        opacity: 0.80,
-                        pane: 'pane_banat',
-                        attribution: '© Banat 1769-1772'
-                    }
-                );
+                window._banatMapLayer = L.tileLayer(DL.url2d('premium.banat'), DL.tile2dOptions('premium.banat', {
+                    minZoom: 11, maxZoom: 20,
+                    maxNativeZoom: window.BANAT_TILE_MAX_NATIVE_Z,
+                    pane: 'pane_banat'
+                }));
 
                 window.toggleBanatMap = function (on) {
                     if (on) {
@@ -14218,22 +14136,12 @@
                 // fullExtent-ul serviciului (Web Mercator -> WGS84): Transilvania.
                 var TRANSYLVANIA1859_BOUNDS = L.latLngBounds([[45.2059, 22.2319], [47.7300, 26.7037]]);
 
-                window._transylvania1859MapLayer = L.tileLayer(
-                    'https://tiles.arcgis.com/tiles/t2AVhHhEnEvHcPF6/arcgis/rest/services/Siebenburgen_1859/MapServer/tile/{z}/{y}/{x}',
-                    {
-                        minZoom: 7,
-                        maxZoom: 20,
-                        maxNativeZoom: window.TRANSYLVANIA1859_TILE_MAX_NATIVE_Z,
-                        tileSize: 256,
-                        opacity: 0.80,
-                        bounds: TRANSYLVANIA1859_BOUNDS,
-                        pane: 'pane_transylvania1859',
-                        // Digitalizarea și publicarea tile-urilor aparțin
-                        // Universității „Ștefan cel Mare” din Suceava
-                        // (sursă: bukowina1856.eu).
-                        attribution: '© Administrativ Karte des Grossfürstenthums Siebenbürgen (1859; 1:144 000) · Digitalizare și publicare: Universitatea „Ștefan cel Mare” din Suceava · Sursă: <a href="https://bukowina1856.eu" target="_blank" rel="noopener noreferrer">bukowina1856.eu</a>'
-                    }
-                );
+                window._transylvania1859MapLayer = L.tileLayer(DL.url2d('premium.transylvania-1859'), DL.tile2dOptions('premium.transylvania-1859', {
+                    minZoom: 7, maxZoom: 20,
+                    maxNativeZoom: window.TRANSYLVANIA1859_TILE_MAX_NATIVE_Z,
+                    bounds: TRANSYLVANIA1859_BOUNDS,
+                    pane: 'pane_transylvania1859'
+                }));
 
                 window.toggleTransylvania1859Map = function (on) {
                     if (on) {
@@ -14274,22 +14182,12 @@
                 // fullExtent-ul serviciului (Web Mercator -> WGS84): Galiția și Lodomeria.
                 var GALICIA1855_BOUNDS = L.latLngBounds([[46.8116, 18.3937], [50.8713, 26.6844]]);
 
-                window._galicia1855MapLayer = L.tileLayer(
-                    'https://tiles.arcgis.com/tiles/t2AVhHhEnEvHcPF6/arcgis/rest/services/Kummerer_1855/MapServer/tile/{z}/{y}/{x}',
-                    {
-                        minZoom: 6,
-                        maxZoom: 20,
-                        maxNativeZoom: window.GALICIA1855_TILE_MAX_NATIVE_Z,
-                        tileSize: 256,
-                        opacity: 0.80,
-                        bounds: GALICIA1855_BOUNDS,
-                        pane: 'pane_galicia1855',
-                        // Digitalizarea și publicarea tile-urilor aparțin
-                        // Universității „Ștefan cel Mare” din Suceava
-                        // (sursă: bukowina1856.eu).
-                        attribution: '© Administrativ-Karte von Galizien und Lodomerien - Carl von Kummersberg 1855 · Digitalizare și publicare: Universitatea „Ștefan cel Mare” din Suceava · Sursă: <a href="https://bukowina1856.eu" target="_blank" rel="noopener noreferrer">bukowina1856.eu</a>'
-                    }
-                );
+                window._galicia1855MapLayer = L.tileLayer(DL.url2d('premium.galicia-1855'), DL.tile2dOptions('premium.galicia-1855', {
+                    minZoom: 6, maxZoom: 20,
+                    maxNativeZoom: window.GALICIA1855_TILE_MAX_NATIVE_Z,
+                    bounds: GALICIA1855_BOUNDS,
+                    pane: 'pane_galicia1855'
+                }));
 
                 window.toggleGalicia1855Map = function (on) {
                     if (on) {
@@ -14320,18 +14218,9 @@
                 map.getPane('pane_mitteleuropa').style.zIndex = 654;
                 map.getPane('pane_mitteleuropa').style.pointerEvents = 'none';
 
-                window._mitteleuropaMapLayer = L.tileLayer.wms(CENAGIS_WMS_URL, {
-                    // CENAGIS publishes this catalogue entry as ukvme_3857
-                    // (the display title is Übersichtskarte von Mitteleuropa).
-                    layers: 'ihpan:ukvme_3857',
-                    format: 'image/png',
-                    transparent: true,
-                    version: '1.1.1',
-                    maxZoom: 18,
-                    opacity: 0.80,
-                    pane: 'pane_mitteleuropa',
-                    attribution: '© Übersichtskarte von Mitteleuropa 1:300 000 (1893–1945) · CENAGIS / IH PAN'
-                });
+                window._mitteleuropaMapLayer = L.tileLayer.wms(DL.url2d('premium.mitteleuropa'), DL.wms2dOptions('premium.mitteleuropa', {
+                    pane: 'pane_mitteleuropa', maxZoom: 18
+                }));
                 // Keys the WMS health guard (js/wms-health.js) uses to find
                 // this layer's row + switch (#mitteleuropaRow / #mitteleuropaMapToggle).
                 window._mitteleuropaMapLayer._detectlabUiKeys = ['mitteleuropa'];
@@ -14363,16 +14252,9 @@
                 map.getPane('pane_chrzanowski').style.zIndex = 655;
                 map.getPane('pane_chrzanowski').style.pointerEvents = 'none';
 
-                window._chrzanowskiMapLayer = L.tileLayer.wms(CENAGIS_WMS_URL, {
-                    layers: 'ihpan:chrzanowski_3857',
-                    format: 'image/png',
-                    transparent: true,
-                    version: '1.1.1',
-                    maxZoom: 18,
-                    opacity: 0.80,
-                    pane: 'pane_chrzanowski',
-                    attribution: '© Karta Dawnej Polski – Wojciech Chrzanowski (1859) · CENAGIS / IH PAN'
-                });
+                window._chrzanowskiMapLayer = L.tileLayer.wms(DL.url2d('premium.chrzanowski'), DL.wms2dOptions('premium.chrzanowski', {
+                    pane: 'pane_chrzanowski', maxZoom: 18
+                }));
                 // Keys the WMS health guard (js/wms-health.js) uses to find
                 // this layer's row + switch (#chrzanowskiRow / #chrzanowskiMapToggle).
                 window._chrzanowskiMapLayer._detectlabUiKeys = ['chrzanowski'];
@@ -14404,16 +14286,9 @@
                 map.getPane('pane_reymann').style.zIndex = 656;
                 map.getPane('pane_reymann').style.pointerEvents = 'none';
 
-                window._reymannMapLayer = L.tileLayer.wms(CENAGIS_WMS_URL, {
-                    layers: 'ihpan:reymann_3857',
-                    format: 'image/png',
-                    transparent: true,
-                    version: '1.1.1',
-                    maxZoom: 18,
-                    opacity: 0.80,
-                    pane: 'pane_reymann',
-                    attribution: '© Reymann\'s Special-Karte von Central-Europa (1806–1908) · CENAGIS / IH PAN'
-                });
+                window._reymannMapLayer = L.tileLayer.wms(DL.url2d('premium.reymann'), DL.wms2dOptions('premium.reymann', {
+                    pane: 'pane_reymann', maxZoom: 18
+                }));
                 // Keys the WMS health guard (js/wms-health.js) uses to find
                 // this layer's row + switch (#reymannRow / #reymannMapToggle).
                 window._reymannMapLayer._detectlabUiKeys = ['reymann'];
@@ -14445,17 +14320,9 @@
                 map.getPane('pane_kdr100k').style.zIndex = 657;
                 map.getPane('pane_kdr100k').style.pointerEvents = 'none';
 
-                window._kdr100kMapLayer = L.tileLayer.wms(CENAGIS_WMS_URL, {
-                    // The 1:100,000 German Empire catalogue layer is named kdr_3857.
-                    layers: 'ihpan:kdr_3857',
-                    format: 'image/png',
-                    transparent: true,
-                    version: '1.1.1',
-                    maxZoom: 18,
-                    opacity: 0.80,
-                    pane: 'pane_kdr100k',
-                    attribution: '© Karte des Deutschen Reiches 1:100 000 (1878–1945) · CENAGIS / IH PAN'
-                });
+                window._kdr100kMapLayer = L.tileLayer.wms(DL.url2d('premium.kdr-100k'), DL.wms2dOptions('premium.kdr-100k', {
+                    pane: 'pane_kdr100k', maxZoom: 18
+                }));
                 // Keys the WMS health guard (js/wms-health.js) uses to find
                 // this layer's row + switch (#kdr100kRow / #kdr100kMapToggle).
                 window._kdr100kMapLayer._detectlabUiKeys = ['kdr100k'];
@@ -14487,16 +14354,9 @@
                 map.getPane('pane_kdr_gb').style.zIndex = 658;
                 map.getPane('pane_kdr_gb').style.pointerEvents = 'none';
 
-                window._kdrGbMapLayer = L.tileLayer.wms(CENAGIS_WMS_URL, {
-                    layers: 'ihpan:kdr_gb_3857',
-                    format: 'image/png',
-                    transparent: true,
-                    version: '1.1.1',
-                    maxZoom: 18,
-                    opacity: 0.80,
-                    pane: 'pane_kdr_gb',
-                    attribution: '© Karte des Deutschen Reiches – Großblatt (1914–1944) · CENAGIS / IH PAN'
-                });
+                window._kdrGbMapLayer = L.tileLayer.wms(DL.url2d('premium.kdr-gb'), DL.wms2dOptions('premium.kdr-gb', {
+                    pane: 'pane_kdr_gb', maxZoom: 18
+                }));
                 // Keys the WMS health guard (js/wms-health.js) uses to find
                 // this layer's row + switch (#kdrGbRow / #kdrGbMapToggle).
                 window._kdrGbMapLayer._detectlabUiKeys = ['kdrGb'];
@@ -14528,16 +14388,9 @@
                 map.getPane('pane_wig100k').style.zIndex = 659;
                 map.getPane('pane_wig100k').style.pointerEvents = 'none';
 
-                window._wig100kMapLayer = L.tileLayer.wms(CENAGIS_WMS_URL, {
-                    layers: 'ihpan:wig100k_3857',
-                    format: 'image/png',
-                    transparent: true,
-                    version: '1.1.1',
-                    maxZoom: 18,
-                    opacity: 0.80,
-                    pane: 'pane_wig100k',
-                    attribution: '© Wojskowy Instytut Geograficzny (WIG) 1:100 000 (1919–1939) · CENAGIS / IH PAN'
-                });
+                window._wig100kMapLayer = L.tileLayer.wms(DL.url2d('premium.wig-100k'), DL.wms2dOptions('premium.wig-100k', {
+                    pane: 'pane_wig100k', maxZoom: 18
+                }));
                 // Keys the WMS health guard (js/wms-health.js) uses to find
                 // this layer's row + switch (#wig100kRow / #wig100kMapToggle).
                 window._wig100kMapLayer._detectlabUiKeys = ['wig100k'];
