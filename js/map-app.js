@@ -7029,7 +7029,23 @@
                 return null;
             }
 
+            /* Registry id per master-switch key: the 3D view needs a name for
+             * these layers, and a canvas layer that builds its URLs inside
+             * createTile() carries no URL to recognise it by. */
+            var LIDAR_DEF_IDS = {
+                nlAhn: 'lidar.nl-ahn', noLidar: 'lidar.no-hoydedata',
+                plLidar: 'lidar.pl-nmt', esLidar: 'lidar.es-mdt',
+                chLidar: 'lidar.ch-swisstopo', ukLidar: 'lidar.uk-ea',
+                frLidar: 'lidar.fr-mnh', dkLidar: 'lidar.dk-dhm',
+                seLidar: 'lidar.se-lantmateriet'
+            };
             function _buildLidarLeafletLayer(key, cfg) {
+                var lidarLayer = _buildLidarLeafletLayerRaw(key, cfg);
+                /* Tag only — the 2D behaviour of the layer is untouched. */
+                if (lidarLayer && key && LIDAR_DEF_IDS[key]) lidarLayer._dlDefId = LIDAR_DEF_IDS[key];
+                return lidarLayer;
+            }
+            function _buildLidarLeafletLayerRaw(key, cfg) {
                 // ── Gesture-safe tile options for the LIDAR stack ──
                 // LIDAR sub-layers are dense (HD/AR/AB/BH/CS + "Romania 1m" +
                 // "Romania 2–5m" + the four LAKI III sheets) and are routinely

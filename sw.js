@@ -444,7 +444,7 @@
 //   downloaded from js/maplibre-gl.js the first time 3D is opened. The 2D map
 //   is untouched — it now builds the same CENAGIS/premium/VHR layers from the
 //   registry instead of repeating their URLs.
-const CACHE_NAME = 'detectlab-v194-3d-lidar';
+const CACHE_NAME = 'detectlab-v195-3d-mirror';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -470,14 +470,16 @@ const PRECACHE_URLS = [
   // 3D terrain view (2D ⇄ 3D) — shared layer registry + MapLibre GL viewer.
   // js/maplibre-gl.js is precached as well: opening 3D on a cold PWA offline
   // must not depend on the network.
-  'js/layer-registry.js?v=20261013-3d-lidar',
+  'js/layer-registry.js?v=20261013-3d-mirror',
   'js/layer-registry.js',
-  'js/map3d-terrain.js?v=20261013-3d-lidar',
+  'js/map3d-mirror.js?v=20261013-3d-mirror',
+  'js/map3d-mirror.js',
+  'js/map3d-terrain.js?v=20261013-3d-mirror',
   'js/map3d-terrain.js',
   'js/maplibre-gl.js?v=20261013-3d-terrain',
   'js/maplibre-gl.js',
   'css/maplibre-gl.css?v=20261013-3d-terrain',
-  'css/map3d-terrain.css?v=20261013-3d-position',
+  'css/map3d-terrain.css?v=20261013-3d-mirror',
   // European Historical Maps (CENAGIS / IH PAN)
   'js/historical-eu-maps.js?v=20261008-country-overlap',
   'js/historical-eu-maps.js?v=20261013-flat-hist-maps',

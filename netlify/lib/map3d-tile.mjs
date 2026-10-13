@@ -288,6 +288,93 @@ export function buildUpstreamUrl(def, { z, x, y, time, product, mode }) {
     };
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  RELAY MODE — one arbitrary tile URL, allow-listed
+ * ---------------------------------------------------------------------------
+ *  Layers the 3D view mirrors from the live 2D map (js/map3d-mirror.js) are not
+ *  in the registry: their tile URLs are built by the Leaflet layer itself. When
+ *  such a host sends no CORS headers the tile is requested as
+ *
+ *      GET /api/map3d/tile?u=<encoded upstream URL>
+ *
+ *  This is still not an open relay: the host must be one the site itself uses —
+ *  a host of a registry definition (or one of its mirrors), a host of a country
+ *  LiDAR module, or a host the deployment adds to
+ *  window.DETECTLAB_MAP3D.proxy.extraHosts — and private/loopback addresses are
+ *  refused outright. A rejected host is answered with a 403 JSON body, which
+ *  the status panel reports verbatim so it can be added to the list in one line.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+const RELAY_EXTRA_HOSTS = [
+    /* Every host the site's own tile code calls (js/map-app.js,
+     * js/historical-eu-maps.js, js/corona*.js, js/country-dock.js, the country
+     * LiDAR modules, the basemap switcher). A host that is not here can still
+     * be enabled with window.DETECTLAB_MAP3D.proxy.extraHosts — the refusal
+     * names the host, so it is a one-line change. */
+    'www.ahn.nl', 'ahn.arcgisonline.nl', 'api.dataforsyningen.dk', 'dataforsyningen.dk',
+    'data.geopf.fr', 'environment.data.gov.uk', 'hoydedata.no', 'maps.lantmateriet.se',
+    'minkarta.lantmateriet.se', 'mapy.geoportal.gov.pl', 'www.geoportal.gov.pl',
+    'wms.geo.admin.ch', 'wmts.geo.admin.ch', 'wms-mapa-lidar.idee.es', 'www.scne.es',
+    'www.ign.es', 'www.idee.es', 'www.lantmateriet.se', 'www.swisstopo.admin.ch',
+    'www.nationalarchives.gov.uk',
+    'server.arcgisonline.com', 'services.arcgisonline.com', 'tiles.arcgis.com',
+    'elevation3d.arcgis.com',
+    'services.geo-spatial.org', 'eism.geo-spatial.ro', 'pastmaps.cenagis.edu.pl',
+    'geoserve.cast.uark.edu', 'corona.cast.uark.edu',
+    'image.discomap.eea.europa.eu', 'copernicus.discomap.eea.europa.eu',
+    'phenology.hrvpp2.vgt.vito.be', 'sclav.andreiroba2000.workers.dev',
+    'detectlab-feedback.andreiroba2000.workers.dev',
+    'pub-638f9319d3994d9ba6b7c4ce178867fd.r2.dev', 'dacboefvooxgsngxkavx.supabase.co',
+    /* map data the 2D view draws as vectors (never tiles, but a layer of the
+     * user's own may be relayed from them) */
+    'imperium.ahlfeldt.se', 'atlantides.org', 'pleiades.stoa.org', 'ran.cimec.ro',
+    'overpass-api.de', 'raw.githubusercontent.com', 's3.amazonaws.com'
+];
+
+export function relayAllowedHosts() {
+    const hosts = new Set(RELAY_EXTRA_HOSTS);
+    const add = (value) => {
+        if (!value) return;
+        const text = String(value).indexOf('//') === -1 ? 'https://' + value : String(value);
+        try { hosts.add(new URL(text).hostname.toLowerCase()); }
+        catch { /* a template with a placeholder host is simply not addable */ }
+    };
+    for (const def of registry.list()) {
+        add(def.url);
+        add(def.template);
+        Object.keys(def.alt || {}).forEach(key => add(def.alt[key]));
+    }
+    const extra = (registry.config().proxy && registry.config().proxy.extraHosts) || [];
+    extra.forEach(add);
+    return hosts;
+}
+
+function isPrivateHost(host) {
+    if (!host) return true;
+    if (/^(localhost|.*\.local|.*\.internal|.*\.localhost|.*\.home)$/i.test(host)) return true;
+    const v4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (v4) {
+        const a = Number(v4[1]);
+        const b = Number(v4[2]);
+        if (a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) ||
+            (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224) return true;
+    }
+    if (host.charAt(0) === '[') return true;             /* IPv6 literals: not needed here */
+    return false;
+}
+
+export function validateRelayUrl(raw) {
+    const text = String(raw || '').trim();
+    if (!text || text.length > 4096 || /[\s\\]/.test(text)) return { ok: false, reason: 'bad-url' };
+    let url;
+    try { url = new URL(text); } catch { return { ok: false, reason: 'bad-url' }; }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return { ok: false, reason: 'bad-protocol' };
+    if (url.username || url.password) return { ok: false, reason: 'credentials' };
+    const host = url.hostname.toLowerCase();
+    if (isPrivateHost(host)) return { ok: false, reason: 'private-host' };
+    if (!relayAllowedHosts().has(host)) return { ok: false, reason: 'host-not-allowed' };
+    return { ok: true, url, host };
+}
+
 /* ── validation (this is what keeps the proxy from being an open relay) ──── */
 export function validateTileRequest(url) {
     const layerId = url.searchParams.get('layer') || '';
@@ -330,10 +417,122 @@ function blankResponse(status, headers = {}) {
     });
 }
 
+/**
+ * One upstream image, cached in the container and by the CDN.
+ * Used by both modes: a registry layer (`?layer=…`) and a relayed tile (`?u=…`).
+ */
+async function fetchUpstream(target, options = {}) {
+    const timeoutMs = options.timeoutMs || 15000;
+    const cacheSeconds = options.cacheSeconds || 86400;
+    const label = options.label || 'tile';
+    const extra = options.upstreamHeaders || {};
+
+    const hit = memoryTiles.get(options.cacheKey);
+    if (hit && Date.now() - hit.at < MEMORY_TTL_MS) {
+        memoryTiles.delete(options.cacheKey);
+        memoryTiles.set(options.cacheKey, hit);          // LRU refresh
+        return new Response(hit.body, {
+            status: 200,
+            headers: {
+                'Content-Type': hit.type,
+                'Cache-Control': `public, max-age=${cacheSeconds}`,
+                'X-Map3D-Cache': 'memory',
+                ...extra
+            }
+        });
+    }
+
+    let upstream;
+    try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        upstream = await fetch(target, {
+            signal: controller.signal,
+            headers: {
+                /* Some government services (not the ones proxied today) prefer
+                 * a browser-ish UA; harmless everywhere else. */
+                'User-Agent': 'DetectLab-map3d-tile/1.0 (+https://detectlab.ro)',
+                'Accept': 'image/png,image/jpeg,image/webp,image/*;q=0.8',
+                ...(options.requestHeaders || {})
+            }
+        });
+        clearTimeout(timer);
+    } catch (err) {
+        return blankResponse(200, {
+            'X-Map3D-Upstream': 'error',
+            'X-Map3D-Reason': String((err && err.message) || err).slice(0, 120),
+            ...extra
+        });
+    }
+
+    if (!upstream.ok) {
+        return blankResponse(200, {
+            'X-Map3D-Upstream': 'http-' + upstream.status,
+            'X-Map3D-Layer': label,
+            ...extra
+        });
+    }
+
+    const type = upstream.headers.get('content-type') || 'image/png';
+    const body = Buffer.from(await upstream.arrayBuffer());
+    if (!/^image\//i.test(type) || body.length < 32) {
+        /* A GeoServer that answers 200 with a Java stack trace is the classic
+         * CENAGIS failure mode (CENAGIS_WMS_HEALTH.md): never hand that to the
+         * renderer. */
+        return blankResponse(200, {
+            'X-Map3D-Upstream': 'not-an-image',
+            'X-Map3D-Layer': label,
+            'X-Map3D-Upstream-Type': type.slice(0, 60),
+            ...extra
+        });
+    }
+
+    memoryTiles.set(options.cacheKey, { at: Date.now(), body, type });
+    while (memoryTiles.size > MEMORY_MAX_TILES) {
+        memoryTiles.delete(memoryTiles.keys().next().value);
+    }
+
+    return new Response(body, {
+        status: 200,
+        headers: {
+            'Content-Type': type,
+            'Cache-Control': `public, max-age=${cacheSeconds}, stale-while-revalidate=86400`,
+            'Netlify-CDN-Cache-Control': `public, s-maxage=${Math.max(cacheSeconds, 604800)}, stale-while-revalidate=86400`,
+            'X-Map3D-Cache': 'upstream',
+            'X-Map3D-Layer': label,
+            'X-Map3D-CRS': options.crs || '',
+            ...extra
+        }
+    });
+}
+
 export async function handleTileRequest(request, options = {}) {
     const timeoutMs = options.timeoutMs || 15000;
     const cacheSeconds = options.cacheSeconds || 86400;
     const url = new URL(request.url);
+
+    /* ── relay mode — one tile URL from a layer mirrored off the live 2D map ── */
+    const relayRaw = url.searchParams.get('u');
+    if (relayRaw) {
+        const relay = validateRelayUrl(relayRaw);
+        if (!relay.ok) {
+            return new Response(JSON.stringify({
+                error: 'relay-' + relay.reason,
+                hint: 'add the host to window.DETECTLAB_MAP3D.proxy.extraHosts (or to RELAY_EXTRA_HOSTS in netlify/lib/map3d-tile.mjs)'
+            }), {
+                status: 403,
+                headers: { 'Content-Type': 'application/json', 'X-Map3D-Reason': relay.reason }
+            });
+        }
+        return fetchUpstream(relay.url.toString(), {
+            cacheKey: 'relay|' + relay.url.toString(),
+            timeoutMs,
+            cacheSeconds,
+            label: 'relay:' + relay.host,
+            upstreamHeaders: { 'X-Map3D-Upstream': 'relay' }
+        });
+    }
+
     const check = validateTileRequest(url);
     if (!check.ok) {
         return new Response(JSON.stringify({ error: check.reason }), {
@@ -348,77 +547,12 @@ export async function handleTileRequest(request, options = {}) {
         return blankResponse(200, { 'X-Map3D-Upstream': 'unavailable', 'X-Map3D-Reason': built.error });
     }
 
-    const cacheKey = `${def.id}|${z}|${x}|${y}|${time}|${product}|${mode}`;
-    const hit = memoryTiles.get(cacheKey);
-    if (hit && Date.now() - hit.at < MEMORY_TTL_MS) {
-        memoryTiles.delete(cacheKey);
-        memoryTiles.set(cacheKey, hit);      // LRU refresh
-        return new Response(hit.body, {
-            status: 200,
-            headers: {
-                'Content-Type': hit.type,
-                'Cache-Control': `public, max-age=${cacheSeconds}`,
-                'X-Map3D-Cache': 'memory'
-            }
-        });
-    }
-
-    let upstream;
-    try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeoutMs);
-        upstream = await fetch(built.url, {
-            signal: controller.signal,
-            headers: {
-                /* Some government services (not the ones proxied today) prefer
-                 * a browser-ish UA; harmless everywhere else. */
-                'User-Agent': 'DetectLab-map3d-tile/1.0 (+https://detectlab.ro)',
-                'Accept': 'image/png,image/jpeg,image/webp,image/*;q=0.8'
-            }
-        });
-        clearTimeout(timer);
-    } catch (err) {
-        return blankResponse(200, {
-            'X-Map3D-Upstream': 'error',
-            'X-Map3D-Reason': String((err && err.message) || err).slice(0, 120)
-        });
-    }
-
-    if (!upstream.ok) {
-        return blankResponse(200, {
-            'X-Map3D-Upstream': 'http-' + upstream.status,
-            'X-Map3D-Layer': def.id
-        });
-    }
-
-    const type = upstream.headers.get('content-type') || 'image/png';
-    const body = Buffer.from(await upstream.arrayBuffer());
-    if (!/^image\//i.test(type) || body.length < 32) {
-        /* A GeoServer that answers 200 with a Java stack trace is the classic
-         * CENAGIS failure mode (CENAGIS_WMS_HEALTH.md): never hand that to the
-         * renderer. */
-        return blankResponse(200, {
-            'X-Map3D-Upstream': 'not-an-image',
-            'X-Map3D-Layer': def.id,
-            'X-Map3D-Upstream-Type': type.slice(0, 60)
-        });
-    }
-
-    memoryTiles.set(cacheKey, { at: Date.now(), body, type });
-    while (memoryTiles.size > MEMORY_MAX_TILES) {
-        memoryTiles.delete(memoryTiles.keys().next().value);
-    }
-
-    return new Response(body, {
-        status: 200,
-        headers: {
-            'Content-Type': type,
-            'Cache-Control': `public, max-age=${cacheSeconds}, stale-while-revalidate=86400`,
-            'Netlify-CDN-Cache-Control': `public, s-maxage=${Math.max(cacheSeconds, 604800)}, stale-while-revalidate=86400`,
-            'X-Map3D-Cache': 'upstream',
-            'X-Map3D-Layer': def.id,
-            'X-Map3D-CRS': built.crs || ''
-        }
+    return fetchUpstream(built.url, {
+        cacheKey: `${def.id}|${z}|${x}|${y}|${time}|${product}|${mode}`,
+        timeoutMs,
+        cacheSeconds,
+        label: def.id,
+        crs: built.crs
     });
 }
 

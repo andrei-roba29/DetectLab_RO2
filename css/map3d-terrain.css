@@ -272,3 +272,29 @@ body.is-3d #map3d-bar { display: flex; }
 @media (max-height: 420px) {
     #map3d-bar { max-height: calc(100% - 16px); }
 }
+
+/* ── popups opened from a 3D feature (same HTML the 2D popup shows) ────── */
+#map3d-surface .maplibregl-popup.m3d-popup .maplibregl-popup-content {
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(184, 216, 240, 0.28);
+    background: rgba(6, 14, 30, 0.94);
+    color: rgba(245, 240, 235, 0.95);
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.76rem;
+    line-height: 1.45;
+    max-height: 40vh;
+    overflow: auto;
+}
+
+#map3d-surface .maplibregl-popup.m3d-popup .maplibregl-popup-tip { border-top-color: rgba(6, 14, 30, 0.94); }
+#map3d-surface .maplibregl-popup.m3d-popup a { color: rgba(200, 169, 110, 0.95); }
+#map3d-surface .maplibregl-popup.m3d-popup .m3d-popup-body b { color: rgba(245, 240, 235, 0.9); }
+
+/* ── the status rows the 3D bar shows below the sliders ───────────────── */
+#map3d-status .m3d-attrib {
+    margin-top: 3px;
+    font-size: 0.62rem;
+    opacity: 0.55;
+    line-height: 1.35;
+}
