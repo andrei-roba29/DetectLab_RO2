@@ -556,8 +556,8 @@
        all (e.g. a stylesheet overrides the container's `display: flex`, which
        is what stretches the SDK's view root and surface). In that state the
        SDK keeps its 300×150 fallback canvas, renders nothing, and the gate
-       would be a black panel with just the country list. So the adapter
-       measures the surface before it reports the globe as usable: it restores
+       would be a black panel with no usable globe. So the adapter measures
+       the surface before it reports the globe as usable: it restores
        the documented layout once, and if the surface is still collapsed it
        rejects — js/globe-country-picker.js then opens the canvas globe
        instead of leaving the visitor on a black screen. */

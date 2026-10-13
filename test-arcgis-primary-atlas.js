@@ -63,9 +63,9 @@ assert.match(index, /id="mapLock"/, 'the members-only lock overlay is restored')
 
 /* ── 4. Script order: gate → dock → map-app (ArcGIS basemap) ── */
 const order = [
-    'js/translations.js?v=20261011-arcgis-gate',
+    'js/translations.js?v=20261013-country-click',
     'js/globe-arcgis-gate.js?v=20261012-gate-layout',
-    'js/globe-country-picker.js?v=20261011-arcgis-gate',
+    'js/globe-country-picker.js?v=20261013-country-click',
     'js/country-dock.js?v=20261010-hillshade-globe',
     'js/map-app.js?v=20261011-arcgis-basemap',
     'js/offline-maps.js?v=20261009-3d-globe'
@@ -118,7 +118,7 @@ assert.match(atlasCss, /\.atlas-embedded \.back-link\s*\{\s*display:\s*none/, 'e
 
 /* ── 7. Service worker: v185+ shell, atlas + gate/dock precached ── */
 const cacheVersion = Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
-assert(cacheVersion >= 185, 'the PWA shell version was bumped to v185 for the gate layout fix');
+assert(cacheVersion >= 186, 'the PWA shell version was bumped to v186 for direct globe selection');
 [
   'europe-roman-atlas.html?embed=1',
   'europe-roman-atlas.html',
@@ -126,14 +126,14 @@ assert(cacheVersion >= 185, 'the PWA shell version was bumped to v185 for the ga
   'js/europe-roman-atlas.js?v=20261011-arcgis-primary',
   'js/atlas-shell.js?v=20261011-arcgis-primary',
   'css/styles.css?v=20261008-roman-dare-icons',
-  'css/globe-country-picker.css?v=20261012-gate-layout',
+  'css/globe-country-picker.css?v=20261013-country-click',
   'js/globe-arcgis-gate.js?v=20261012-gate-layout',
-  'js/globe-country-picker.js?v=20261011-arcgis-gate',
+  'js/globe-country-picker.js?v=20261013-country-click',
   'css/country-dock.css?v=20261008',
   'js/country-dock.js?v=20261010-hillshade-globe',
   'js/map-app.js?v=20261011-arcgis-basemap',
   'js/offline-maps.js?v=20261009-3d-globe',
-  'js/translations.js?v=20261011-arcgis-gate',
+  'js/translations.js?v=20261013-country-click',
   'data/countries-50m.json'
 ].forEach((asset) => assert(sw.includes("'" + asset + "'"), 'PWA precaches ' + asset));
 assert.doesNotMatch(sw, /'js\/(?:maplibre-gl|leaflet-maplibre-gl|globe-base-layer)\.js/, 'PWA does not precache the retired globe modules');

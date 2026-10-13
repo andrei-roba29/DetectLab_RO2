@@ -88,9 +88,9 @@ zoom-11 gate because there is no globe camera to drift from.
 
 ## PWA / service worker
 
-- `sw.js` is bumped to **v185** (`detectlab-v185-gate-layout`, replacing
-  `detectlab-v184-arcgis-basemap`), so installed PWAs pick up the gate layout
-  fix along with the v184 integration.
+- `sw.js` is bumped to **v186** (`detectlab-v186-country-click`, replacing
+  `detectlab-v185-gate-layout`), so installed PWAs pick up the direct
+  click-to-select gate along with the v184 integration.
 - The retired MapLibre/globe assets stay out of the precache; the restored
   gate/dock assets and the new `js/map-app.js?v=20261011-arcgis-basemap`
   are precached; the atlas page assets remain precached.

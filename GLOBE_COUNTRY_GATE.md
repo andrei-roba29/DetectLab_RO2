@@ -3,12 +3,12 @@
 ## Renderer choice
 
 The authenticated country gate now prefers a **lazy-loaded ArcGIS SceneView**
-globe with a professional single-country list. The existing 2D canvas globe
-remains the fallback if the ArcGIS SDK, imagery/network, WebGL, or SceneView
-cannot start. Both renderers use the same country-picker data and preserve the
-existing one-country hand-off, localStorage record, events, Leaflet lock, and
-“Change Country” re-entry. This is approach B: keep the canvas implementation
-until the ArcGIS route has been verified in the deployed browser environment.
+globe. The existing 2D canvas globe remains the fallback if the ArcGIS SDK,
+imagery/network, WebGL, or SceneView cannot start. Both renderers use the same
+country-picker data and preserve the existing one-country hand-off, localStorage
+record, events, Leaflet lock, and “Change Country” re-entry. This is approach B:
+keep the canvas implementation until the ArcGIS route has been verified in the
+deployed browser environment.
 
 The working Leaflet/MapLibre map is deliberately unchanged. The ArcGIS view is
 only the temporary country-selection surface; selecting a country still
@@ -28,8 +28,8 @@ configuration is:
 - `ground: { layers: [] }`, which leaves a flat globe with no elevation layer;
 - background `#030916`, `starsEnabled: false`, `atmosphereEnabled: false`, and
   virtual lighting with direct shadows and ambient occlusion disabled;
-- no Esri view widgets: the gate supplies its own zoom controls, country list,
-  and visible imagery credit.
+- no Esri view widgets: the gate supplies its own zoom controls and visible
+  imagery credit.
 
 The 50-country polygons come from the gate's existing geometry builder. The
 renderer normalizes GeoJSON ring winding for ArcGIS, draws a separate
@@ -44,14 +44,12 @@ small marker so micro-states remain visible and targetable.
 
 ## Country selection and data
 
-The right-hand panel is a **single-selection checkbox list**, not app
-multi-select. It shows the localized country name, the alternate EN/RO name,
-and ISO code. Search checks both names and the ISO code using the picker's
-existing accent-insensitive normalizer. A click on the globe or a checkbox
-stages exactly one country; “Continue to map” flies the SceneView to that
-country, persists the existing selection, and then applies the existing
-Leaflet country lock. The canvas fallback keeps its original direct map-click
-selection and also supports the list.
+The gate has no country list or search panel. The globe is the picker: a click
+on any supported country immediately selects it, highlights it, zooms the
+active renderer to its bounds, persists the existing selection, and then hands
+off to the existing Leaflet country lock. The canvas fallback uses the same
+direct map-click path. The country dock remains available after hand-off for
+switching countries without reopening the globe.
 
 The data flow remains the one in `js/globe-country-picker.js`:
 
@@ -73,22 +71,21 @@ shim, `filterLayersForCountry()`, lock-change event, and country dock. The app
 remains limited to one selected country. Returning users keep the same saved
 selection and can reopen the gate using “Change Country”.
 
-## Canvas and list-only fallbacks
+## Canvas and last-resort fallback
 
 If ArcGIS CDN loading, WebGL initialization, SceneView preparation, or the
 imagery layer fails, the adapter is closed and the gate activates the existing
 canvas globe. That path samples the same legacy Esri World Imagery tile URL as
 the working map, over `#030916`; if imagery is unavailable it uses the bundled
 Blue Marble texture, and if that also fails it draws the atlas land fill. It
-keeps the canvas's geometric picking, fly-to, and no-WebGL behavior.
+keeps the canvas's geometric picking and fly-to behavior.
 
-If the local geometry or 2D canvas cannot initialize either, the static country
-list/select remains usable with the existing approximate country bounds. It
-still applies the standard one-country map lock, but naturally has no globe
-animation or imagery. The gate should never hard-lock the map solely because a
-renderer failed.
+If the local geometry or 2D canvas cannot initialize either, the static select
+is retained only as a last-resort no-globe fallback using the existing
+approximate country bounds. The gate should never hard-lock the map solely
+because a renderer failed.
 
-## Drawable-surface guard (v185 — “black screen, only the country list”)
+## Drawable-surface guard (v185 — “black screen, no globe”)
 
 `#globeGateArcGIS` is not a wrapper around the SceneView — it **is** the view's
 container, so the SDK tags the element with `.esri-view`, whose own stylesheet
@@ -99,8 +96,8 @@ then does `.esri-view-surface` and the drawing canvas get a real height.
 If anything overrides the container's display (the gate CSS used `display:
 block` until v185), the root collapses to `0 px`, the SDK keeps its fallback
 300×150 canvas and never resizes it, and the gate opens as a flat `#030916`
-panel: no globe, no country outlines, only the gate chrome, the list, and the
-zoom buttons — the reported black screen. The fix keeps the SDK contract:
+panel: no globe, no country outlines, only the gate chrome and zoom buttons —
+the reported black screen. The fix keeps the SDK contract:
 
 - the gate CSS uses `display: flex` for `.globe-gate.is-arcgis
   .globe-gate-arcgis` and restates `.esri-view-root { flex: 100%; position:
@@ -120,7 +117,7 @@ and the reject → canvas-fallback path).
 
 ## PWA, network, licensing, and device constraints
 
-`sw.js` uses shell cache `detectlab-v185-gate-layout`. The local adapter, picker,
+`sw.js` uses shell cache `detectlab-v186-country-click`. The local adapter, picker,
 CSS, translations, and country data remain in the app shell. The external
 ArcGIS SDK/theme and imagery services are **not** precached; cross-origin
 requests pass through the service worker's network path. `js.arcgis.com`,
@@ -143,20 +140,19 @@ imagery credit in its own UI.
 
 SceneView consumes WebGL/GPU memory and downloads a third-party SDK when online;
 very low-memory phones, older mobile WebViews, or browsers with blocked WebGL
-may use the canvas or list-only fallback instead. The 10m geometry refinement
-can also increase work when it arrives on a mobile device. The list is scrollable
-and moves to a bottom panel at narrow widths. These are documented risks, not
-verified mobile-device results.
+may use the canvas or last-resort select fallback instead. The 10m geometry
+refinement can also increase work when it arrives on a mobile device. These are
+documented risks, not verified mobile-device results.
 
 ## Files
 
 - `js/globe-arcgis-gate.js` — optional ArcGIS SceneView renderer, projection and
   country graphics, hover/click hit-testing, micro-state snap, and camera zoom.
-- `js/globe-country-picker.js` — shared 50-country / 10m data flow, gate DOM,
-  localized list/search, public API, persistence, selection events, Leaflet
+- `js/globe-country-picker.js` — shared 50-country / 10m data flow, direct
+  globe-click selection, public API, persistence, selection events, Leaflet
   lock and canvas fallback.
 - `css/globe-country-picker.css`, `index.html`, and `js/translations.js` — gate
-  panel, responsive layout, markup, and EN/RO copy.
+  layout, markup, and EN/RO click-to-select copy.
 - `js/globe-base-layer.js` — the separate working-map MapLibre globe; untouched.
 - `js/country-dock.js` + `css/country-dock.css` — the working map's country
   switcher and lock-exit controls (see `COUNTRY_SELECTION_DOCK.md`).
@@ -512,7 +508,7 @@ for conversion, and any canvas-drawn source gets the zoom gate, not a twin.
 
 ## Gate deployment and regression checks
 
-`sw.js` cache `v185` precaches the local ArcGIS adapter, picker, styles,
+`sw.js` cache `v186` precaches the local ArcGIS adapter, picker, styles,
 translations and the 50m atlas (the retired MapLibre globe assets are no longer
 part of the shell). The remote ArcGIS SDK,
 theme, imagery, and the two optional canvas texture images are intentionally

@@ -386,10 +386,10 @@
 //   a live globe.
 // v180: index.html gives the LIDAR zoom message (#lidarZoomGateMsg) its PWA bottom offset.
 // v181: the canvas gate shares Esri World Imagery with the working map.
-// v182: prefer a lazy ArcGIS SceneView country globe and a searchable, single-country
-//   checkbox list. The existing canvas picker remains the network/WebGL fallback;
-//   the ArcGIS CDN SDK/theme stay out of precache and load only when the gate opens.
-//   The local adapter, picker, CSS, and EN/RO copy are versioned and precached.
+// v182: prefer a lazy ArcGIS SceneView country globe. The existing canvas picker
+//   remains the network/WebGL fallback; the ArcGIS CDN SDK/theme stay out of
+//   precache and load only when the gate opens. The local adapter, picker, CSS,
+//   and EN/RO copy are versioned and precached.
 // v183: the PR that made the ArcGIS SceneView atlas the embedded primary map.
 //   Reverted by v184 below — the DetectLab UI must stay the primary interface.
 // v184: fix the PR #283 integration. The DetectLab interface (map tabs incl.
@@ -408,12 +408,14 @@
 //   is the ArcGIS SceneView's own container, so the SDK adds `.esri-view`
 //   (display: flex) to it; the gate CSS overrode that with `display: block`,
 //   which collapsed `.esri-view-root` to 0 px. The SceneView then kept its
-//   300×150 fallback canvas, rendered nothing, and the visitor saw only the
-//   country list on a black panel. The gate now uses `display: flex`, and
-//   js/globe-arcgis-gate.js measures the drawable surface after open (and
-//   restores the layout once) so a collapsed SceneView falls back to the
-//   canvas globe instead of showing an empty gate.
-const CACHE_NAME = 'detectlab-v185-gate-layout';
+//   300×150 fallback canvas, rendered nothing. The gate now uses `display:
+//   flex`, and js/globe-arcgis-gate.js measures the drawable surface after
+//   open (and restores the layout once) so a collapsed SceneView falls back to
+//   the canvas globe instead of showing an empty gate.
+// v186: remove the initial country-list panel. Clicking a country on either
+//   globe renderer now immediately selects it, zooms to it, and hands off to
+//   the existing locked Leaflet map view.
+const CACHE_NAME = 'detectlab-v186-country-click';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1016,9 +1018,9 @@ const PRECACHE_URLS = [
   // v184: the ArcGIS-basemap working map, restored country gate (lazy ArcGIS
   // SceneView + canvas fallback) and country dock, in the documented load
   // order (gate → dock → map-app).
-  'css/globe-country-picker.css?v=20261012-gate-layout',
+  'css/globe-country-picker.css?v=20261013-country-click',
   'js/globe-arcgis-gate.js?v=20261012-gate-layout',
-  'js/globe-country-picker.js?v=20261011-arcgis-gate',
+  'js/globe-country-picker.js?v=20261013-country-click',
   // v167: country dock glued under the search bar (country switcher +
   // World-hillshade checkbox) and the “Exit view” button of the locked
   // country view. The hillshade tiles themselves stay network-only.
@@ -1032,7 +1034,7 @@ const PRECACHE_URLS = [
   'js/map-app.js?v=20261010-lidar-zoom-gate',
   'js/offline-maps.js?v=20261009-3d-globe',
   'js/translations.js?v=20261009-3d-globe',
-  'js/translations.js?v=20261011-arcgis-gate',
+  'js/translations.js?v=20261013-country-click',
   'js/d3.min.js?v=7.9.0',
   'js/topojson-client.min.js?v=3.1.0',
   'data/countries-50m.json?v=20261008',
