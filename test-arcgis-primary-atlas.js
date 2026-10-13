@@ -63,9 +63,9 @@ assert.match(index, /id="mapLock"/, 'the members-only lock overlay is restored')
 
 /* ── 4. Script order: gate → dock → map-app (ArcGIS basemap) ── */
 const order = [
-    'js/translations.js?v=20261013-country-click',
+    'js/translations.js?v=20261013-no-change-pill',
     'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
-    'js/globe-country-picker.js?v=20261013-handoff-zoom',
+    'js/globe-country-picker.js?v=20261013-no-change-pill',
     'js/country-dock.js?v=20261013-country-2d',
     'js/map-app.js?v=20261011-arcgis-basemap',
     'js/offline-maps.js?v=20261009-3d-globe'
@@ -126,14 +126,14 @@ assert(cacheVersion >= 187, 'the PWA shell version was bumped to v187 for the fl
   'js/europe-roman-atlas.js?v=20261011-arcgis-primary',
   'js/atlas-shell.js?v=20261011-arcgis-primary',
   'css/styles.css?v=20261008-roman-dare-icons',
-  'css/globe-country-picker.css?v=20261013-country-click',
+  'css/globe-country-picker.css?v=20261013-no-change-pill',
   'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
-  'js/globe-country-picker.js?v=20261013-handoff-zoom',
+  'js/globe-country-picker.js?v=20261013-no-change-pill',
   'css/country-dock.css?v=20261008',
   'js/country-dock.js?v=20261013-country-2d',
   'js/map-app.js?v=20261011-arcgis-basemap',
   'js/offline-maps.js?v=20261009-3d-globe',
-  'js/translations.js?v=20261013-country-click',
+  'js/translations.js?v=20261013-no-change-pill',
   'data/countries-50m.json'
 ].forEach((asset) => assert(sw.includes("'" + asset + "'"), 'PWA precaches ' + asset));
 assert.doesNotMatch(sw, /'js\/(?:maplibre-gl|leaflet-maplibre-gl|globe-base-layer)\.js/, 'PWA does not precache the retired globe modules');

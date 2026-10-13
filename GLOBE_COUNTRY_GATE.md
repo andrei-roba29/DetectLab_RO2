@@ -6,9 +6,11 @@ The authenticated country gate now prefers a **lazy-loaded ArcGIS SceneView**
 globe. The existing 2D canvas globe remains the fallback if the ArcGIS SDK,
 imagery/network, WebGL, or SceneView cannot start. Both renderers use the same
 country-picker data and preserve the existing one-country hand-off, localStorage
-record, events, Leaflet lock, and “Change Country” re-entry. This is approach B:
-keep the canvas implementation until the ArcGIS route has been verified in the
-deployed browser environment.
+record, events, and Leaflet lock. The gate has **no “Change Country” pill** any
+more (v190): the dock under the search bar already switches country, and
+“Exit view” — or `DetectLabGlobeGate.open()` — reopens the globe. This is
+approach B: keep the canvas implementation until the ArcGIS route has been
+verified in the deployed browser environment.
 
 The working map remains the primary Leaflet interface, with its flat ArcGIS
 Web-Mercator basemap and existing data overlays. The ArcGIS/canvas view is only
@@ -72,7 +74,10 @@ Selection still writes
 `detectlab:country-selected`, and uses the existing `_detectlabCountryLayer`
 shim, `filterLayersForCountry()`, lock-change event, and country dock. The app
 remains limited to one selected country. Returning users keep the same saved
-selection and can reopen the gate using “Change Country”.
+selection; switching country happens in the dock under the search bar, and
+“Exit view” (or `DetectLabGlobeGate.open()`) brings the globe back. There is no
+“Change Country” pill next to the “?” help button — it overlapped that button
+and duplicated the dock.
 
 ## Canvas and last-resort fallback
 
@@ -120,8 +125,8 @@ and the reject → canvas-fallback path).
 
 ## PWA, network, licensing, and device constraints
 
-`sw.js` uses shell cache `detectlab-v189-country-handoff-zoom`. The local adapter, picker,
-CSS, translations, and country data remain in the app shell. The external
+`sw.js` uses shell cache `detectlab-v190-no-change-country-pill`. The local
+adapter, picker, CSS, translations, and country data remain in the app shell. The external
 ArcGIS SDK/theme and imagery services are **not** precached; cross-origin
 requests pass through the service worker's network path. `js.arcgis.com`,
 `arcgis.com`, and `ibasemaps-api.arcgis.com` are noted in the service-worker
@@ -308,7 +313,7 @@ the outline, which is the intended detail upgrade).
 
 ## Gate deployment and regression checks
 
-`sw.js` cache `v189` precaches the local ArcGIS adapter, picker, styles,
+`sw.js` cache `v190` precaches the local ArcGIS adapter, picker, styles,
 translations and the 50m atlas (the retired MapLibre globe assets are no longer
 part of the shell). The remote ArcGIS SDK,
 theme, imagery, and the two optional canvas texture images are intentionally
@@ -320,7 +325,7 @@ configuration, the v185 drawable-surface guard, country graphics, the
 single-select flow and the v189 hand-off zoom/conversion/clamp),
 `node test-globe-canvas-picker.js` (fallback picking, shared geometry, imagery
 math and the canvas↔flat-map frame cross-check), `node test-country-dock.js`
-(public API, lock, dock, re-entry and the shared hand-off frame), and
+(public API, lock, dock, exit/re-entry and the shared hand-off frame), and
 `node test-country-layer-filter.js` (country-scoped layers and the outline-only
 bounds overlay). The public `window.DetectLabGlobeGate` API and `_test` hooks
 remain in `js/globe-country-picker.js` (`countryHandoffFrame`,

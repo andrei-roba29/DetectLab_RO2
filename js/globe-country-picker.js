@@ -2,8 +2,10 @@
    DetectLab — country-selection gate
    ──────────────────────────────────────────────────────────────
    The public DetectLabGlobeGate API, country data, localStorage record,
-   events, Leaflet lock, and re-entry behavior live here. The preferred
-   renderer is the optional lazy ArcGIS SceneView adapter in
+   events, Leaflet lock, and re-entry behavior live here. There is no
+   “Change Country” pill: the dock under the search bar switches country, the
+   “Exit view” button and DetectLabGlobeGate.open() reopen the globe. The
+   preferred renderer is the optional lazy ArcGIS SceneView adapter in
    js/globe-arcgis-gate.js; this file loads the shared 50-country atlas and
    Natural Earth 10m refinement, handles direct globe clicks, and keeps the
    existing d3 canvas globe as a network/WebGL fallback. The working map is
@@ -1937,7 +1939,6 @@
         els.retryBtn = document.getElementById('globeGateRetryBtn');
         els.hint = document.getElementById('globeGateHint');
         els.closeBtn = document.getElementById('globeGateCloseBtn');
-        els.reopenBtn = document.getElementById('globeGateReopenBtn');
         els.fallbackWrap = document.getElementById('globeGateFallback');
         els.fallbackSelect = document.getElementById('globeGateFallbackSelect');
         els.fallbackBtn = document.getElementById('globeGateFallbackBtn');
@@ -2128,7 +2129,10 @@
         els.root.classList.remove('hidden', 'is-leaving', 'is-arcgis', 'is-canvas');
         els.root.setAttribute('aria-hidden', 'false');
         if (document.documentElement) document.documentElement.classList.add('globe-gate-open');
-        if (els.closeBtn) els.closeBtn.style.display = hasSelection() ? '' : 'none';
+        // The ✕ reuses the pill styling, so its visibility is set here instead
+        // of relying on the old `body.country-selected .globe-gate-reopen`
+        // rule that went away with the “Change Country” pill.
+        if (els.closeBtn) els.closeBtn.style.display = hasSelection() ? 'inline-flex' : 'none';
         if (els.fallbackWrap) els.fallbackWrap.classList.add('hidden');
         showError(false);
         showLoading(true);
@@ -2180,9 +2184,6 @@
     function wireChrome() {
         if (els.closeBtn) {
             els.closeBtn.addEventListener('click', function () { closeGate(true); });
-        }
-        if (els.reopenBtn) {
-            els.reopenBtn.addEventListener('click', function () { openGate(); });
         }
         if (els.retryBtn) {
             els.retryBtn.addEventListener('click', function () {

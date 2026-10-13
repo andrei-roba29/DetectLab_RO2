@@ -12,12 +12,16 @@
 <base href="../">
 <title>DetectLab — Globe Gate preview</title>
 <link rel="stylesheet" href="css/leaflet.css">
-<link rel="stylesheet" href="css/globe-country-picker.css?v=20261013-country-click">
+<link rel="stylesheet" href="css/globe-country-picker.css?v=20261013-no-change-pill">
 <style>
   html, body { height: 100%; margin: 0; background: #030916; font-family: system-ui, sans-serif; color: #eee; }
   #frame { position: relative; width: 100%; height: 100%; overflow: hidden; }
   /* The working map: same flat Leaflet/Web-Mercator stack the app hands off to. */
   #detectlab-map { position: absolute; inset: 0; background: #0d1a2b; }
+  /* Dev-only: the app dropped the “Change Country” pill (the dock switches
+     country instead). The harness keeps one, visible and wired locally, so the
+     gate can be reopened while testing the hand-off. */
+  #globeGateReopenBtn { display: inline-flex; }
   #result { position: fixed; left: 12px; bottom: 12px; z-index: 20000; background: rgba(8,10,22,.85);
             border: 1px solid rgba(185,255,0,.5); border-radius: 10px; padding: 10px 14px; font-size: 13px;
             line-height: 1.5; max-width: 48ch; }
@@ -63,7 +67,7 @@
 <div id="result">Nicio țară selectată încă — apasă pe o țară de pe glob.</div>
 <script src="js/leaflet.js"></script>
 <script src="js/globe-arcgis-gate.js?v=20261013-handoff-zoom"></script>
-<script src="js/globe-country-picker.js?v=20261013-handoff-zoom"></script>
+<script src="js/globe-country-picker.js?v=20261013-no-change-pill"></script>
 <script>
   localStorage.removeItem('detectlab_selected_country_v1');
 
@@ -125,6 +129,12 @@
 
   DetectLabGlobeGate.attach(map);
   DetectLabGlobeGate.open();
+
+  // Local wiring: the app no longer ships the pill, so the picker does not
+  // wire it either (see tools/country-dock-preview.html for the same hook).
+  document.getElementById('globeGateReopenBtn').addEventListener('click', function () {
+    DetectLabGlobeGate.open();
+  });
 </script>
 </body>
 </html>

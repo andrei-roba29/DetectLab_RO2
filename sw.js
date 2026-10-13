@@ -424,7 +424,11 @@
 //   own, the locked 2D view no longer draws the country bbox as a rectangle
 //   while the atlas geometry is still loading, and a country's zoom floor no
 //   longer clamps the next country's fit.
-const CACHE_NAME = 'detectlab-v189-country-handoff-zoom';
+// v190: drop the “Change Country” pill that sat next to the “?” help button —
+//   the dock under the search bar switches country and “Exit view” reopens the
+//   globe — and re-version the picker, its stylesheet and the translations
+//   behind it.
+const CACHE_NAME = 'detectlab-v190-no-change-country-pill';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1027,9 +1031,9 @@ const PRECACHE_URLS = [
   // v184: the ArcGIS-basemap working map, restored country gate (lazy ArcGIS
   // SceneView + canvas fallback) and country dock, in the documented load
   // order (gate → dock → map-app).
-  'css/globe-country-picker.css?v=20261013-country-click',
+  'css/globe-country-picker.css?v=20261013-no-change-pill',
   'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
-  'js/globe-country-picker.js?v=20261013-handoff-zoom',
+  'js/globe-country-picker.js?v=20261013-no-change-pill',
   // v167: country dock glued under the search bar (country switcher +
   // World-hillshade checkbox) and the “Exit view” button of the locked
   // country view. The hillshade tiles themselves stay network-only.
@@ -1043,7 +1047,7 @@ const PRECACHE_URLS = [
   'js/map-app.js?v=20261010-lidar-zoom-gate',
   'js/offline-maps.js?v=20261009-3d-globe',
   'js/translations.js?v=20261009-3d-globe',
-  'js/translations.js?v=20261013-country-click',
+  'js/translations.js?v=20261013-no-change-pill',
   'js/d3.min.js?v=7.9.0',
   'js/topojson-client.min.js?v=3.1.0',
   'data/countries-50m.json?v=20261008',

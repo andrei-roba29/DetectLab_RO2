@@ -17,9 +17,9 @@ assert(indexHtml.includes('id="globeGateCanvas"'), 'index.html contains globeGat
 assert(indexHtml.includes('id="globeGateZoomIn"'), 'index.html contains globeGateZoomIn');
 assert(indexHtml.includes('id="globeGateZoomOut"'), 'index.html contains globeGateZoomOut');
 assert(indexHtml.includes('id="globeGateFallbackSelect"'), 'index.html keeps the no-canvas fallback select');
-assert(indexHtml.includes('js/globe-country-picker.js?v=20261013-handoff-zoom'), 'index.html loads the re-versioned picker');
-assert(indexHtml.includes('css/globe-country-picker.css?v=20261013-country-click'), 'index.html loads the re-versioned css');
-assert(indexHtml.indexOf('js/globe-country-picker.js?v=20261013-handoff-zoom') <
+assert(indexHtml.includes('js/globe-country-picker.js?v=20261013-no-change-pill'), 'index.html loads the re-versioned picker');
+assert(indexHtml.includes('css/globe-country-picker.css?v=20261013-no-change-pill'), 'index.html loads the re-versioned css');
+assert(indexHtml.indexOf('js/globe-country-picker.js?v=20261013-no-change-pill') <
        indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d') &&
        indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d') <
        indexHtml.indexOf('js/map-app.js?v=20261011-arcgis-basemap'),
@@ -38,7 +38,7 @@ console.log('  ✓ local canvas-gate assets shipped');
 
 // ── 3. sw.js precache ──
 const swJs = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8');
-['js/globe-country-picker.js?v=20261013-handoff-zoom', 'css/globe-country-picker.css?v=20261013-country-click',
+['js/globe-country-picker.js?v=20261013-no-change-pill', 'css/globe-country-picker.css?v=20261013-no-change-pill',
  'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
  'js/d3.min.js?v=7.9.0', 'js/topojson-client.min.js?v=3.1.0',
  'data/countries-50m.json?v=20261008',
@@ -411,11 +411,33 @@ T.G.hovered = eu.find(d => d.iso === 'MC');  // micro-state marker + label path
 T.draw(1);
 console.log('  ✓ render pipeline runs clean (imagery, flat, textured, micro-state paths)');
 
-// ── 9. translations keep the globe gate keys ──
+// ── 9. translations keep the globe gate keys, and the removed pill is gone ──
 const transJs = fs.readFileSync(path.join(__dirname, 'js/translations.js'), 'utf8');
-['globe_gate_title', 'globe_gate_desc', 'globe_gate_loading', 'globe_gate_change_country'].forEach(function (k) {
+['globe_gate_title', 'globe_gate_desc', 'globe_gate_loading', 'globe_gate_retry'].forEach(function (k) {
     assert(transJs.includes(k), 'translations.js contains ' + k);
 });
-console.log('  ✓ translations intact');
+// The “Change Country” pill next to the “?” help button was removed; the dock
+// under the search bar switches country and “Exit view” reopens the globe.
+assert(!indexHtml.includes('globeGateReopenBtn'), 'index.html no longer ships the “Change Country” pill');
+assert(!indexHtml.includes('globe_gate_change_country'), 'its translation key is gone from the markup');
+assert(!transJs.includes('globe_gate_change_country'), 'and from translations.js');
+const gatePickerJs = fs.readFileSync(path.join(__dirname, 'js/globe-country-picker.js'), 'utf8');
+assert(!/reopenBtn/.test(gatePickerJs), 'the picker no longer looks for or wires a reopen button');
+assert(!gateCss.includes('body.country-selected .globe-gate-reopen'),
+    'the CSS rule that revealed the pill is gone');
+assert(/globeGateCloseBtn/.test(indexHtml) && /globe-gate-reopen/.test(gateCss),
+    'the gate’s own ✕ keeps the shared pill styling');
+// The ✕ is shown by the picker (inline display), because the old CSS reveal
+// rule went away with the pill.
+assert(/closeBtn\.style\.display\s*=\s*hasSelection\(\)\s*\?\s*'inline-flex'/.test(gatePickerJs),
+    'the gate ✕ controls its own visibility');
+// The two remaining ways in: the dock's country grid (switching always went
+// through selectCountry) and “Exit view”, which releases the lock and reopens
+// the globe through DetectLabGlobeGate.exitView().
+const dockJs = fs.readFileSync(path.join(__dirname, 'js/country-dock.js'), 'utf8');
+assert(/g\.exitView\(\)/.test(dockJs), 'the dock’s “Exit view” still exits through the gate (which reopens the globe)');
+assert(/function exitView\(\)[\s\S]{0,400}openGate\(\);/.test(gatePickerJs),
+    'the gate’s own exitView() reopens the globe');
+console.log('  ✓ translations intact; “Change Country” pill removed (dock + Exit view remain)');
 
 console.log('\nAll canvas globe gate tests passed ✔');

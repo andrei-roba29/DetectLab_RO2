@@ -102,7 +102,7 @@ layers** and keeps the selection visible on the map:
 - `index.html` / `sw.js` — version bumps
   (`js/map-app.js?v=20261011-arcgis-basemap`,
   `js/historical-eu-maps.js?v=20261008-country-layers-strict`,
-  `js/globe-country-picker.js?v=20261013-handoff-zoom`), shell `v189`.
+  `js/globe-country-picker.js?v=20261013-no-change-pill`), shell `v190`.
 
 ## Semantics
 

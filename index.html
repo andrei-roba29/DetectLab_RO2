@@ -27,7 +27,7 @@
     <link rel="stylesheet" href="css/leaflet-measure.css">
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
     <link rel="stylesheet" href="css/styles.css?v=20261008-roman-dare-icons">
-    <link rel="stylesheet" href="css/globe-country-picker.css?v=20261013-country-click">
+    <link rel="stylesheet" href="css/globe-country-picker.css?v=20261013-no-change-pill">
     <link rel="stylesheet" href="css/country-dock.css?v=20261008">
     <link rel="stylesheet" href="css/library-of-babel.css?v=20260917-babel-epochs">
     <link rel="stylesheet" href="css/tutorial.css?v=20260922-mobile-fs-controls">
@@ -1386,8 +1386,11 @@
                          the existing no-WebGL canvas picker stays available when
                          the SDK, network, or 3D context cannot start. Both renderers
                          consume js/globe-country-picker.js's same 50-country / 10m
-                         geometry and preserve its single-country map lock. -->
-                    <button type="button" class="globe-gate-reopen" id="globeGateReopenBtn" data-key="globe_gate_change_country">Change Country</button>
+                         geometry and preserve its single-country map lock.
+                         There is no “Change Country” pill next to the “?” help
+                         button any more: the dock under the search bar already
+                         switches country, and the “Exit view” button reopens the
+                         globe (js/country-dock.js). -->
                     <div class="globe-gate hidden" id="globeGate" aria-hidden="true">
                         <div class="globe-gate-arcgis" id="globeGateArcGIS" aria-label="Interactive country globe"></div>
                         <div class="globe-gate-canvas" id="globeGateCanvas"></div>
@@ -4713,7 +4716,7 @@
         </div>
     </footer>
 
-    <script src="js/translations.js?v=20261013-country-click"></script>
+    <script src="js/translations.js?v=20261013-no-change-pill"></script>
 
     <!-- Leaflet JS (from qgis2web folder) -->
     <script src="js/leaflet.js"></script>
@@ -4786,7 +4789,7 @@
     <script src="js/patrimoniu-clustering.js?v=20260914-patrimoniu-cluster"></script>
     <!-- Lightweight local adapter only; the ArcGIS CDN SDK/theme are loaded after the gate opens. -->
     <script src="js/globe-arcgis-gate.js?v=20261013-handoff-zoom"></script>
-    <script src="js/globe-country-picker.js?v=20261013-handoff-zoom"></script>
+    <script src="js/globe-country-picker.js?v=20261013-no-change-pill"></script>
     <!-- Country dock: the slide-down country switcher glued under the search
          bar, the small World-hillshade overlay checkbox and the bottom-centre
          “Exit view” button. Loaded after the globe gate (it only talks to it

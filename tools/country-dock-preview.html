@@ -18,6 +18,10 @@
   /* Minimal stand-ins for the app's own layout, so the real CSS of the dock
      lands exactly where it does in index.html. */
   .map-frame { position: relative; height: 100vh; overflow: visible; isolation: isolate; }
+  /* Dev-only: the app dropped the “Change Country” pill (the dock switches
+     country instead). The harness keeps one, visible and wired locally, so the
+     gate can be reopened while testing the dock. */
+  #globeGateReopenBtn { display: inline-flex; }
   #detectlab-map { position: absolute; inset: 0; background: #0d1a2b; }
   .map-search-wrap {
     position: absolute;
