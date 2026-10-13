@@ -5432,7 +5432,12 @@
                     tms: useTms,
                     crossOrigin: 'anonymous',
                     errorTileUrl: ''
-                }).addTo(map);
+                });
+                // APM is opt-in: keep the layer off until the user enables it.
+                // The probe is asynchronous, so checking the control here also
+                // respects a click made while the tile source is being detected.
+                var apmToggle = document.getElementById('apmToggle');
+                if (apmToggle && apmToggle.checked) layer.addTo(map);
                 window._apmLayer = layer;
                 return layer;
             }

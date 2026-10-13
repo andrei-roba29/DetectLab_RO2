@@ -21,15 +21,15 @@ console.log('[Test] Lazy ArcGIS country gate...');
 
 // Page and service-worker wiring: adapter before the public gate, no eager CDN.
 const adapterUrl = 'js/globe-arcgis-gate.js?v=20261012-gate-layout';
-const pickerUrl = 'js/globe-country-picker.js?v=20261011-arcgis-gate';
-const cssUrl = 'css/globe-country-picker.css?v=20261012-gate-layout';
-const translationsUrl = 'js/translations.js?v=20261011-arcgis-gate';
+const pickerUrl = 'js/globe-country-picker.js?v=20261013-country-click';
+const cssUrl = 'css/globe-country-picker.css?v=20261013-country-click';
+const translationsUrl = 'js/translations.js?v=20261013-country-click';
 for (const asset of [adapterUrl, pickerUrl, cssUrl, translationsUrl]) {
     assert(html.includes(asset), 'index.html references ' + asset);
     assert(sw.includes("'" + asset + "'"), 'sw.js precaches ' + asset);
 }
 assert(html.indexOf(adapterUrl) < html.indexOf(pickerUrl), 'local ArcGIS adapter loads before the gate API');
-assert(html.indexOf(pickerUrl) < html.indexOf('js/country-dock.js?v=20261010-hillshade-globe'), 'public gate API loads before the country dock');
+assert(html.indexOf(pickerUrl) < html.indexOf('js/country-dock.js?v=20261013-country-2d'), 'public gate API loads before the country dock');
 assert(!/https:\/\/js\.arcgis\.com/.test(html), 'the ArcGIS SDK is not eagerly included in index.html');
 assert(adapter.includes("var SDK_ROOT = 'https://js.arcgis.com/4.31/'"), 'the adapter pins ArcGIS SDK 4.31');
 assert(adapter.includes("var SDK_CSS = SDK_ROOT + 'esri/themes/dark/main.css'"), 'the ArcGIS theme is dynamically loaded');
@@ -39,12 +39,12 @@ assert(/const CACHE_NAME = 'detectlab-v(18[5-9]|19\d|[2-9]\d\d)-/.test(sw), 'the
 for (const host of ['js.arcgis.com', 'arcgis.com', 'ibasemaps-api.arcgis.com']) {
     assert(sw.includes("'" + host + "'"), 'service-worker passthrough list includes ' + host);
 }
-assert(html.includes('id="globeGateArcGIS"') && html.includes('id="globeGateCountryList"'), 'ArcGIS surface and country list markup exist');
-assert(html.includes('id="globeGateCountrySearch"') && html.includes('globeGateSelectBtn') && picker.includes("checkbox.type = 'checkbox'"), 'gate exposes search, one-country checks, and a continue action');
-for (const key of ['globe_gate_search', 'globe_gate_country_count', 'globe_gate_selection_hint', 'globe_gate_continue']) {
-    assert((translations.split(key).length - 1) >= 2, key + ' is translated in English and Romanian');
-}
-console.log('  ✓ lazy SDK/CSS, cache, markup, and EN/RO release wiring');
+assert(html.includes('id="globeGateArcGIS"') && !html.includes('id="globeGateCountryList"'), 'ArcGIS surface exists and the initial country list is removed');
+assert(!html.includes('id="globeGateCountrySearch"') && !html.includes('globeGateSelectBtn'), 'the gate has no search or continue panel');
+assert(picker.includes('onSelect: function (iso) { selectCountry(iso); }') && picker.includes('function selectCountry(iso)'), 'a globe click is wired directly to country selection');
+assert(translations.includes('globe_gate_desc: \'Rotate the globe and click a country to select it and zoom in.\''), 'English copy explains click-to-select');
+assert(translations.includes('globe_gate_desc: \'Rotește globul și apasă pe o țară pentru a o selecta și a mări harta.\''), 'Romanian copy explains click-to-select');
+console.log('  ✓ lazy SDK/CSS, cache, click-to-select markup, and EN/RO release wiring');
 
 // Scene configuration and fallback wiring are explicit and do not touch map-app.
 for (const token of [
@@ -57,17 +57,33 @@ for (const token of [
 ]) assert(adapter.includes(token), 'SceneView configuration contains ' + token);
 assert(adapter.includes('new modules.GraphicsLayer'), 'outlines use explicit ArcGIS GraphicsLayers');
 assert(adapter.includes('orientRing(ring, index === 0)'), 'GeoJSON ring orientation is normalized for ArcGIS');
-assert(picker.includes('function setPendingCountry(iso)') && picker.includes('if (iso && !NAMES[iso]) iso = null'), 'gate staging rejects multi/unknown-country values');
-assert(picker.includes('DetectLabArcGISGate.goToCountry(iso)') && picker.includes('finishSelection(iso, name, bbox)'), 'one staged country zooms before existing hand-off');
+assert(picker.includes('function setPendingCountry(iso)') && picker.includes('if (iso && !NAMES[iso]) iso = null'), 'stored country highlights still reject unknown ISO values');
+assert(picker.includes('DetectLabArcGISGate.goToCountry(iso)') && picker.includes('finishSelection(iso, name, bbox)'), 'a clicked country zooms before the existing hand-off');
 assert(picker.includes('activateCanvasFallback(error)') && picker.includes('buildCanvas()') && picker.includes('startImagery()'), 'SceneView failures fall back to the existing canvas renderer');
-assert(picker.includes('normalizeName(text).indexOf(query)') && picker.includes('[item.iso, item.name, item.en, item.ro]'), 'country search is accent-normalized and checks both EN/RO names plus ISO');
+assert(!picker.includes('renderCountryList') && !css.includes('.globe-gate-country-panel'), 'the initial gate no longer renders a country-list panel');
 assert(css.includes('.globe-gate.is-arcgis .globe-gate-canvas') && css.includes('.globe-gate.is-canvas .globe-gate-arcgis'), 'ArcGIS and canvas surfaces can be switched independently');
 
-// v185 regression: #globeGateArcGIS is the SceneView's own container, so the
-// SDK's `.esri-view` rule (display: flex) must not be overridden — `display:
-// block` there collapsed the view root to 0 px and the gate opened black with
-// nothing but the country list. The adapter also refuses to hand back a globe
-// without a drawable surface.
+// The selected-country view is deliberately flat: stage the Leaflet camera
+// before either 3D renderer is removed, and keep the renderer present during
+// the fade so ArcGIS and canvas selections share the same hand-off contract.
+assert(picker.includes('function prepareFlatMapTransition(iso, bbox)'), 'selection stages a flat Leaflet transition');
+assert(picker.includes("window.setArcgisBasemap('imagery')"), 'the staged map uses the same World Imagery basemap');
+assert(picker.includes('duration: 0.85') && picker.includes('easeLinearity: 0.25'), 'the staged Leaflet fit is animated');
+assert(picker.includes('state.mapTransition') && picker.includes('state.mapTransition.iso === iso'), 'applySelection reuses the staged fit instead of moving twice');
+const stageAt = picker.indexOf('prepareFlatMapTransition(iso, bbox);');
+const arcgisCameraAt = picker.indexOf('DetectLabArcGISGate.goToCountry(iso)');
+const canvasCameraAt = picker.indexOf('flyTo(entry, function () {');
+assert(stageAt !== -1 && stageAt < arcgisCameraAt && stageAt < canvasCameraAt,
+    'both ArcGIS and canvas camera paths start after the flat map is staged');
+assert(picker.includes('var GATE_LEAVE_MS = 720'), 'the 3D gate fade has enough overlap with the flat-map camera');
+assert(picker.includes('gateCloseTimer = window.setTimeout(function () {\n            if (window.DetectLabArcGISGate'), 'ArcGIS cleanup is delayed until after the fade');
+assert(!picker.includes('DetectLabGlobeBase'), 'the final bounds overlay has no retired globe-camera dependency');
+assert(/\.globe-gate\s*\{[^}]*transition:\s*opacity\s+\.72s/.test(css), 'the gate opacity transition is synchronized with the hand-off');
+
+// Regression: #globeGateArcGIS is the SceneView's own container, so the SDK's
+// `.esri-view` rule (display: flex) must not be overridden — `display: block`
+// there collapsed the view root to 0 px and the gate opened black with no
+// drawable globe. The adapter also refuses to hand back an unsized surface.
 assert(html.includes('id="globeGateArcGIS"'), 'the ArcGIS container is the one the SceneView is created in');
 assert(/\.globe-gate\.is-arcgis \.globe-gate-arcgis\s*\{\s*display:\s*flex;/.test(css),
     'the ArcGIS host keeps the SDK layout (display: flex) when the gate is in ArcGIS mode');
@@ -243,8 +259,8 @@ const countries = [
     api.close();
 
     // v185: a SceneView that reports "ready" but never gets a drawable surface
-    // must never be handed to the gate — that was the black screen with only
-    // the country list visible.
+    // must never be handed to the gate — that was the black screen with no
+    // usable globe.
     const box = (width, height) => ({ width, height, top: 0, left: 0, right: width, bottom: height });
     const layoutContainer = (hostSize, surfaceSize, heal) => {
         const state = { display: '', surface: box(surfaceSize.width, surfaceSize.height) };

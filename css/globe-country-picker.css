@@ -1,8 +1,9 @@
 /* ══════════════════════════════════════════════════════════════
    DetectLab — country gate (ArcGIS SceneView + canvas fallback)
    The preferred lazy-loaded SceneView and the existing no-WebGL canvas
-   share the same country data, single-country selection UI, and map lock.
-   The dark background matches the working map's globe. See
+   share the same country data, direct-click selection flow, and map lock.
+   The dark background keeps the temporary gate visually consistent with the
+   working map during hand-off. See
    GLOBE_COUNTRY_GATE.md.
    ══════════════════════════════════════════════════════════════ */
 
@@ -17,7 +18,9 @@
     overflow: hidden;
     background: #030916;
     opacity: 1;
-    transition: opacity .45s ease;
+    /* The flat Leaflet map is prepared underneath before this fades away. */
+    transition: opacity .72s cubic-bezier(.22, .61, .36, 1);
+    will-change: opacity;
 }
 
 .globe-gate.hidden {
@@ -297,8 +300,8 @@ body.country-selected .globe-gate-reopen { display: inline-flex; }
    then fill the root. Overriding the container's display (e.g. `block`, the
    pre-2026-10-12 rule) collapses the root to 0 px: the SDK keeps its fallback
    300×150 canvas, never resizes it, and the gate renders as a flat black
-   panel that only shows its own chrome and the country list — the "black
-   screen, no globe" regression. Same display value, both axes: flex. */
+   panel that only shows its own chrome and zoom buttons — the "black screen,
+   no globe" regression. Same display value, both axes: flex. */
 .globe-gate-arcgis {
     display: none;
     position: absolute;
@@ -324,252 +327,21 @@ body.country-selected .globe-gate-reopen { display: inline-flex; }
 }
 .globe-gate.is-canvas .globe-gate-arcgis { display: none !important; }
 
-/* ── Single-country picker panel ── */
-.globe-gate-country-panel {
-    position: absolute;
-    top: 96px;
-    right: 16px;
-    bottom: 54px;
-    z-index: 5;
-    width: min(312px, 34vw);
-    min-width: 244px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 14px;
-    border: 1px solid rgba(214, 224, 243, .18);
-    border-radius: 16px;
-    background: rgba(5, 11, 25, .90);
-    box-shadow: 0 16px 44px rgba(0, 0, 0, .38);
-    -webkit-backdrop-filter: blur(16px);
-    backdrop-filter: blur(16px);
-    color: #F5F0EB;
-    pointer-events: auto;
-}
-.globe-gate-country-panel-head {
-    min-height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-}
-.globe-gate-country-panel-kicker {
-    font: 700 .82rem/1.1 system-ui, sans-serif;
-    letter-spacing: .09em;
-    text-transform: uppercase;
-    color: #F5F0EB;
-}
-.globe-gate-country-count {
-    color: rgba(232, 238, 249, .64);
-    font: 500 .70rem/1.2 system-ui, sans-serif;
-    white-space: nowrap;
-}
-.globe-gate-search {
-    min-height: 40px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 11px;
-    border: 1px solid rgba(214, 224, 243, .18);
-    border-radius: 10px;
-    background: rgba(255, 255, 255, .055);
-    color: rgba(238, 243, 252, .72);
-    font: 500 20px/1 system-ui, sans-serif;
-}
-.globe-gate-search:focus-within {
-    border-color: rgba(185, 255, 0, .65);
-    box-shadow: 0 0 0 3px rgba(185, 255, 0, .09);
-}
-.globe-gate-search input {
-    min-width: 0;
-    width: 100%;
-    height: 38px;
-    padding: 0;
-    border: 0;
-    outline: 0;
-    background: transparent;
-    color: #fff;
-    font: 500 .84rem system-ui, sans-serif;
-    appearance: none;
-}
-.globe-gate-search input::placeholder { color: rgba(232, 238, 249, .48); }
-.globe-gate-search input::-webkit-search-cancel-button { cursor: pointer; }
-.globe-gate-country-list {
-    flex: 1 1 auto;
-    min-height: 100px;
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(185, 255, 0, .42) rgba(255, 255, 255, .05);
-    padding: 1px 3px 1px 1px;
-}
-.globe-gate-country-list::-webkit-scrollbar { width: 6px; }
-.globe-gate-country-list::-webkit-scrollbar-track { background: rgba(255, 255, 255, .04); border-radius: 8px; }
-.globe-gate-country-list::-webkit-scrollbar-thumb { background: rgba(185, 255, 0, .38); border-radius: 8px; }
-.globe-gate-country-row {
-    min-height: 47px;
-    display: grid;
-    grid-template-columns: 19px minmax(0, 1fr) 28px;
-    align-items: center;
-    gap: 10px;
-    margin: 0 0 3px;
-    padding: 5px 8px;
-    border: 1px solid transparent;
-    border-radius: 10px;
-    background: transparent;
-    cursor: pointer;
-    transition: background .12s ease, border-color .12s ease;
-}
-.globe-gate-country-row:hover,
-.globe-gate-country-row.is-hovered {
-    border-color: rgba(255, 255, 255, .13);
-    background: rgba(255, 255, 255, .055);
-}
-.globe-gate-country-row.is-selected {
-    border-color: rgba(57, 255, 20, .42);
-    background: rgba(57, 255, 20, .095);
-}
-.globe-gate-country-row input {
-    position: relative;
-    width: 18px;
-    height: 18px;
-    margin: 0;
-    border: 1px solid rgba(232, 238, 249, .46);
-    border-radius: 5px;
-    background: rgba(255, 255, 255, .04);
-    appearance: none;
-    cursor: pointer;
-}
-.globe-gate-country-row input:checked {
-    border-color: #39ff14;
-    background: #39ff14;
-    box-shadow: 0 0 10px rgba(57, 255, 20, .22);
-}
-.globe-gate-country-row input:checked::after {
-    content: '';
-    position: absolute;
-    left: 5px;
-    top: 2px;
-    width: 5px;
-    height: 9px;
-    border: solid #06100a;
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
-}
-.globe-gate-country-row input:focus-visible {
-    outline: 2px solid #ddffb0;
-    outline-offset: 3px;
-}
-.globe-gate-country-name {
-    min-width: 0;
-    overflow: hidden;
-    color: rgba(245, 240, 235, .92);
-    font: 550 .82rem/1.25 system-ui, sans-serif;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.globe-gate-country-alt {
-    display: block;
-    overflow: hidden;
-    margin-top: 2px;
-    color: rgba(232, 238, 249, .48);
-    font: 400 .68rem/1.2 system-ui, sans-serif;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.globe-gate-country-code {
-    justify-self: end;
-    color: rgba(232, 238, 249, .52);
-    font: 650 .64rem/1 system-ui, sans-serif;
-    letter-spacing: .06em;
-}
-.globe-gate-country-row.is-selected .globe-gate-country-name,
-.globe-gate-country-row.is-selected .globe-gate-country-code { color: #ddffb0; }
-.globe-gate-no-results {
-    padding: 18px 8px;
-    color: rgba(232, 238, 249, .62);
-    font: 500 .78rem/1.4 system-ui, sans-serif;
-    text-align: center;
-}
-.globe-gate-selection-hint {
-    flex: 0 0 auto;
-    margin: 0;
-    color: rgba(232, 238, 249, .58);
-    font: 450 .70rem/1.35 system-ui, sans-serif;
-}
-.globe-gate-select-btn {
-    flex: 0 0 auto;
-    min-height: 42px;
-    padding: 9px 16px;
-    border: 1px solid rgba(57, 255, 20, .55);
-    border-radius: 10px;
-    background: rgba(57, 255, 20, .13);
-    color: #ddffb0;
-    font: 650 .82rem system-ui, sans-serif;
-    cursor: pointer;
-    transition: background .14s ease, opacity .14s ease, transform .14s ease;
-}
-.globe-gate-select-btn:not(:disabled):hover { background: rgba(57, 255, 20, .22); }
-.globe-gate-select-btn:not(:disabled):active { transform: translateY(1px); }
-.globe-gate-select-btn:disabled {
-    border-color: rgba(232, 238, 249, .12);
-    background: rgba(255, 255, 255, .045);
-    color: rgba(232, 238, 249, .36);
-    cursor: not-allowed;
-}
+/* Country selection is performed directly on the interactive globe. */
 #globeGateCloseBtn { top: 12px !important; left: 12px !important; right: auto !important; z-index: 20; }
 
-/* Loading and last-resort states must sit above the interactive picker. */
+/* Loading and last-resort states must sit above the interactive globe. */
 .globe-gate-loading,
 .globe-gate-error,
 .globe-gate-fallback { z-index: 8; }
 
 @media (max-width: 760px) {
-    .globe-gate-country-panel {
-        top: auto;
-        left: 10px;
-        right: 10px;
-        bottom: 10px;
-        width: auto;
-        min-width: 0;
-        max-height: min(41vh, 360px);
-        gap: 7px;
-        padding: 10px;
-        border-radius: 13px;
-    }
-    .globe-gate-country-panel-head { min-height: 21px; }
-    .globe-gate-search { min-height: 36px; }
-    .globe-gate-search input { height: 34px; }
-    .globe-gate-country-list { min-height: 66px; }
-    .globe-gate-country-row { min-height: 42px; grid-template-columns: 19px minmax(0, 1fr) 28px; }
-    .globe-gate-selection-hint { font-size: .66rem; }
-    .globe-gate-select-btn { min-height: 38px; }
-    .globe-gate-zoom { bottom: calc(min(41vh, 360px) + 18px); }
-    .globe-gate-hint { display: none; }
     .globe-gate-attrib {
         left: 10px;
-        bottom: calc(min(41vh, 360px) + 14px);
+        bottom: 0;
         z-index: 6;
         max-width: 55%;
         overflow: hidden;
         text-overflow: ellipsis;
     }
-}
-
-@media (max-width: 760px) and (max-height: 500px) {
-    .globe-gate-country-panel {
-        max-height: min(48vh, 300px);
-        gap: 4px;
-        padding: 8px;
-    }
-    .globe-gate-country-panel-head { min-height: 18px; }
-    .globe-gate-search { min-height: 31px; }
-    .globe-gate-search input { height: 29px; }
-    .globe-gate-country-list { min-height: 40px; }
-    .globe-gate-country-row { min-height: 36px; }
-    .globe-gate-selection-hint { font-size: .61rem; }
-    .globe-gate-select-btn { min-height: 34px; padding-top: 7px; padding-bottom: 7px; }
-    .globe-gate-zoom { bottom: calc(min(48vh, 300px) + 16px); }
-    .globe-gate-attrib { bottom: calc(min(48vh, 300px) + 12px); }
 }

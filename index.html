@@ -27,7 +27,7 @@
     <link rel="stylesheet" href="css/leaflet-measure.css">
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
     <link rel="stylesheet" href="css/styles.css?v=20261008-roman-dare-icons">
-    <link rel="stylesheet" href="css/globe-country-picker.css?v=20261012-gate-layout">
+    <link rel="stylesheet" href="css/globe-country-picker.css?v=20261013-country-click">
     <link rel="stylesheet" href="css/country-dock.css?v=20261008">
     <link rel="stylesheet" href="css/library-of-babel.css?v=20260917-babel-epochs">
     <link rel="stylesheet" href="css/tutorial.css?v=20260922-mobile-fs-controls">
@@ -1292,8 +1292,9 @@
                              slide-down button shows the current 2-letter code
                              and drops open the full initials list (hover = full
                              name), next to the small World-hillshade overlay
-                             checkbox. The permanent 3D globe base is never
-                             switched by a country selection. js/country-dock.js. -->
+                             checkbox. Selecting a country transitions from
+                             the temporary 3D gate to the flat 2D map.
+                             js/country-dock.js. -->
                         <div class="country-dock" id="countryDock">
                             <div class="country-dock-row">
                                 <button type="button" class="country-dock-btn" id="countryDockBtn"
@@ -1304,7 +1305,7 @@
                                     <span class="country-dock-caret" aria-hidden="true">▾</span>
                                 </button>
                                 <label class="country-dock-hs" id="countryDockHillshadeWrap"
-                                       title="World Hillshade (Esri · USGS · NOAA, 30 m) — terrain shading over the permanent 3D globe">
+                                       title="World Hillshade (Esri · USGS · NOAA, 30 m) — terrain shading over the flat 2D map">
                                     <input type="checkbox" id="countryDockHillshade">
                                     <span class="t" data-key="country_dock_hillshade">World hillshade</span>
                                 </label>
@@ -1320,7 +1321,7 @@
                                 <div class="country-dock-grid" id="countryDockGrid" role="listbox"
                                      aria-label="Countries"></div>
                                 <div class="country-dock-name" id="countryDockName" aria-live="polite"></div>
-                                <p class="country-dock-hint t" data-key="country_dock_hint">Hover a code for the country name. Picking one moves and locks the map view to it — the 3D globe stays in place.</p>
+                                <p class="country-dock-hint t" data-key="country_dock_hint">Hover a code for the country name. Picking one moves and locks the flat 2D map view to it.</p>
                             </div>
                         </div>
                     </div>
@@ -1392,25 +1393,12 @@
                         <div class="globe-gate-canvas" id="globeGateCanvas"></div>
                         <div class="globe-gate-chrome">
                             <div class="globe-gate-title t" id="globeGateTitle" data-key="globe_gate_title">Choose your country</div>
-                            <p class="globe-gate-desc t" id="globeGateDesc" data-key="globe_gate_desc">Spin the globe and select a European country to start mapping.</p>
+                            <p class="globe-gate-desc t" id="globeGateDesc" data-key="globe_gate_desc">Rotate the globe and click a country to select it and zoom in.</p>
                             <div class="globe-gate-legend">
                                 <span class="globe-gate-swatch globe-gate-swatch--default"></span><span class="t" data-key="globe_gate_legend_default">Available country</span>
                                 <span class="globe-gate-swatch globe-gate-swatch--hover"></span><span class="t" data-key="globe_gate_legend_hover">Hovered</span>
                             </div>
                         </div>
-                        <aside class="globe-gate-country-panel" id="globeGateCountryPanel" aria-label="Country selection">
-                            <div class="globe-gate-country-panel-head">
-                                <span class="globe-gate-country-panel-kicker">DetectLab</span>
-                                <span class="globe-gate-country-count" id="globeGateCountryCount" aria-live="polite">50 countries</span>
-                            </div>
-                            <label class="globe-gate-search" for="globeGateCountrySearch">
-                                <span aria-hidden="true">⌕</span>
-                                <input id="globeGateCountrySearch" type="search" autocomplete="off" spellcheck="false" placeholder="Search countries" data-placeholder-key="globe_gate_search" aria-label="Search countries">
-                            </label>
-                            <div class="globe-gate-country-list" id="globeGateCountryList" role="group" aria-label="Select one country"></div>
-                            <p class="globe-gate-selection-hint t" id="globeGateSelectionHint" data-key="globe_gate_selection_hint" role="status" aria-live="polite">Select one country to continue.</p>
-                            <button type="button" class="globe-gate-select-btn t" id="globeGateSelectBtn" data-key="globe_gate_continue" disabled>Continue to map</button>
-                        </aside>
                         <button type="button" id="globeGateCloseBtn" class="globe-gate-reopen" style="display:none;top:auto;right:auto;left:14px" aria-label="Close">✕</button>
                         <div class="globe-gate-zoom">
                             <button type="button" id="globeGateZoomIn" aria-label="Zoom in">+</button>
@@ -1663,7 +1651,7 @@
                                 <span>APM Layer</span>
                             </span>
                             <label class="apm-toggle-switch" style="margin-left:auto;flex-shrink:0" title="Toggle APM Layer">
-                                <input type="checkbox" id="apmToggle" checked onchange="toggleApmLayer(this.checked)">
+                                <input type="checkbox" id="apmToggle" onchange="toggleApmLayer(this.checked)">
                                 <span class="apm-toggle-track"></span>
                             </label>
                         </div>
@@ -4725,7 +4713,7 @@
         </div>
     </footer>
 
-    <script src="js/translations.js?v=20261011-arcgis-gate"></script>
+    <script src="js/translations.js?v=20261013-country-click"></script>
 
     <!-- Leaflet JS (from qgis2web folder) -->
     <script src="js/leaflet.js"></script>
@@ -4798,13 +4786,13 @@
     <script src="js/patrimoniu-clustering.js?v=20260914-patrimoniu-cluster"></script>
     <!-- Lightweight local adapter only; the ArcGIS CDN SDK/theme are loaded after the gate opens. -->
     <script src="js/globe-arcgis-gate.js?v=20261012-gate-layout"></script>
-    <script src="js/globe-country-picker.js?v=20261011-arcgis-gate"></script>
+    <script src="js/globe-country-picker.js?v=20261013-country-click"></script>
     <!-- Country dock: the slide-down country switcher glued under the search
          bar, the small World-hillshade overlay checkbox and the bottom-centre
          “Exit view” button. Loaded after the globe gate (it only talks to it
          through window.DetectLabGlobeGate) and before map-app.js, which
          attaches it to the Leaflet map. -->
-    <script src="js/country-dock.js?v=20261010-hillshade-globe"></script>
+    <script src="js/country-dock.js?v=20261013-country-2d"></script>
     <script src="js/map-app.js?v=20261011-arcgis-basemap"></script>
     <script src="js/historical-eu-maps.js?v=20261008-country-layers-strict"></script>
     <script src="js/offline-maps.js?v=20261009-3d-globe"></script>

@@ -1,4 +1,4 @@
-# ArcGIS basemap integration (PR #283 fix — v184, gate layout v185)
+# ArcGIS basemap integration (PR #283 fix — v184, gate layout v185, flat hand-off v186)
 
 ## v185 — country gate "black screen" fix
 
@@ -82,15 +82,36 @@ the covering-iframe situation v183 introduced. So:
 
 Known, accepted differences vs. the pre-PR 3D globe: the selected-country
 outline is no longer projected with a globe camera — `js/globe-country-picker.js`
-falls back to its own Leaflet placement (`L.geoJSON`/`L.rectangle` in
-`pane_country_bounds`), and the canvas-drawn LIDAR sources no longer need the
-zoom-11 gate because there is no globe camera to drift from.
+uses Leaflet placement (`L.geoJSON`/`L.rectangle` in `pane_country_bounds`), and
+the canvas-drawn LIDAR sources no longer need the zoom-11 gate because there is
+no permanent globe camera to drift from.
+
+## v186 — seamless 3D gate to flat 2D country view
+
+The ArcGIS SceneView and canvas globe are temporary selection surfaces, not the
+selected-country basemap. On a direct globe click, `selectCountry()` first calls
+`prepareFlatMapTransition()` in `js/globe-country-picker.js`. That routine:
+
+1. switches the flat map to the same World Imagery service, stops stale Leaflet
+   motion, invalidates its size, and starts an animated `fitBounds()` to the
+   selected country's bounds;
+2. records the fit zoom so `restrictLeafletToCountry()` can apply the lock
+   without starting a second camera movement;
+3. runs concurrently with ArcGIS `goToCountry()` or the canvas `flyTo()`;
+4. keeps the final 3D renderer visible while the gate fades for 720 ms, then
+   destroys the ArcGIS view and hides the gate.
+
+Both renderer paths therefore reveal the same country in the flat Leaflet/Web-
+Mercator view. The country lock, persistence, layer filtering, bounds overlay,
+and dock remain unchanged. A country selected from the dock skips the 3D gate
+and continues on the ordinary 2D working-map path.
 
 ## PWA / service worker
 
-- `sw.js` is bumped to **v185** (`detectlab-v185-gate-layout`, replacing
-  `detectlab-v184-arcgis-basemap`), so installed PWAs pick up the gate layout
-  fix along with the v184 integration.
+- `sw.js` is bumped to **v187** (`detectlab-v187-flat-country-handoff`, replacing
+  `detectlab-v186-country-click`), so installed PWAs pick up direct
+  click-to-select and the staged 3D-to-flat-2D hand-off along with the v184
+  integration.
 - The retired MapLibre/globe assets stay out of the precache; the restored
   gate/dock assets and the new `js/map-app.js?v=20261011-arcgis-basemap`
   are precached; the atlas page assets remain precached.

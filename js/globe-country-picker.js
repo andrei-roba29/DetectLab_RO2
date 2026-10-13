@@ -5,10 +5,10 @@
    events, Leaflet lock, and re-entry behavior live here. The preferred
    renderer is the optional lazy ArcGIS SceneView adapter in
    js/globe-arcgis-gate.js; this file loads the shared 50-country atlas and
-   Natural Earth 10m refinement, builds the single-country list, and keeps
-   the existing d3 canvas globe as a network/WebGL fallback. The working
-   Leaflet/MapLibre map remains independent (js/map-app.js and
-   js/globe-base-layer.js). See GLOBE_COUNTRY_GATE.md.
+   Natural Earth 10m refinement, handles direct globe clicks, and keeps the
+   existing d3 canvas globe as a network/WebGL fallback. The working map is
+   the flat Leaflet/Web-Mercator stack in js/map-app.js; the 3D renderer is
+   only a temporary selection surface. See GLOBE_COUNTRY_GATE.md.
    ══════════════════════════════════════════════════════════════ */
 (function (window, document) {
     'use strict';
@@ -30,19 +30,18 @@
     var FETCH_TIMEOUT_MS = 20000;
 
     /* ── Basemap imagery ────────────────────────────────────────────────
-       The sphere shows the same Esri World Imagery the working map's
-       MapLibre globe draws (WORLD_IMAGERY_URL / BACKGROUND in
-       js/globe-base-layer.js), so the picture does not change when a
-       country is picked. The tiles are Web Mercator: for every canvas
+       The sphere shows the same Esri World Imagery used by the working
+       map's flat Leaflet/Web-Mercator basemap, so the picture does not change
+       when a country is picked. The tiles are Web Mercator: for every canvas
        pixel the inverse orthographic mapping gives lon/lat, which is
        converted to Mercator and read from the tile covering it (or from
        the nearest loaded ancestor while that tile is still downloading —
-       the same progressive refinement MapLibre does). Like MapLibre the
-       gate draws the imagery as it is: no hillshade, no limb darkening,
-       no atmosphere halo, and the pole caps are filled by extending the
+       the same progressive refinement as a normal tile renderer). The gate
+       draws the imagery as it is: no hillshade, no limb darkening, no
+       atmosphere halo, and the pole caps are filled by extending the
        outermost Mercator rows. */
     var IMAGERY_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-    var IMAGERY_BACKGROUND = '#030916';     // globe-base-layer.js BACKGROUND
+    var IMAGERY_BACKGROUND = '#030916';     // keeps the temporary gate visually continuous
     var IMAGERY_ATTRIBUTION = 'Imagery \u00a9 Esri \u2014 World Imagery';
     var FALLBACK_ATTRIBUTION = 'Imagery: NASA Blue Marble';   // shown only when the tile service is unreachable
     var TILE_PX = 256;
@@ -62,8 +61,9 @@
        so the user cannot wander off the chosen country. Zooming out to that
        floor is the signal for the “Exit view” button built by
        js/country-dock.js; the only other way out is picking another country
-       from the dock glued to the search bar (or from this globe). The
-       permanent 3D globe basemap is never replaced by a selection — see
+       from the dock glued to the search bar (or clicking another country on
+       this globe). The
+       flat 2D basemap is prepared underneath the transition — see
        COUNTRY_SELECTION_DOCK.md. */
     var LOCK_PAD = 0.15;         // degrees of slack around the country bbox
     // Leaflet snaps the zoom to whole levels by default, so the floor has to be
@@ -274,25 +274,75 @@
         return Math.max(state.baseMinZoom, Math.min(state.baseMaxZoom, fit));
     }
 
-    /* Lock the working map to one country: pan pinned to the (slightly
-       padded) country box, zoom floor at the fit zoom. The permanent 3D globe
-       base is never replaced here — a selection only moves the camera and
-       locks it. */
-    function restrictLeafletToCountry(map, bbox) {
+    /* The country gate is a temporary 3D surface. The working map underneath
+       is deliberately a flat Leaflet/Web-Mercator map, using the same Esri
+       World Imagery tiles. Start its camera transition while the globe is
+       still visible so the two surfaces meet on the same country instead of
+       revealing a second, unrelated view. */
+    function prepareFlatMapTransition(iso, bbox) {
+        var map = activeMap();
+        state.mapTransition = null;
+        if (!map || !window.L || !Array.isArray(bbox) || bbox.length !== 4) return false;
+        try {
+            rememberBaseZoom(map);
+            // The globe and the flat working map share World Imagery. If the
+            // basemap switcher has been restored from an older session, return
+            // to imagery for the hand-off; the user can switch to topographic
+            // or terrain again once the country view is visible.
+            if (typeof window.setArcgisBasemap === 'function') {
+                try { window.setArcgisBasemap('imagery'); } catch (e) {}
+            }
+            if (typeof map.stop === 'function') map.stop();
+            if (typeof map.invalidateSize === 'function') map.invalidateSize({ pan: false });
+            var sw = window.L.latLng(bbox[1], bbox[0]);
+            var ne = window.L.latLng(bbox[3], bbox[2]);
+            var bounds = window.L.latLngBounds(sw, ne);
+            var padded = bounds.pad(LOCK_PAD);
+            var fitZoom = countryFitZoom(map, padded);
+            map.fitBounds(bounds, {
+                padding: [24, 24],
+                maxZoom: fitZoom,
+                animate: true,
+                duration: 0.85,
+                easeLinearity: 0.25
+            });
+            state.mapTransition = { iso: iso, bbox: bbox.slice(), fitZoom: fitZoom };
+            if (document.documentElement) document.documentElement.classList.add('country-view-transitioning');
+            return true;
+        } catch (e) {
+            state.mapTransition = null;
+            console.warn('[DetectLab] Globe gate: could not prepare the flat 2D hand-off', e);
+            return false;
+        }
+    }
+
+    function clearFlatMapTransition() {
+        state.mapTransition = null;
+        if (document.documentElement) document.documentElement.classList.remove('country-view-transitioning');
+    }
+
+    /* Lock the flat working map to one country: pan pinned to the (slightly
+       padded) country box, zoom floor at the fit zoom. `skipFit` is used only
+       after prepareFlatMapTransition() has already animated the same camera
+       underneath the still-visible globe. */
+    function restrictLeafletToCountry(map, bbox, options) {
         if (!map || !window.L) return;
+        options = options || {};
         try {
             rememberBaseZoom(map);
             var sw = window.L.latLng(bbox[1], bbox[0]);
             var ne = window.L.latLng(bbox[3], bbox[2]);
             var bounds = window.L.latLngBounds(sw, ne);
             var padded = bounds.pad(LOCK_PAD);
-            var fitZoom = countryFitZoom(map, padded);
+            var fitZoom = (typeof options.fitZoom === 'number') ? options.fitZoom : countryFitZoom(map, padded);
             map.setMaxBounds(null);
             map.options.maxBoundsViscosity = 1;
             map.setMaxBounds(padded);
             map.setMinZoom(Math.max(state.baseMinZoom, fitZoom - LOCK_ZOOM_SLACK));
             if (typeof map.setMaxZoom === 'function') map.setMaxZoom(state.baseMaxZoom);
-            map.fitBounds(bounds, { padding: [24, 24], maxZoom: fitZoom, animate: true });
+            if (!options.skipFit) {
+                map.fitBounds(bounds, { padding: [24, 24], maxZoom: fitZoom, animate: true });
+            }
             state.locked = true;
             state.fitZoom = fitZoom;
             // The bounds of the selected country stay visible on the map for
@@ -301,7 +351,7 @@
             if (document.documentElement) document.documentElement.classList.add('country-view-locked');
             fireLockChange(true);
         } catch (e) {
-            console.warn('[DetectLab] Globe gate: could not restrict the map to the selected country', e);
+            console.warn('[DetectLab] Globe gate: could not restrict the flat 2D map to the selected country', e);
         }
     }
 
@@ -309,6 +359,7 @@
        Used by the “Exit view” button (js/country-dock.js) and by reset(). */
     function unlockCountryView() {
         var map = activeMap();
+        clearFlatMapTransition();
         state.locked = false;
         state.fitZoom = null;
         if (document.documentElement) document.documentElement.classList.remove('country-view-locked');
@@ -337,10 +388,9 @@
        selection bbox. Drawn non-interactive in its own pane above every data
        pane (LIDAR 610, historical maps ≤ 652), removed when the lock is
        released (“Exit view”, reset) and replaced on every new selection.
-       With the 3D globe basemap live, the outline and its highlight are
-       projected with the globe camera, so they stay on the imagery when zoomed
-       out and while the globe moves (see DetectLabGlobeBase.createProjectedFeature).
-       Without a live globe they are placed by Leaflet as before. */
+       The working map is flat 2D, so the outline is placed directly by
+       Leaflet in Web Mercator and remains aligned with the basemap during the
+       globe-to-map hand-off. */
     var BOUNDS_PANE = 'pane_country_bounds';
     var BOUNDS_PANE_Z = 688;   // above the data panes, under tracks (690)/measure (700)
 
@@ -386,31 +436,9 @@
         var layer = null;
         var kind = 'bbox rectangle';   // what the layer draws (read by the status line)
         var entry = (iso && G.byIso) ? G.byIso[iso] : null;
-        // With the live 3D globe the outline is projected with the globe camera
-        // (DetectLabGlobeBase.createProjectedFeature), so it stays on the
-        // imagery at every zoom and view. Without a globe on this map, Leaflet's
-        // own Web Mercator placement is used, as before.
-        // map-app publishes the Leaflet raster fallback under the same name when
-        // WebGL is unavailable, so only a real globe adapter counts here.
-        var globe = window._detectlabGlobeBaseLayer;
-        var projector = window.DetectLabGlobeBase;
-        if (globe && globe._map === map && typeof globe.getMaplibreMap === 'function' && projector) {
-            var globeOpts = { globeLayer: globe };
-            for (var key in styleOpts) {
-                if (Object.prototype.hasOwnProperty.call(styleOpts, key)) globeOpts[key] = styleOpts[key];
-            }
-            if (entry && entry.feature) {
-                try { layer = projector.createProjectedFeature(entry.feature, globeOpts); } catch (e) { layer = null; }
-                if (layer) kind = 'country outline';
-            }
-            if (!layer) {
-                try {
-                    layer = projector.createProjectedPolygon([
-                        [bbox[1], bbox[0]], [bbox[1], bbox[2]], [bbox[3], bbox[2]], [bbox[3], bbox[0]]
-                    ], globeOpts);
-                } catch (e) { layer = null; }
-            }
-        }
+        // The working map is intentionally flat 2D, so Leaflet's own
+        // Web-Mercator placement keeps the outline aligned with the same
+        // raster tiles used during the hand-off.
         if (!layer && entry && entry.feature && typeof window.L.geoJSON === 'function') {
             try { layer = window.L.geoJSON(entry.feature, styleOpts); kind = 'country outline'; } catch (e) { layer = null; }
         }
@@ -483,7 +511,15 @@
             }
         };
         var leafletMap = activeMap();
-        if (leafletMap) restrictLeafletToCountry(leafletMap, bbox);
+        var transition = state.mapTransition && state.mapTransition.iso === iso ? state.mapTransition : null;
+        if (leafletMap) {
+            restrictLeafletToCountry(leafletMap, bbox, {
+                skipFit: !!transition,
+                fitZoom: transition && transition.fitZoom
+            });
+        }
+        clearFlatMapTransition();
+        document.documentElement.classList.add('country-view-2d');
         document.documentElement.classList.add('country-selected');
         if (document.body) document.body.classList.add('country-selected');
         callFilterLayersWithRetry(iso, 40);
@@ -1525,18 +1561,46 @@
         window.requestAnimationFrame(stepFrame);
     }
 
+    // A country click is the complete selection gesture. The working Leaflet
+    // camera is staged immediately while the active 3D renderer flies to the
+    // same country, then both surfaces hand off through one selection path.
     function selectCountry(iso) {
-        var entry = G.byIso[iso];
-        if (!entry || !entry.bboxEU) return;
-        var name = displayName(iso, entry.name);
+        iso = String(iso || '').toUpperCase();
+        if (!NAMES[iso] || (state && state.selectingIso)) return;
+
+        var entry = G.byIso[iso] || null;
+        var bbox = (entry && entry.bboxEU) || approxBbox(iso);
+        var name = nameOf(iso) || displayName(iso, entry && entry.name) || iso;
+        var selectionToken = state.openToken;
+        state.selectingIso = iso;
+        state.pendingIso = iso;
+        G.selected = entry;
         showHint(name, true);
-        flyTo(entry, function () {
-            finishSelection(iso, name, entry.bboxEU);
-            G.selected = null;
-        });
+        prepareFlatMapTransition(iso, bbox);
+
+        if (state.renderer === 'arcgis' && window.DetectLabArcGISGate && window.DetectLabArcGISGate.isActive()) {
+            Promise.resolve(window.DetectLabArcGISGate.goToCountry(iso)).then(function () {
+                if (selectionToken === state.openToken && gateVisible()) finishSelection(iso, name, bbox);
+            }, function (error) {
+                console.warn('[DetectLab] Globe gate: country camera transition failed; applying the selected country anyway.', error && error.message);
+                if (selectionToken === state.openToken && gateVisible()) finishSelection(iso, name, bbox);
+            });
+            return;
+        }
+
+        if (state.renderer === 'canvas' && entry && entry.bboxEU && G.ctx) {
+            flyTo(entry, function () {
+                if (selectionToken === state.openToken && gateVisible()) finishSelection(iso, name, bbox);
+                G.selected = null;
+            });
+            return;
+        }
+        finishSelection(iso, name, bbox);
     }
 
     function finishSelection(iso, name, bbox) {
+        state.selectingIso = null;
+        state.pendingIso = iso;
         persistSelection(iso, name, bbox);
         applySelection(iso, name, bbox);
         closeGate(true);
@@ -1551,7 +1615,7 @@
     // [lng, lat, zoom] table above still yields a sane locked view.
     function approxBbox(iso) {
         var c = APPROX_CENTER[iso] || [15, 48, 5];
-        var lonSpan = 360 / Math.pow(2, c[2]);   // ≈ the width the old picker zoomed to
+        var lonSpan = 360 / Math.pow(2, c[2]);   // rough width of the country view
         var latSpan = lonSpan * 0.6;
         return [c[0] - lonSpan / 2, c[1] - latSpan / 2, c[0] + lonSpan / 2, c[1] + latSpan / 2];
     }
@@ -1707,7 +1771,6 @@
                 G.hovered = hovIso ? G.byIso[hovIso] || null : null;
                 var n = G.eu.filter(function (d) { return d.fromShp; }).length;
                 console.info('[DetectLab] Globe gate: refined ' + n + '/' + G.eu.length + ' countries from the 10m shapefile.');
-                renderCountryList();
                 syncArcGISCountries();
                 if (state.renderer === 'canvas') render(1);
                 refreshCountryBoundsLayer();   // redraw the outline with the finer shape
@@ -1718,12 +1781,16 @@
     }
 
     /* ── Module state & DOM refs ── */
+    var gateCloseTimer = 0;
+    var GATE_LEAVE_MS = 720;
     var state = {
         leafletMap: null,
         readyPromise: null,
-        globeFailed: false,      // both visual renderers failed; list-only fallback is active
+        globeFailed: false,      // both visual renderers failed; last-resort select is active
         renderer: 'none',       // none | loading | arcgis | canvas | list
-        pendingIso: null,        // uncommitted single-country choice in the gate
+        pendingIso: null,        // country currently highlighted while the gate is open
+        selectingIso: null,       // prevents duplicate camera transitions from double-clicks
+        mapTransition: null,     // flat-map camera transition running under the globe
         openToken: 0,
         locked: false,          // is the working map pinned to a country right now?
         fitZoom: null,          // the zoom the current country view opens at
@@ -1737,12 +1804,6 @@
         els.root = document.getElementById('globeGate');
         els.arcgis = document.getElementById('globeGateArcGIS');
         els.canvas = document.getElementById('globeGateCanvas');
-        els.countryPanel = document.getElementById('globeGateCountryPanel');
-        els.countryList = document.getElementById('globeGateCountryList');
-        els.countrySearch = document.getElementById('globeGateCountrySearch');
-        els.countryCount = document.getElementById('globeGateCountryCount');
-        els.selectionHint = document.getElementById('globeGateSelectionHint');
-        els.selectBtn = document.getElementById('globeGateSelectBtn');
         els.loading = document.getElementById('globeGateLoading');
         els.error = document.getElementById('globeGateError');
         els.errorText = document.getElementById('globeGateErrorText');
@@ -1772,124 +1833,7 @@
     }
     function hideHint() { if (els.hint) els.hint.classList.remove('show'); }
 
-    function gateText(key) {
-        var ro = currentLang() === 'ro';
-        var copy = {
-            search: { en: 'Search countries', ro: 'Caută țări' },
-            count: { en: 'countries', ro: 'țări' },
-            selected: { en: 'Selected: ', ro: 'Selectată: ' },
-            choose: { en: 'Select one country to continue.', ro: 'Alege o singură țară pentru a continua.' },
-            empty: { en: 'No countries found.', ro: 'Nu s-au găsit țări.' }
-        };
-        return copy[key] ? copy[key][ro ? 'ro' : 'en'] : '';
-    }
-
-    function updateCountryListSelection() {
-        if (els.countryList && typeof els.countryList.querySelectorAll === 'function') {
-            Array.prototype.forEach.call(els.countryList.querySelectorAll('[data-country-iso]'), function (row) {
-                var selected = row.getAttribute('data-country-iso') === state.pendingIso;
-                row.classList.toggle('is-selected', selected);
-                var checkbox = row.querySelector('input[type="checkbox"]');
-                if (checkbox) checkbox.checked = selected;
-            });
-        }
-        if (els.selectBtn) els.selectBtn.disabled = !state.pendingIso;
-        if (els.selectionHint) {
-            if (state.pendingIso) {
-                var name = nameOf(state.pendingIso) || state.pendingIso;
-                els.selectionHint.textContent = gateText('selected') + name;
-            } else {
-                els.selectionHint.textContent = gateText('choose');
-            }
-        }
-    }
-
-    function renderCountryList() {
-        if (!els.countryList) return;
-        var all = listCountries();
-        var lang = currentLang() === 'ro' ? 'ro' : 'en';
-        if (els.countryPanel) els.countryPanel.setAttribute('aria-label', lang === 'ro' ? 'Selectarea țării' : 'Country selection');
-        els.countryList.setAttribute('aria-label', lang === 'ro' ? 'Alege o singură țară' : 'Select one country');
-        var query = normalizeName(els.countrySearch && els.countrySearch.value);
-        var shown = all.filter(function (item) {
-            if (!query) return true;
-            return [item.iso, item.name, item.en, item.ro].some(function (text) {
-                return normalizeName(text).indexOf(query) !== -1;
-            });
-        });
-        if (els.countryCount) els.countryCount.textContent = all.length + ' ' + gateText('count');
-        if (els.countrySearch) {
-            els.countrySearch.placeholder = gateText('search');
-            els.countrySearch.setAttribute('aria-label', gateText('search'));
-        }
-        els.countryList.textContent = '';
-        if (!shown.length) {
-            var empty = document.createElement('div');
-            empty.className = 'globe-gate-no-results';
-            empty.textContent = gateText('empty');
-            els.countryList.appendChild(empty);
-            updateCountryListSelection();
-            return;
-        }
-        shown.forEach(function (item) {
-            var row = document.createElement('label');
-            row.className = 'globe-gate-country-row';
-            row.setAttribute('data-country-iso', item.iso);
-            var checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.value = item.iso;
-            checkbox.setAttribute('aria-label', item.name + ' (' + item.iso + ')');
-            checkbox.addEventListener('change', function () {
-                if (checkbox.checked) setPendingCountry(item.iso);
-                else if (state.pendingIso === item.iso) setPendingCountry(null);
-            });
-            checkbox.addEventListener('focus', function () { setCountryHover(item.iso, true); });
-            checkbox.addEventListener('blur', function () { setCountryHover(item.iso, false); });
-            var names = document.createElement('span');
-            names.className = 'globe-gate-country-name';
-            names.textContent = item.name;
-            var altName = lang === 'ro' ? item.en : item.ro;
-            if (altName && altName !== item.name) {
-                var alternate = document.createElement('span');
-                alternate.className = 'globe-gate-country-alt';
-                alternate.textContent = altName;
-                names.appendChild(alternate);
-            }
-            var code = document.createElement('span');
-            code.className = 'globe-gate-country-code';
-            code.textContent = item.iso;
-            row.appendChild(checkbox);
-            row.appendChild(names);
-            row.appendChild(code);
-            row.addEventListener('pointerenter', function () { setCountryHover(item.iso, true); });
-            row.addEventListener('pointerleave', function () { setCountryHover(item.iso, false); });
-            els.countryList.appendChild(row);
-        });
-        updateCountryListSelection();
-    }
-
-    function updateCountryRowHover(iso) {
-        if (!els.countryList || typeof els.countryList.querySelectorAll !== 'function') return;
-        Array.prototype.forEach.call(els.countryList.querySelectorAll('[data-country-iso]'), function (row) {
-            row.classList.toggle('is-hovered', !!iso && row.getAttribute('data-country-iso') === iso);
-        });
-    }
-
-    function setCountryHover(iso, active) {
-        var nextIso = active ? iso : null;
-        updateCountryRowHover(nextIso);
-        if (state.renderer === 'arcgis' && window.DetectLabArcGISGate && window.DetectLabArcGISGate.isActive()) {
-            window.DetectLabArcGISGate.setHovered(nextIso);
-            if (nextIso) showHint(nameOf(nextIso) || nextIso); else hideHint();
-        } else if (state.renderer === 'canvas') {
-            G.hovered = nextIso && G.byIso[nextIso] ? G.byIso[nextIso] : null;
-            if (G.hovered) showHint(displayName(G.hovered.iso, G.hovered.name)); else hideHint();
-            render(1);
-        }
-    }
-
     function onArcGISHover(iso, entry) {
-        updateCountryRowHover(iso);
         if (entry) showHint(displayName(iso, entry.name)); else hideHint();
     }
 
@@ -1901,7 +1845,6 @@
         if (window.DetectLabArcGISGate && window.DetectLabArcGISGate.isActive()) {
             window.DetectLabArcGISGate.setSelected(iso);
         }
-        updateCountryListSelection();
         if (state.renderer === 'canvas') render(1);
         if (iso) showHint(nameOf(iso) || iso, true); else hideHint();
     }
@@ -1955,7 +1898,6 @@
                 buildEurope(null);
                 if (!G.eu.length) throw new Error('no European countries in the 50m dataset');
                 state.globeFailed = false;
-                if (gateVisible()) renderCountryList();
                 // Natural Earth 10m geometry remains an optional refinement:
                 // it upgrades the same data passed to either visual renderer.
                 refineFromShapefile();
@@ -1989,8 +1931,7 @@
         if (els.attrib) els.attrib.textContent = '';
         populateFallbackSelect();
         if (els.fallbackWrap) els.fallbackWrap.classList.remove('hidden');
-        renderCountryList();
-        if (error) console.warn('[DetectLab] Globe gate: visual renderers unavailable; using the country list.', error.message || error);
+        if (error) console.warn('[DetectLab] Globe gate: visual renderers unavailable; using the last-resort country select.', error.message || error);
         return false;
     }
 
@@ -2014,7 +1955,6 @@
         G.selected = state.pendingIso && G.byIso[state.pendingIso] ? G.byIso[state.pendingIso] : null;
         G.hovered = null;
         if (els.attrib) setAttribution();
-        renderCountryList();
         resizeNow();
         render(1);
         // The local canvas fallback keeps its existing tile->Blue-Marble path.
@@ -2037,7 +1977,7 @@
             selectedIso: state.pendingIso,
             nameOf: nameOf,
             onHover: onArcGISHover,
-            onSelect: function (iso) { setPendingCountry(iso); }
+            onSelect: function (iso) { selectCountry(iso); }
         }).then(function () {
             if (token !== state.openToken || !gateVisible()) {
                 renderer.close();
@@ -2048,14 +1988,14 @@
             if (els.fallbackWrap) els.fallbackWrap.classList.add('hidden');
             showLoading(false);
             if (els.attrib) els.attrib.textContent = 'Imagery © Esri — World Imagery';
-            renderCountryList();
-            updateCountryListSelection();
             return true;
         });
     }
 
     function openGate() {
         if (!els.root) return;
+        window.clearTimeout(gateCloseTimer);
+        gateCloseTimer = 0;
         var token = ++state.openToken;
         if (window.DetectLabArcGISGate) window.DetectLabArcGISGate.close();
         els.root.classList.remove('hidden', 'is-leaving', 'is-arcgis', 'is-canvas');
@@ -2071,11 +2011,9 @@
         G.selected = state.pendingIso && G.byIso[state.pendingIso] ? G.byIso[state.pendingIso] : null;
         G.hovered = null;
         G.flying = false;
-        renderCountryList();
         ensureReady().then(function () {
             if (token !== state.openToken || !gateVisible()) return false;
             G.selected = state.pendingIso && G.byIso[state.pendingIso] ? G.byIso[state.pendingIso] : null;
-            renderCountryList();
             return openArcGISGate(token);
         }).then(function (opened) {
             if (!opened || token !== state.openToken || !gateVisible()) return;
@@ -2087,54 +2025,28 @@
         });
     }
 
-    function confirmPendingSelection() {
-        var iso = state.pendingIso;
-        if (!iso || !NAMES[iso]) return;
-        var entry = G.byIso[iso] || null;
-        var bbox = (entry && entry.bboxEU) || approxBbox(iso);
-        var name = nameOf(iso) || displayName(iso, entry && entry.name) || iso;
-        var selectionToken = state.openToken;
-        var finish = function () {
-            if (selectionToken === state.openToken && gateVisible()) finishSelection(iso, name, bbox);
-        };
-
-        if (state.renderer === 'arcgis' && window.DetectLabArcGISGate && window.DetectLabArcGISGate.isActive()) {
-            showLoading(true);
-            Promise.resolve(window.DetectLabArcGISGate.goToCountry(iso)).then(function () {
-                if (gateVisible()) finish();
-            }, function (error) {
-                console.warn('[DetectLab] Globe gate: country camera transition failed; applying the selected country anyway.', error && error.message);
-                if (gateVisible()) finish();
-            });
-            return;
-        }
-
-        if (state.renderer === 'canvas' && entry && entry.bboxEU && G.ctx) {
-            showHint(name, true);
-            flyTo(entry, function () {
-                if (gateVisible()) finish();
-                G.selected = null;
-            });
-            return;
-        }
-        finish();
-    }
-
     function closeGate(revealControls) {
         if (!els.root) return;
         state.openToken++;
-        if (window.DetectLabArcGISGate) window.DetectLabArcGISGate.close();
-        setGateRenderer('none');
+        state.selectingIso = null;
+        clearFlatMapTransition();
+        // Keep the final 3D country camera alive during the fade. Destroying
+        // SceneView before the opacity transition leaves a dark rectangle and
+        // makes the hand-off to the flat map feel like a hard cut.
+        state.renderer = 'none';
         els.root.classList.add('is-leaving');
         stopSpinLoop();
         G.spinEnabled = false;
         hideHint();
-        window.setTimeout(function () {
+        window.clearTimeout(gateCloseTimer);
+        gateCloseTimer = window.setTimeout(function () {
+            if (window.DetectLabArcGISGate) window.DetectLabArcGISGate.close();
             els.root.classList.add('hidden');
-            els.root.classList.remove('is-leaving');
+            els.root.classList.remove('is-leaving', 'is-arcgis', 'is-canvas');
             els.root.setAttribute('aria-hidden', 'true');
             if (document.documentElement) document.documentElement.classList.remove('globe-gate-open');
-        }, 420);
+            gateCloseTimer = 0;
+        }, GATE_LEAVE_MS);
         if (revealControls && hasSelection()) setMapControlsHidden(false);
     }
 
@@ -2161,8 +2073,6 @@
             if (state.renderer === 'arcgis' && window.DetectLabArcGISGate) window.DetectLabArcGISGate.zoomBy(-0.65);
             else setZoom(G.k / 1.3);
         });
-        if (els.countrySearch) els.countrySearch.addEventListener('input', renderCountryList);
-        if (els.selectBtn) els.selectBtn.addEventListener('click', confirmPendingSelection);
         if (els.fallbackBtn) {
             els.fallbackBtn.addEventListener('click', function () {
                 var iso = els.fallbackSelect && els.fallbackSelect.value;
@@ -2175,6 +2085,9 @@
                     var pad = 0.6;
                     bbox = [c[0] - pad, c[1] - pad, c[0] + pad, c[1] + pad];
                 }
+                // The last-resort select has no camera of its own, but it still
+                // uses the same flat-map staging before the gate fades away.
+                prepareFlatMapTransition(iso, bbox);
                 finishSelection(iso, name, bbox);
             });
         }
@@ -2183,7 +2096,6 @@
                 els.fallbackSelect.innerHTML = '';
                 populateFallbackSelect();
             }
-            renderCountryList();
             if (window.DetectLabArcGISGate) window.DetectLabArcGISGate.refreshLabels();
             if (gateVisible() && state.renderer === 'canvas') render(1);
         });
@@ -2237,6 +2149,7 @@
             window._detectlabSelectedCountry = null;
             window._detectlabSelectedCountryName = null;
             window._detectlabCountryBounds = null;
+            document.documentElement.classList.remove('country-view-2d');
             document.documentElement.classList.remove('country-selected');
             if (document.body) document.body.classList.remove('country-selected');
         },
@@ -2296,6 +2209,8 @@
             disableImagery: disableImagery,
             approxBbox: approxBbox,
             listCountries: listCountries,
+            prepareFlatMapTransition: prepareFlatMapTransition,
+            clearFlatMapTransition: clearFlatMapTransition,
             restrictLeafletToCountry: restrictLeafletToCountry,
             unlockCountryView: unlockCountryView,
             showCountryBoundsLayer: showCountryBoundsLayer,
