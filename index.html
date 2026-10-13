@@ -27,7 +27,7 @@
     <link rel="stylesheet" href="css/leaflet-measure.css">
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
     <link rel="stylesheet" href="css/styles.css?v=20261008-roman-dare-icons">
-    <link rel="stylesheet" href="css/globe-country-picker.css?v=20261013-country-click">
+    <link rel="stylesheet" href="css/globe-country-picker.css?v=20261013-no-change-pill">
     <link rel="stylesheet" href="css/country-dock.css?v=20261008">
     <link rel="stylesheet" href="css/library-of-babel.css?v=20260917-babel-epochs">
     <link rel="stylesheet" href="css/tutorial.css?v=20260922-mobile-fs-controls">
@@ -1386,8 +1386,11 @@
                          the existing no-WebGL canvas picker stays available when
                          the SDK, network, or 3D context cannot start. Both renderers
                          consume js/globe-country-picker.js's same 50-country / 10m
-                         geometry and preserve its single-country map lock. -->
-                    <button type="button" class="globe-gate-reopen" id="globeGateReopenBtn" data-key="globe_gate_change_country">Change Country</button>
+                         geometry and preserve its single-country map lock.
+                         There is no “Change Country” pill next to the “?” help
+                         button any more: the dock under the search bar already
+                         switches country, and the “Exit view” button reopens the
+                         globe (js/country-dock.js). -->
                     <div class="globe-gate hidden" id="globeGate" aria-hidden="true">
                         <div class="globe-gate-arcgis" id="globeGateArcGIS" aria-label="Interactive country globe"></div>
                         <div class="globe-gate-canvas" id="globeGateCanvas"></div>
@@ -3368,8 +3371,9 @@
                                        oninput="setGalicia1855MapOpacity(this.value)">
                             </div>
 
-                            <!-- Catalogul CENAGIS / IH PAN este parte din același grup premium.
-                                 Rândurile sunt filtrate după suprapunerea extinderii hărții cu țara selectată. -->
+                            <!-- Catalogul CENAGIS / IH PAN: rânduri plat în același grup premium,
+                                 fără subcategorie/titlu propriu. Rândurile sunt filtrate după
+                                 suprapunerea extinderii hărții cu țara selectată. -->
                             <div id="histEuMapsSection" class="cenagis-historical-section" aria-live="polite"></div>
 
                         </div><!-- /histPremiumSubLayers -->
@@ -4713,10 +4717,15 @@
         </div>
     </footer>
 
-    <script src="js/translations.js?v=20261013-country-click"></script>
+    <script src="js/translations.js?v=20261013-no-change-pill"></script>
 
     <!-- Leaflet JS (from qgis2web folder) -->
     <script src="js/leaflet.js"></script>
+    <!-- Availability guard for third-party WMS services (CENAGIS / IH PAN
+         historical maps): probes one GetMap tile per layer, marks the row
+         unavailable and explains 200-with-error-body failures instead of
+         silently showing empty tiles. See js/wms-health.js. -->
+    <script src="js/wms-health.js?v=20261013-wms-guard"></script>
     <!-- Global tile performance governor: gesture-safe defaults for every tile
          layer of the app (LIDAR, CORONA 60's, historical maps, APM…), one tile
          update per layer per gesture and a page-wide budget on live tiles.
@@ -4785,16 +4794,16 @@
     <!-- Physical-distance clustering for Patrimoniu pins and protection radiuses. -->
     <script src="js/patrimoniu-clustering.js?v=20260914-patrimoniu-cluster"></script>
     <!-- Lightweight local adapter only; the ArcGIS CDN SDK/theme are loaded after the gate opens. -->
-    <script src="js/globe-arcgis-gate.js?v=20261012-gate-layout"></script>
-    <script src="js/globe-country-picker.js?v=20261013-country-click"></script>
+    <script src="js/globe-arcgis-gate.js?v=20261013-handoff-zoom"></script>
+    <script src="js/globe-country-picker.js?v=20261013-no-change-pill"></script>
     <!-- Country dock: the slide-down country switcher glued under the search
          bar, the small World-hillshade overlay checkbox and the bottom-centre
          “Exit view” button. Loaded after the globe gate (it only talks to it
          through window.DetectLabGlobeGate) and before map-app.js, which
          attaches it to the Leaflet map. -->
     <script src="js/country-dock.js?v=20261013-country-2d"></script>
-    <script src="js/map-app.js?v=20261011-arcgis-basemap"></script>
-    <script src="js/historical-eu-maps.js?v=20261008-country-layers-strict"></script>
+    <script src="js/map-app.js?v=20261013-wms-guard"></script>
+    <script src="js/historical-eu-maps.js?v=20261013-flat-hist-maps"></script>
     <script src="js/offline-maps.js?v=20261009-3d-globe"></script>
     <script src="js/battles-layer.js?v=20260902-battles-label-anchor"></script>
     <script src="js/vertical-opacity-control.js?v=20261002-persistent-layer-actions-v2"></script>

@@ -419,7 +419,25 @@
 //   ArcGIS/canvas renderer and fade the temporary 3D gate out after hand-off.
 // v188: keep the APM layer opt-in on first load; installed PWAs must replace the
 //   cached shell so the unchecked control and asynchronous layer probe agree.
-const CACHE_NAME = 'detectlab-v188-apm-default-off';
+// v189: one hand-off frame for both country surfaces — the 3D globe flies to
+//   the exact flat-map fit zoom (Mercator-corrected) instead of a level of its
+//   own, the locked 2D view no longer draws the country bbox as a rectangle
+//   while the atlas geometry is still loading, and a country's zoom floor no
+//   longer clamps the next country's fit.
+// v190: drop the “Change Country” pill that sat next to the “?” help button —
+//   the dock under the search bar switches country and “Exit view” reopens the
+//   globe — and re-version the picker, its stylesheet and the translations
+// v192: the CENAGIS / IH PAN sheets are listed flat inside the single
+//   “Historical Maps” group — the “European maps · CENAGIS / IH PAN”
+//   subcategory heading is gone (js/historical-eu-maps.js renderUi).
+// v191: third-party WMS availability guard (js/wms-health.js). The CENAGIS /
+//   IH PAN historical-map server answers GetMap with HTTP 200 and an error
+//   body instead of an image (unreadable ECW mosaics — see
+//   CENAGIS_WMS_HEALTH.md), so every tile was an undecodable 200 and the
+//   layer stayed silently blank. One probe per layer now gates the add,
+//   the row is marked unavailable and a notice explains the outage.
+//   behind it.
+const CACHE_NAME = 'detectlab-v192-flat-hist-maps';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -444,6 +462,7 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 const PRECACHE_URLS = [
   // European Historical Maps (CENAGIS / IH PAN)
   'js/historical-eu-maps.js?v=20261008-country-overlap',
+  'js/historical-eu-maps.js?v=20261013-flat-hist-maps',
   'js/historical-eu-maps.js?v=20261008-country-layers-strict',
   'js/historical-eu-maps.js',
   // Host-aware market defaults for detectlab.ro and detectlab.eu.
@@ -1022,9 +1041,10 @@ const PRECACHE_URLS = [
   // v184: the ArcGIS-basemap working map, restored country gate (lazy ArcGIS
   // SceneView + canvas fallback) and country dock, in the documented load
   // order (gate → dock → map-app).
-  'css/globe-country-picker.css?v=20261013-country-click',
-  'js/globe-arcgis-gate.js?v=20261012-gate-layout',
-  'js/globe-country-picker.js?v=20261013-country-click',
+  'css/globe-country-picker.css?v=20261013-no-change-pill',
+  'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
+  'js/globe-country-picker.js?v=20261013-no-change-pill',
+  'js/wms-health.js?v=20261013-wms-guard',
   // v167: country dock glued under the search bar (country switcher +
   // World-hillshade checkbox) and the “Exit view” button of the locked
   // country view. The hillshade tiles themselves stay network-only.
@@ -1033,12 +1053,13 @@ const PRECACHE_URLS = [
   'js/country-dock.js?v=20261009-3d-globe',
   'js/country-dock.js?v=20261013-country-2d',
   'js/map-app.js?v=20261011-arcgis-basemap',
+  'js/map-app.js?v=20261013-wms-guard',
   'js/map-app.js?v=20261009-3d-globe',
   'js/map-app.js?v=20261009-lidar-globe-twin',
   'js/map-app.js?v=20261010-lidar-zoom-gate',
   'js/offline-maps.js?v=20261009-3d-globe',
   'js/translations.js?v=20261009-3d-globe',
-  'js/translations.js?v=20261013-country-click',
+  'js/translations.js?v=20261013-no-change-pill',
   'js/d3.min.js?v=7.9.0',
   'js/topojson-client.min.js?v=3.1.0',
   'data/countries-50m.json?v=20261008',

@@ -5,6 +5,10 @@
  * georeferențiate, găzduite pe infrastructura CENAGIS (Politechnika Warszawska)
  * și dezvoltate în colaborare cu Instytut Historii PAN (Atlas Fontium / PastMaps).
  *
+ * Rândurile sunt listate PLAT în grupul „Hărți istorice / Historical Maps”
+ * (index.html #histPremiumSubLayers): fără subcategorie proprie, fără titlu
+ * de tip „Hărți europene · CENAGIS / IH PAN” deasupra listei.
+ *
  * Categorisire pe fiecare țară europeană intersectată/suprapusă:
  *   • Polonia (PL), Germania (DE), Ucraina (UA), Belarus (BY), Lituania (LT),
  *     Letonia (LV), Cehia (CZ), Slovacia (SK), Austria (AT), Ungaria (HU),
@@ -897,7 +901,13 @@
         }
 
         var options = {
-            layers: 'topp:' + mapMeta.wms_layer,
+            // WMS_BASE_URL is .../geoserver/ihpan/wms — the workspace prefix
+            // must be `ihpan`, not the stock GeoServer `topp`. The old value
+            // happened to resolve because this server matches the layer by
+            // local name, but it was wrong and would break on any GeoServer
+            // that validates the prefix strictly (or if `topp` ever exists
+            // there with a same-named layer).
+            layers: 'ihpan:' + mapMeta.wms_layer,
             format: 'image/png',
             transparent: true,
             version: '1.3.0',
@@ -912,6 +922,11 @@
         }
 
         var layer = L.tileLayer.wms(WMS_BASE_URL, options);
+        // For the WMS health guard (js/wms-health.js): which row + switch this
+        // layer belongs to (.cenagis-map-row[data-map-id] / .cenagis-toggle),
+        // and the title to name it in the “server is down” notice.
+        layer._detectlabUiKeys = [mapKey];
+        layer._detectlabUiTitle = mapMeta.title[lang] || mapMeta.title.en || mapMeta.title.ro || mapKey;
         _leafletLayers[mapKey] = layer;
         return layer;
     }
@@ -1026,9 +1041,9 @@
 
         var section = document.getElementById('histEuMapsSection');
         if (section) {
-            // Keep the catalog heading/status visible even when this country
-            // has no CENAGIS rows; the matching legacy premium sheets (if any)
-            // still live alongside it in the same accordion.
+            // Keep the country-filter hint visible even when this country has
+            // no CENAGIS rows; the matching legacy premium sheets (if any)
+            // still live alongside them in the same accordion.
             section.classList.remove('country-layer-unavailable');
             section.setAttribute('aria-hidden', 'false');
         }
@@ -1065,8 +1080,8 @@
         var lang = getLang();
         var title = meta.title[lang] || meta.title.en || meta.title.ro;
         var desc = (lang === 'ro')
-            ? ('Scară: ' + meta.scale + '\nPerioadă / Ani: ' + meta.years + '\nSursă / Institut: ' + meta.provider + '\nEndpoint: ' + WMS_BASE_URL + '\nStrat WMS: topp:' + meta.wms_layer)
-            : ('Scale: ' + meta.scale + '\nPeriod / Years: ' + meta.years + '\nSource / Institute: ' + meta.provider + '\nEndpoint: ' + WMS_BASE_URL + '\nWMS Layer: topp:' + meta.wms_layer);
+            ? ('Scară: ' + meta.scale + '\nPerioadă / Ani: ' + meta.years + '\nSursă / Institut: ' + meta.provider + '\nEndpoint: ' + WMS_BASE_URL + '\nStrat WMS: ihpan:' + meta.wms_layer)
+            : ('Scale: ' + meta.scale + '\nPeriod / Years: ' + meta.years + '\nSource / Institute: ' + meta.provider + '\nEndpoint: ' + WMS_BASE_URL + '\nWMS Layer: ihpan:' + meta.wms_layer);
 
         if (typeof root.showLayerInfo === 'function') {
             root.showLayerInfo(title, desc);
@@ -1096,10 +1111,11 @@
             return aTitle.localeCompare(bTitle, lang);
         });
 
-        var heading = (lang === 'ro') ? 'Hărți europene · CENAGIS / IH PAN' : 'European maps · CENAGIS / IH PAN';
+        // These sheets are listed flat inside the single “Historical Maps”
+        // group — there is no “European maps · CENAGIS / IH PAN” subcategory
+        // heading (nor any replacement one) above them.
         var emptyText = (lang === 'ro') ? 'Nu există alte hărți CENAGIS pentru țara selectată.' : 'No other CENAGIS maps cover the selected country.';
         var html = [];
-        html.push('<div class="cenagis-catalog-title" style="padding-top:8px;border-top:1px solid rgba(200,169,110,0.2);font-size:0.72rem;font-weight:600;letter-spacing:0.04em;color:rgba(200,169,110,0.95);">' + heading + '</div>');
         html.push('<div id="histEuFilterStatus" aria-live="polite" style="font-size:0.66rem;color:rgba(245,240,235,0.55);line-height:1.35;">' + (lang === 'ro' ? 'Selectează o țară pe glob pentru a vedea hărțile care o intersectează.' : 'Choose a country on the globe to see maps that overlap it.') + '</div>');
         html.push('<div id="cenagisNoMaps" style="display:none;font-size:0.68rem;color:rgba(245,240,235,0.55);">' + emptyText + '</div>');
         html.push('<div class="cenagis-map-list" style="display:flex;flex-direction:column;gap:7px;">');

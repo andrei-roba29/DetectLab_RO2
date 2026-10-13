@@ -4,7 +4,9 @@
 
 Selecting a country on the globe used to be a pure hand-off: the Leaflet map
 was fitted to the country with a loose `maxBounds` and the only way back to
-another country was the “Change Country” pill. Now the choice *owns* the map:
+another country was the “Change Country” pill. That pill is now gone as well
+(it sat next to the “?” help button) — the dock below carries country switching
+entirely. Now the choice *owns* the map:
 
 - **The view is locked to the country.** After the temporary 3D gate zooms to
   the clicked country, the gate cross-fades into the working map's flat 2D
@@ -48,7 +50,7 @@ another country was the “Change Country” pill. Now the choice *owns* the map
   button (inside `.map-frame`), the CSS/JS tags.
 - `js/translations.js` — `country_dock_title`, `country_dock_hint`,
   `country_dock_hillshade`, `country_exit_view` (EN + RO).
-- `sw.js` — shell `v187`, precaches the dock, the local ArcGIS gate adapter,
+- `sw.js` — shell `v192`, precaches the dock, the local ArcGIS gate adapter,
   and the canvas fallback assets (not the remote ArcGIS SDK).
 - `tools/country-dock-preview.html` — dev harness: the dock on a real Leaflet
   map with Esri imagery, no auth, no rest of the app.
@@ -63,9 +65,16 @@ another country was the “Change Country” pill. Now the choice *owns* the map
 - remembers the map's *own* `minZoom`/`maxZoom` once (`state.baseMinZoom` /
   `baseMaxZoom`), so switching country after country can never ratchet the
   zoom floor upwards;
-- computes the opening zoom as `min(FIT_MAX_ZOOM = 11, boundsZoom(padded))`,
-  clamped to that baseline — micro-states (Monaco, Vatican, San Marino) open on
-  a sane local view instead of a single street;
+- computes the opening zoom as `min(FIT_MAX_ZOOM = 11, boundsZoom(country
+  box, 2 × FIT_PADDING))`, measured inside the map's *base* zoom range, clamped
+  to that baseline — micro-states (Monaco, Vatican, San Marino) open on a sane
+  local view instead of a single street, and switching country after country
+  neither inherits the previous lock's zoom floor nor mis-measures the fit
+  (Leaflet's `fitBounds()` frees `FIT_PADDING` on each side, i.e. counts a
+  symmetric padding twice). It is the *same* call (`countryFitZoom` +
+  `countryHandoffFrame`) that the 3D globe camera is flown to, so the two
+  surfaces meet on one zoom (see `GLOBE_COUNTRY_GATE.md` → “One hand-off frame”
+  and “A lock never leaks its zoom floor into the next country”);
 - applies `maxBounds = country bbox padded by LOCK_PAD (0.15°)` with
   `maxBoundsViscosity = 1` (a drag past the edge snaps straight back);
 - sets `minZoom = fitZoom − LOCK_ZOOM_SLACK (1)` and `fitBounds(...,
@@ -98,8 +107,9 @@ switch is instant.
   width and the `auth-hidden` reveal that already hides the bar until a country
   is active. CSS shows it only with `body.country-selected`.
 - `html.globe-gate-open` (set/cleared by the gate while the globe is on screen)
-  hides both the dock and the exit pill — inside the globe the “Change Country”
-  pill is the right affordance.
+  hides the dock while the globe is on screen. The gate has no “Change Country”
+  pill any more; to reach the globe from a locked country view the user zooms
+  out to the floor and takes “Exit view”.
 - A `MutationObserver` on `#mapSearchResults` adds `dock-suppressed` while the
   search autocomplete is open, so the two never overlap.
 - The initials grid is rebuilt from `listCountries()` on every open, on
@@ -148,14 +158,15 @@ lock was released).
 - Run `node test-country-dock.js` and `node test-globe-arcgis-gate.js` after
   touching the country flow; `node test-globe-canvas-picker.js` continues to
   guard the no-WebGL fallback. The dock suite covers the initials grid, hover
-  names, switch call, hillshade layer (single instance, own pane, persistence)
-  and every exit-button transition.
+  names, switch call, the hand-off frame (`countryHandoffFrame` / `fitZoom`),
+  hillshade layer (single instance, own pane, persistence) and every
+  exit-button transition.
 - The dock's UI is intentionally free of `querySelectorAll`: it keeps an
   `iso → element` map (`_test.state.buttons`) so the headless suite can drive
   it with the same minimal DOM stub the other suites use.
 - Versioning: bump the `?v=` query of a changed local asset in `index.html`
   **and** the matching `sw.js` precache entry together, then raise
-  `CACHE_NAME` (currently `detectlab-v187-flat-country-handoff`). The SDK/theme CDN stays
+  `CACHE_NAME` (currently `detectlab-v192-flat-hist-maps`). The SDK/theme CDN stays
   lazy and is not an app-shell precache entry.
 - Manual QA: `python3 -m http.server` at the repo root, open
   `/tools/country-dock-preview.html`; the overlay status line reports the lock,

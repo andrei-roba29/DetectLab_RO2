@@ -25,10 +25,10 @@ const indexHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 assert(indexHtml.includes('css/country-dock.css?v=20261008'), 'index.html loads the dock css');
 assert(indexHtml.includes('js/country-dock.js?v=20261013-country-2d'), 'index.html loads the dock script');
 // The dock talks to the gate, so the gate must be parsed first.
-assert(indexHtml.indexOf('js/globe-country-picker.js?v=20261013-country-click') <
+assert(indexHtml.indexOf('js/globe-country-picker.js?v=20261013-no-change-pill') <
     indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d'), 'globe gate loads before the dock');
 assert(indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d') <
-    indexHtml.indexOf('js/map-app.js?v=20261011-arcgis-basemap'), 'dock loads before map-app.js');
+    indexHtml.indexOf('js/map-app.js?v=20261013-wms-guard'), 'dock loads before map-app.js');
 // The dock lives *inside* the search wrap so it stays glued to the search bar.
 const wrapIdx = indexHtml.indexOf('id="mapSearchWrap"');
 const dockIdx = indexHtml.indexOf('id="countryDock"');
@@ -170,7 +170,10 @@ function makeMap() {
         _handlers: {},
         _fit: null,
         _view: null,
-        getBoundsZoom: function () { return 7.2; },
+        getBoundsZoom: function (bounds, inside, padding) {
+            m._gbz = { bounds: bounds, inside: inside, padding: padding };
+            return 7.2;
+        },
         setMaxBounds: function (b) { m._maxBounds = b; },
         getMaxBounds: function () { return m._maxBounds; },
         setMinZoom: function (z) { m._minZoom = z; m.options.minZoom = z; },
@@ -345,6 +348,34 @@ function makeSandbox(elMap) {
         'a lockchange event announces the new lock');
     console.log('  ✓ selectCountry locks the map to the country (maxBounds + zoom floor + events)');
 
+    // // 5d-bis. One hand-off frame drives both surfaces: the flat map fits at
+    // frame.fitZoom and the 3D renderer is flown to that same level (the
+    // ArcGIS adapter converts it for the SceneView, canvasFrameScale for the
+    // canvas), so the cross-fade has no zoom jump left to hide.
+    const handoff = T.countryHandoffFrame('DE', sandbox._detectlabCountryBounds);
+    assert.equal(handoff.fitZoom, map.getBoundsZoom(),
+        'the hand-off frame carries the flat map\'s own fit zoom (got ' + handoff.fitZoom + ')');
+    assert.equal(handoff.fitZoom, T.countryFitZoom(map, handoff.bounds),
+        'the fit zoom comes from the same helper the lock uses');
+    assert(handoff.bounds && handoff.padded, 'the frame keeps the fit box and its padded lock box');
+    assert.equal(handoff.padded._w.lng < handoff.bounds._w.lng, true,
+        'the padded box stays wider than the fit box (LOCK_PAD)');
+    assert.equal(handoff.center[0], (handoff.bbox[0] + handoff.bbox[2]) / 2,
+        'the frame centre is the country bbox centre the 3D camera flies to');
+    assert.equal(T.countryHandoffFrame('DE', null).fitZoom, null,
+        'a country without a bbox falls back to the renderer estimate');
+    assert(T.canvasFrameScale({ iso: 'DE', lat: 51 }, handoff) > 1,
+        'the canvas fallback derives its scale from the same fit zoom');
+    // Leaflet's fitBounds()/getBoundsZoom() sum paddingTopLeft + paddingBottomRight,
+    // so a symmetric `padding: [24, 24]` really frees 24 px on *each* side; asking
+    // getBoundsZoom() for a single 24 would over-estimate the fit (and the globe
+    // would be flown to that wrong level).
+    T.countryFitZoom(map, handoff.bounds);
+    const gbzPad = map._gbz && map._gbz.padding;
+    assert(Array.isArray(gbzPad) && gbzPad[0] === T.FIT_PADDING * 2 && gbzPad[1] === T.FIT_PADDING * 2,
+        'the fit is measured with the padding fitBounds() really applies (2 x FIT_PADDING, got ' + JSON.stringify(gbzPad) + ')');
+    console.log('  ✓ hand-off frame: flat-map fit zoom shared with the 3D renderers');
+
     // // 5e. Switching country again must not ratchet the zoom floor upwards.
     const firstMin = map.getMinZoom();
     await gate.selectCountry('VA');
@@ -353,6 +384,44 @@ function makeSandbox(elMap) {
     assert(map.getMinZoom() <= firstMin + 0.0001,
         'the zoom floor comes from the map baseline, not from the previous country (' +
         map.getMinZoom() + ' vs ' + firstMin + ')');
+
+    // // 5e-bis. A locked country must not clamp the *next* country's fit.
+    // Leaflet's getBoundsZoom() answers inside the map's live zoom range, so a
+    // measurement taken while a small country is locked would be pinned to that
+    // country's floor — Monaco then Russia opened at street level instead of the
+    // Russian extent. The fit is measured inside the map's own base range (and
+    // the lock range put straight back).
+    const clampMap = makeMap();
+    const BASE_FIT = 6;
+    clampMap.getBoundsZoom = function () {
+        return Math.max(clampMap.getMinZoom(), Math.min(clampMap.getMaxZoom(), BASE_FIT));
+    };
+    const fitBox = T.bboxBounds([6, 47, 15, 55]);        // the German box
+    assert.equal(T.countryFitZoom(clampMap, fitBox), BASE_FIT,
+        'an unlocked map measures the plain fit');
+    clampMap.setMinZoom(10);                             // a micro-state is locked
+    assert.equal(T.countryFitZoom(clampMap, fitBox), BASE_FIT,
+        'the fit is measured in the base range, not under the previous lock floor (got ' +
+        T.countryFitZoom(clampMap, fitBox) + ')');
+    assert.equal(clampMap.getMinZoom(), 10, 'the lock\'s zoom floor is put back after measuring');
+    assert.equal(clampMap.getMaxZoom(), 20, 'and so is the ceiling');
+    // The flat-map transition drops a stale floor before it fits, otherwise
+    // Leaflet.setView() clamps the new frame to the old country's level.
+    const frame = T.countryHandoffFrame('DE', [6, 47, 15, 55]);
+    const attachedMap = T.state.leafletMap;
+    const staleMap = makeMap();
+    staleMap.setMinZoom(10);
+    T.state.leafletMap = staleMap;
+    try {
+        T.prepareFlatMapTransition('DE', [6, 47, 15, 55], frame);
+    } finally {
+        T.state.leafletMap = attachedMap;
+    }
+    assert(staleMap.getMinZoom() < 10,
+        'the 2D hand-off transition clears the previous lock\'s zoom floor (got ' + staleMap.getMinZoom() + ')');
+    assert(staleMap._fit && staleMap._fit.opts.maxZoom <= T.FIT_MAX_ZOOM,
+        'and still fits the new country inside the fit cap');
+    console.log('  ✓ zoom floors never leak between countries (fit measured in the base range, stale floor dropped)');
 
     // // 5f. Exit view releases everything.
     gate.exitView();

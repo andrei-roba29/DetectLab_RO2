@@ -23,19 +23,24 @@ const parentEnd = indexHtml.indexOf('<!-- /histPremiumSubLayers -->', parentStar
 assert(parentStart >= 0 && parentEnd > parentStart, 'single premium Historical Maps accordion exists');
 const parentMarkup = indexHtml.slice(parentStart, parentEnd);
 assert(parentMarkup.includes('id="histEuMapsSection"'), 'CENAGIS catalog is inside histPremiumSubLayers');
+// The sheets are a flat part of the Historical Maps group: the old
+// “European maps · CENAGIS / IH PAN” subcategory heading is gone for good and
+// no replacement heading may come back above the list.
+assert(!indexHtml.includes('cenagis-catalog-title'), 'index.html ships no CENAGIS subcategory heading');
+assert(!source.includes('cenagis-catalog-title'), 'the catalog renderer builds no CENAGIS subcategory heading');
 ['histEuRow', 'histEuSubLayers', 'histEuToggle', 'histEuExpandBtn'].forEach(id => {
     assert(!indexHtml.includes('id="' + id + '"'), 'obsolete separate group #' + id + ' is removed');
 });
-assert(indexHtml.includes('js/historical-eu-maps.js?v=20261008-country-layers-strict'), 'versioned catalog is loaded');
-assert(indexHtml.includes('js/map-app.js?v=20261011-arcgis-basemap'), 'versioned fallback map app is loaded');
+assert(indexHtml.includes('js/historical-eu-maps.js?v=20261013-flat-hist-maps'), 'versioned catalog is loaded');
+assert(indexHtml.includes('js/map-app.js?v=20261013-wms-guard'), 'versioned fallback map app is loaded');
 assert(indexHtml.includes('js/subscriptions.js?v=20261008-premium-roman-guard'), 'premium guard is versioned');
 assert(subscriptions.includes('toggleCenagisLayer'), 'dynamic CENAGIS toggle is Premium-guarded');
 assert(subscriptions.includes("'toggleRomanDareCategories'"), 'DARE All/None is Premium-guarded');
 assert(subscriptions.includes("'toggleRomanSub'"), 'Roman sublayers are Premium-guarded');
 console.log('  ✓ one premium parent group, versioned scripts and entitlement guards verified');
 
-assert(swJs.includes('js/historical-eu-maps.js?v=20261008-country-layers-strict'), 'service worker precaches the versioned catalog');
-assert(swJs.includes('js/map-app.js?v=20261011-arcgis-basemap'), 'service worker precaches the current versioned map app');
+assert(swJs.includes('js/historical-eu-maps.js?v=20261013-flat-hist-maps'), 'service worker precaches the versioned catalog');
+assert(swJs.includes('js/map-app.js?v=20261013-wms-guard'), 'service worker precaches the current versioned map app');
 assert(swJs.includes('js/subscriptions.js?v=20261008-premium-roman-guard'), 'service worker precaches the versioned subscription guard');
 const shellVersion = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
 assert(shellVersion >= 171, 'service-worker cache bumped for the merged catalog (got v' + shellVersion + ')');
@@ -103,6 +108,22 @@ vm.createContext(sandbox);
 vm.runInContext(source, sandbox);
 const api = mockWindow.DetectLabEuMaps;
 assert(api, 'DetectLabEuMaps API is exported');
+
+// Rendered output: every non-shared sheet appears as a plain row, directly in
+// the Historical Maps group — no subcategory block, no heading, no separator.
+api.renderUi();
+const rendered = section.innerHTML;
+assert(rendered.indexOf('histEuFilterStatus') !== -1, 'the country-filter hint still renders above the rows');
+assert(rendered.indexOf('cenagis-catalog-title') === -1, 'no subcategory heading is rendered');
+assert(rendered.indexOf('CENAGIS / IH PAN') === -1, 'the heading text is not part of the rendered list');
+assert(rendered.indexOf('<div class="cenagis-map-row') === 0 ||
+       rendered.indexOf('<div class="cenagis-map-row') < rendered.indexOf('cenagis-map-list'),
+    'the rows render flat at the start of the container (no heading block before them)');
+const flatRows = (rendered.match(/class="cenagis-map-row hist-eu-map-row"/g) || []).length;
+const expectedRows = Object.keys(api.catalog).filter(id => !api.sharedPremiumMapKeys[id]).length;
+assert.strictEqual(flatRows, expectedRows,
+    'each non-shared catalog sheet renders exactly once as a flat row (' + flatRows + '/' + expectedRows + ')');
+console.log('  ✓ sheets render flat in the Historical Maps group, with no subcategory heading');
 
 // Catalog and duplicate behavior: maps already offered by legacy premium rows
 // stay in that part of the same parent and are not repeated in the CENAGIS list.

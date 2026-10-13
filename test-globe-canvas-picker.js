@@ -17,12 +17,12 @@ assert(indexHtml.includes('id="globeGateCanvas"'), 'index.html contains globeGat
 assert(indexHtml.includes('id="globeGateZoomIn"'), 'index.html contains globeGateZoomIn');
 assert(indexHtml.includes('id="globeGateZoomOut"'), 'index.html contains globeGateZoomOut');
 assert(indexHtml.includes('id="globeGateFallbackSelect"'), 'index.html keeps the no-canvas fallback select');
-assert(indexHtml.includes('js/globe-country-picker.js?v=20261013-country-click'), 'index.html loads the re-versioned picker');
-assert(indexHtml.includes('css/globe-country-picker.css?v=20261013-country-click'), 'index.html loads the re-versioned css');
-assert(indexHtml.indexOf('js/globe-country-picker.js?v=20261013-country-click') <
+assert(indexHtml.includes('js/globe-country-picker.js?v=20261013-no-change-pill'), 'index.html loads the re-versioned picker');
+assert(indexHtml.includes('css/globe-country-picker.css?v=20261013-no-change-pill'), 'index.html loads the re-versioned css');
+assert(indexHtml.indexOf('js/globe-country-picker.js?v=20261013-no-change-pill') <
        indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d') &&
        indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d') <
-       indexHtml.indexOf('js/map-app.js?v=20261011-arcgis-basemap'),
+       indexHtml.indexOf('js/map-app.js?v=20261013-wms-guard'),
     'gate, country dock and map-app load in the documented order');
 assert(!indexHtml.includes('maplibre-gl') && !indexHtml.includes('globe-base-layer'),
     'the retired MapLibre globe basemap is not loaded by the shell');
@@ -38,11 +38,11 @@ console.log('  ✓ local canvas-gate assets shipped');
 
 // ── 3. sw.js precache ──
 const swJs = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8');
-['js/globe-country-picker.js?v=20261013-country-click', 'css/globe-country-picker.css?v=20261013-country-click',
- 'js/globe-arcgis-gate.js?v=20261012-gate-layout',
+['js/globe-country-picker.js?v=20261013-no-change-pill', 'css/globe-country-picker.css?v=20261013-no-change-pill',
+ 'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
  'js/d3.min.js?v=7.9.0', 'js/topojson-client.min.js?v=3.1.0',
  'data/countries-50m.json?v=20261008',
- 'js/map-app.js?v=20261011-arcgis-basemap'].forEach(function (p) {
+ 'js/map-app.js?v=20261013-wms-guard'].forEach(function (p) {
     assert(swJs.includes("'" + p + "'"), 'sw.js precaches ' + p);
 });
 const shellVersion = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
@@ -138,6 +138,40 @@ assert(fr.bboxEU[0] > -32 && fr.bboxEU[1] > 33, 'France bbox excludes overseas t
 const ru = eu.find(d => d.iso === 'RU');
 assert(ru.bboxEU[2] <= 70, 'Russia hand-off bbox is clamped to European Russia: ' + JSON.stringify(ru.bboxEU));
 console.log('  ✓ buildEurope: display + hand-off geometry sane for all countries');
+
+// ── 5b. Hand-off scale: the canvas ends on the frame the flat map opens on ──
+// The globe must zoom until the country is on screen at the same pixel size
+// the Leaflet map shows it at after the cross-fade (the old span-based
+// estimate left the globe roughly 3× wider than the 2D view at mid
+// latitudes). Cross-checked against the projection maths of both surfaces.
+{
+    const de = eu.find(d => d.iso === 'DE');
+    const center = [(de.bboxEU[0] + de.bboxEU[2]) / 2, (de.bboxEU[1] + de.bboxEU[3]) / 2];
+    const fitZoom = 5;
+    const frame = { fitZoom: fitZoom, center: center };
+    const side = Math.min(T.G.W, T.G.H);
+    const k = T.canvasFrameScale(de, frame);
+    assert(k > 1.2 && k < 16, 'the hand-off scale is a usable globe zoom (got ' + k + ')');
+    // Orthographic: R px per radian, the country spans R·Δλ·cosφ px here.
+    const R = side / 2 * 0.88 * k;
+    const lonSpan = de.bboxEU[2] - de.bboxEU[0];
+    const canvasPx = R * (lonSpan * Math.PI / 180) * Math.cos(center[1] * Math.PI / 180);
+    // Flat Web-Mercator map at the same fit zoom: 256·2^z px per 360° of longitude.
+    const flatPx = lonSpan * 256 * Math.pow(2, fitZoom) / 360;
+    assert(Math.abs(canvasPx - flatPx) < 1,
+        'the canvas shows the country at the flat map\'s pixel width (' +
+        canvasPx.toFixed(1) + ' vs ' + flatPx.toFixed(1) + ' px)');
+    assert(T.canvasFrameScale(de, { fitZoom: fitZoom, center: [center[0], 51] }) >
+           T.canvasFrameScale(de, { fitZoom: fitZoom, center: [center[0], 0] }),
+        'the canvas scale compensates the flat map\'s 1/cosφ Mercator stretch');
+    assert.equal(T.canvasFrameScale(de, { fitZoom: 6, center: center }) >
+                 T.canvasFrameScale(de, { fitZoom: 5, center: center }), true,
+        'one more flat-map zoom level doubles the globe scale');
+    assert.equal(T.canvasFrameScale(de, null), null, 'no fit zoom → the renderer keeps its own estimate');
+    assert.equal(T.countryHandoffFrame('DE', de.bboxEU).fitZoom, null,
+        'without a Leaflet map the hand-off frame stays zoom-less (dev harness)');
+    console.log('  ✓ hand-off scale: canvas matches the flat map\'s frame (no zoom jump at the cross-fade)');
+}
 
 // ── 6. Picking: the click really hits the country under the cursor ──
 T.G.W = 800; T.G.H = 600; T.G.k = 2.5;
@@ -377,11 +411,33 @@ T.G.hovered = eu.find(d => d.iso === 'MC');  // micro-state marker + label path
 T.draw(1);
 console.log('  ✓ render pipeline runs clean (imagery, flat, textured, micro-state paths)');
 
-// ── 9. translations keep the globe gate keys ──
+// ── 9. translations keep the globe gate keys, and the removed pill is gone ──
 const transJs = fs.readFileSync(path.join(__dirname, 'js/translations.js'), 'utf8');
-['globe_gate_title', 'globe_gate_desc', 'globe_gate_loading', 'globe_gate_change_country'].forEach(function (k) {
+['globe_gate_title', 'globe_gate_desc', 'globe_gate_loading', 'globe_gate_retry'].forEach(function (k) {
     assert(transJs.includes(k), 'translations.js contains ' + k);
 });
-console.log('  ✓ translations intact');
+// The “Change Country” pill next to the “?” help button was removed; the dock
+// under the search bar switches country and “Exit view” reopens the globe.
+assert(!indexHtml.includes('globeGateReopenBtn'), 'index.html no longer ships the “Change Country” pill');
+assert(!indexHtml.includes('globe_gate_change_country'), 'its translation key is gone from the markup');
+assert(!transJs.includes('globe_gate_change_country'), 'and from translations.js');
+const gatePickerJs = fs.readFileSync(path.join(__dirname, 'js/globe-country-picker.js'), 'utf8');
+assert(!/reopenBtn/.test(gatePickerJs), 'the picker no longer looks for or wires a reopen button');
+assert(!gateCss.includes('body.country-selected .globe-gate-reopen'),
+    'the CSS rule that revealed the pill is gone');
+assert(/globeGateCloseBtn/.test(indexHtml) && /globe-gate-reopen/.test(gateCss),
+    'the gate’s own ✕ keeps the shared pill styling');
+// The ✕ is shown by the picker (inline display), because the old CSS reveal
+// rule went away with the pill.
+assert(/closeBtn\.style\.display\s*=\s*hasSelection\(\)\s*\?\s*'inline-flex'/.test(gatePickerJs),
+    'the gate ✕ controls its own visibility');
+// The two remaining ways in: the dock's country grid (switching always went
+// through selectCountry) and “Exit view”, which releases the lock and reopens
+// the globe through DetectLabGlobeGate.exitView().
+const dockJs = fs.readFileSync(path.join(__dirname, 'js/country-dock.js'), 'utf8');
+assert(/g\.exitView\(\)/.test(dockJs), 'the dock’s “Exit view” still exits through the gate (which reopens the globe)');
+assert(/function exitView\(\)[\s\S]{0,400}openGate\(\);/.test(gatePickerJs),
+    'the gate’s own exitView() reopens the globe');
+console.log('  ✓ translations intact; “Change Country” pill removed (dock + Exit view remain)');
 
 console.log('\nAll canvas globe gate tests passed ✔');

@@ -1,22 +1,36 @@
 <!DOCTYPE html>
-<!-- Dev-only harness: opens the preferred lazy ArcGIS country gate directly
-     (no auth or working map) and keeps the canvas picker as a fallback. -->
+<!-- Dev-only harness: opens the preferred lazy ArcGIS country gate directly and
+     now keeps the same flat Leaflet working map behind it as the real app, so
+     the 3D→2D hand-off can be watched (and measured) without auth or the rest
+     of the app. The canvas picker stays the fallback when the ArcGIS SDK or
+     WebGL is unavailable; the status line reports both surfaces' zooms.
+     Serve the repository root and open /tools/globe-gate-preview.html. -->
 <html lang="ro">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <base href="../">
 <title>DetectLab — Globe Gate preview</title>
-<link rel="stylesheet" href="css/globe-country-picker.css?v=20261013-country-click">
+<link rel="stylesheet" href="css/leaflet.css">
+<link rel="stylesheet" href="css/globe-country-picker.css?v=20261013-no-change-pill">
 <style>
   html, body { height: 100%; margin: 0; background: #030916; font-family: system-ui, sans-serif; color: #eee; }
   #frame { position: relative; width: 100%; height: 100%; overflow: hidden; }
+  /* The working map: same flat Leaflet/Web-Mercator stack the app hands off to. */
+  #detectlab-map { position: absolute; inset: 0; background: #0d1a2b; }
+  /* Dev-only: the app dropped the “Change Country” pill (the dock switches
+     country instead). The harness keeps one, visible and wired locally, so the
+     gate can be reopened while testing the hand-off. */
+  #globeGateReopenBtn { display: inline-flex; }
   #result { position: fixed; left: 12px; bottom: 12px; z-index: 20000; background: rgba(8,10,22,.85);
-            border: 1px solid rgba(185,255,0,.5); border-radius: 10px; padding: 10px 14px; font-size: 13px; }
+            border: 1px solid rgba(185,255,0,.5); border-radius: 10px; padding: 10px 14px; font-size: 13px;
+            line-height: 1.5; max-width: 48ch; }
+  #result b { color: #ddffb0; }
 </style>
 </head>
 <body>
 <div id="frame">
+  <div id="detectlab-map"></div>
   <button type="button" class="globe-gate-reopen" id="globeGateReopenBtn">Change Country</button>
   <div class="globe-gate hidden" id="globeGate" aria-hidden="true">
     <div class="globe-gate-arcgis" id="globeGateArcGIS" aria-label="Interactive country globe"></div>
@@ -51,17 +65,76 @@
   </div>
 </div>
 <div id="result">Nicio țară selectată încă — apasă pe o țară de pe glob.</div>
-<script src="js/globe-arcgis-gate.js?v=20261012-gate-layout"></script>
-<script src="js/globe-country-picker.js?v=20261013-country-click"></script>
+<script src="js/leaflet.js"></script>
+<script src="js/globe-arcgis-gate.js?v=20261013-handoff-zoom"></script>
+<script src="js/globe-country-picker.js?v=20261013-no-change-pill"></script>
 <script>
   localStorage.removeItem('detectlab_selected_country_v1');
+
+  // Same flat working map the app reveals after the gate (minZoom 2, imagery).
+  var map = L.map('detectlab-map', { minZoom: 2, maxZoom: 20, worldCopyJump: false })
+    .setView([51, 12], 3);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxNativeZoom: 19, attribution: 'Imagery © Esri'
+  }).addTo(map);
+
+  var out = document.getElementById('result');
+  var handoff = null;   // numbers captured at the moment of the hand-off
+
+  function number(v) { return (typeof v === 'number' && isFinite(v)) ? v.toFixed(2) : '—'; }
+
+  function capture() {
+    var gate = window.DetectLabGlobeGate;
+    var T = gate._test;
+    var sel = gate.getSelection();
+    var live = window.DetectLabArcGISGate && window.DetectLabArcGISGate._test.getCurrent();
+    var frame = sel ? T.countryHandoffFrame(sel.iso, sel.bbox) : null;
+    var sceneZoom = window.DetectLabArcGISGate && window.DetectLabArcGISGate.isActive()
+      ? (live && live.view ? live.view.zoom : null) : null;
+    // The SceneView is destroyed a moment after the hand-off, so remember what
+    // it had reached when the working map took over.
+    if (sceneZoom != null) handoff = { sceneZoom: sceneZoom, flatZoom: map.getZoom(), fitZoom: frame && frame.fitZoom };
+    return { sel: sel, frame: frame, sceneZoom: sceneZoom, outline: T.state.boundsLayer };
+  }
+
+  function report(prefix) {
+    var info = capture();
+    var sel = info.sel;
+    if (!sel) { out.innerHTML = prefix + '<br>No country selected yet — click one on the globe.'; return; }
+    var expected = null;
+    if (info.frame && typeof info.frame.fitZoom === 'number' && window.DetectLabArcGISGate) {
+      expected = window.DetectLabArcGISGate._test.sceneZoomForFlat(info.frame.fitZoom, info.frame.center[1]);
+    }
+    out.innerHTML = prefix +
+      '<br>Country: <b>' + sel.name + ' (' + sel.iso + ')</b>' +
+      '<br>2D map zoom: <b>' + number(map.getZoom()) + '</b> (floor ' + number(map.getMinZoom()) + ')' +
+      ' · hand-off fit zoom: <b>' + number(info.frame && info.frame.fitZoom) + '</b>' +
+      '<br>Globe zoom at hand-off: <b>' + number(handoff && handoff.sceneZoom) + '</b>' +
+      (expected ? ' · expected SceneView zoom: <b>' + number(expected) + '</b>' : '') +
+      (handoff ? '<br>3D→2D scale: the country must keep its on-screen size when the gate fades.'
+               : '') +
+      '<br>Country outline on the map: <b>' +
+      (info.outline ? (info.outline._detectlabBoundsKind || 'outline') : 'none yet (geometry still loading)') +
+      '</b> — never a bounding box.';
+  }
+
   document.addEventListener('detectlab:country-selected', function (e) {
-    document.getElementById('result').textContent =
-      'Selectat: ' + e.detail.name + ' (' + e.detail.iso + ')  bbox=' +
-      e.detail.bbox.map(function (v) { return v.toFixed(1); }).join(', ');
+    report('Selectat: ' + e.detail.name + ' (' + e.detail.iso + ')');
+    // The staged Leaflet fit animates; re-print once it has settled.
+    setTimeout(function () { report('Hand-off settled'); }, 1200);
   });
-  DetectLabGlobeGate.attach(null);
+  document.addEventListener('detectlab:country-lockchange', function (e) {
+    report(e.detail.locked ? 'Locked with no animation' : 'View unlocked');
+  });
+
+  DetectLabGlobeGate.attach(map);
   DetectLabGlobeGate.open();
+
+  // Local wiring: the app no longer ships the pill, so the picker does not
+  // wire it either (see tools/country-dock-preview.html for the same hook).
+  document.getElementById('globeGateReopenBtn').addEventListener('click', function () {
+    DetectLabGlobeGate.open();
+  });
 </script>
 </body>
 </html>

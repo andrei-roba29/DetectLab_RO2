@@ -18,6 +18,10 @@
   /* Minimal stand-ins for the app's own layout, so the real CSS of the dock
      lands exactly where it does in index.html. */
   .map-frame { position: relative; height: 100vh; overflow: visible; isolation: isolate; }
+  /* Dev-only: the app dropped the “Change Country” pill (the dock switches
+     country instead). The harness keeps one, visible and wired locally, so the
+     gate can be reopened while testing the dock. */
+  #globeGateReopenBtn { display: inline-flex; }
   #detectlab-map { position: absolute; inset: 0; background: #0d1a2b; }
   .map-search-wrap {
     position: absolute;
@@ -296,7 +300,7 @@
     var sel = g && g.getSelection ? g.getSelection() : null;
     var hs = window.DetectLabCountryDock && window.DetectLabCountryDock.isHillshadeOn();
     var bl = g && g._test && g._test.state ? g._test.state.boundsLayer : null;
-    var boundsKind = bl ? (bl._detectlabBoundsKind || (typeof bl.eachLayer === 'function' ? 'country outline' : 'bbox rectangle')) : '—';
+    var boundsKind = bl ? (bl._detectlabBoundsKind || 'country outline') : 'none yet (geometry not loaded)';
     out.innerHTML = prefix + (sel
       ? '<br>Country: <b>' + sel.name + ' (' + sel.iso + ')</b> · locked: <b>' + (g.isLocked() ? 'yes' : 'no') +
         '</b> · zoom ' + map.getZoom().toFixed(2) + ' (min ' + map.getMinZoom().toFixed(2) + ')' +

@@ -6,6 +6,9 @@
  * remains owned by globe-country-picker.js and is the network/WebGL fallback.
  * The renderer receives the same atlas / Natural Earth geometry that the
  * canvas gate builds; it never owns selection persistence or the Leaflet map.
+ * A country click flies the camera to the zoom the picker reports for the flat
+ * map's own fit (Mercator-corrected — see sceneZoomForFlat), so the hand-off
+ * to the 2D working map has no zoom jump to hide.
  */
 (function (window, document) {
     'use strict';
@@ -23,6 +26,11 @@
     var TEXT_COLOR = [234, 255, 221];
     var ATTRIBUTION = 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community';
     var MICRO_ISO = { AD: true, LI: true, LU: true, MC: true, MT: true, SM: true, VA: true };
+    // SceneView zoom window. The hand-off zoom comes from the flat map's
+    // Leaflet fit (capped at its own FIT_MAX_ZOOM = 11), so the ceiling here is
+    // one step above it; the floor is the European-overview level.
+    var MIN_SCENE_ZOOM = 1.5;
+    var MAX_SCENE_ZOOM = 12;
 
     var sdkPromise = null;
     var cssPromise = null;
@@ -485,6 +493,10 @@
         }));
     }
 
+    /* Fallback camera zoom, used only when the picker could not supply the
+       flat map's fit zoom (no Leaflet map: the dev harness / standalone gate).
+       The real hand-off zoom comes from js/globe-country-picker.js, so the
+       globe and the 2D map always share one scale — see countryGoToTarget. */
     function zoomFor(entry) {
         var bbox = entry && entry.bboxEU;
         var span = 0.5;
@@ -499,9 +511,44 @@
         return Math.max(1.8, Math.min(9.2, zoom));
     }
 
-    function countryGoToTarget(entry) {
+    function clampSceneZoom(zoom) {
+        if (!(typeof zoom === 'number' && isFinite(zoom))) return null;
+        return Math.max(MIN_SCENE_ZOOM, Math.min(MAX_SCENE_ZOOM, zoom));
+    }
+
+    /* Converts the flat working map's Web-Mercator fit zoom into the SceneView
+       zoom that puts the same country on screen at the same size.
+
+       A Mercator map shows ground at a nominal scale that is inflated by
+       1/cos φ (at 51°N the same “zoom” covers roughly 1.6× less ground than at
+       the equator), while the globe always shows true ground scale. That is
+       exactly the latitude correction in the documented 2D→3D viewpoint
+       conversion (Esri's “switch view from 2D to 3D” sample multiplies the 2D
+       scale by cos φ, i.e. adds log2(1/cos φ) zoom levels here). Without it the
+       globe would end its flight showing a visibly wider frame than the flat
+       map that replaces it. */
+    function sceneZoomForFlat(flatZoom, latitude) {
+        var zoom = Number(flatZoom);
+        if (!isFinite(zoom)) return null;
+        var lat = Number(latitude);
+        if (!isFinite(lat)) return zoom;
+        var cos = Math.max(0.05, Math.cos(lat * Math.PI / 180));
+        return zoom + Math.log(1 / cos) / Math.LN2;
+    }
+
+    function countryGoToTarget(entry, options) {
         var center = countryCenter(entry);
-        return { center: center, zoom: zoomFor(entry), heading: 0, tilt: 0 };
+        // The picker hands over the zoom the flat 2D map will open at (its
+        // Leaflet fit zoom). Flying the SceneView to the same level makes the
+        // cross-fade land on one scale instead of jumping between two
+        // independently computed cameras. Without a flat map (the gate opened
+        // on its own) zoomFor() keeps the span-based estimate.
+        var handoff = clampSceneZoom(sceneZoomForFlat(
+            options && Number(options.zoom),
+            center[1]
+        ));
+        var zoom = handoff == null ? zoomFor(entry) : handoff;
+        return { center: center, zoom: zoom, heading: 0, tilt: 0 };
     }
 
     function createView(modules, container, hooks, countries) {
@@ -721,13 +768,13 @@
         return true;
     }
 
-    function goToCountry(iso) {
+    function goToCountry(iso, options) {
         if (!current || !current.entries[iso]) return Promise.reject(new Error('Country geometry unavailable: ' + iso));
         var instance = current;
         instance.selectedIso = iso;
         instance.hoveredIso = null;
         drawFocus(instance);
-        return Promise.resolve(instance.view.goTo(countryGoToTarget(instance.entries[iso].entry), {
+        return Promise.resolve(instance.view.goTo(countryGoToTarget(instance.entries[iso].entry, options), {
             duration: 850,
             easing: 'ease-in-out'
         }));
@@ -737,7 +784,7 @@
         if (!current || !current.view) return Promise.resolve(false);
         var zoom = Number(current.view.zoom);
         if (!isFinite(zoom)) zoom = 2.35;
-        zoom = Math.max(1.5, Math.min(9.5, zoom + Number(amount || 0)));
+        zoom = Math.max(MIN_SCENE_ZOOM, Math.min(MAX_SCENE_ZOOM, zoom + Number(amount || 0)));
         return Promise.resolve(current.view.goTo({ zoom: zoom }, { duration: 180 })).then(function () { return true; });
     }
 
@@ -757,7 +804,9 @@
             background: BACKGROUND,
             imageryService: WORLD_IMAGERY_SERVICE,
             keyedImageryService: KEYED_WORLD_IMAGERY_SERVICE,
-            attribution: ATTRIBUTION
+            attribution: ATTRIBUTION,
+            minSceneZoom: MIN_SCENE_ZOOM,
+            maxSceneZoom: MAX_SCENE_ZOOM
         },
         _test: {
             signedArea: signedArea,
@@ -765,7 +814,11 @@
             geometryRings: geometryRings,
             isMicroState: isMicroState,
             zoomFor: zoomFor,
+            clampSceneZoom: clampSceneZoom,
+            sceneZoomForFlat: sceneZoomForFlat,
             countryGoToTarget: countryGoToTarget,
+            MIN_SCENE_ZOOM: MIN_SCENE_ZOOM,
+            MAX_SCENE_ZOOM: MAX_SCENE_ZOOM,
             surfaceCoversHost: surfaceCoversHost,
             restoreContainerLayout: restoreContainerLayout,
             ensureDrawableSurface: ensureDrawableSurface,

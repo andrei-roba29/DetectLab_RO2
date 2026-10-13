@@ -41,24 +41,33 @@ layers** and keeps the selection visible on the map:
     declared by their real extent and belong to every country they span.
   - Rows **without** any attribution or bounds record (live/API layers) are
     left untouched.
-- **The CENAGIS dynamic catalog** (`js/historical-eu-maps.js
-  filterForCountry`) is curated-first: for the 19 analyzed countries the
+- **The CENAGIS dynamic catalog** (`js/historical-eu-maps.js` — `renderUi` /
+  `filterForCountry`, rendered flat in `#histEuMapsSection` without a
+  subcategory heading) is curated-first: for the 19 analyzed countries the
   `COUNTRIES_DATA` lists decide (rectangle overlap alone leaked neighbouring
   countries' sheets into the window — the exact bug this fixes). For a country
   outside that analysis (Italy, Norway…) the sheets' own extents are used, and
   only a *substantial* overlap counts (≥ 5% of the country's box **or** ≥ 5%
   of the sheet's box) — a bbox graze is not "a map of this country".
-- **The bounds of the selected country stay visible on the map.** The globe
-  gate draws them while the selection surface is visible: the real country
-  outline (the gate's geometry) once the atlas is loaded, and the bbox rectangle
-  until then. A selection restored from `localStorage` starts with the rectangle
-  and upgrades as soon as `ensureReady()` / the 10 m shapefile refinement
-  delivers geometry. Once the hand-off completes, Leaflet/Web Mercator owns the
+- **The selected country's real outline stays visible on the map — never its
+  bounding box.** The overlay is the country geometry from the gate's atlas
+  (`L.geoJSON`, non-interactive). While that geometry is not in yet (a
+  `localStorage` selection restored before the atlas finishes loading, or the
+  10 m refinement still in flight) *nothing* is drawn: the selection bbox is
+  used for `maxBounds`, the layer-coverage math and the camera — but a bbox is
+  a rectangle around e.g. Sweden, and drawing it as the country's outline made
+  a fresh selection look like a rectangle that “merged” into the real shape a
+  couple of seconds later. `refreshCountryBoundsLayer()` draws the outline as
+  soon as `ensureReady()` / `refineFromShapefile()` delivers geometry (and
+  re-draws it when the refined feature object replaces the atlas one), so the
+  first frame with an overlay is already the correct shape. `attach()` warms
+  the atlas immediately for a restored selection, so that frame comes as early
+  as possible. Once the hand-off completes, Leaflet/Web Mercator owns the
   outline and its highlight fill, so the overlay stays aligned with every
-  working-map raster and vector layer. It is non-interactive, sits in its own
-  pane `pane_country_bounds` at z-index **688** (above every data pane — LIDAR
-  610, historical maps ≤ 652 — under tracks 690 / measure 700), is replaced on
-  every new selection and removed on unlock (“Exit view”, `reset()`).
+  working-map raster and vector layer. It sits in its own pane
+  `pane_country_bounds` at z-index **688** (above every data pane — LIDAR 610,
+  historical maps ≤ 652 — under tracks 690 / measure 700), is replaced on every
+  new selection and removed on unlock (“Exit view”, `reset()`).
 
 ## Files
 
@@ -81,8 +90,9 @@ layers** and keeps the selection visible on the map:
 - `js/globe-country-picker.js` — `showCountryBoundsLayer` /
   `removeCountryBoundsLayer` / `refreshCountryBoundsLayer`, wired into
   `restrictLeafletToCountry`, `unlockCountryView`, `ensureReady` and
-  `refineFromShapefile`; `state.boundsLayer` tracks the overlay and always uses
-  Leaflet/Web-Mercator placement in the working view.
+  `refineFromShapefile`; `state.boundsLayer` / `state.boundsIso` /
+  `state.boundsFeature` track the overlay (outline only — no bbox rectangle
+  fallback) and always use Leaflet/Web-Mercator placement in the working view.
 - `tools/country-dock-preview.html` — the dev harness implements the same
   contract (national rows strict by ISO, `histEuRow` pan-European by coverage).
 - `test-country-layer-filter.js` — regression suite: Italy must not see
@@ -91,8 +101,12 @@ layers** and keeps the selection visible on the map:
 - `test-historical-eu-maps.js` — curated-first catalog + a drift guard that
   asserts `SHARED_PREMIUM_COUNTRIES` mirrors `COUNTRIES_DATA` exactly.
 - `index.html` / `sw.js` — version bumps
-  (`js/map-app.js?v=20261011-arcgis-basemap`,
-  `js/historical-eu-maps.js?v=20261008-country-layers-strict`), shell `v187`.
+  (`js/map-app.js?v=20261013-wms-guard`,
+  `js/historical-eu-maps.js?v=20261013-flat-hist-maps`,
+  `js/globe-country-picker.js?v=20261013-no-change-pill`), shell `v192`.
+  The CENAGIS sheets are listed **flat** in the single “Hărți istorice /
+  Historical Maps” group: there is no “European maps · CENAGIS / IH PAN”
+  subcategory heading (nor any replacement one) above them.
 
 ## Semantics
 

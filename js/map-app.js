@@ -12989,6 +12989,19 @@
 
             // Listen for zoom changes
             map.on('zoomend', window.updatePremiumMapCoverageVisibility);
+            // The WMS health guard (js/wms-health.js) can remove a CENAGIS
+            // layer on its own when the provider's server stops answering with
+            // images; keep the “coverage” rectangles in sync with the real map
+            // state instead of waiting for the next zoom. Only removals of the
+            // premium layers themselves trigger a refresh, so the polygons the
+            // refresh adds/removes cannot re-enter this handler.
+            map.on('layerremove', function (e) {
+                var isPremiumLayer = Object.keys(premiumMapCoverageBounds).some(function (key) {
+                    var layerVar = premiumMapCoverageBounds[key].layerVar;
+                    return layerVar && window[layerVar] === e.layer;
+                });
+                if (isPremiumLayer) window.updatePremiumMapCoverageVisibility();
+            });
             window.updatePremiumMapCoverageVisibility();
 
             // ── LAYER VISIBILITY HIGHLIGHT ──
@@ -14319,6 +14332,9 @@
                     pane: 'pane_mitteleuropa',
                     attribution: '© Übersichtskarte von Mitteleuropa 1:300 000 (1893–1945) · CENAGIS / IH PAN'
                 });
+                // Keys the WMS health guard (js/wms-health.js) uses to find
+                // this layer's row + switch (#mitteleuropaRow / #mitteleuropaMapToggle).
+                window._mitteleuropaMapLayer._detectlabUiKeys = ['mitteleuropa'];
 
                 window.toggleMitteleuropaMap = function (on) {
                     if (on) {
@@ -14357,6 +14373,9 @@
                     pane: 'pane_chrzanowski',
                     attribution: '© Karta Dawnej Polski – Wojciech Chrzanowski (1859) · CENAGIS / IH PAN'
                 });
+                // Keys the WMS health guard (js/wms-health.js) uses to find
+                // this layer's row + switch (#chrzanowskiRow / #chrzanowskiMapToggle).
+                window._chrzanowskiMapLayer._detectlabUiKeys = ['chrzanowski'];
 
                 window.toggleChrzanowskiMap = function (on) {
                     if (on) {
@@ -14395,6 +14414,9 @@
                     pane: 'pane_reymann',
                     attribution: '© Reymann\'s Special-Karte von Central-Europa (1806–1908) · CENAGIS / IH PAN'
                 });
+                // Keys the WMS health guard (js/wms-health.js) uses to find
+                // this layer's row + switch (#reymannRow / #reymannMapToggle).
+                window._reymannMapLayer._detectlabUiKeys = ['reymann'];
 
                 window.toggleReymannMap = function (on) {
                     if (on) {
@@ -14434,6 +14456,9 @@
                     pane: 'pane_kdr100k',
                     attribution: '© Karte des Deutschen Reiches 1:100 000 (1878–1945) · CENAGIS / IH PAN'
                 });
+                // Keys the WMS health guard (js/wms-health.js) uses to find
+                // this layer's row + switch (#kdr100kRow / #kdr100kMapToggle).
+                window._kdr100kMapLayer._detectlabUiKeys = ['kdr100k'];
 
                 window.toggleKdr100kMap = function (on) {
                     if (on) {
@@ -14472,6 +14497,9 @@
                     pane: 'pane_kdr_gb',
                     attribution: '© Karte des Deutschen Reiches – Großblatt (1914–1944) · CENAGIS / IH PAN'
                 });
+                // Keys the WMS health guard (js/wms-health.js) uses to find
+                // this layer's row + switch (#kdrGbRow / #kdrGbMapToggle).
+                window._kdrGbMapLayer._detectlabUiKeys = ['kdrGb'];
 
                 window.toggleKdrGbMap = function (on) {
                     if (on) {
@@ -14510,6 +14538,9 @@
                     pane: 'pane_wig100k',
                     attribution: '© Wojskowy Instytut Geograficzny (WIG) 1:100 000 (1919–1939) · CENAGIS / IH PAN'
                 });
+                // Keys the WMS health guard (js/wms-health.js) uses to find
+                // this layer's row + switch (#wig100kRow / #wig100kMapToggle).
+                window._wig100kMapLayer._detectlabUiKeys = ['wig100k'];
 
                 window.toggleWig100kMap = function (on) {
                     if (on) {

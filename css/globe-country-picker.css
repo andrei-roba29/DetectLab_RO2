@@ -254,7 +254,11 @@
 }
 .globe-gate-fallback button:hover { background: rgba(185,255,0,0.22); }
 
-/* ── "Change country" re-entry pill, shown once a country is active ── */
+/* ── Gate pill button — the gate's own ✕ control ──
+   The class used to be shared with the “Change Country” re-entry pill, which
+   sat under the “?” help button; that pill is gone (the dock switches
+   country), so this styles only #globeGateCloseBtn now. Its visibility is set
+   by the picker (inline display), not by a body.country-selected rule. */
 .globe-gate-reopen {
     position: absolute;
     top: 14px;
@@ -273,7 +277,6 @@
     cursor: pointer;
     box-shadow: 0 6px 18px rgba(0,0,0,.4);
 }
-body.country-selected .globe-gate-reopen { display: inline-flex; }
 .globe-gate-reopen:hover { background: rgba(185,255,0,0.16); }
 .map-frame.is-fullscreen .globe-gate-reopen {
     top: calc(14px + env(safe-area-inset-top));

@@ -2,13 +2,19 @@
    DetectLab — country-selection gate
    ──────────────────────────────────────────────────────────────
    The public DetectLabGlobeGate API, country data, localStorage record,
-   events, Leaflet lock, and re-entry behavior live here. The preferred
-   renderer is the optional lazy ArcGIS SceneView adapter in
+   events, Leaflet lock, and re-entry behavior live here. There is no
+   “Change Country” pill: the dock under the search bar switches country, the
+   “Exit view” button and DetectLabGlobeGate.open() reopen the globe. The
+   preferred renderer is the optional lazy ArcGIS SceneView adapter in
    js/globe-arcgis-gate.js; this file loads the shared 50-country atlas and
    Natural Earth 10m refinement, handles direct globe clicks, and keeps the
    existing d3 canvas globe as a network/WebGL fallback. The working map is
    the flat Leaflet/Web-Mercator stack in js/map-app.js; the 3D renderer is
-   only a temporary selection surface. See GLOBE_COUNTRY_GATE.md.
+   only a temporary selection surface. The country box and the fit zoom the
+   flat map opens on are computed once (countryHandoffFrame) and handed to the
+   3D renderer, so both surfaces end on the same frame. The locked view draws
+   the country's real outline only — never the selection bbox as a rectangle.
+   See GLOBE_COUNTRY_GATE.md.
    ══════════════════════════════════════════════════════════════ */
 (function (window, document) {
     'use strict';
@@ -72,6 +78,10 @@
     // also the only legal way out of a locked view (see js/country-dock.js).
     var LOCK_ZOOM_SLACK = 1;
     var FIT_MAX_ZOOM = 11;       // micro-states: never dive into a single street
+    // Leaflet fitBounds padding for the country view, in CSS pixels. The zoom
+    // the flat map opens at is derived from it, and that same zoom is what the
+    // 3D globe camera flies to — so the two surfaces meet on one frame.
+    var FIT_PADDING = 24;
 
     var CONTROL_IDS = ['mapSearchWrap', 'transpTab', 'transpPanel', 'verticalOpacityControl', 'verticalSatPeriodControl', 'mapHelpBtn'];
 
@@ -263,15 +273,78 @@
         state.baseMaxZoom = (typeof opts.maxZoom === 'number') ? opts.maxZoom : 20;
     }
 
-    // The zoom the country view opens at: the bbox fitted to the viewport,
-    // capped so micro-states (Monaco, Vatican…) don't fall into one street.
-    function countryFitZoom(map, padded) {
+    // The zoom the country view opens at: the country box fitted to the flat
+    // map's viewport with exactly the padding its fitBounds() call uses, capped
+    // so micro-states (Monaco, Vatican…) don't fall into one street. This is
+    // *the* hand-off zoom: the 3D globe camera ends on it too (see
+    // countryHandoffFrame / goToCountry), so the flat map is revealed at the
+    // level the globe was already showing.
+    function countryFitZoom(map, bounds) {
         var fit = FIT_MAX_ZOOM;
         try {
-            var z = map.getBoundsZoom(padded, false);
-            if (typeof z === 'number' && isFinite(z)) fit = Math.min(FIT_MAX_ZOOM, z);
+            rememberBaseZoom(map);
+            // Leaflet's getBoundsZoom() clamps its answer to the map's *live*
+            // zoom range, and the locked view has already raised minZoom to the
+            // current country's fit level. Measuring the next country under the
+            // old country's floor would peg it there — switch from Monaco to
+            // Russia and Russia would open at street level. Measure inside the
+            // map's own base range, then put the live range back.
+            var liveMin = typeof map.getMinZoom === 'function' ? map.getMinZoom() : null;
+            var liveMax = typeof map.getMaxZoom === 'function' ? map.getMaxZoom() : null;
+            var reshaped = typeof map.setMinZoom === 'function' && typeof map.setMaxZoom === 'function' &&
+                typeof liveMin === 'number' && typeof liveMax === 'number' &&
+                (liveMin !== state.baseMinZoom || liveMax !== state.baseMaxZoom);
+            if (reshaped) { map.setMinZoom(state.baseMinZoom); map.setMaxZoom(state.baseMaxZoom); }
+            try {
+                // Leaflet's fitBounds()/getBoundsZoom() count a symmetric
+                // `padding` twice: fitBounds() passes
+                // paddingTopLeft.add(paddingBottomRight) = 2 × padding, so the
+                // box really has FIT_PADDING px free on *each* side. Asking
+                // with a single FIT_PADDING would over-estimate the fit by up
+                // to one level — and that estimate is what the globe flies to.
+                var pad2 = [FIT_PADDING * 2, FIT_PADDING * 2];
+                var z = map.getBoundsZoom(bounds, false, pad2);
+                if (typeof z === 'number' && isFinite(z)) fit = Math.min(FIT_MAX_ZOOM, z);
+            } finally {
+                if (reshaped) { map.setMinZoom(liveMin); map.setMaxZoom(liveMax); }
+            }
         } catch (e) { /* keep the cap */ }
         return Math.max(state.baseMinZoom, Math.min(state.baseMaxZoom, fit));
+    }
+
+    function bboxBounds(bbox) {
+        if (!window.L || !Array.isArray(bbox) || bbox.length !== 4) return null;
+        try {
+            return window.L.latLngBounds(window.L.latLng(bbox[1], bbox[0]), window.L.latLng(bbox[3], bbox[2]));
+        } catch (e) { return null; }
+    }
+
+    /* The frame the locked country view opens on: the country box fitted into
+       the flat map's viewport, plus the zoom that fit lands on. Both surfaces
+       use the same Esri World Imagery Web-Mercator pyramid, so that single zoom
+       number is also the correct SceneView/canvas zoom: the 3D camera keeps
+       zooming until it sits exactly where the flat map will be revealed. */
+    function countryHandoffFrame(iso, bbox) {
+        var frame = {
+            iso: iso,
+            bbox: Array.isArray(bbox) ? bbox.slice() : null,
+            center: Array.isArray(bbox) ? [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2] : null,
+            bounds: null,
+            padded: null,
+            fitZoom: null           // null = no flat map yet: the renderer approximates
+        };
+        var map = activeMap();
+        if (!map || !window.L || typeof map.getBoundsZoom !== 'function' || !frame.bbox) return frame;
+        try {
+            rememberBaseZoom(map);
+            frame.bounds = bboxBounds(bbox);
+            if (!frame.bounds) return frame;
+            frame.padded = typeof frame.bounds.pad === 'function' ? frame.bounds.pad(LOCK_PAD) : null;
+            frame.fitZoom = countryFitZoom(map, frame.bounds);
+        } catch (e) {
+            frame.fitZoom = null;
+        }
+        return frame;
     }
 
     /* The country gate is a temporary 3D surface. The working map underneath
@@ -279,7 +352,7 @@
        World Imagery tiles. Start its camera transition while the globe is
        still visible so the two surfaces meet on the same country instead of
        revealing a second, unrelated view. */
-    function prepareFlatMapTransition(iso, bbox) {
+    function prepareFlatMapTransition(iso, bbox, frame) {
         var map = activeMap();
         state.mapTransition = null;
         if (!map || !window.L || !Array.isArray(bbox) || bbox.length !== 4) return false;
@@ -294,13 +367,23 @@
             }
             if (typeof map.stop === 'function') map.stop();
             if (typeof map.invalidateSize === 'function') map.invalidateSize({ pan: false });
-            var sw = window.L.latLng(bbox[1], bbox[0]);
-            var ne = window.L.latLng(bbox[3], bbox[2]);
-            var bounds = window.L.latLngBounds(sw, ne);
-            var padded = bounds.pad(LOCK_PAD);
-            var fitZoom = countryFitZoom(map, padded);
+            // A previous country's lock also raised the map's zoom floor; drop
+            // it before the transition fit, otherwise Leaflet's setView clamps
+            // the new frame to the old country's level and the hand-off would
+            // land on a zoom the globe did not fly to.
+            if (state.locked && state.baseMinZoom != null && typeof map.setMinZoom === 'function') {
+                map.setMinZoom(state.baseMinZoom);
+            }
+            frame = frame || countryHandoffFrame(iso, bbox);
+            var bounds = frame.bounds || bboxBounds(bbox);
+            if (!bounds) return false;
+            // The same zoom drives the 3D camera (frame.fitZoom), so the flat
+            // map lands exactly on the frame the globe flew to.
+            var fitZoom = (typeof frame.fitZoom === 'number')
+                ? frame.fitZoom
+                : countryFitZoom(map, bounds);
             map.fitBounds(bounds, {
-                padding: [24, 24],
+                padding: [FIT_PADDING, FIT_PADDING],
                 maxZoom: fitZoom,
                 animate: true,
                 duration: 0.85,
@@ -330,18 +413,17 @@
         options = options || {};
         try {
             rememberBaseZoom(map);
-            var sw = window.L.latLng(bbox[1], bbox[0]);
-            var ne = window.L.latLng(bbox[3], bbox[2]);
-            var bounds = window.L.latLngBounds(sw, ne);
-            var padded = bounds.pad(LOCK_PAD);
-            var fitZoom = (typeof options.fitZoom === 'number') ? options.fitZoom : countryFitZoom(map, padded);
+            var bounds = bboxBounds(bbox);
+            if (!bounds) return;
+            var padded = typeof bounds.pad === 'function' ? bounds.pad(LOCK_PAD) : bounds;
+            var fitZoom = (typeof options.fitZoom === 'number') ? options.fitZoom : countryFitZoom(map, bounds);
             map.setMaxBounds(null);
             map.options.maxBoundsViscosity = 1;
             map.setMaxBounds(padded);
             map.setMinZoom(Math.max(state.baseMinZoom, fitZoom - LOCK_ZOOM_SLACK));
             if (typeof map.setMaxZoom === 'function') map.setMaxZoom(state.baseMaxZoom);
             if (!options.skipFit) {
-                map.fitBounds(bounds, { padding: [24, 24], maxZoom: fitZoom, animate: true });
+                map.fitBounds(bounds, { padding: [FIT_PADDING, FIT_PADDING], maxZoom: fitZoom, animate: true });
             }
             state.locked = true;
             state.fitZoom = fitZoom;
@@ -382,15 +464,15 @@
         fireLockChange(false);
     }
 
-    /* ── Selected-country bounds on the working map ────────────────────────
-       A selection keeps the country bounds visible on the Leaflet map: the
-       country outline when the gate's geometry is loaded, otherwise the
-       selection bbox. Drawn non-interactive in its own pane above every data
-       pane (LIDAR 610, historical maps ≤ 652), removed when the lock is
-       released (“Exit view”, reset) and replaced on every new selection.
-       The working map is flat 2D, so the outline is placed directly by
-       Leaflet in Web Mercator and remains aligned with the basemap during the
-       globe-to-map hand-off. */
+    /* ── Selected-country outline on the working map ───────────────────────
+       A selection keeps the country's real outline visible on the Leaflet
+       map — its actual shape, never the selection bbox (see
+       showCountryBoundsLayer). Drawn non-interactive in its own pane above
+       every data pane (LIDAR 610, historical maps ≤ 652), removed when the
+       lock is released (“Exit view”, reset) and replaced on every new
+       selection. The working map is flat 2D, so the outline is placed
+       directly by Leaflet in Web Mercator and remains aligned with the
+       basemap during the globe-to-map hand-off. */
     var BOUNDS_PANE = 'pane_country_bounds';
     var BOUNDS_PANE_Z = 688;   // above the data panes, under tracks (690)/measure (700)
 
@@ -409,6 +491,7 @@
     function removeCountryBoundsLayer() {
         var layer = state.boundsLayer;
         state.boundsLayer = null;
+        state.boundsFeature = null;
         if (!layer) return;
         var map = activeMap();
         if (map && typeof map.removeLayer === 'function') {
@@ -416,8 +499,27 @@
         }
     }
 
+    /* The locked view shows the country's real outline — never the selection
+       bounding box. A box is a *rectangle* around e.g. Croatia or Sweden, and
+       the old fallback drew exactly that until the atlas arrived a couple of
+       seconds later, so a freshly restored or dock-switched selection first
+       looked like a rectangle and then “merged” into the country shape. When
+       the geometry is not in yet the map simply stays without an overlay;
+       refreshCountryBoundsLayer() draws the outline the moment it is. */
     function showCountryBoundsLayer(map, iso, bbox) {
         if (!map || !window.L || !Array.isArray(bbox) || bbox.length !== 4) return;
+        var entry = (iso && G.byIso) ? G.byIso[iso] : null;
+        var feature = entry && entry.feature ? entry.feature : null;
+        if (!feature || typeof window.L.geoJSON !== 'function') {
+            // No geometry (atlas not loaded yet, or it failed): draw nothing.
+            // The bbox stays the lock/maxBounds only, never a visible outline.
+            removeCountryBoundsLayer();
+            return;
+        }
+        // Redrawing the identical geometry (re-lock on the same country, a
+        // window resize, a second refresh) would flash the outline away and
+        // back; only a new feature object (the 10m refinement) replaces it.
+        if (state.boundsLayer && state.boundsIso === iso && state.boundsFeature === feature) return;
         removeCountryBoundsLayer();
         // Leaflet passes these options straight to every vector it builds
         // (bundled 1.9.4: geometryToLayer forwards the GeoJSON options), so
@@ -434,34 +536,25 @@
         var paneName = ensureBoundsPane(map);
         if (paneName) styleOpts.pane = paneName;
         var layer = null;
-        var kind = 'bbox rectangle';   // what the layer draws (read by the status line)
-        var entry = (iso && G.byIso) ? G.byIso[iso] : null;
         // The working map is intentionally flat 2D, so Leaflet's own
         // Web-Mercator placement keeps the outline aligned with the same
         // raster tiles used during the hand-off.
-        if (!layer && entry && entry.feature && typeof window.L.geoJSON === 'function') {
-            try { layer = window.L.geoJSON(entry.feature, styleOpts); kind = 'country outline'; } catch (e) { layer = null; }
-        }
-        if (!layer && typeof window.L.rectangle === 'function') {
-            try {
-                layer = window.L.rectangle([[bbox[1], bbox[0]], [bbox[3], bbox[2]]], styleOpts);
-            } catch (e) { layer = null; }
-        }
+        try { layer = window.L.geoJSON(feature, styleOpts); } catch (e) { layer = null; }
         if (!layer || typeof map.addLayer !== 'function') return;
-        // Paths have no eachLayer, so the status line cannot tell the outline
-        // from the rectangle by shape; the kind is recorded here instead.
-        layer._detectlabBoundsKind = kind;
+        layer._detectlabBoundsKind = 'country outline';
         try {
             map.addLayer(layer);
             state.boundsLayer = layer;
+            state.boundsIso = iso;
+            state.boundsFeature = feature;
         } catch (e) {}
     }
 
     // Redraw once the atlas (or the 10m shapefile refinement) is ready: a
-    // selection restored from localStorage starts with the plain bbox rectangle
-    // and upgrades to the real country outline as soon as geometry exists.
+    // selection restored from localStorage is locked without an outline until
+    // the geometry exists, and this is where the real country shape appears.
     function refreshCountryBoundsLayer() {
-        if (!state.locked || !state.boundsLayer) return;
+        if (!state.locked) return;
         var map = activeMap();
         if (!map) return;
         showCountryBoundsLayer(map, window._detectlabSelectedCountry, window._detectlabCountryBounds);
@@ -1525,20 +1618,50 @@
         if (spinRaf) { window.cancelAnimationFrame(spinRaf); spinRaf = 0; }
     }
 
+    /* The orthographic canvas scale that renders the country at the same pixel
+       size the flat map opens at, so the canvas fallback hands off as
+       seamlessly as the SceneView does. The projection radius is
+       R = min(W,H)/2 · 0.88 · k px per radian, so a country box of Δλ° spans
+       R·Δλ·(π/180)·cosφ px here and Δλ·256·2^z/360 px on the flat map; the
+       two are equal for k = 92.6 · 2^z / (min(W,H) · cosφ). Returns null when
+       the flat map has no fit zoom yet (the caller keeps its own estimate).
+
+       The result is capped at the canvas's own zoom ceiling (16, the same
+       range setZoom() allows): this fallback draws World Imagery only up to
+       IMAGERY_MAX_Z = 10, so a deeper hand-off zoom would trade a small scale
+       step at the cross-fade for a blurry, over-magnified globe. */
+    function canvasFrameScale(entry, frame) {
+        var fitZoom = frame && frame.fitZoom;
+        if (!(typeof fitZoom === 'number' && isFinite(fitZoom))) return null;
+        var lat = (frame && frame.center && isFinite(frame.center[1]))
+            ? Number(frame.center[1])
+            : Number(entry && entry.lat);
+        if (!isFinite(lat)) lat = 48;
+        var cos = Math.max(0.25, Math.cos(lat * Math.PI / 180));
+        var side = Math.max(240, Math.min(G.W || 0, G.H || 0));
+        return Math.max(1.2, Math.min(16, 92.6 * Math.pow(2, fitZoom) / (side * cos)));
+    }
+
     /* ── Fly-to animation, then hand off to Leaflet ── */
-    function flyTo(entry, done) {
+    function flyTo(entry, done, frame) {
         var d3g = window.d3;
         G.flying = true;
         G.selected = entry;
         G.hovered = null;
         var rot0 = G.rot.slice(), k0 = G.k;
-        var lon1 = -entry.lng, lat1 = -entry.lat;
+        // Centre on the same box the flat map fits (the European hand-off
+        // bbox), not on the geometry centroid: for Russia those differ.
+        var target = (frame && frame.center) || [Number(entry.lng) || 14, Number(entry.lat) || 40];
+        var lon1 = -target[0], lat1 = -target[1];
         lon1 = rot0[0] + (((lon1 - rot0[0] + 540) % 360) - 180); // shortest way round
         var b = entry.bounds;
         var spanLon = b[1][0] >= b[0][0] ? b[1][0] - b[0][0] : 360 - b[0][0] + b[1][0];
         var span = Math.max(spanLon, b[1][1] - b[0][1], 0.5);
-        var k1 = Math.max(2, Math.min(9, 60 / span));
-        if (entry.iso === 'RU') k1 = 1.8;
+        var k1 = canvasFrameScale(entry, frame);
+        if (k1 == null) {
+            k1 = Math.max(2, Math.min(9, 60 / span));
+            if (entry.iso === 'RU') k1 = 1.8;
+        }
         var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
         var dur = 950;
         function stepFrame() {
@@ -1564,6 +1687,9 @@
     // A country click is the complete selection gesture. The working Leaflet
     // camera is staged immediately while the active 3D renderer flies to the
     // same country, then both surfaces hand off through one selection path.
+    // The frame (bbox + flat-map fit zoom) is computed once: it drives the 2D
+    // fit *and* the 3D camera, so the globe ends on the exact level the flat
+    // map is revealed at instead of on a zoom of its own.
     function selectCountry(iso) {
         iso = String(iso || '').toUpperCase();
         if (!NAMES[iso] || (state && state.selectingIso)) return;
@@ -1576,10 +1702,11 @@
         state.pendingIso = iso;
         G.selected = entry;
         showHint(name, true);
-        prepareFlatMapTransition(iso, bbox);
+        var frame = countryHandoffFrame(iso, bbox);
+        prepareFlatMapTransition(iso, bbox, frame);
 
         if (state.renderer === 'arcgis' && window.DetectLabArcGISGate && window.DetectLabArcGISGate.isActive()) {
-            Promise.resolve(window.DetectLabArcGISGate.goToCountry(iso)).then(function () {
+            Promise.resolve(window.DetectLabArcGISGate.goToCountry(iso, { zoom: frame.fitZoom })).then(function () {
                 if (selectionToken === state.openToken && gateVisible()) finishSelection(iso, name, bbox);
             }, function (error) {
                 console.warn('[DetectLab] Globe gate: country camera transition failed; applying the selected country anyway.', error && error.message);
@@ -1592,7 +1719,7 @@
             flyTo(entry, function () {
                 if (selectionToken === state.openToken && gateVisible()) finishSelection(iso, name, bbox);
                 G.selected = null;
-            });
+            }, frame);
             return;
         }
         finishSelection(iso, name, bbox);
@@ -1796,7 +1923,9 @@
         fitZoom: null,          // the zoom the current country view opens at
         baseMinZoom: null,      // the map's own zoom range, remembered once
         baseMaxZoom: null,
-        boundsLayer: null       // the country outline/bbox drawn on the Leaflet map
+        boundsLayer: null,      // the country outline drawn on the Leaflet map
+        boundsIso: null,        // ...and which country / geometry object it is
+        boundsFeature: null
     };
 
     var els = {};
@@ -1810,7 +1939,6 @@
         els.retryBtn = document.getElementById('globeGateRetryBtn');
         els.hint = document.getElementById('globeGateHint');
         els.closeBtn = document.getElementById('globeGateCloseBtn');
-        els.reopenBtn = document.getElementById('globeGateReopenBtn');
         els.fallbackWrap = document.getElementById('globeGateFallback');
         els.fallbackSelect = document.getElementById('globeGateFallbackSelect');
         els.fallbackBtn = document.getElementById('globeGateFallbackBtn');
@@ -2001,7 +2129,10 @@
         els.root.classList.remove('hidden', 'is-leaving', 'is-arcgis', 'is-canvas');
         els.root.setAttribute('aria-hidden', 'false');
         if (document.documentElement) document.documentElement.classList.add('globe-gate-open');
-        if (els.closeBtn) els.closeBtn.style.display = hasSelection() ? '' : 'none';
+        // The ✕ reuses the pill styling, so its visibility is set here instead
+        // of relying on the old `body.country-selected .globe-gate-reopen`
+        // rule that went away with the “Change Country” pill.
+        if (els.closeBtn) els.closeBtn.style.display = hasSelection() ? 'inline-flex' : 'none';
         if (els.fallbackWrap) els.fallbackWrap.classList.add('hidden');
         showError(false);
         showLoading(true);
@@ -2053,9 +2184,6 @@
     function wireChrome() {
         if (els.closeBtn) {
             els.closeBtn.addEventListener('click', function () { closeGate(true); });
-        }
-        if (els.reopenBtn) {
-            els.reopenBtn.addEventListener('click', function () { openGate(); });
         }
         if (els.retryBtn) {
             els.retryBtn.addEventListener('click', function () {
@@ -2118,6 +2246,12 @@
             var stored = readStoredSelection();
             if (stored) {
                 applySelection(stored.iso, stored.name, stored.bbox);
+                // A restored selection is locked straight away, and the lock no
+                // longer draws the approximate bounding box as a stand-in
+                // outline. Start the local atlas now (instead of waiting for
+                // the dock's warm-up) so the real country shape appears as soon
+                // as it can and the locked view is never marked by a rectangle.
+                prefetch();
             } else {
                 setMapControlsHidden(true);
             }
@@ -2209,6 +2343,10 @@
             disableImagery: disableImagery,
             approxBbox: approxBbox,
             listCountries: listCountries,
+            countryFitZoom: countryFitZoom,
+            countryHandoffFrame: countryHandoffFrame,
+            canvasFrameScale: canvasFrameScale,
+            bboxBounds: bboxBounds,
             prepareFlatMapTransition: prepareFlatMapTransition,
             clearFlatMapTransition: clearFlatMapTransition,
             restrictLeafletToCountry: restrictLeafletToCountry,
@@ -2220,7 +2358,8 @@
             BOUNDS_PANE_Z: BOUNDS_PANE_Z,
             LOCK_PAD: LOCK_PAD,
             LOCK_ZOOM_SLACK: LOCK_ZOOM_SLACK,
-            FIT_MAX_ZOOM: FIT_MAX_ZOOM
+            FIT_MAX_ZOOM: FIT_MAX_ZOOM,
+            FIT_PADDING: FIT_PADDING
         }
     };
 })(window, document);
