@@ -417,7 +417,9 @@
 //   the existing locked Leaflet map view.
 // v187: stage the flat Leaflet/Web-Mercator country camera underneath the
 //   ArcGIS/canvas renderer and fade the temporary 3D gate out after hand-off.
-const CACHE_NAME = 'detectlab-v187-flat-country-handoff';
+// v188: keep the APM layer opt-in on first load; installed PWAs must replace the
+//   cached shell so the unchecked control and asynchronous layer probe agree.
+const CACHE_NAME = 'detectlab-v188-apm-default-off';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
