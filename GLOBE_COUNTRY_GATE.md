@@ -125,7 +125,7 @@ and the reject → canvas-fallback path).
 
 ## PWA, network, licensing, and device constraints
 
-`sw.js` uses shell cache `detectlab-v190-no-change-country-pill`. The local
+`sw.js` uses shell cache `detectlab-v192-flat-hist-maps`. The local
 adapter, picker, CSS, translations, and country data remain in the app shell. The external
 ArcGIS SDK/theme and imagery services are **not** precached; cross-origin
 requests pass through the service worker's network path. `js.arcgis.com`,
@@ -313,7 +313,7 @@ the outline, which is the intended detail upgrade).
 
 ## Gate deployment and regression checks
 
-`sw.js` cache `v190` precaches the local ArcGIS adapter, picker, styles,
+`sw.js` cache `v192` precaches the local ArcGIS adapter, picker, styles,
 translations and the 50m atlas (the retired MapLibre globe assets are no longer
 part of the shell). The remote ArcGIS SDK,
 theme, imagery, and the two optional canvas texture images are intentionally

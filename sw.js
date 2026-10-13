@@ -427,6 +427,9 @@
 // v190: drop the “Change Country” pill that sat next to the “?” help button —
 //   the dock under the search bar switches country and “Exit view” reopens the
 //   globe — and re-version the picker, its stylesheet and the translations
+// v192: the CENAGIS / IH PAN sheets are listed flat inside the single
+//   “Historical Maps” group — the “European maps · CENAGIS / IH PAN”
+//   subcategory heading is gone (js/historical-eu-maps.js renderUi).
 // v191: third-party WMS availability guard (js/wms-health.js). The CENAGIS /
 //   IH PAN historical-map server answers GetMap with HTTP 200 and an error
 //   body instead of an image (unreadable ECW mosaics — see
@@ -434,7 +437,7 @@
 //   layer stayed silently blank. One probe per layer now gates the add,
 //   the row is marked unavailable and a notice explains the outage.
 //   behind it.
-const CACHE_NAME = 'detectlab-v191-wms-guard';
+const CACHE_NAME = 'detectlab-v192-flat-hist-maps';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -459,7 +462,7 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 const PRECACHE_URLS = [
   // European Historical Maps (CENAGIS / IH PAN)
   'js/historical-eu-maps.js?v=20261008-country-overlap',
-  'js/historical-eu-maps.js?v=20261013-wms-guard',
+  'js/historical-eu-maps.js?v=20261013-flat-hist-maps',
   'js/historical-eu-maps.js?v=20261008-country-layers-strict',
   'js/historical-eu-maps.js',
   // Host-aware market defaults for detectlab.ro and detectlab.eu.

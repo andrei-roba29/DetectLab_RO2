@@ -50,7 +50,7 @@ entirely. Now the choice *owns* the map:
   button (inside `.map-frame`), the CSS/JS tags.
 - `js/translations.js` — `country_dock_title`, `country_dock_hint`,
   `country_dock_hillshade`, `country_exit_view` (EN + RO).
-- `sw.js` — shell `v190`, precaches the dock, the local ArcGIS gate adapter,
+- `sw.js` — shell `v192`, precaches the dock, the local ArcGIS gate adapter,
   and the canvas fallback assets (not the remote ArcGIS SDK).
 - `tools/country-dock-preview.html` — dev harness: the dock on a real Leaflet
   map with Esri imagery, no auth, no rest of the app.
@@ -166,7 +166,7 @@ lock was released).
   it with the same minimal DOM stub the other suites use.
 - Versioning: bump the `?v=` query of a changed local asset in `index.html`
   **and** the matching `sw.js` precache entry together, then raise
-  `CACHE_NAME` (currently `detectlab-v190-no-change-country-pill`). The SDK/theme CDN stays
+  `CACHE_NAME` (currently `detectlab-v192-flat-hist-maps`). The SDK/theme CDN stays
   lazy and is not an app-shell precache entry.
 - Manual QA: `python3 -m http.server` at the repo root, open
   `/tools/country-dock-preview.html`; the overlay status line reports the lock,

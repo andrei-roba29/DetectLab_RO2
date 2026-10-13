@@ -41,8 +41,9 @@ layers** and keeps the selection visible on the map:
     declared by their real extent and belong to every country they span.
   - Rows **without** any attribution or bounds record (live/API layers) are
     left untouched.
-- **The CENAGIS dynamic catalog** (`js/historical-eu-maps.js
-  filterForCountry`) is curated-first: for the 19 analyzed countries the
+- **The CENAGIS dynamic catalog** (`js/historical-eu-maps.js` — `renderUi` /
+  `filterForCountry`, rendered flat in `#histEuMapsSection` without a
+  subcategory heading) is curated-first: for the 19 analyzed countries the
   `COUNTRIES_DATA` lists decide (rectangle overlap alone leaked neighbouring
   countries' sheets into the window — the exact bug this fixes). For a country
   outside that analysis (Italy, Norway…) the sheets' own extents are used, and
@@ -100,9 +101,12 @@ layers** and keeps the selection visible on the map:
 - `test-historical-eu-maps.js` — curated-first catalog + a drift guard that
   asserts `SHARED_PREMIUM_COUNTRIES` mirrors `COUNTRIES_DATA` exactly.
 - `index.html` / `sw.js` — version bumps
-  (`js/map-app.js?v=20261011-arcgis-basemap`,
-  `js/historical-eu-maps.js?v=20261008-country-layers-strict`,
-  `js/globe-country-picker.js?v=20261013-no-change-pill`), shell `v190`.
+  (`js/map-app.js?v=20261013-wms-guard`,
+  `js/historical-eu-maps.js?v=20261013-flat-hist-maps`,
+  `js/globe-country-picker.js?v=20261013-no-change-pill`), shell `v192`.
+  The CENAGIS sheets are listed **flat** in the single “Hărți istorice /
+  Historical Maps” group: there is no “European maps · CENAGIS / IH PAN”
+  subcategory heading (nor any replacement one) above them.
 
 ## Semantics
 

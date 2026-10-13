@@ -31,11 +31,11 @@ assert(guardTag !== -1, 'index.html loads the versioned WMS guard');
 assert(guardTag > indexHtml.indexOf('js/leaflet.js'), 'the guard loads after Leaflet');
 assert(guardTag < indexHtml.indexOf('js/map-app.js?v=20261013-wms-guard'),
     'the guard loads before map-app.js creates the CENAGIS layers');
-assert(guardTag < indexHtml.indexOf('js/historical-eu-maps.js?v=20261013-wms-guard'),
+assert(guardTag < indexHtml.indexOf('js/historical-eu-maps.js?v=20261013-flat-hist-maps'),
     'the guard loads before the country-map catalog wraps it');
 assert(swJs.includes('js/wms-health.js?v=20261013-wms-guard'), 'sw.js precaches the guard');
 assert(swJs.includes('js/map-app.js?v=20261013-wms-guard'), 'sw.js precaches the re-versioned map app');
-assert(swJs.includes('js/historical-eu-maps.js?v=20261013-wms-guard'), 'sw.js precaches the re-versioned catalog');
+assert(swJs.includes('js/historical-eu-maps.js?v=20261013-flat-hist-maps'), 'sw.js precaches the re-versioned catalog');
 const shellVersion = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
 assert(shellVersion >= 191, 'sw.js cache is v191 or newer so installed PWAs pick the guard up');
 console.log('  ✓ index.html / sw.js load and precache the guard in order');

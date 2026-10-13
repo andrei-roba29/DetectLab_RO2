@@ -125,7 +125,7 @@ name, so it worked, but it was wrong — the guard and the catalogue now ask
 
 ## Service worker
 
-`CACHE_NAME` is `detectlab-v191-wms-guard`; the precache list carries
+`CACHE_NAME` is `detectlab-v192-flat-hist-maps`; the precache list carries
 `js/wms-health.js?v=20261013-wms-guard`, `js/map-app.js?v=20261013-wms-guard`
-and `js/historical-eu-maps.js?v=20261013-wms-guard`, matching the `?v=` pins in
-`index.html`.
+and `js/historical-eu-maps.js?v=20261013-flat-hist-maps`, matching the `?v=`
+pins in `index.html`.
