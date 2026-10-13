@@ -6,20 +6,20 @@ Selecting a country on the globe used to be a pure hand-off: the Leaflet map
 was fitted to the country with a loose `maxBounds` and the only way back to
 another country was the “Change Country” pill. Now the choice *owns* the map:
 
-- **The view is locked to the country.** The working map uses a permanent
-  MapLibre-rendered 3D globe basemap, synchronized with Leaflet's existing
-  controls and geographic overlays. A selection never switches that globe; it
-  moves the camera to the country and pins it there — panning is clamped to the
-  country box (`maxBoundsViscosity: 1`) and the zoom floor sits just under the
-  fitted zoom, so the user cannot wander off.
+- **The view is locked to the country.** After the temporary 3D gate zooms to
+  the clicked country, the gate cross-fades into the working map's flat 2D
+  Leaflet/Web-Mercator basemap. The same World Imagery tiles are used on both
+  surfaces, so the hand-off has no unrelated basemap flash. Panning is then
+  clamped to the country box (`maxBoundsViscosity: 1`) and the zoom floor sits
+  just under the fitted zoom, so the user cannot wander off.
 - **A country dock is glued under the search bar** (inside `#mapSearchWrap`,
   so it shares the bar's anchor point and hidden/visible state). It shows the
   current 2-letter code and drops open the full list of country initials;
   hovering (or focusing) an initial prints the full country name, clicking it
   moves and re-locks the map to that country — no globe needed.
 - **A small “World hillshade” checkbox** lays the Esri World Hillshade tiles
-  (30 m terrain shading) *over* the permanent 3D globe and any selected
-  historical imagery overlay.
+  (30 m terrain shading) over the flat 2D basemap and any selected historical
+  imagery overlay.
 - **“Exit view”** appears centred in the lower part of the screen once the
   locked country view is zoomed all the way out. It releases the lock, pulls
   back to the European overview and reopens the globe, so leaving a country
@@ -38,16 +38,18 @@ another country was the “Change Country” pill. Now the choice *owns* the map
   `restrictLeafletToCountry()` and the `detectlab:country-lockchange` event.
 - `js/map-app.js` — `window.DetectLabCountryDock.attach(map)` right after the
   globe gate, `window.unfilterLayersForCountry()` (the layer-coverage dimming
-  belongs to the locked view only), and the permanent 3D globe basemap setup.
-- `js/globe-base-layer.js` plus local MapLibre GL assets — renders the Esri
-  imagery on MapLibre's globe projection while keeping Leaflet as the map
-  interaction / overlay API. The temporary country gate prefers the lazy
-  ArcGIS SceneView (`js/globe-arcgis-gate.js`) and retains the canvas fallback.
+  belongs to the locked view only), and the flat ArcGIS Web-Mercator basemap
+  stack used by the working map.
+- `js/globe-arcgis-gate.js` plus `js/globe-country-picker.js` — the temporary
+  3D selection surface and canvas fallback. Both stage the Leaflet 2D camera
+  before the gate fades away; the working map remains the source of truth after
+  the hand-off.
 - `index.html` — the dock markup (inside `#mapSearchWrap`), the exit-view
   button (inside `.map-frame`), the CSS/JS tags.
 - `js/translations.js` — `country_dock_title`, `country_dock_hint`,
   `country_dock_hillshade`, `country_exit_view` (EN + RO).
-- `sw.js` — shell `v182`, precaches the dock, the local ArcGIS gate adapter, and local 3D globe assets (not the remote SDK).
+- `sw.js` — shell `v187`, precaches the dock, the local ArcGIS gate adapter,
+  and the canvas fallback assets (not the remote ArcGIS SDK).
 - `tools/country-dock-preview.html` — dev harness: the dock on a real Leaflet
   map with Esri imagery, no auth, no rest of the app.
 - `test-country-dock.js` — the regression suite.
@@ -84,9 +86,11 @@ atlas (`ensureReady()`), takes the country's `bboxEU` — or `approxBbox(iso)`
 built from the static `APPROX_CENTER` table when the geometry is unavailable —
 and then runs the *same* path as a globe pick: `persistSelection` →
 `applySelection` (lock + `filterLayersForCountry`) → the
-`detectlab:country-selected` event. Search sources and layer filtering
-therefore follow a dock switch exactly like they follow a globe pick.
-`prefetch()` is fired after any selection so the next switch is instant.
+`detectlab:country-selected` event. A dock switch starts directly on the normal
+flat 2D working-map path; it does not reopen or animate the 3D gate. Search
+sources and layer filtering therefore follow a dock switch exactly like they
+follow a globe pick. `prefetch()` is fired after any selection so the next
+switch is instant.
 
 ### 3. The dock UI
 
@@ -151,7 +155,7 @@ lock was released).
   it with the same minimal DOM stub the other suites use.
 - Versioning: bump the `?v=` query of a changed local asset in `index.html`
   **and** the matching `sw.js` precache entry together, then raise
-  `CACHE_NAME` (currently `detectlab-v182-arcgis-gate`). The SDK/theme CDN stays
+  `CACHE_NAME` (currently `detectlab-v187-flat-country-handoff`). The SDK/theme CDN stays
   lazy and is not an app-shell precache entry.
 - Manual QA: `python3 -m http.server` at the repo root, open
   `/tools/country-dock-preview.html`; the overlay status line reports the lock,

@@ -415,7 +415,9 @@
 // v186: remove the initial country-list panel. Clicking a country on either
 //   globe renderer now immediately selects it, zooms to it, and hands off to
 //   the existing locked Leaflet map view.
-const CACHE_NAME = 'detectlab-v186-country-click';
+// v187: stage the flat Leaflet/Web-Mercator country camera underneath the
+//   ArcGIS/canvas renderer and fade the temporary 3D gate out after hand-off.
+const CACHE_NAME = 'detectlab-v187-flat-country-handoff';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1027,7 +1029,7 @@ const PRECACHE_URLS = [
   'css/country-dock.css?v=20261008',
   'js/country-dock.js?v=20261008',
   'js/country-dock.js?v=20261009-3d-globe',
-  'js/country-dock.js?v=20261010-hillshade-globe',
+  'js/country-dock.js?v=20261013-country-2d',
   'js/map-app.js?v=20261011-arcgis-basemap',
   'js/map-app.js?v=20261009-3d-globe',
   'js/map-app.js?v=20261009-lidar-globe-twin',

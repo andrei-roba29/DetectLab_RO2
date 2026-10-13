@@ -1292,8 +1292,9 @@
                              slide-down button shows the current 2-letter code
                              and drops open the full initials list (hover = full
                              name), next to the small World-hillshade overlay
-                             checkbox. The permanent 3D globe base is never
-                             switched by a country selection. js/country-dock.js. -->
+                             checkbox. Selecting a country transitions from
+                             the temporary 3D gate to the flat 2D map.
+                             js/country-dock.js. -->
                         <div class="country-dock" id="countryDock">
                             <div class="country-dock-row">
                                 <button type="button" class="country-dock-btn" id="countryDockBtn"
@@ -1304,7 +1305,7 @@
                                     <span class="country-dock-caret" aria-hidden="true">▾</span>
                                 </button>
                                 <label class="country-dock-hs" id="countryDockHillshadeWrap"
-                                       title="World Hillshade (Esri · USGS · NOAA, 30 m) — terrain shading over the permanent 3D globe">
+                                       title="World Hillshade (Esri · USGS · NOAA, 30 m) — terrain shading over the flat 2D map">
                                     <input type="checkbox" id="countryDockHillshade">
                                     <span class="t" data-key="country_dock_hillshade">World hillshade</span>
                                 </label>
@@ -1320,7 +1321,7 @@
                                 <div class="country-dock-grid" id="countryDockGrid" role="listbox"
                                      aria-label="Countries"></div>
                                 <div class="country-dock-name" id="countryDockName" aria-live="polite"></div>
-                                <p class="country-dock-hint t" data-key="country_dock_hint">Hover a code for the country name. Picking one moves and locks the map view to it — the 3D globe stays in place.</p>
+                                <p class="country-dock-hint t" data-key="country_dock_hint">Hover a code for the country name. Picking one moves and locks the flat 2D map view to it.</p>
                             </div>
                         </div>
                     </div>
@@ -4791,7 +4792,7 @@
          “Exit view” button. Loaded after the globe gate (it only talks to it
          through window.DetectLabGlobeGate) and before map-app.js, which
          attaches it to the Leaflet map. -->
-    <script src="js/country-dock.js?v=20261010-hillshade-globe"></script>
+    <script src="js/country-dock.js?v=20261013-country-2d"></script>
     <script src="js/map-app.js?v=20261011-arcgis-basemap"></script>
     <script src="js/historical-eu-maps.js?v=20261008-country-layers-strict"></script>
     <script src="js/offline-maps.js?v=20261009-3d-globe"></script>

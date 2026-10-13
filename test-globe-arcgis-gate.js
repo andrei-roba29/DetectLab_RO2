@@ -29,7 +29,7 @@ for (const asset of [adapterUrl, pickerUrl, cssUrl, translationsUrl]) {
     assert(sw.includes("'" + asset + "'"), 'sw.js precaches ' + asset);
 }
 assert(html.indexOf(adapterUrl) < html.indexOf(pickerUrl), 'local ArcGIS adapter loads before the gate API');
-assert(html.indexOf(pickerUrl) < html.indexOf('js/country-dock.js?v=20261010-hillshade-globe'), 'public gate API loads before the country dock');
+assert(html.indexOf(pickerUrl) < html.indexOf('js/country-dock.js?v=20261013-country-2d'), 'public gate API loads before the country dock');
 assert(!/https:\/\/js\.arcgis\.com/.test(html), 'the ArcGIS SDK is not eagerly included in index.html');
 assert(adapter.includes("var SDK_ROOT = 'https://js.arcgis.com/4.31/'"), 'the adapter pins ArcGIS SDK 4.31');
 assert(adapter.includes("var SDK_CSS = SDK_ROOT + 'esri/themes/dark/main.css'"), 'the ArcGIS theme is dynamically loaded');
@@ -62,6 +62,23 @@ assert(picker.includes('DetectLabArcGISGate.goToCountry(iso)') && picker.include
 assert(picker.includes('activateCanvasFallback(error)') && picker.includes('buildCanvas()') && picker.includes('startImagery()'), 'SceneView failures fall back to the existing canvas renderer');
 assert(!picker.includes('renderCountryList') && !css.includes('.globe-gate-country-panel'), 'the initial gate no longer renders a country-list panel');
 assert(css.includes('.globe-gate.is-arcgis .globe-gate-canvas') && css.includes('.globe-gate.is-canvas .globe-gate-arcgis'), 'ArcGIS and canvas surfaces can be switched independently');
+
+// The selected-country view is deliberately flat: stage the Leaflet camera
+// before either 3D renderer is removed, and keep the renderer present during
+// the fade so ArcGIS and canvas selections share the same hand-off contract.
+assert(picker.includes('function prepareFlatMapTransition(iso, bbox)'), 'selection stages a flat Leaflet transition');
+assert(picker.includes("window.setArcgisBasemap('imagery')"), 'the staged map uses the same World Imagery basemap');
+assert(picker.includes('duration: 0.85') && picker.includes('easeLinearity: 0.25'), 'the staged Leaflet fit is animated');
+assert(picker.includes('state.mapTransition') && picker.includes('state.mapTransition.iso === iso'), 'applySelection reuses the staged fit instead of moving twice');
+const stageAt = picker.indexOf('prepareFlatMapTransition(iso, bbox);');
+const arcgisCameraAt = picker.indexOf('DetectLabArcGISGate.goToCountry(iso)');
+const canvasCameraAt = picker.indexOf('flyTo(entry, function () {');
+assert(stageAt !== -1 && stageAt < arcgisCameraAt && stageAt < canvasCameraAt,
+    'both ArcGIS and canvas camera paths start after the flat map is staged');
+assert(picker.includes('var GATE_LEAVE_MS = 720'), 'the 3D gate fade has enough overlap with the flat-map camera');
+assert(picker.includes('gateCloseTimer = window.setTimeout(function () {\n            if (window.DetectLabArcGISGate'), 'ArcGIS cleanup is delayed until after the fade');
+assert(!picker.includes('DetectLabGlobeBase'), 'the final bounds overlay has no retired globe-camera dependency');
+assert(/\.globe-gate\s*\{[^}]*transition:\s*opacity\s+\.72s/.test(css), 'the gate opacity transition is synchronized with the hand-off');
 
 // Regression: #globeGateArcGIS is the SceneView's own container, so the SDK's
 // `.esri-view` rule (display: flex) must not be overridden — `display: block`

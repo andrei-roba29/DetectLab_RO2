@@ -1,8 +1,9 @@
 /* ══════════════════════════════════════════════════════════════
    DetectLab — country gate (ArcGIS SceneView + canvas fallback)
    The preferred lazy-loaded SceneView and the existing no-WebGL canvas
-   share the same country data, single-country selection UI, and map lock.
-   The dark background matches the working map's globe. See
+   share the same country data, direct-click selection flow, and map lock.
+   The dark background keeps the temporary gate visually consistent with the
+   working map during hand-off. See
    GLOBE_COUNTRY_GATE.md.
    ══════════════════════════════════════════════════════════════ */
 
@@ -17,7 +18,9 @@
     overflow: hidden;
     background: #030916;
     opacity: 1;
-    transition: opacity .45s ease;
+    /* The flat Leaflet map is prepared underneath before this fades away. */
+    transition: opacity .72s cubic-bezier(.22, .61, .36, 1);
+    will-change: opacity;
 }
 
 .globe-gate.hidden {

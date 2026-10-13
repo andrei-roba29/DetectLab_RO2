@@ -49,26 +49,16 @@ layers** and keeps the selection visible on the map:
   only a *substantial* overlap counts (≥ 5% of the country's box **or** ≥ 5%
   of the sheet's box) — a bbox graze is not "a map of this country".
 - **The bounds of the selected country stay visible on the map.** The globe
-  gate draws them for the whole locked view: the real country outline (the
-  gate's geometry) once the atlas is loaded, the bbox rectangle until then (a
-  selection restored from `localStorage` starts with the rectangle and upgrades
-  as soon as `ensureReady()` / the 10 m shapefile refinement delivers geometry).
-  The outline and its highlight fill are one path. While the 3D globe basemap
-  is live on the same map (`window._detectlabGlobeBaseLayer`), that path is
-  **projected with the globe's own camera** (`DetectLabGlobeBase
-  .createProjectedFeature` for the outline, `createProjectedPolygon` over the
-  bbox corners for the rectangle), so it stays on the imagery when zoomed out
-  and while the globe moves. Without a live globe, Leaflet places it as before
-  (`L.geoJSON` / `L.rectangle`). The basemap itself is unchanged. The overlay
-  is non-interactive, sits in its own pane `pane_country_bounds` at z-index
-  **688** (above every data pane — LIDAR 610, historical maps ≤ 652 — under
-  tracks 690 / measure 700), is replaced on every new selection and removed on
-  unlock (“Exit view”, `reset()`).
-- **Scope of the projection.** Only the country-shaped vector overlay (the
-  outline and highlight) is projected onto the globe. The country-attributed
-  Leaflet *raster* layers (LIDAR, WMS/WMTS, UAT tiles, hillshade, Copernicus
-  VHR) keep Leaflet's Web Mercator placement, so they still differ from the
-  globe by a few pixels away from the view centre.
+  gate draws them while the selection surface is visible: the real country
+  outline (the gate's geometry) once the atlas is loaded, and the bbox rectangle
+  until then. A selection restored from `localStorage` starts with the rectangle
+  and upgrades as soon as `ensureReady()` / the 10 m shapefile refinement
+  delivers geometry. Once the hand-off completes, Leaflet/Web Mercator owns the
+  outline and its highlight fill, so the overlay stays aligned with every
+  working-map raster and vector layer. It is non-interactive, sits in its own
+  pane `pane_country_bounds` at z-index **688** (above every data pane — LIDAR
+  610, historical maps ≤ 652 — under tracks 690 / measure 700), is replaced on
+  every new selection and removed on unlock (“Exit view”, `reset()`).
 
 ## Files
 
@@ -91,12 +81,8 @@ layers** and keeps the selection visible on the map:
 - `js/globe-country-picker.js` — `showCountryBoundsLayer` /
   `removeCountryBoundsLayer` / `refreshCountryBoundsLayer`, wired into
   `restrictLeafletToCountry`, `unlockCountryView`, `ensureReady` and
-  `refineFromShapefile`; `state.boundsLayer` tracks the overlay. With a live
-  globe it builds the projected outline (see above).
-- `js/globe-base-layer.js` — `DetectLabGlobeBase.createProjectedPolygon` /
-  `createProjectedFeature`: a Leaflet polygon whose vertices come from the
-  globe camera (`gl.project`), re-projected on every pan, resize and zoom end.
-  Fall back to Leaflet placement when no globe is on the map.
+  `refineFromShapefile`; `state.boundsLayer` tracks the overlay and always uses
+  Leaflet/Web-Mercator placement in the working view.
 - `tools/country-dock-preview.html` — the dev harness implements the same
   contract (national rows strict by ISO, `histEuRow` pan-European by coverage).
 - `test-country-layer-filter.js` — regression suite: Italy must not see
@@ -105,8 +91,8 @@ layers** and keeps the selection visible on the map:
 - `test-historical-eu-maps.js` — curated-first catalog + a drift guard that
   asserts `SHARED_PREMIUM_COUNTRIES` mirrors `COUNTRIES_DATA` exactly.
 - `index.html` / `sw.js` — version bumps
-  (`js/map-app.js?v=20261008-country-layers-strict`,
-  `js/historical-eu-maps.js?v=20261008-country-layers-strict`), shell `v172`.
+  (`js/map-app.js?v=20261011-arcgis-basemap`,
+  `js/historical-eu-maps.js?v=20261008-country-layers-strict`), shell `v187`.
 
 ## Semantics
 

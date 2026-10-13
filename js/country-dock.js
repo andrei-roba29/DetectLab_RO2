@@ -10,9 +10,9 @@
        the full country name, clicking it moves the locked map view
        to that country;
      • a small “World hillshade” checkbox that lays the Esri World
-       Hillshade tiles (30 m terrain shading) over the permanent 3D
-       globe base (and any historical imagery overlay) — a selection
-       never switches the globe, it only overlays the relief;
+       Hillshade tiles (30 m terrain shading) over the flat 2D
+       basemap (and any historical imagery overlay) — a selection
+       keeps the working map in 2D and only overlays the relief;
      • the “Exit view” button, which appears in the middle of the
        lower edge once the locked country view is zoomed all the way
        out. Exiting releases the lock, pulls back to the European
@@ -255,13 +255,8 @@
             console.warn('[DetectLab] Country dock: world hillshade layer unavailable', e);
             return null;
         }
-        // On the 3D globe the hillshade is a globe twin like the other raster
-        // overlays (js/globe-base-layer.js). A layer that does not convert exactly
-        // keeps Leaflet's own tiles, so this changes nothing when there is no globe.
-        var globeBase = window.DetectLabGlobeBase;
-        if (globeBase && typeof globeBase.attachTileTwin === 'function') {
-            try { globeBase.attachTileTwin(state.hillshadeLayer); } catch (e) { /* Leaflet tiles stay */ }
-        }
+        // The working basemap is flat Leaflet/Web Mercator; the Leaflet layer
+        // remains the single source of truth for this overlay.
         return state.hillshadeLayer;
     }
 
@@ -290,12 +285,12 @@
         if (typeof window.showLayerInfo !== 'function') return;
         var lang = (typeof window._currentLang === 'function') ? window._currentLang() : 'ro';
         var description = (lang === 'en')
-            ? 'Esri World Hillshade (30 m) is drawn over the permanent 3D globe base and any ' +
-              'selected historical imagery, so terrain stays readable without replacing the globe. ' +
-              'Toggle it with the small checkbox next to the country button.'
-            : 'Esri World Hillshade (30 m) se suprapune peste globul 3D permanent și peste imaginile ' +
-              'istorice selectate, pentru a evidenția relieful fără să înlocuiască globul. Se comută ' +
-              'din bifa mică de lângă butonul de țară.';
+            ? 'Esri World Hillshade (30 m) is drawn over the flat 2D basemap and any selected ' +
+              'historical imagery, keeping terrain readable during the country view. Toggle it ' +
+              'with the small checkbox next to the country button.'
+            : 'Esri World Hillshade (30 m) se suprapune peste harta 2D și peste imaginile istorice ' +
+              'selectate, pentru a evidenția relieful în vizualizarea țării. Se comută din bifa mică ' +
+              'de lângă butonul de țară.';
         window.showLayerInfo(
             (lang === 'en') ? 'World Hillshade' : 'Relief umbrit (World Hillshade)',
             HS_ATTRIBUTION + ' — 30 m terrain shading (Esri, USGS, NOAA)',

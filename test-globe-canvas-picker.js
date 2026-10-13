@@ -20,8 +20,8 @@ assert(indexHtml.includes('id="globeGateFallbackSelect"'), 'index.html keeps the
 assert(indexHtml.includes('js/globe-country-picker.js?v=20261013-country-click'), 'index.html loads the re-versioned picker');
 assert(indexHtml.includes('css/globe-country-picker.css?v=20261013-country-click'), 'index.html loads the re-versioned css');
 assert(indexHtml.indexOf('js/globe-country-picker.js?v=20261013-country-click') <
-       indexHtml.indexOf('js/country-dock.js?v=20261010-hillshade-globe') &&
-       indexHtml.indexOf('js/country-dock.js?v=20261010-hillshade-globe') <
+       indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d') &&
+       indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d') <
        indexHtml.indexOf('js/map-app.js?v=20261011-arcgis-basemap'),
     'gate, country dock and map-app load in the documented order');
 assert(!indexHtml.includes('maplibre-gl') && !indexHtml.includes('globe-base-layer'),
