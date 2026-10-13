@@ -32,7 +32,7 @@ assert(!source.includes('cenagis-catalog-title'), 'the catalog renderer builds n
     assert(!indexHtml.includes('id="' + id + '"'), 'obsolete separate group #' + id + ' is removed');
 });
 assert(indexHtml.includes('js/historical-eu-maps.js?v=20261013-flat-hist-maps'), 'versioned catalog is loaded');
-assert(indexHtml.includes('js/map-app.js?v=20261013-wms-guard'), 'versioned fallback map app is loaded');
+assert(indexHtml.includes('js/map-app.js?v=20261013-fr-lidar'), 'versioned fallback map app is loaded');
 assert(indexHtml.includes('js/subscriptions.js?v=20261008-premium-roman-guard'), 'premium guard is versioned');
 assert(subscriptions.includes('toggleCenagisLayer'), 'dynamic CENAGIS toggle is Premium-guarded');
 assert(subscriptions.includes("'toggleRomanDareCategories'"), 'DARE All/None is Premium-guarded');
@@ -40,7 +40,7 @@ assert(subscriptions.includes("'toggleRomanSub'"), 'Roman sublayers are Premium-
 console.log('  ✓ one premium parent group, versioned scripts and entitlement guards verified');
 
 assert(swJs.includes('js/historical-eu-maps.js?v=20261013-flat-hist-maps'), 'service worker precaches the versioned catalog');
-assert(swJs.includes('js/map-app.js?v=20261013-wms-guard'), 'service worker precaches the current versioned map app');
+assert(swJs.includes('js/map-app.js?v=20261013-fr-lidar'), 'service worker precaches the current versioned map app');
 assert(swJs.includes('js/subscriptions.js?v=20261008-premium-roman-guard'), 'service worker precaches the versioned subscription guard');
 const shellVersion = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
 assert(shellVersion >= 171, 'service-worker cache bumped for the merged catalog (got v' + shellVersion + ')');
@@ -103,8 +103,17 @@ const mockWindow = {
         tileLayer: { wms: () => ({ setOpacity() {}, addTo() {} }) }
     }
 };
+/* The catalogue itself now lives in js/layer-registry.js (shared with the 3D
+ * terrain view and the tile proxy), so the sandbox loads it first — the same
+ * order index.html uses. */
+const registrySource = read('js/layer-registry.js');
 const sandbox = { window: mockWindow, document, L: mockWindow.L, console, alert() {} };
 vm.createContext(sandbox);
+vm.runInContext(registrySource, sandbox);
+assert(mockWindow.DetectLabLayers && typeof mockWindow.DetectLabLayers.cenagisCatalog === 'function',
+    'the shared layer registry is loaded before the CENAGIS catalogue');
+assert(Object.keys(mockWindow.DetectLabLayers.cenagisCatalog()).length === 45,
+    'the registry still carries all 45 CENAGIS sheets');
 vm.runInContext(source, sandbox);
 const api = mockWindow.DetectLabEuMaps;
 assert(api, 'DetectLabEuMaps API is exported');

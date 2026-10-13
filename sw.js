@@ -437,7 +437,14 @@
 //   layer stayed silently blank. One probe per layer now gates the add,
 //   the row is marked unavailable and a notice explains the outage.
 //   behind it.
-const CACHE_NAME = 'detectlab-v192-flat-hist-maps';
+// v193: 3D terrain view (2D ⇄ 3D). js/layer-registry.js is the single shared
+//   definition of every raster layer (historical WMS sheets, R2/Supabase tile
+//   pyramids, LiDAR relief, CORONA, VEG-FP, base imagery); js/map3d-terrain.js
+//   drapes the active ones over a DEM with MapLibre GL, which is itself
+//   downloaded from js/maplibre-gl.js the first time 3D is opened. The 2D map
+//   is untouched — it now builds the same CENAGIS/premium/VHR layers from the
+//   registry instead of repeating their URLs.
+const CACHE_NAME = 'detectlab-v194-3d-lidar';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -460,6 +467,17 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 //   shared CENAGIS sheets follow the curated coverage lists.
 // ── Static assets to pre-cache on install ──
 const PRECACHE_URLS = [
+  // 3D terrain view (2D ⇄ 3D) — shared layer registry + MapLibre GL viewer.
+  // js/maplibre-gl.js is precached as well: opening 3D on a cold PWA offline
+  // must not depend on the network.
+  'js/layer-registry.js?v=20261013-3d-lidar',
+  'js/layer-registry.js',
+  'js/map3d-terrain.js?v=20261013-3d-lidar',
+  'js/map3d-terrain.js',
+  'js/maplibre-gl.js?v=20261013-3d-terrain',
+  'js/maplibre-gl.js',
+  'css/maplibre-gl.css?v=20261013-3d-terrain',
+  'css/map3d-terrain.css?v=20261013-3d-position',
   // European Historical Maps (CENAGIS / IH PAN)
   'js/historical-eu-maps.js?v=20261008-country-overlap',
   'js/historical-eu-maps.js?v=20261013-flat-hist-maps',
@@ -1053,7 +1071,7 @@ const PRECACHE_URLS = [
   'js/country-dock.js?v=20261009-3d-globe',
   'js/country-dock.js?v=20261013-country-2d',
   'js/map-app.js?v=20261011-arcgis-basemap',
-  'js/map-app.js?v=20261013-wms-guard',
+  'js/map-app.js?v=20261013-fr-lidar',
   'js/map-app.js?v=20261009-3d-globe',
   'js/map-app.js?v=20261009-lidar-globe-twin',
   'js/map-app.js?v=20261010-lidar-zoom-gate',

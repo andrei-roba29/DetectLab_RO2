@@ -52,6 +52,21 @@
   to = "/.netlify/functions/se-hojdmodell"
   status = 200
 
+# ── 3D TERRAIN · same-origin tile proxy for the MapLibre GL view ───────────
+# MapLibre loads every raster tile with crossOrigin="anonymous", so a layer
+# whose server sends no Access-Control-Allow-Origin cannot be draped over the
+# relief at all — even when the very same layer renders fine as a plain <img>
+# in the 2D Leaflet map (Copernicus VHR "discomap", CORONA GeoWebCache, the
+# two EPSG:2180 CENAGIS sheets). This route re-serves those tiles from the
+# same origin and re-projects the tile bbox for the layers that cannot answer
+# Web-Mercator. The allow-list is the shared registry (js/layer-registry.js).
+# See netlify/functions/map3d-tile.mjs, netlify/lib/map3d-tile.mjs and
+# MAP_3D_TERRAIN.md.
+[[redirects]]
+  from = "/api/map3d/tile"
+  to = "/.netlify/functions/map3d-tile"
+  status = 200
+
 # ── DENMARK · Dataforsyningen DHM skyggekort WMTS tile proxy ───────────────
 # api.dataforsyningen.dk refuses every imagery request without a token, and
 # that token is account-wide (no documented domain/IP restriction), so it

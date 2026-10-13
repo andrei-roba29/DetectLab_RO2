@@ -31,19 +31,27 @@ const subscriptions = read('js/subscriptions.js');
 const translations = read('js/translations.js');
 const html = read('index.html');
 
+/* The two XYZ endpoints are defined ONCE in the shared layer registry
+ * (js/layer-registry.js, entries premium.transylvania-1859 / premium.galicia-1855)
+ * — the 2D map, the 3D terrain view and the tile proxy all read them from
+ * there. See MAP_3D_TERRAIN.md. */
+const registry = require('./js/layer-registry.js');
+
 console.log('[Test] Premium historical maps — Transilvania 1859 & Galiția 1855 (ArcGIS tiles)...');
 
 // ── 1. Layer sources (Tiled Map Services, org t2AVhHhEnEvHcPF6) ─────
 assert.match(
-    mapApp,
+    registry.get('premium.transylvania-1859').url,
     /tiles\.arcgis\.com\/tiles\/t2AVhHhEnEvHcPF6\/arcgis\/rest\/services\/Siebenburgen_1859\/MapServer\/tile\/\{z\}\/\{y\}\/\{x\}/,
     'Transylvania 1859 must use the ArcGIS Siebenburgen_1859 MapServer XYZ tile endpoint ({z}/{row}/{col})'
 );
 assert.match(
-    mapApp,
+    registry.get('premium.galicia-1855').url,
     /tiles\.arcgis\.com\/tiles\/t2AVhHhEnEvHcPF6\/arcgis\/rest\/services\/Kummerer_1855\/MapServer\/tile\/\{z\}\/\{y\}\/\{x\}/,
     'Galicia 1855 must use the ArcGIS Kummerer_1855 MapServer XYZ tile endpoint ({z}/{row}/{col})'
 );
+assert.match(mapApp, /DL\.url2d\('premium\.transylvania-1859'\)/, 'map-app.js builds Transylvania from the registry');
+assert.match(mapApp, /DL\.url2d\('premium\.galicia-1855'\)/, 'map-app.js builds Galicia from the registry');
 
 // Native zoom ranges match the service LODs (Siebenburgen 7-14, Kummerer 6-14).
 const transylvaniaBlock = mapApp.slice(mapApp.indexOf('_transylvania1859MapLayer = L.tileLayer'), mapApp.indexOf('window.toggleTransylvania1859Map'));
@@ -122,10 +130,16 @@ assert.ok(subPanel.includes(`showLayerInfo('Hartă administrativă a Galiției �
 
 // The ⓘ popup, the Leaflet attribution and the offline-maps panel all repeat
 // the digitization credit and the bukowina1856.eu source.
-[transylvaniaBlock, galiciaBlock].forEach((block, i) => {
-    const which = i === 0 ? 'Transylvania' : 'Galicia';
-    assert.ok(block.includes(DIGITIZATION_CREDIT), which + ' Leaflet attribution credits the USV digitization');
-    assert.ok(block.includes('bukowina1856.eu'), which + ' Leaflet attribution names bukowina1856.eu as the source');
+/* The credit line is DEFINED in the shared registry entry and reaches the 2D
+ * layer through DL.tile2dOptions() (so the 3D view shows the very same
+ * attribution). Asserting it here keeps every consumer honest. */
+[['premium.transylvania-1859', 'Transylvania', transylvaniaBlock],
+ ['premium.galicia-1855', 'Galicia', galiciaBlock]].forEach(([id, which, block]) => {
+    const attribution = registry.get(id).attribution;
+    assert.ok(attribution.includes(DIGITIZATION_CREDIT), which + ' Leaflet attribution credits the USV digitization');
+    assert.ok(attribution.includes('bukowina1856.eu'), which + ' Leaflet attribution names bukowina1856.eu as the source');
+    assert.match(block, new RegExp("DL\\.tile2dOptions\\('" + id.replace('.', '\\.') + "'"),
+        which + ' 2D layer takes its options (incl. the credit) from the registry');
 });
 const offlineMaps = read('js/offline-maps.js');
 for (const id of ['transylvania1859', 'galicia1855']) {

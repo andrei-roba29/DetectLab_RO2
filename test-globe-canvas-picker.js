@@ -22,10 +22,15 @@ assert(indexHtml.includes('css/globe-country-picker.css?v=20261013-no-change-pil
 assert(indexHtml.indexOf('js/globe-country-picker.js?v=20261013-no-change-pill') <
        indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d') &&
        indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d') <
-       indexHtml.indexOf('js/map-app.js?v=20261013-wms-guard'),
+       indexHtml.indexOf('js/map-app.js?v=20261013-fr-lidar'),
     'gate, country dock and map-app load in the documented order');
-assert(!indexHtml.includes('maplibre-gl') && !indexHtml.includes('globe-base-layer'),
+/* The retired MapLibre globe BASEMAP stays gone; MapLibre GL is now loaded on
+ * purpose as the separate 3D terrain viewer (js/map3d-terrain.js + the shared
+ * registry js/layer-registry.js — see MAP_3D_TERRAIN.md). */
+assert(!indexHtml.includes('globe-base-layer') && !indexHtml.includes('leaflet-maplibre-gl'),
     'the retired MapLibre globe basemap is not loaded by the shell');
+assert(indexHtml.includes('js/map3d-terrain.js?v=20261013-3d-lidar'),
+    'the 3D terrain viewer is loaded instead');
 console.log('  ✓ index.html keeps the canvas fallback and the gate/dock load order');
 
 // ── 2. Local assets exist ──
@@ -42,7 +47,7 @@ const swJs = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8');
  'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
  'js/d3.min.js?v=7.9.0', 'js/topojson-client.min.js?v=3.1.0',
  'data/countries-50m.json?v=20261008',
- 'js/map-app.js?v=20261013-wms-guard'].forEach(function (p) {
+ 'js/map-app.js?v=20261013-fr-lidar'].forEach(function (p) {
     assert(swJs.includes("'" + p + "'"), 'sw.js precaches ' + p);
 });
 const shellVersion = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);

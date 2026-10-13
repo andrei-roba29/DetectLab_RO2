@@ -34,8 +34,14 @@ assert.match(index, /<section id="map-section">/, 'the map section carries the D
 assert.doesNotMatch(index, /class="map-frame atlas-view"/, 'the map frame is not the atlas view');
 assert.doesNotMatch(styles, /atlas-primary|atlas-view|legacy-map-tab|atlas-mode-floating-toggle/,
     'no ArcGIS-primary CSS overrides remain in styles.css');
-assert.doesNotMatch(index, /maplibre-gl|leaflet-maplibre-gl|globe-base-layer/,
+/* The RETIRED MapLibre *globe basemap* must stay gone. MapLibre GL is loaded
+ * again — deliberately — as the separate 3D terrain viewer (2D ⇄ 3D), which
+ * drapes the historical layers over a DEM; see MAP_3D_TERRAIN.md. */
+assert.doesNotMatch(index, /leaflet-maplibre-gl|globe-base-layer/,
     'the retired MapLibre globe basemap is not loaded by the shell');
+assert(index.includes('js/map3d-terrain.js?v=20261013-3d-lidar') &&
+       index.includes('js/layer-registry.js?v=20261013-3d-lidar'),
+    'the 3D terrain viewer and its shared layer registry are loaded');
 
 /* ── 2. The original map tabs and controls are restored and visible ── */
 assert.match(index, /<button class="map-tab active t" data-key="tab_free" onclick="switchTab\(this,'free'\)">/,
@@ -67,7 +73,7 @@ const order = [
     'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
     'js/globe-country-picker.js?v=20261013-no-change-pill',
     'js/country-dock.js?v=20261013-country-2d',
-    'js/map-app.js?v=20261013-wms-guard',
+    'js/map-app.js?v=20261013-fr-lidar',
     'js/offline-maps.js?v=20261009-3d-globe'
 ];
 order.forEach((asset) => assert(index.includes(asset), 'index.html loads ' + asset));
@@ -131,12 +137,15 @@ assert(cacheVersion >= 187, 'the PWA shell version was bumped to v187 for the fl
   'js/globe-country-picker.js?v=20261013-no-change-pill',
   'css/country-dock.css?v=20261008',
   'js/country-dock.js?v=20261013-country-2d',
-  'js/map-app.js?v=20261013-wms-guard',
+  'js/map-app.js?v=20261013-fr-lidar',
   'js/offline-maps.js?v=20261009-3d-globe',
   'js/translations.js?v=20261013-no-change-pill',
   'data/countries-50m.json'
 ].forEach((asset) => assert(sw.includes("'" + asset + "'"), 'PWA precaches ' + asset));
-assert.doesNotMatch(sw, /'js\/(?:maplibre-gl|leaflet-maplibre-gl|globe-base-layer)\.js/, 'PWA does not precache the retired globe modules');
+assert.doesNotMatch(sw, /'js\/(?:leaflet-maplibre-gl|globe-base-layer)\.js/, 'PWA does not precache the retired globe modules');
+assert(sw.includes("'js/maplibre-gl.js?v=20261013-3d-terrain'") &&
+       sw.includes("'js/map3d-terrain.js?v=20261013-3d-lidar'"),
+    'PWA precaches the vendored 3D SDK and the terrain viewer');
 
 /* ── 8. Restored files exist ── */
 [
