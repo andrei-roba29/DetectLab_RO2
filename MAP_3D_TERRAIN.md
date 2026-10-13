@@ -297,7 +297,61 @@ never from the layer provider — a WMS only ever contributes flat imagery.
    module name; in the browser and in the proxy they are evaluated, so
    `/api/map3d/status` and `node test-map3d-terrain.js` show **91/91 draped**.
 
-## 6. Performance notes (desktop and narrow mobile)
+## 6. Mobile — WebGL, why 3D used to snap straight back to 2D, and what changed
+
+**Symptom (iPhone Safari, mobile browser *and* installed PWA):** tapping **3D** made a
+dark rectangle flash once and the app went straight back to the 2D map, with no error
+anywhere. Desktop was unaffected.
+
+**Root cause.** MapLibre GL 5 acquires its WebGL context *inside the constructor* and
+throws synchronously when it cannot:
+
+```js
+gl = canvas.getContext("webgl2", attrs) || canvas.getContext("webgl", attrs);
+if (!gl) throw new Error("Failed to initialize WebGL");   // ← vendored js/maplibre-gl.js
+```
+
+On iOS Safari that happens on real hardware. The context was requested at the full
+`devicePixelRatio` (3 on a Face-ID iPhone → ~1170 × 2532 ≈ 3 Mpx) with
+`powerPreference: 'high-performance'`, after the page already holds every Leaflet tile
+image — WebKit refuses the allocation and returns `null`. A desktop GPU never reaches that
+ceiling, which is why the same build worked on a laptop.
+
+**Why it looked silent.** That throw landed in `open()`'s `catch`, which removed
+`body.is-3d`. That class is what makes `#map3d-surface` display at all
+(`#map3d-surface { display: none }` without it) — and the veil carrying the error message
+lives *inside* the surface. So the failure path hid the very message it was trying to show.
+The user saw a flash; the console had the reason.
+
+**What changed** (`js/map3d-terrain.js`, `css/map3d-terrain.css`, `js/layer-registry.js`):
+
+| # | Change | Why |
+| --- | --- | --- |
+| 1 | `deviceProfile()` → the phone's `pixelRatio`, `maxCanvasSize` and `canvasContextAttributes` are passed **into** `new maplibregl.Map()` | `setPixelRatio(1)` *after* construction could only resize a context that had already been allocated at ×3 — by which point WebKit had already said no |
+| 2 | Phones: `pixelRatio: 1`, canvas ceiling 2048², no MSAA, `powerPreference: 'low-power'`, tile cache 64 instead of 320 | 320 decoded tiles is ~80 MB of texture on top of the framebuffers; 4× MSAA quadruples the colour buffer |
+| 3 | `webglProbe()` runs before the 1 MB SDK download, and releases its context (`WEBGL_lose_context`) | A device that cannot do 3D gets an explanation instead of a flash — and the probe does not itself eat one of WebKit's handful of contexts |
+| 4 | A refused context is retried **once in safe mode**: `pixelRatio` 1, canvas 1024², cache 32, no stencil, no sky, no hillshade — **DEM kept** | The relief is the reason 3D exists; everything that is decoration, not map, is shed first |
+| 5 | `fail3D()` keeps `body.is-3d`, records `state.lastError`, and shows **Try again** + **Back to 2D** (44 px touch targets, scrollable detail) | The message can no longer hide itself; the exact WebGL reason is quotable in a bug report |
+| 6 | `webglcontextlost` / `webglcontextrestored` are handled | iOS reclaims the GPU context on backgrounding or memory pressure; MapLibre then painted a black canvas with no visible reason |
+| 7 | Phones get a 45 s SDK timeout instead of 15 s | 1 MB of JS on cellular; a timeout is indistinguishable from a crash |
+
+Desktop is unchanged except that antialiasing now actually applies — MapLibre 5 reads
+`antialias` under `canvasContextAttributes`, so the old top-level `antialias: true` was
+silently ignored.
+
+**Diagnosing a device that still cannot open 3D** (console):
+
+```js
+DetectLabMap3D.status().webgl        // { webgl2, webgl, error }
+DetectLabMap3D.status().deviceProfile
+DetectLabMap3D.getLastError()        // the exact message, e.g. "Failed to initialize WebGL"
+```
+
+Regression suite: `node test-map3d-mobile.js` (9 groups — profile, constructor options,
+safe-mode retry, visible failures, touch targets, probe, context loss, phone timeouts, PWA
+cache).
+
+## 7. Performance notes (desktop and narrow mobile)
 
 * Nothing but the registry (~107 kB) and the viewer (~60 kB) is parsed with the page;
   **MapLibre GL (1.0 MB) and any tile are only fetched when 3D is opened**.
@@ -309,9 +363,10 @@ never from the layer provider — a WMS only ever contributes flat imagery.
   `raster` source with `raster-fade-duration` set from the registry config.
 * On narrow viewports the MapLibre navigation/terrain controls are hidden
   (`@media (max-width: 720px)`), the control bar moves under the search bar and keeps its
-  own scroll, the device pixel ratio is capped and the DEM zoom ceiling is lowered; the
-  3D button stays reachable bottom-centre. Terrain + hillshade at a 3× exaggeration is the
-  expensive combination on old phones — prefer 1.0–1.5× there.
+  own scroll, the device pixel ratio is capped *in the constructor* and the DEM zoom
+  ceiling is lowered; the 3D button stays reachable bottom-centre. Terrain + hillshade at
+  a 3× exaggeration is the expensive combination on old phones — prefer 1.0–1.5× there.
+  See §6 for the phone budget (pixel ratio, canvas ceiling, tile cache, MSAA).
 * Per-tile layers (`dl3d://`) cost one extra URL build per tile in the browser — a
   function call, no extra request. Through the proxy they are one hop like any other
   layer, with the same in-memory + CDN caching.
@@ -321,8 +376,10 @@ never from the layer provider — a WMS only ever contributes flat imagery.
   later enable a CORS header on a provider, flip its `cors` field in the registry to
   `'yes'` and its tiles go direct.
 
-## 7. Verification performed / how to verify
+## 8. Verification performed / how to verify
 
+* `node test-map3d-mobile.js` — the phone/WebGL path: device profile, constructor options,
+  safe-mode retry, failures that stay visible, touch targets, the context-loss watch.
 * `node test-map3d-terrain.js` — wiring, registry integrity, “defined once” guards, a
   headless boot of the viewer (style, terrain, sky, status), the proxy's URL builder,
   validator, re-projection and blank-tile contract, **the per-tile route for all nine
@@ -338,7 +395,7 @@ never from the layer provider — a WMS only ever contributes flat imagery.
   for CORS/4xx/5xx and confirm the layer list at the top of the bar marks it **on**. A
   host that fails appears as `— switching to the proxy` in the console and then recovers.
 
-## 8. Adding a new layer so it appears in 2D **and** 3D
+## 9. Adding a new layer so it appears in 2D **and** 3D
 
 1. Add **one entry** to `js/layer-registry.js` (the panel group order, the 2D pane
    z-index and – for a WMS – the service facts):

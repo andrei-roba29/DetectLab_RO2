@@ -444,7 +444,15 @@
 //   downloaded from js/maplibre-gl.js the first time 3D is opened. The 2D map
 //   is untouched — it now builds the same CENAGIS/premium/VHR layers from the
 //   registry instead of repeating their URLs.
-const CACHE_NAME = 'detectlab-v195-3d-mirror';
+// v196: 3D works on phones. MapLibre creates its WebGL context inside the
+//   constructor and throws synchronously when iOS Safari refuses it (the
+//   context used to be requested at the full devicePixelRatio, 3 on an
+//   iPhone). The viewer now asks for a small, low-power context from the
+//   first call, retries once in a stripped-down safe mode, keeps the error
+//   on screen when it still fails (it used to remove body.is-3d, hiding the
+//   very surface that carried the message) and recovers from a lost context.
+//   Cache bumped so installed PWAs pick up the new viewer + skin.
+const CACHE_NAME = 'detectlab-v196-3d-mobile';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -470,15 +478,19 @@ const PRECACHE_URLS = [
   // 3D terrain view (2D ⇄ 3D) — shared layer registry + MapLibre GL viewer.
   // js/maplibre-gl.js is precached as well: opening 3D on a cold PWA offline
   // must not depend on the network.
+  'js/layer-registry.js?v=20261013-3d-mobile',
   'js/layer-registry.js?v=20261013-3d-mirror',
   'js/layer-registry.js',
+  'js/map3d-mirror.js?v=20261013-3d-mobile',
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
+  'js/map3d-terrain.js?v=20261013-3d-mobile',
   'js/map3d-terrain.js?v=20261013-3d-mirror',
   'js/map3d-terrain.js',
   'js/maplibre-gl.js?v=20261013-3d-terrain',
   'js/maplibre-gl.js',
   'css/maplibre-gl.css?v=20261013-3d-terrain',
+  'css/map3d-terrain.css?v=20261013-3d-mobile',
   'css/map3d-terrain.css?v=20261013-3d-mirror',
   // European Historical Maps (CENAGIS / IH PAN)
   'js/historical-eu-maps.js?v=20261008-country-overlap',

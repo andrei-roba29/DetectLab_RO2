@@ -82,8 +82,31 @@ body.is-pwa.is-3d #map3d-surface {
 @keyframes map3d-spin { to { transform: rotate(360deg); } }
 
 #map3d-veil .m3d-veil-title { font-weight: 600; letter-spacing: 0.02em; }
-#map3d-veil .m3d-veil-detail { font-size: 0.78rem; color: rgba(245, 240, 235, 0.65); max-width: 30rem; }
-#map3d-veil .m3d-veil-action {
+#map3d-veil .m3d-veil-detail {
+    font-size: 0.78rem;
+    color: rgba(245, 240, 235, 0.65);
+    max-width: 30rem;
+    /* A long error message (the exact WebGL reason is appended) must never
+     * push the buttons off the bottom of a phone screen. */
+    max-height: 40vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* The two ways out of an error: retry the 3D view, or give up and go back to
+ * the 2D map. They live inside the surface, which is the only place an error
+ * CAN be shown — #map3d-surface is display:none without body.is-3d, so an
+ * error that removed the class hid its own message (the mobile “flashes and
+ * snaps back to 2D” bug). */
+#map3d-veil .m3d-veil-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+}
+
+#map3d-veil .m3d-veil-action,
+#map3d-veil .m3d-veil-back {
     margin-top: 4px;
     padding: 7px 14px;
     border-radius: 6px;
@@ -93,7 +116,14 @@ body.is-pwa.is-3d #map3d-surface {
     font: inherit;
     cursor: pointer;
 }
-#map3d-veil .m3d-veil-action:hover { background: rgba(200, 169, 110, 0.26); }
+/* Secondary: “back to 2D” must not out-shout “try again”. */
+#map3d-veil .m3d-veil-back {
+    border-color: rgba(184, 216, 240, 0.3);
+    background: rgba(184, 216, 240, 0.08);
+}
+#map3d-veil .m3d-veil-action:hover,
+#map3d-veil .m3d-veil-back:hover { background: rgba(200, 169, 110, 0.26); }
+#map3d-veil .m3d-veil-back:hover { background: rgba(184, 216, 240, 0.18); }
 
 /* ── the 2D/3D switch (visible in both modes) ──────────────────────────── */
 #map3d-toggle {
@@ -267,6 +297,20 @@ body.is-3d #map3d-bar { display: flex; }
     #map3d-surface .maplibregl-ctrl-bottom-left { display: none; }
     #map3d-surface .maplibregl-ctrl-bottom-left,
     #map3d-surface .maplibregl-ctrl-bottom-right { font-size: 0.6rem; }
+
+    /* The veil is the only thing standing between a phone and a silent
+     * failure, so its buttons get a real touch target (44 px is Apple's
+     * minimum) and the whole panel keeps clear of the rounded corners. */
+    #map3d-veil { padding: 16px; }
+    #map3d-veil .m3d-veil-actions { width: 100%; }
+    #map3d-veil .m3d-veil-action,
+    #map3d-veil .m3d-veil-back {
+        min-height: 44px;
+        min-width: 44px;
+        flex: 1 1 8rem;
+        padding: 10px 16px;
+        font-size: 0.82rem;
+    }
 }
 
 @media (max-height: 420px) {

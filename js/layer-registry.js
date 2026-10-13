@@ -62,7 +62,11 @@
             js: 'js/maplibre-gl.js?v=20261013-3d-terrain',
             css: 'css/maplibre-gl.css?v=20261013-3d-terrain',
             namespace: 'maplibregl',
-            timeoutMs: 15000
+            timeoutMs: 15000,
+            /* The vendored SDK is ~1 MB. A phone on cellular can need several
+             * times the desktop's 15 s to pull it down, and a timeout shows up
+             * as “3D snapped back to 2D” — not as “slow”. */
+            timeoutMsMobile: 45000
         },
         terrain: {
             provider: 'aws-terrarium',   // 'aws-terrarium' | 'maptiler' | 'custom'
@@ -125,6 +129,17 @@
             /* Phones: 1 device pixel ratio, fewer DEM tiles, shorter tile life */
             mobilePixelRatio: 1,
             mobileMaxTerrainZoom: 12,
+            /* The tile cache is measured in *decoded* tiles: 320 × 256 px RGBA
+             * is ~80 MB of texture memory on top of the WebGL framebuffers.
+             * That is exactly the pressure that makes iOS Safari refuse the GL
+             * context (canvas.getContext('webgl2') → null), so phones keep a
+             * much smaller cache. */
+            mobileMaxTileCacheSize: 64,
+            /* WebKit caps the drawing buffer it will allocate. The 4096²
+             * desktop ceiling at devicePixelRatio 3 is far past what an iPhone
+             * grants, so the phone ceiling is lowered before the very first
+             * context is requested (not after it already failed). */
+            mobileMaxCanvas: [2048, 2048],
             fadeDuration: 120,
             maxTileCacheSize: 320
         },
