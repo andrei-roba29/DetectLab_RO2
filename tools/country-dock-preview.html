@@ -296,7 +296,7 @@
     var sel = g && g.getSelection ? g.getSelection() : null;
     var hs = window.DetectLabCountryDock && window.DetectLabCountryDock.isHillshadeOn();
     var bl = g && g._test && g._test.state ? g._test.state.boundsLayer : null;
-    var boundsKind = bl ? (bl._detectlabBoundsKind || (typeof bl.eachLayer === 'function' ? 'country outline' : 'bbox rectangle')) : '—';
+    var boundsKind = bl ? (bl._detectlabBoundsKind || 'country outline') : 'none yet (geometry not loaded)';
     out.innerHTML = prefix + (sel
       ? '<br>Country: <b>' + sel.name + ' (' + sel.iso + ')</b> · locked: <b>' + (g.isLocked() ? 'yes' : 'no') +
         '</b> · zoom ' + map.getZoom().toFixed(2) + ' (min ' + map.getMinZoom().toFixed(2) + ')' +

@@ -46,11 +46,13 @@ small marker so micro-states remain visible and targetable.
 ## Country selection and data
 
 The gate has no country list or search panel. The globe is the picker: a click
-on any supported country immediately selects it, highlights it, zooms the
-active renderer to its bounds, persists the existing selection, and then hands
-off to the existing Leaflet country lock. The canvas fallback uses the same
-direct map-click path. The country dock remains available after hand-off for
-switching countries without reopening the globe.
+on any supported country immediately selects it, highlights it, flies the
+active renderer to the **same frame the flat 2D map will open on** (its fit
+zoom, not a level of its own — see “One hand-off frame” below), persists the
+existing selection, and then hands off to the existing Leaflet country lock.
+The canvas fallback uses the same direct map-click path and the same frame. The
+country dock remains available after hand-off for switching countries without
+reopening the globe.
 
 The data flow remains the one in `js/globe-country-picker.js`:
 
@@ -118,7 +120,7 @@ and the reject → canvas-fallback path).
 
 ## PWA, network, licensing, and device constraints
 
-`sw.js` uses shell cache `detectlab-v187-flat-country-handoff`. The local adapter, picker,
+`sw.js` uses shell cache `detectlab-v189-country-handoff-zoom`. The local adapter, picker,
 CSS, translations, and country data remain in the app shell. The external
 ArcGIS SDK/theme and imagery services are **not** precached; cross-origin
 requests pass through the service worker's network path. `js.arcgis.com`,
@@ -198,14 +200,115 @@ not fitted a second time. Dock-driven country changes skip the gate and use the
 normal flat-map selection path. If a renderer or the map is unavailable, the
 existing last-resort selection and lock behavior still applies.
 
-The selected-country rectangle/outline is consequently stable in the final
-view: Leaflet/Web-Mercator owns its placement, while the 3D renderer is only a
+The selected-country outline is consequently stable in the final view:
+Leaflet/Web-Mercator owns its placement, while the 3D renderer is only a
 transitional selection surface. The lock, persistence, layer filtering, bounds
 pane, country dock, and exit-view behavior are unchanged.
 
+## One hand-off frame (v189 — the zoom the two surfaces meet on)
+
+The globe used to end its flight on a zoom of its own: `zoomFor()` in
+`js/globe-arcgis-gate.js` derived a SceneView zoom from the country's bbox span
+(`log2(360 / span) − 0.35`, clamped to 1.8–9.2), while the flat map opened on
+its Leaflet fit zoom (`min(11, getBoundsZoom(country box))`). For France on a
+desktop viewport those are ~4.2 and ~6 — the cross-fade therefore revealed a map
+zoomed about **3× closer** than the globe the user had just been looking at.
+The canvas fallback had the same class of mismatch (`k = 60 / span`).
+
+Both renderers now start from one object, computed by the picker before either
+camera moves (`countryHandoffFrame(iso, bbox)`):
+
+- `bounds` / `padded` — the country box and its `LOCK_PAD` box, built once and
+  reused by the staged 2D fit and by `restrictLeafletToCountry()`;
+- `fitZoom` — `countryFitZoom(map, bounds)` = `min(FIT_MAX_ZOOM 11,
+  map.getBoundsZoom(bounds, false, [2 × FIT_PADDING, 2 × FIT_PADDING]))`,
+  clamped to the map's own zoom range. The doubled padding is Leaflet's:
+  `fitBounds()` measures with `paddingTopLeft.add(paddingBottomRight)`, so a
+  symmetric `padding: [24, 24]` frees 24 px on *each* side and asking for a
+  single 24 would report a fit up to one level too deep — the level the globe
+  would then fly to while the 2D map landed one step wider. With the doubling,
+  the number *is* the zoom the flat map opens at (verified against real Leaflet
+  for all 50 countries: fit zoom == landed zoom);
+- `center` — the hand-off bbox centre (for Russia the App's European box, not
+  the Asian geometry centroid), which is what both cameras centre on.
+
+`selectCountry()` hands that frame to the active renderer:
+
+- **ArcGIS SceneView** — `DetectLabArcGISGate.goToCountry(iso, { zoom:
+  fitZoom })`. The adapter converts the flat (Web-Mercator) zoom to the
+  equivalent 3D level with the documented 2D→3D viewpoint correction: a
+  Mercator map shows ground at a nominal scale inflated by `1/cos φ`, while the
+  globe shows true ground scale, so `sceneZoomForFlat()` adds
+  `log2(1 / cos φ)` zoom levels (Esri's own “switch view from 2D to 3D” sample
+  multiplies the 2D scale by `cos φ` for the same reason; ~0.67 levels at 51°N,
+  ~0 at the equator). The result is clamped to the SceneView window
+  (`MIN_SCENE_ZOOM 1.5` … `MAX_SCENE_ZOOM 12`, the same window `zoomBy()`
+  uses). `zoomFor()` remains only as the fallback for a gate with no flat map
+  behind it (dev harness), and the picker passes `{ zoom: null }` in that case.
+- **Canvas fallback** — `flyTo(entry, done, frame)` centres on `frame.center`
+  and takes its scale from `canvasFrameScale()`, the orthographic equivalent of
+  the same conversion: with the projection radius `R = min(W,H)/2 · 0.88 · k`
+  px per radian, a country box of `Δλ°` spans `R·Δλ·(π/180)·cos φ` px on the
+  canvas and `Δλ·256·2^z/360` px on the flat map, so
+  `k = 92.6 · 2^fitZoom / (min(W,H) · cos φ)`. Without a fit zoom the old
+  span-based estimate is kept.
+
+The 2D fit still runs first and the globe flight still resolves before the
+gate's 720 ms fade, so the two surfaces are already on the same frame when the
+cross-fade starts. Regression coverage: the hand-off zoom/conversion/clamp
+assertions in `test-globe-arcgis-gate.js`, the canvas pixel-width cross-check in
+`test-globe-canvas-picker.js` (the country must land within 1 px of the flat
+map's width), and the `countryHandoffFrame` / `canvasFrameScale` assertions in
+`test-country-dock.js`.
+
+### A lock never leaks its zoom floor into the next country (v189)
+
+Because `fitZoom` is shared, a stale zoom level would also be flown to by the
+globe — so the frame is measured inside the map's **own** zoom range:
+
+- `countryFitZoom()` calls `getBoundsZoom()` with the map's base `minZoom` /
+  `maxZoom` temporarily restored. Leaflet clamps that answer to the *live*
+  range, and the locked view has already raised `minZoom` to the current
+  country's fit level; measuring under it pegs the next country there. Locked on
+  Monaco (floor 10) and switching to Russia used to compute `fitZoom 10`
+  (≈43 000 px wide at that zoom) instead of the Russian extent's 2–3, so both
+  the globe and the map opened at street level. The live range is put straight
+  back, so the lock itself is untouched.
+- `prepareFlatMapTransition()` drops a stale floor (`setMinZoom(baseMinZoom)`)
+  before its `fitBounds()`, because Leaflet's `setView()` clamps to the live
+  range as well — otherwise the staged 2D camera could not reach the frame the
+  globe is flying to. `restrictLeafletToCountry()` sets the new floor right
+  after.
+
+Asserted in `test-country-dock.js` (“zoom floors never leak between countries”),
+and cross-checked with real Leaflet in a 900×600 jsdom viewport, where every
+country's `fitZoom` now equals the zoom the map actually lands on (before the
+fix a country switch inherited the previous floor, e.g. Monaco → Russia landed
+at 10).
+
+## The locked view never draws a bounding box (v189)
+
+`showCountryBoundsLayer()` has no `L.rectangle` fallback any more. It draws the
+country's real outline from the gate geometry and, while that geometry is not
+loaded, draws **nothing at all** — the bbox keeps its other jobs (`maxBounds`,
+layer-coverage math, camera) but is never rendered as the country's shape.
+
+That fallback was the “perfect rectangle that merges into the country a few
+seconds later”: a selection restored from `localStorage` locked the map before
+the atlas arrived, so the overlay started as the selection box and was only
+swapped for the real outline when `ensureReady()` (or the 10 m refinement)
+finished. `refreshCountryBoundsLayer()` now runs whenever the view is locked
+(not only when a layer already exists), so the outline appears the moment
+geometry is available; `attach()` fires `prefetch()` for a restored selection
+so that moment comes as early as possible; and a repeat draw with the same
+country and the same feature object is a no-op, so re-locks and refreshes no
+longer flash the outline. `state.boundsIso` / `state.boundsFeature` record what
+is currently drawn (a *new* feature object — the 10 m refinement — does replace
+the outline, which is the intended detail upgrade).
+
 ## Gate deployment and regression checks
 
-`sw.js` cache `v187` precaches the local ArcGIS adapter, picker, styles,
+`sw.js` cache `v189` precaches the local ArcGIS adapter, picker, styles,
 translations and the 50m atlas (the retired MapLibre globe assets are no longer
 part of the shell). The remote ArcGIS SDK,
 theme, imagery, and the two optional canvas texture images are intentionally
@@ -213,10 +316,13 @@ not precached. The canvas can still show atlas land if those texture images are
 unavailable.
 
 The key suites are `node test-globe-arcgis-gate.js` (lazy loading, SceneView
-configuration, the v185 drawable-surface guard, country graphics and
-single-select flow),
-`node test-globe-canvas-picker.js` (fallback picking, shared geometry and
-imagery math), `node test-country-dock.js` (public API, lock, dock, and
-re-entry), and `node test-country-layer-filter.js` (country-scoped layers and
-bounds). The public `window.DetectLabGlobeGate` API and `_test` hooks remain in
-`js/globe-country-picker.js`.
+configuration, the v185 drawable-surface guard, country graphics, the
+single-select flow and the v189 hand-off zoom/conversion/clamp),
+`node test-globe-canvas-picker.js` (fallback picking, shared geometry, imagery
+math and the canvas↔flat-map frame cross-check), `node test-country-dock.js`
+(public API, lock, dock, re-entry and the shared hand-off frame), and
+`node test-country-layer-filter.js` (country-scoped layers and the outline-only
+bounds overlay). The public `window.DetectLabGlobeGate` API and `_test` hooks
+remain in `js/globe-country-picker.js` (`countryHandoffFrame`,
+`countryFitZoom`, `canvasFrameScale`, `bboxBounds`, `FIT_PADDING` are exported
+for the suites).

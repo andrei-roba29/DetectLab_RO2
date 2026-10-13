@@ -8,10 +8,12 @@
 //      Neighbouring countries' rows that are merely visible in the locked
 //      viewport never leak in. A group row hides too when none of its
 //      sublayers survives;
-//   2. the bounds of the selected country stay visible on the Leaflet map —
-//      the country outline once the gate geometry is loaded, the bbox
-//      rectangle until then — drawn non-interactive in its own pane above the
-//      data layers, replaced on every selection and removed on unlock.
+//   2. the selected country's real outline stays visible on the Leaflet map
+//      once the gate geometry is loaded — drawn non-interactive in its own pane
+//      above the data layers, replaced on every selection and removed on
+//      unlock. The selection bbox is NEVER drawn as a stand-in: a bounding box
+//      is a rectangle, and the locked view used to show one until the atlas
+//      arrived (the “rectangle that later merges into the country shape”).
 // Covers js/map-app.js (filterLayersForCountry / unfilterLayersForCountry),
 // js/globe-country-picker.js (bounds overlay), css/styles.css and sw.js.
 // No network, account or npm dependencies.
@@ -48,11 +50,11 @@ assert(/#transpPanel\.country-filter-active \.country-layer-unavailable\s*\{\s*d
 assert(html.includes('css/styles.css?v=20261008-roman-dare-icons'), 'index.html loads the re-versioned styles.css');
 assert(html.includes('js/map-app.js?v=20261011-arcgis-basemap'), 'index.html loads the ArcGIS-basemap map-app.js');
 assert(html.includes('js/historical-eu-maps.js?v=20261008-country-layers-strict'), 'index.html loads the country-attribution catalog');
-assert(html.includes('js/globe-country-picker.js?v=20261013-country-click'), 'index.html loads the re-versioned picker');
+assert(html.includes('js/globe-country-picker.js?v=20261013-handoff-zoom'), 'index.html loads the re-versioned picker');
 ['css/styles.css?v=20261008-roman-dare-icons',
  'js/map-app.js?v=20261011-arcgis-basemap',
  'js/historical-eu-maps.js?v=20261008-country-layers-strict',
- 'js/globe-country-picker.js?v=20261013-country-click'].forEach(function (p) {
+ 'js/globe-country-picker.js?v=20261013-handoff-zoom'].forEach(function (p) {
     assert(sw.includes("'" + p + "'"), 'sw.js precaches ' + p);
 });
 const shellVersion = Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
@@ -461,7 +463,10 @@ gateSandbox.document = {
     dispatchEvent() {}, createEvent() { return { initCustomEvent() {} }; }
 };
 gateSandbox.addEventListener = function (t, fn) { (gateListeners[t] = gateListeners[t] || []).push(fn); };
-// Minimal Leaflet: the gate only needs bounds, rectangles and GeoJSON.
+// Minimal Leaflet: the gate only needs bounds, GeoJSON outlines and the
+// rectangle() the bounds overlay must never fall back to. `rectangleCalls`
+// stays a module-level counter so the bounds test can prove it stayed at 0.
+let rectangleCalls = 0;
 gateSandbox.L = {
     latLng(lat, lng) { return { lat, lng }; },
     latLngBounds(a, b) {
@@ -479,7 +484,7 @@ gateSandbox.L = {
         return bounds;
     },
     geoJSON(feature, options) { return { kind: 'geojson', feature, options }; },
-    rectangle(bounds, options) { return { kind: 'rectangle', bounds, options }; }
+    rectangle(bounds, options) { rectangleCalls++; return { kind: 'rectangle', bounds, options }; }
 };
 vm.createContext(gateSandbox);
 vm.runInContext(gateSource, gateSandbox);
@@ -496,50 +501,73 @@ assert(typeof T.refreshCountryBoundsLayer === 'function', 'refreshCountryBoundsL
     gateSandbox._detectlabSelectedCountry = 'IT';
     gateSandbox._detectlabCountryBounds = IT_BBOX;
 
-    // Lock to Italy before any geometry is loaded → bbox rectangle.
+    // Lock to Italy before any geometry is loaded: the lock applies, but no
+    // overlay is drawn — an approximate bounding box would be a rectangle.
     T.restrictLeafletToCountry(map, IT_BBOX);
     assert.equal(T.state.locked, true, 'selection locks the view');
-    assert.equal(map.added.length, 1, 'the bounds layer is added to the map');
-    assert.equal(map.added[0].kind, 'rectangle', 'no geometry yet → the bbox rectangle is drawn');
-    assert.equal(map.added[0].options.interactive, false, 'the bounds layer never captures clicks');
-    assert.equal(map.added[0].options.pane, T.BOUNDS_PANE, 'drawn in the dedicated pane');
-    assert.equal(map.panes[T.BOUNDS_PANE].style.zIndex, T.BOUNDS_PANE_Z, 'pane sits above the data panes');
-    assert(T.BOUNDS_PANE_Z > 652, 'pane z-index above the highest data pane (652)');
-    assert.deepEqual(map.added[0].bounds, [[IT_BBOX[1], IT_BBOX[0]], [IT_BBOX[3], IT_BBOX[2]]], 'rectangle matches the country bbox');
+    assert.equal(map.added.length, 0, 'no geometry yet → nothing is drawn (never the bbox rectangle)');
+    assert.equal(T.state.boundsLayer, null, 'no bounds layer before the geometry exists');
+    assert.equal(map.panes[T.BOUNDS_PANE], undefined, 'the outline pane is only created with a real outline');
 
-    // The atlas arrives (dock prefetch / globe open): outline replaces the box.
+    // The atlas arrives (dock prefetch / globe open): the outline appears.
     const itFeature = {
         type: 'Feature', properties: { iso: 'IT' },
         geometry: { type: 'MultiPolygon', coordinates: [[[[6.7, 36], [17, 38], [12, 46], [6.7, 36]]]] }
     };
     T.G.byIso['IT'] = { feature: itFeature };
     T.refreshCountryBoundsLayer();
-    assert.equal(map.removed.length, 1, 'the rectangle is removed on upgrade');
-    assert.equal(map.removed[0].kind, 'rectangle', 'the removed layer is the old rectangle');
-    assert.equal(T.state.boundsLayer.kind, 'geojson', 'the country outline takes over');
+    assert.equal(map.added.length, 1, 'the outline is drawn as soon as the geometry exists');
+    assert.equal(T.state.boundsLayer.kind, 'geojson', 'the locked view shows the real country outline');
     assert.equal(T.state.boundsLayer.feature, itFeature, 'outline uses the gate geometry');
-    assert.equal(T.state.boundsLayer.options.pane, T.BOUNDS_PANE, 'outline stays in the dedicated pane');
+    assert.equal(T.state.boundsLayer.options.pane, T.BOUNDS_PANE, 'outline sits in the dedicated pane');
+    assert.equal(map.panes[T.BOUNDS_PANE].style.zIndex, T.BOUNDS_PANE_Z, 'pane sits above the data panes');
+    assert(T.BOUNDS_PANE_Z > 652, 'pane z-index above the highest data pane (652)');
+    assert.equal(T.state.boundsLayer.options.interactive, false, 'the outline never captures clicks');
+    assert.equal(T.state.boundsLayer.options.bubblingMouseEvents, false, 'clicks pass through to the map');
 
-    // Switching country replaces the outline with the new country's bounds.
+    // Re-locking on the same country / refreshing again must not flash it.
+    T.restrictLeafletToCountry(map, IT_BBOX);
+    T.refreshCountryBoundsLayer();
+    assert.equal(map.added.length, 1, 'unchanged geometry is not re-added');
+    assert.equal(map.removed.length, 0, 'unchanged geometry is not removed either');
+
+    // Switching country replaces the outline with the new country's geometry —
+    // and, while that geometry is missing, with nothing at all.
     gateSandbox._detectlabSelectedCountry = 'DK';
     gateSandbox._detectlabCountryBounds = DK_BBOX;
     T.restrictLeafletToCountry(map, DK_BBOX);
-    assert.equal(T.state.boundsLayer.kind, 'rectangle', 'Denmark has no geometry yet → rectangle again');
+    assert.equal(T.state.boundsLayer, null, 'Denmark has no geometry yet → no overlay, not a rectangle');
     assert(map.removed.some(l => l.kind === 'geojson'), 'the Italian outline was removed on the switch');
-    assert.equal(map.added.length, 3, 'exactly one bounds layer per selection');
+    assert.equal(map.added.length, 1, 'exactly one bounds layer per selection with geometry');
 
-    // “Exit view” / unlock clears the bounds from the map.
+    // The 10m refinement swaps the feature object: the outline is redrawn once.
+    const dkFeature = {
+        type: 'Feature', properties: { iso: 'DK' },
+        geometry: { type: 'MultiPolygon', coordinates: [[[[8.1, 54.6], [15.2, 55], [12.6, 57.75], [8.1, 54.6]]]] }
+    };
+    T.G.byIso['DK'] = { feature: dkFeature };
+    T.refreshCountryBoundsLayer();
+    assert.equal(map.added.length, 2, 'the Danish outline is drawn when its geometry arrives');
+    assert.equal(T.state.boundsLayer.feature, dkFeature, 'and it uses the refined geometry');
+    T.refreshCountryBoundsLayer();
+    assert.equal(map.added.length, 2, 'refreshing with the same geometry does not churn the outline');
+
+    // “Exit view” / unlock clears the outline from the map.
     T.unlockCountryView();
     assert.equal(T.state.locked, false, 'view unlocked');
     assert.equal(T.state.boundsLayer, null, 'bounds layer forgotten');
-    assert.equal(map.removed.length, 3, 'the Denmark rectangle removed on unlock');
+    assert.equal(T.state.boundsFeature, null, 'the drawn geometry is forgotten too');
+    assert.equal(map.removed.length, 2, 'the Danish outline removed on unlock');
     assert.equal(map.maxBounds, null, 'maxBounds released');
+
+    // A selection bbox is never turned into a visible rectangle, anywhere.
+    assert.equal(rectangleCalls, 0, 'the bounds overlay never falls back to L.rectangle');
 
     // Removing twice / without a map is harmless.
     assert.doesNotThrow(() => T.removeCountryBoundsLayer(), 'double remove is a no-op');
     gateSandbox._dlMap = null;
     assert.doesNotThrow(() => T.removeCountryBoundsLayer(), 'no map, no crash');
-    console.log('  ✓ bounds overlay: rectangle → outline upgrade, replaced on switch, cleared on unlock');
+    console.log('  ✓ bounds overlay: outline only (no bbox rectangle), refreshed on geometry, cleared on unlock');
 }
 
 console.log('\nAll country layer-filter + bounds tests passed ✔');

@@ -419,7 +419,12 @@
 //   ArcGIS/canvas renderer and fade the temporary 3D gate out after hand-off.
 // v188: keep the APM layer opt-in on first load; installed PWAs must replace the
 //   cached shell so the unchecked control and asynchronous layer probe agree.
-const CACHE_NAME = 'detectlab-v188-apm-default-off';
+// v189: one hand-off frame for both country surfaces — the 3D globe flies to
+//   the exact flat-map fit zoom (Mercator-corrected) instead of a level of its
+//   own, the locked 2D view no longer draws the country bbox as a rectangle
+//   while the atlas geometry is still loading, and a country's zoom floor no
+//   longer clamps the next country's fit.
+const CACHE_NAME = 'detectlab-v189-country-handoff-zoom';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1023,8 +1028,8 @@ const PRECACHE_URLS = [
   // SceneView + canvas fallback) and country dock, in the documented load
   // order (gate → dock → map-app).
   'css/globe-country-picker.css?v=20261013-country-click',
-  'js/globe-arcgis-gate.js?v=20261012-gate-layout',
-  'js/globe-country-picker.js?v=20261013-country-click',
+  'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
+  'js/globe-country-picker.js?v=20261013-handoff-zoom',
   // v167: country dock glued under the search bar (country switcher +
   // World-hillshade checkbox) and the “Exit view” button of the locked
   // country view. The hillshade tiles themselves stay network-only.

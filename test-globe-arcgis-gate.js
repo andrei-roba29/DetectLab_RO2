@@ -20,8 +20,8 @@ const translations = read('js/translations.js');
 console.log('[Test] Lazy ArcGIS country gate...');
 
 // Page and service-worker wiring: adapter before the public gate, no eager CDN.
-const adapterUrl = 'js/globe-arcgis-gate.js?v=20261012-gate-layout';
-const pickerUrl = 'js/globe-country-picker.js?v=20261013-country-click';
+const adapterUrl = 'js/globe-arcgis-gate.js?v=20261013-handoff-zoom';
+const pickerUrl = 'js/globe-country-picker.js?v=20261013-handoff-zoom';
 const cssUrl = 'css/globe-country-picker.css?v=20261013-country-click';
 const translationsUrl = 'js/translations.js?v=20261013-country-click';
 for (const asset of [adapterUrl, pickerUrl, cssUrl, translationsUrl]) {
@@ -58,7 +58,7 @@ for (const token of [
 assert(adapter.includes('new modules.GraphicsLayer'), 'outlines use explicit ArcGIS GraphicsLayers');
 assert(adapter.includes('orientRing(ring, index === 0)'), 'GeoJSON ring orientation is normalized for ArcGIS');
 assert(picker.includes('function setPendingCountry(iso)') && picker.includes('if (iso && !NAMES[iso]) iso = null'), 'stored country highlights still reject unknown ISO values');
-assert(picker.includes('DetectLabArcGISGate.goToCountry(iso)') && picker.includes('finishSelection(iso, name, bbox)'), 'a clicked country zooms before the existing hand-off');
+assert(picker.includes('DetectLabArcGISGate.goToCountry(iso, { zoom: frame.fitZoom })') && picker.includes('finishSelection(iso, name, bbox)'), 'a clicked country zooms before the existing hand-off, on the flat map\'s fit zoom');
 assert(picker.includes('activateCanvasFallback(error)') && picker.includes('buildCanvas()') && picker.includes('startImagery()'), 'SceneView failures fall back to the existing canvas renderer');
 assert(!picker.includes('renderCountryList') && !css.includes('.globe-gate-country-panel'), 'the initial gate no longer renders a country-list panel');
 assert(css.includes('.globe-gate.is-arcgis .globe-gate-canvas') && css.includes('.globe-gate.is-canvas .globe-gate-arcgis'), 'ArcGIS and canvas surfaces can be switched independently');
@@ -66,12 +66,21 @@ assert(css.includes('.globe-gate.is-arcgis .globe-gate-canvas') && css.includes(
 // The selected-country view is deliberately flat: stage the Leaflet camera
 // before either 3D renderer is removed, and keep the renderer present during
 // the fade so ArcGIS and canvas selections share the same hand-off contract.
-assert(picker.includes('function prepareFlatMapTransition(iso, bbox)'), 'selection stages a flat Leaflet transition');
+assert(picker.includes('function prepareFlatMapTransition(iso, bbox, frame)'), 'selection stages a flat Leaflet transition');
 assert(picker.includes("window.setArcgisBasemap('imagery')"), 'the staged map uses the same World Imagery basemap');
 assert(picker.includes('duration: 0.85') && picker.includes('easeLinearity: 0.25'), 'the staged Leaflet fit is animated');
 assert(picker.includes('state.mapTransition') && picker.includes('state.mapTransition.iso === iso'), 'applySelection reuses the staged fit instead of moving twice');
-const stageAt = picker.indexOf('prepareFlatMapTransition(iso, bbox);');
-const arcgisCameraAt = picker.indexOf('DetectLabArcGISGate.goToCountry(iso)');
+// One frame drives both surfaces: the fit zoom the 2D map opens at is handed
+// to the 3D camera, so the globe no longer ends its flight at a level of its
+// own (the old span-based estimate) and the cross-fade has nothing to jump.
+assert(picker.includes('var frame = countryHandoffFrame(iso, bbox);') &&
+    picker.includes('function countryHandoffFrame(iso, bbox)') &&
+    picker.includes('frame.fitZoom = countryFitZoom(map, frame.bounds)'),
+    'a clicked country derives the flat-map hand-off frame (bbox + fit zoom) once');
+assert(picker.includes('canvasFrameScale(entry, frame)'),
+    'the canvas fallback lands on the same frame scale as the flat map');
+const stageAt = picker.indexOf('prepareFlatMapTransition(iso, bbox, frame);');
+const arcgisCameraAt = picker.indexOf('DetectLabArcGISGate.goToCountry(iso, { zoom: frame.fitZoom })');
 const canvasCameraAt = picker.indexOf('flyTo(entry, function () {');
 assert(stageAt !== -1 && stageAt < arcgisCameraAt && stageAt < canvasCameraAt,
     'both ArcGIS and canvas camera paths start after the flat map is staged');
@@ -119,6 +128,29 @@ assert(geo.isMicroState({ iso: 'MC', size: 1 }), 'known micro-state ISO codes ar
 assert(geo.isMicroState({ iso: 'XX', size: 0.2 }), 'tiny geometry can use the micro-state marker path');
 assert(geo.zoomFor({ bboxEU: [13.4, 41.8, 13.6, 42.0] }) > geo.zoomFor({ bboxEU: [-10, 35, 30, 70] }),
     'smaller countries get a closer scene camera');
+
+// Hand-off zoom: the SceneView is flown to the flat map's own fit zoom (the
+// picker supplies it), corrected for the Web-Mercator 1/cos(lat) inflation of
+// the flat map — the documented 2D→3D viewpoint conversion. The country is
+// then on screen at the size the 2D map shows it at right after the cross-fade.
+assert.equal(geo.sceneZoomForFlat(6, 0), 6, 'no correction at the equator');
+assert.equal(geo.sceneZoomForFlat(6), 6, 'no latitude → the raw fit zoom');
+assert.ok(Math.abs(geo.sceneZoomForFlat(6, 51) - (6 + Math.log(1 / Math.cos(51 * Math.PI / 180)) / Math.LN2)) < 1e-9,
+    'the globe zooms in by log2(1/cos φ) to match a Mercator map at 51°N');
+assert.ok(geo.sceneZoomForFlat(6, 51) > 6 && geo.sceneZoomForFlat(6, 51) < 7,
+    'the mid-latitude correction stays well under one zoom level');
+assert.equal(geo.sceneZoomForFlat(NaN, 51), null, 'no flat zoom → the renderer falls back to its estimate');
+const deEntry = { iso: 'DE', name: 'Germany', lng: 10, lat: 51, bboxEU: [5, 47, 15, 55] };
+const handOff = geo.countryGoToTarget(deEntry, { zoom: 6 });
+assert.deepEqual(Array.from(handOff.center), [10, 51], 'the hand-off camera still centres on the country bbox');
+assert.equal(handOff.zoom, geo.clampSceneZoom(geo.sceneZoomForFlat(6, 51)),
+    'the flat map\'s fit zoom drives the SceneView level for a clicked country');
+assert.equal(handOff.tilt, 0, 'the hand-off view stays untilted, like the flat map');
+assert.equal(geo.countryGoToTarget(deEntry, {}).zoom, geo.zoomFor(deEntry),
+    'without a hand-off zoom the span-based estimate is kept');
+assert.equal(geo.countryGoToTarget(deEntry, { zoom: 99 }).zoom, geo.MAX_SCENE_ZOOM,
+    'a hand-off zoom is clamped to the SceneView window');
+assert.equal(geo.clampSceneZoom(0.4), geo.MIN_SCENE_ZOOM, 'the floor is the European overview');
 console.log('  ✓ geometry conversion and camera-fit calculations');
 
 // Runtime smoke test with a tiny mocked ArcGIS AMD runtime. It proves the SDK
@@ -244,6 +276,22 @@ const countries = [
 
     await api.goToCountry('DE');
     assert.deepEqual(Array.from(instance.view.goTos.at(-1).center), [10, 51], 'selection camera centers on the European hand-off bbox');
+    assert.equal(instance.view.goTos.at(-1).zoom, api._test.zoomFor(countries[0]),
+        'without a hand-off zoom the SceneView keeps its own estimate');
+
+    // The picker hands over the flat map's fit zoom: the globe must fly to that
+    // level (Web-Mercator corrected) instead of to a level of its own, so the
+    // 2D map is revealed on the same frame the globe already showed.
+    await api.goToCountry('DE', { zoom: 6 });
+    const handOffTarget = instance.view.goTos.at(-1);
+    assert.ok(Math.abs(handOffTarget.zoom - api._test.clampSceneZoom(api._test.sceneZoomForFlat(6, 51))) < 1e-9,
+        'a clicked country lands the globe on the flat map\'s fit zoom');
+    assert.equal(instance.view.zoom, handOffTarget.zoom, 'the live SceneView zoom is the hand-off zoom');
+    await api.goToCountry('DE', { zoom: 40 });
+    assert.equal(instance.view.goTos.at(-1).zoom, api.constants.maxSceneZoom,
+        'an absurd hand-off zoom cannot push the camera past the SceneView window');
+    assert.equal(api._test.clampSceneZoom(0.2), api.constants.minSceneZoom,
+        'zoomBy() shares the same window as the hand-off zoom');
     const countBeforeZoom = instance.view.goTos.length;
     await api.zoomBy(0.5);
     assert.equal(instance.view.goTos.length, countBeforeZoom + 1, 'custom zoom buttons are routed to SceneView');
