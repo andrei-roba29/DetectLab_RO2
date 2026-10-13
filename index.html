@@ -4720,6 +4720,11 @@
 
     <!-- Leaflet JS (from qgis2web folder) -->
     <script src="js/leaflet.js"></script>
+    <!-- Availability guard for third-party WMS services (CENAGIS / IH PAN
+         historical maps): probes one GetMap tile per layer, marks the row
+         unavailable and explains 200-with-error-body failures instead of
+         silently showing empty tiles. See js/wms-health.js. -->
+    <script src="js/wms-health.js?v=20261013-wms-guard"></script>
     <!-- Global tile performance governor: gesture-safe defaults for every tile
          layer of the app (LIDAR, CORONA 60's, historical maps, APM…), one tile
          update per layer per gesture and a page-wide budget on live tiles.
@@ -4796,8 +4801,8 @@
          through window.DetectLabGlobeGate) and before map-app.js, which
          attaches it to the Leaflet map. -->
     <script src="js/country-dock.js?v=20261013-country-2d"></script>
-    <script src="js/map-app.js?v=20261011-arcgis-basemap"></script>
-    <script src="js/historical-eu-maps.js?v=20261008-country-layers-strict"></script>
+    <script src="js/map-app.js?v=20261013-wms-guard"></script>
+    <script src="js/historical-eu-maps.js?v=20261013-wms-guard"></script>
     <script src="js/offline-maps.js?v=20261009-3d-globe"></script>
     <script src="js/battles-layer.js?v=20260902-battles-label-anchor"></script>
     <script src="js/vertical-opacity-control.js?v=20261002-persistent-layer-actions-v2"></script>

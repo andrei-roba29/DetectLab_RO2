@@ -897,7 +897,13 @@
         }
 
         var options = {
-            layers: 'topp:' + mapMeta.wms_layer,
+            // WMS_BASE_URL is .../geoserver/ihpan/wms — the workspace prefix
+            // must be `ihpan`, not the stock GeoServer `topp`. The old value
+            // happened to resolve because this server matches the layer by
+            // local name, but it was wrong and would break on any GeoServer
+            // that validates the prefix strictly (or if `topp` ever exists
+            // there with a same-named layer).
+            layers: 'ihpan:' + mapMeta.wms_layer,
             format: 'image/png',
             transparent: true,
             version: '1.3.0',
@@ -912,6 +918,11 @@
         }
 
         var layer = L.tileLayer.wms(WMS_BASE_URL, options);
+        // For the WMS health guard (js/wms-health.js): which row + switch this
+        // layer belongs to (.cenagis-map-row[data-map-id] / .cenagis-toggle),
+        // and the title to name it in the “server is down” notice.
+        layer._detectlabUiKeys = [mapKey];
+        layer._detectlabUiTitle = mapMeta.title[lang] || mapMeta.title.en || mapMeta.title.ro || mapKey;
         _leafletLayers[mapKey] = layer;
         return layer;
     }
@@ -1065,8 +1076,8 @@
         var lang = getLang();
         var title = meta.title[lang] || meta.title.en || meta.title.ro;
         var desc = (lang === 'ro')
-            ? ('Scară: ' + meta.scale + '\nPerioadă / Ani: ' + meta.years + '\nSursă / Institut: ' + meta.provider + '\nEndpoint: ' + WMS_BASE_URL + '\nStrat WMS: topp:' + meta.wms_layer)
-            : ('Scale: ' + meta.scale + '\nPeriod / Years: ' + meta.years + '\nSource / Institute: ' + meta.provider + '\nEndpoint: ' + WMS_BASE_URL + '\nWMS Layer: topp:' + meta.wms_layer);
+            ? ('Scară: ' + meta.scale + '\nPerioadă / Ani: ' + meta.years + '\nSursă / Institut: ' + meta.provider + '\nEndpoint: ' + WMS_BASE_URL + '\nStrat WMS: ihpan:' + meta.wms_layer)
+            : ('Scale: ' + meta.scale + '\nPeriod / Years: ' + meta.years + '\nSource / Institute: ' + meta.provider + '\nEndpoint: ' + WMS_BASE_URL + '\nWMS Layer: ihpan:' + meta.wms_layer);
 
         if (typeof root.showLayerInfo === 'function') {
             root.showLayerInfo(title, desc);

@@ -427,8 +427,14 @@
 // v190: drop the “Change Country” pill that sat next to the “?” help button —
 //   the dock under the search bar switches country and “Exit view” reopens the
 //   globe — and re-version the picker, its stylesheet and the translations
+// v191: third-party WMS availability guard (js/wms-health.js). The CENAGIS /
+//   IH PAN historical-map server answers GetMap with HTTP 200 and an error
+//   body instead of an image (unreadable ECW mosaics — see
+//   CENAGIS_WMS_HEALTH.md), so every tile was an undecodable 200 and the
+//   layer stayed silently blank. One probe per layer now gates the add,
+//   the row is marked unavailable and a notice explains the outage.
 //   behind it.
-const CACHE_NAME = 'detectlab-v190-no-change-country-pill';
+const CACHE_NAME = 'detectlab-v191-wms-guard';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -453,6 +459,7 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 const PRECACHE_URLS = [
   // European Historical Maps (CENAGIS / IH PAN)
   'js/historical-eu-maps.js?v=20261008-country-overlap',
+  'js/historical-eu-maps.js?v=20261013-wms-guard',
   'js/historical-eu-maps.js?v=20261008-country-layers-strict',
   'js/historical-eu-maps.js',
   // Host-aware market defaults for detectlab.ro and detectlab.eu.
@@ -1034,6 +1041,7 @@ const PRECACHE_URLS = [
   'css/globe-country-picker.css?v=20261013-no-change-pill',
   'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
   'js/globe-country-picker.js?v=20261013-no-change-pill',
+  'js/wms-health.js?v=20261013-wms-guard',
   // v167: country dock glued under the search bar (country switcher +
   // World-hillshade checkbox) and the “Exit view” button of the locked
   // country view. The hillshade tiles themselves stay network-only.
@@ -1042,6 +1050,7 @@ const PRECACHE_URLS = [
   'js/country-dock.js?v=20261009-3d-globe',
   'js/country-dock.js?v=20261013-country-2d',
   'js/map-app.js?v=20261011-arcgis-basemap',
+  'js/map-app.js?v=20261013-wms-guard',
   'js/map-app.js?v=20261009-3d-globe',
   'js/map-app.js?v=20261009-lidar-globe-twin',
   'js/map-app.js?v=20261010-lidar-zoom-gate',
