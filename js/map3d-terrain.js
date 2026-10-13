@@ -96,7 +96,12 @@
         healthTimers: [],
         pollTimer: null,
         protocols: false,                /* dl2d:// + dl3d:// registered         */
-        errors: []
+        errors: [],
+        failed: false,                   /* last open() ended in an error        */
+        safeMode: false,                 /* first GL context was refused         */
+        contextLost: false,              /* GPU context reclaimed by the system  */
+        lastError: '',                   /* exact message, for the user to quote */
+        probe: null                      /* memoised webglProbe() result         */
     };
 
     function isMobile() {
@@ -104,6 +109,117 @@
             return (root.matchMedia && root.matchMedia('(max-width: 768px)').matches) ||
                 (navigator && navigator.maxTouchPoints > 1);
         } catch (e) { return false; }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     *  MOBILE / WEBGL CAPABILITY
+     * -----------------------------------------------------------------------
+     *  WHY THIS BLOCK EXISTS — the mobile “3D flashes and snaps back to 2D”
+     *  bug, root-caused against the vendored MapLibre GL 5.24.0:
+     *
+     *    new maplibregl.Map(...) creates its WebGL2 context inside the
+     *    constructor and THROWS SYNCHRONOUSLY when the context cannot be
+     *    allocated:
+     *
+     *        i = canvas.getContext("webgl2", e) || canvas.getContext("webgl", e)
+     *        if (!i) throw new Error("Failed to initialize WebGL")
+     *
+     *  On iOS Safari that happens on real hardware. The context used to be
+     *  requested at the full devicePixelRatio (3 on a Face-ID iPhone →
+     *  ~1170×2532 ≈ 3 Mpx) with powerPreference 'high-performance', after the
+     *  page already holds every Leaflet tile image; WebKit refuses the
+     *  allocation and returns null. Desktop GPUs never hit that ceiling, which
+     *  is why the same build worked on a laptop and failed on a phone.
+     *
+     *  The throw landed in open()'s catch, which removed `body.is-3d` — and
+     *  that class is what makes #map3d-surface display at all. So the surface
+     *  containing the error message was hidden by the very code trying to show
+     *  it: all the user ever saw was the dark rectangle flash once and vanish.
+     *
+     *  Three changes, in order of importance:
+     *    1. ask for a small, low-power context from the FIRST call (§deviceProfile);
+     *    2. probe WebGL before spending 1 MB on the SDK, and retry in a
+     *       stripped-down “safe mode” if the first context is refused (§open);
+     *    3. keep the surface — and the message — on screen when 3D fails (§fail3D).
+     * ═══════════════════════════════════════════════════════════════════════ */
+    function perf() { return REGISTRY.config().perf || {}; }
+
+    /** Everything the MapLibre constructor must do differently on a phone. */
+    function deviceProfile() {
+        var p = perf();
+        if (!isMobile()) {
+            return {
+                mobile: false,
+                pixelRatio: null,            /* null → let MapLibre read devicePixelRatio */
+                maxTileCacheSize: p.maxTileCacheSize || 320,
+                maxCanvasSize: null,         /* null → MapLibre's own 4096² ceiling */
+                canvasContextAttributes: {
+                    antialias: true,
+                    powerPreference: 'high-performance',
+                    failIfMajorPerformanceCaveat: false,
+                    preserveDrawingBuffer: false
+                }
+            };
+        }
+        return {
+            mobile: true,
+            /* Passed INTO the constructor rather than applied afterwards with
+             * setPixelRatio(): the first GL context is then created small
+             * instead of being created at ×3 and shrunk once it already exists
+             * — by which point WebKit has already said no. */
+            pixelRatio: p.mobilePixelRatio || 1,
+            maxTileCacheSize: p.mobileMaxTileCacheSize || 64,
+            maxCanvasSize: (p.mobileMaxCanvas && p.mobileMaxCanvas.length === 2)
+                ? p.mobileMaxCanvas : [2048, 2048],
+            canvasContextAttributes: {
+                antialias: false,            /* 4× MSAA quadruples the colour buffer */
+                powerPreference: 'low-power',
+                failIfMajorPerformanceCaveat: false,
+                preserveDrawingBuffer: false
+            }
+        };
+    }
+
+    /** Free a probe context so it does not eat the browser's context budget. */
+    function releaseGl(gl) {
+        try {
+            var ext = gl.getExtension('WEBGL_lose_context') || gl.getExtension('WEBKIT_lose_context');
+            if (ext && ext.loseContext) ext.loseContext();
+        } catch (e) { /* a leaked probe is a nuisance, never a failure */ }
+    }
+
+    /**
+     * Does this browser do WebGL at all, and which flavour? A throwaway 32×32
+     * canvas: creating it costs nothing, and releasing it keeps it out of the
+     * handful of contexts WebKit allows at once — a leaked probe context could
+     * itself be the reason the real one is refused.
+     */
+    function webglProbe(force) {
+        /* Memoised: status()/renderStatus() call this on every repaint. open()
+         * passes force=true because a device that refused a context minutes
+         * ago may well grant one now. */
+        if (!force && state.probe) return state.probe;
+        var result = { webgl2: false, webgl: false, error: '' };
+        try {
+            var canvas = document.createElement('canvas');
+            canvas.width = 32;
+            canvas.height = 32;
+            var attrs = { antialias: false, depth: false, stencil: false, failIfMajorPerformanceCaveat: false };
+            var gl = null;
+            try { gl = canvas.getContext('webgl2', attrs); } catch (e) { gl = null; }
+            if (gl) { result.webgl2 = true; releaseGl(gl); state.probe = result; return result; }
+            try {
+                gl = canvas.getContext('webgl', attrs) || canvas.getContext('experimental-webgl', attrs);
+            } catch (e) { gl = null; }
+            if (gl) { result.webgl = true; releaseGl(gl); state.probe = result; return result; }
+            result.error = 'canvas.getContext("webgl2"/"webgl") returned null';
+            state.probe = result;
+            return result;
+        } catch (e) {
+            result.error = String((e && e.message) || e);
+            state.probe = result;
+            return result;
+        }
     }
 
     function lang() {
@@ -126,6 +242,12 @@
             failed: 'Vederea 3D nu a putut porni.',
             failedDetail: 'Biblioteca 3D nu s-a putut încărca. Harta 2D funcționează în continuare.',
             retry: 'Încearcă din nou',
+            back: 'Înapoi la 2D',
+            noWebgl: 'Acest dispozitiv nu poate afișa harta 3D',
+            noWebglDetail: 'Safari nu a putut crea un context WebGL — de obicei memoria este ocupată de harta 2D. Închide alte file sau reîncarcă pagina și încearcă din nou.',
+            contextLost: 'Contextul 3D a fost pierdut',
+            contextLostDetail: 'Sistemul a eliberat memoria grafică (aplicatia a trecut în fundal sau memoria era plină). Reluăm desenarea.',
+            safeMode: 'mod avansat (calitate redusă)',
             pitch: 'Înclinare',
             bearing: 'Rotație',
             exaggeration: 'Exagerare relief',
@@ -154,6 +276,12 @@
             failed: 'The 3D view could not start.',
             failedDetail: 'The 3D library could not be loaded. The 2D map keeps working.',
             retry: 'Try again',
+            back: 'Back to 2D',
+            noWebgl: 'This device cannot show the 3D map',
+            noWebglDetail: 'Safari could not create a WebGL context — usually because the 2D map is already using the available graphics memory. Close other tabs or reload the page and try again.',
+            contextLost: 'The 3D context was lost',
+            contextLostDetail: 'The system released the graphics memory (the app went to the background, or memory ran low). Redrawing.',
+            safeMode: 'safe mode (reduced quality)',
             pitch: 'Pitch',
             bearing: 'Bearing',
             exaggeration: 'Terrain exaggeration',
@@ -181,11 +309,15 @@
         if (MAPLIBRE) return Promise.resolve(MAPLIBRE);
         if (sdkPromise) return sdkPromise;
         var cfg = REGISTRY.config().maplibre || {};
+        /* 1 MB of JS on a phone over cellular: the desktop timeout is far too
+         * tight there, and a timeout is indistinguishable from a crash. */
+        var timeoutMs = isMobile() ? (cfg.timeoutMsMobile || cfg.timeoutMs || 15000)
+            : (cfg.timeoutMs || 15000);
         sdkPromise = new Promise(function (resolve, reject) {
             var timer = root.setTimeout(function () {
                 sdkPromise = null;
-                reject(new Error('Timed out loading MapLibre GL'));
-            }, cfg.timeoutMs || 15000);
+                reject(new Error('Timed out loading MapLibre GL after ' + timeoutMs + 'ms'));
+            }, timeoutMs);
 
             function finish() {
                 root.clearTimeout(timer);
@@ -435,13 +567,22 @@
             '<span class="m3d-ring" aria-hidden="true"></span>' +
             '<span class="m3d-veil-title"></span>' +
             '<span class="m3d-veil-detail"></span>' +
-            '<button type="button" class="m3d-veil-action" style="display:none"></button>';
+            '<span class="m3d-veil-actions">' +
+            '<button type="button" class="m3d-veil-action" style="display:none"></button>' +
+            /* The way out of a failure: without it the only exit was the 2D⇄3D
+             * pill, which reads "3D" again after a failure and would simply
+             * retry instead of returning to the map. */
+            '<button type="button" class="m3d-veil-back" style="display:none"></button>' +
+            '</span>';
         surface.appendChild(veil);
         host.appendChild(surface);
 
         veil.querySelector('.m3d-veil-action').addEventListener('click', function () {
             close();
             open();
+        });
+        veil.querySelector('.m3d-veil-back').addEventListener('click', function () {
+            close();
         });
 
         /* Attribution of the layers the 2D map is showing: rasters also carry
@@ -474,7 +615,7 @@
             escapeHtml(list.slice(0, 6).join(' · '));
     }
 
-    function showVeil(mode, title, detail, actionLabel) {
+    function showVeil(mode, title, detail, actionLabel, backLabel) {
         if (!veil) return;
         surface.classList.remove('is-busy', 'is-error');
         if (mode) surface.classList.add(mode === 'error' ? 'is-error' : 'is-busy');
@@ -483,6 +624,9 @@
         var action = veil.querySelector('.m3d-veil-action');
         action.style.display = actionLabel ? '' : 'none';
         action.textContent = actionLabel || '';
+        var back = veil.querySelector('.m3d-veil-back');
+        back.style.display = backLabel ? '' : 'none';
+        back.textContent = backLabel || '';
     }
 
     function hideVeil() {
@@ -657,7 +801,15 @@
      * ═══════════════════════════════════════════════════════════════════════ */
     function terrainSource() { return REGISTRY.terrainSource(); }
 
-    function buildStyle(maplibre) {
+    /**
+     * @param {object} maplibre resolved SDK namespace (unused — kept for the tests)
+     * @param {boolean} safeMode drop everything that is decoration, not map:
+     *        sky and hillshade each cost an extra render pass and their own
+     *        render targets, which is the first thing to shed when a device is
+     *        too tight on GPU memory to open 3D at all. The DEM stays — the
+     *        relief is the reason 3D exists.
+     */
+    function buildStyle(maplibre, safeMode) {
         var ts = terrainSource();
         var cfg = REGISTRY.config();
         var style = {
@@ -690,7 +842,7 @@
                 maxzoom: cfg.hillshade.serviceMaxzoom || 16,
                 attribution: cfg.hillshade.serviceAttribution || ''
             };
-        } else if (cfg.hillshade && cfg.hillshade.enabled && style.sources[ts.id]) {
+        } else if (cfg.hillshade && cfg.hillshade.enabled && !safeMode && style.sources[ts.id]) {
             style.layers.push({
                 id: 'm3d-hillshade',
                 type: 'hillshade',
@@ -704,7 +856,7 @@
             });
         }
 
-        if (cfg.sky && cfg.sky.enabled) {
+        if (cfg.sky && cfg.sky.enabled && !safeMode) {
             style.sky = Object.assign({}, cfg.sky.paint || {});
         }
         return style;
@@ -1543,6 +1695,12 @@
             state.exaggeration.toFixed(1) + '× · ' + on.length + ' ' +
             escapeHtml(lang() === 'ro' ? 'straturi active' : 'active layers') +
             ' · ' + escapeHtml(t('mirrored')) + '</div>');
+        /* The device refused a full-quality GL context, so 3D is running
+         * reduced — say so rather than letting the user wonder why it looks
+         * flatter than on the desktop. */
+        if (state.safeMode) {
+            rows.push('<div class="m3d-sum is-warn">' + escapeHtml(t('safeMode')) + '</div>');
+        }
         box.innerHTML = rows.join('');
     }
 
@@ -1560,6 +1718,64 @@
     /* ═══════════════════════════════════════════════════════════════════════
      *  OPEN / CLOSE
      * ═══════════════════════════════════════════════════════════════════════ */
+
+    /**
+     * The MapLibre constructor options for this device.
+     *
+     * `pixelRatio` and `maxCanvasSize` are passed IN, not applied afterwards:
+     * MapLibre creates the WebGL context inside the constructor, so anything
+     * set later can only resize a context that already had to be allocated at
+     * the device's full ratio — which is precisely what iOS Safari refuses.
+     *
+     * `antialias` lives in `canvasContextAttributes` (v5 ignores a top-level
+     * `antialias`, so the old code was silently running without it on desktop
+     * and asking for the default on every device).
+     */
+    function buildMapOptions(cam, profile, safeMode) {
+        var cfg = REGISTRY.config();
+        var attrs = {};
+        for (var key in profile.canvasContextAttributes) {
+            if (Object.prototype.hasOwnProperty.call(profile.canvasContextAttributes, key)) {
+                attrs[key] = profile.canvasContextAttributes[key];
+            }
+        }
+        var pixelRatio = profile.pixelRatio;
+        var maxCanvasSize = profile.maxCanvasSize;
+        if (safeMode) {
+            attrs.antialias = false;
+            attrs.powerPreference = 'low-power';
+            attrs.preserveDrawingBuffer = false;
+            attrs.failIfMajorPerformanceCaveat = false;
+            attrs.depth = true;
+            attrs.stencil = false;
+            pixelRatio = 1;
+            maxCanvasSize = [1024, 1024];
+        }
+        var options = {
+            container: surface,
+            style: buildStyle(root.maplibregl || {}, safeMode),
+            center: cam.center,
+            zoom: cam.zoom,
+            bearing: cam.bearing,
+            pitch: (CONFIG.camera && CONFIG.camera.pitch) || 60,
+            minZoom: (CONFIG.camera && CONFIG.camera.minZoom) || 2,
+            maxZoom: (CONFIG.camera && CONFIG.camera.maxZoom) || 20,
+            maxPitch: (CONFIG.camera && CONFIG.camera.maxPitch) || 80,
+            attributionControl: { compact: true },
+            maxTileCacheSize: safeMode ? Math.min(32, profile.maxTileCacheSize) : profile.maxTileCacheSize,
+            fadeDuration: (cfg.perf && cfg.perf.fadeDuration) || 120,
+            canvasContextAttributes: attrs,
+            hash: false,
+            cooperativeGestures: false
+        };
+        /* Only set the ones we have a value for: MapLibre has its own defaults
+         * (devicePixelRatio and a 4096² ceiling) and `undefined` would override
+         * them with nothing. */
+        if (pixelRatio) options.pixelRatio = pixelRatio;
+        if (maxCanvasSize) options.maxCanvasSize = maxCanvasSize;
+        return options;
+    }
+
     function open() {
         if (state.open) return Promise.resolve(true);
         if (!wrapper()) {
@@ -1571,32 +1787,40 @@
         ensureToggle();
         document.body.classList.add('is-3d');
         state.open = true;
+        state.failed = false;
         refreshToggle();
         showVeil('busy', t('loading'), t('loadingDetail'), null);
+
+        /* Before spending 1 MB on the SDK: can this browser do WebGL at all?
+         * A device that cannot gets an explanation instead of a flash of dark
+         * canvas and a silent return to 2D. */
+        var probe = webglProbe(true);
+        if (!probe.webgl2 && !probe.webgl) {
+            return Promise.resolve(reportNoWebgl(probe));
+        }
 
         return loadMapLibre().then(function (maplibre) {
             if (!state.open) return true;
             registerProtocols(maplibre);
             var cfg = REGISTRY.config();
             var cam = cameraFrom2D();
-            var options = {
-                container: surface,
-                style: buildStyle(maplibre),
-                center: cam.center,
-                zoom: cam.zoom,
-                bearing: cam.bearing,
-                pitch: (CONFIG.camera && CONFIG.camera.pitch) || 60,
-                minZoom: (CONFIG.camera && CONFIG.camera.minZoom) || 2,
-                maxZoom: (CONFIG.camera && CONFIG.camera.maxZoom) || 20,
-                maxPitch: (CONFIG.camera && CONFIG.camera.maxPitch) || 80,
-                attributionControl: { compact: true },
-                maxTileCacheSize: (cfg.perf && cfg.perf.maxTileCacheSize) || 320,
-                fadeDuration: (cfg.perf && cfg.perf.fadeDuration) || 120,
-                antialias: true,
-                hash: false,
-                cooperativeGestures: false
-            };
-            map = new maplibre.Map(options);
+            var profile = deviceProfile();
+
+            /* One attempt at full quality, one at the minimum a phone will
+             * grant. MapLibre throws SYNCHRONOUSLY from the constructor when
+             * getContext('webgl2') returns null, so this is a plain try/catch
+             * around `new` — no promise, no event, no error dialog by itself. */
+            try {
+                map = new maplibre.Map(buildMapOptions(cam, profile, false));
+            } catch (firstError) {
+                pushError('first GL context refused: ' + String((firstError && firstError.message) || firstError));
+                state.safeMode = true;
+                state.probe = null;          /* the memoised verdict is now stale */
+                console.warn('[Map3D] WebGL context refused — retrying in safe mode');
+                /* Throws again → falls through to the .catch below, which now
+                 * has a real message to show the user. */
+                map = new maplibre.Map(buildMapOptions(cam, profile, true));
+            }
             if (!state.open) {                    /* closed while the SDK was loading */
                 try { map.remove(); } catch (e) { /* ignore */ }
                 map = null;
@@ -1615,9 +1839,19 @@
             if (maplibre.ScaleControl) {
                 map.addControl(new maplibre.ScaleControl({ maxWidth: 80, unit: 'metric' }), 'bottom-left');
             }
-            if (isMobile() && typeof map.setPixelRatio === 'function') {
-                try { map.setPixelRatio(cfg.perf.mobilePixelRatio || 1); } catch (e) { /* ignore */ }
+            /* The pixel ratio is already IN the constructor above; this only
+             * covers an SDK that ignores the option, and only when the ratio
+             * actually differs — an unconditional setPixelRatio() forces a
+             * full resize on every open. */
+            if (profile.pixelRatio && typeof map.setPixelRatio === 'function' &&
+                typeof map.getPixelRatio === 'function' && map.getPixelRatio() !== profile.pixelRatio) {
+                try { map.setPixelRatio(profile.pixelRatio); } catch (e) { /* ignore */ }
             }
+
+            /* iOS drops the GL context when the app is backgrounded or memory
+             * runs short; MapLibre then renders a black canvas with no visible
+             * reason. Say so, and redraw as soon as it comes back. */
+            watchContextLoss();
 
             /* The deck is not gated on a single event: 'load' waits for the DEM,
              * so a slow/unreachable elevation model would hide every layer.
@@ -1654,19 +1888,74 @@
             document.addEventListener('detectlab:langchange', refreshBarCopy);
             return true;
         }).catch(function (error) {
-            console.error('[Map3D] ' + (error && error.message || error));
-            showVeil('error', t('failed'), t('failedDetail'), t('retry'));
-            state.open = false;
-            document.body.classList.remove('is-3d');
-            refreshToggle();
-            return false;
+            return fail3D(error);
         });
     }
 
+    /**
+     * A failure the user has to be able to SEE.
+     *
+     * `body.is-3d` is deliberately NOT removed here. That class is what makes
+     * #map3d-surface display at all (`display:none` without it), and the veil
+     * holding this message lives inside the surface — so dropping the class
+     * hid the explanation along with the map. That is the whole of the mobile
+     * bug as it presented: tap 3D, dark rectangle flashes, straight back to
+     * 2D, no reason given anywhere.
+     *
+     * The surface now stays up with the message and two ways out (retry /
+     * back to 2D). state.open goes false so the 2D⇄3D pill reads “3D” again
+     * and one more tap retries; close() is what finally removes the class.
+     */
+    function fail3D(error) {
+        var message = String((error && error.message) || error || 'unknown error');
+        state.lastError = message;
+        pushError(message);
+        console.error('[Map3D] ' + message);
+        state.failed = true;
+        state.open = false;
+        showVeil('error', t('failed'), t('failedDetail') + ' (' + message + ')', t('retry'), t('back'));
+        refreshToggle();
+        renderStatus();
+        return false;
+    }
+
+    /** No WebGL at all — the SDK is never even downloaded. */
+    function reportNoWebgl(probe) {
+        var detail = t('noWebglDetail') + (probe.error ? ' (' + probe.error + ')' : '');
+        state.lastError = probe.error || 'no WebGL';
+        state.failed = true;
+        showVeil('error', t('noWebgl'), detail, t('retry'), t('back'));
+        return false;
+    }
+
+    /* iOS/Android reclaim the GPU context on backgrounding or memory pressure.
+     * MapLibre's own handling keeps the map object alive but paints nothing,
+     * so the veil is the only honest signal there is. */
+    function watchContextLoss() {
+        var canvas = null;
+        try { canvas = map && map.getCanvas ? map.getCanvas() : null; } catch (e) { canvas = null; }
+        if (!canvas || !canvas.addEventListener) return;
+        canvas.addEventListener('webglcontextlost', function (event) {
+            try { if (event && event.preventDefault) event.preventDefault(); } catch (e) { /* ignore */ }
+            state.contextLost = true;
+            pushError('WebGL context lost');
+            showVeil('error', t('contextLost'), t('contextLostDetail'), t('retry'), t('back'));
+        }, false);
+        canvas.addEventListener('webglcontextrestored', function () {
+            state.contextLost = false;
+            hideVeil();
+            state.firstSyncDone = false;
+            scheduleSync();
+        }, false);
+    }
+
     function close() {
-        if (!state.open && !map) return false;
+        if (!state.open && !map && !state.failed) return false;
         state.open = false;
         state.firstSyncDone = false;
+        state.failed = false;
+        state.safeMode = false;
+        state.contextLost = false;
         stopPanelWatcher();
         state.healthTimers.forEach(function (timer) { root.clearTimeout(timer); });
         state.healthTimers = [];
@@ -1682,6 +1971,7 @@
         state.images = {};
         state.pendingImages = {};
         popup = null;
+        hideVeil();
         document.body.classList.remove('is-3d');
         refreshToggle();
         return true;
@@ -1781,6 +2071,16 @@
         return {
             open: state.open,
             exaggeration: state.exaggeration,
+            /* Mobile diagnostics — what the device was asked for and whether
+             * it had to fall back. Surfaced by /api/map3d/status and quoted by
+             * the support report. */
+            mobile: isMobile(),
+            deviceProfile: deviceProfile(),
+            safeMode: !!state.safeMode,
+            failed: !!state.failed,
+            contextLost: !!state.contextLost,
+            lastError: state.lastError || '',
+            webgl: webglProbe(),
             camera: map ? {
                 center: [map.getCenter().lng, map.getCenter().lat],
                 zoom: map.getZoom(),
@@ -1864,8 +2164,14 @@
         report: report,
         registry: REGISTRY,
         mirror: MIRROR,
-        /* kept for the automated tests: build the style without a GPU */
+        /* kept for the automated tests: build the style / options without a GPU */
         _buildStyle: function () { return buildStyle(root.maplibregl || {}); },
+        _mapOptions: function (safeMode) {
+            return buildMapOptions(cameraFrom2D(), deviceProfile(), !!safeMode);
+        },
+        _webglProbe: webglProbe,
+        _deviceProfile: deviceProfile,
+        getLastError: function () { return state.lastError || ''; },
         _deckOrder: computeDeckOrder,
         _mirror: function () { collectMirror(); return state.mirror; },
         _fetchTile: fetchTile

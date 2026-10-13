@@ -39,7 +39,7 @@ const mirrorSource = read('js/map3d-mirror.js');
 const skin = read('css/map3d-terrain.css');
 
 const TAG = '20261013-3d-terrain';             /* MapLibre itself (unchanged) */
-const TAG_3D = '20261013-3d-mirror';           /* registry + mirror + viewer  */
+const TAG_3D = '20261013-3d-mobile';           /* registry + mirror + viewer  */
 
 // ══════════════════════════════════════════════════════════════
 // 1. Static wiring — the viewer must be reachable in the app
@@ -71,7 +71,7 @@ const TAG_3D = '20261013-3d-mirror';           /* registry + mirror + viewer  */
         assert(swJs.includes("'" + asset + "'"), 'sw.js precaches ' + asset);
     });
     const shellVersion = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
-    assert(shellVersion >= 195, 'sw.js cache is v195 or newer so installed PWAs get the mirrored 3D view');
+    assert(shellVersion >= 196, 'sw.js cache is v196 or newer so installed PWAs get the mobile 3D fix');
 
     // Netlify: the route exists both as a function path and as a redirect
     assert(read('netlify/functions/map3d-tile.mjs').includes("path: '/api/map3d/tile'"),

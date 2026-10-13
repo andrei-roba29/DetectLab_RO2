@@ -31,7 +31,7 @@
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
     <link rel="stylesheet" href="css/maplibre-gl.css?v=20261013-3d-terrain">
-    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261013-3d-mirror">
+    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261013-3d-mobile">
     <link rel="stylesheet" href="css/globe-country-picker.css?v=20261013-no-change-pill">
     <link rel="stylesheet" href="css/country-dock.css?v=20261008">
     <link rel="stylesheet" href="css/library-of-babel.css?v=20260917-babel-epochs">
@@ -4813,7 +4813,7 @@
          map, the 3D terrain view and the tile proxy all read it, so the two
          views can never drift apart. Must load before map-app.js and
          historical-eu-maps.js. -->
-    <script src="js/layer-registry.js?v=20261013-3d-mirror"></script>
+    <script src="js/layer-registry.js?v=20261013-3d-mobile"></script>
     <script src="js/map-app.js?v=20261013-fr-lidar"></script>
     <script src="js/historical-eu-maps.js?v=20261013-flat-hist-maps"></script>
     <!-- 2D ⇄ 3D: MapLibre GL viewer draped over the DEM. The 3D deck is the
@@ -4821,8 +4821,8 @@
          GeoJSON, markers, clusters and heatmaps included (js/map3d-mirror.js)
          — so nothing can be visible in 2D and missing in 3D. MapLibre GL
          itself is downloaded only when 3D is opened (js/map3d-terrain.js). -->
-    <script src="js/map3d-mirror.js?v=20261013-3d-mirror"></script>
-    <script src="js/map3d-terrain.js?v=20261013-3d-mirror"></script>
+    <script src="js/map3d-mirror.js?v=20261013-3d-mobile"></script>
+    <script src="js/map3d-terrain.js?v=20261013-3d-mobile"></script>
     <script src="js/offline-maps.js?v=20261009-3d-globe"></script>
     <script src="js/battles-layer.js?v=20260902-battles-label-anchor"></script>
     <script src="js/vertical-opacity-control.js?v=20261002-persistent-layer-actions-v2"></script>
