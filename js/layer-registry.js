@@ -8,7 +8,7 @@
         : typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
     'use strict';
 
-    var VERSION = '2026-10-13-3d-terrain-v1';
+    var VERSION = '2026-10-13-3d-mirror-v1';
 
     /* ═══════════════════════════════════════════════════════════════════════
      *  3D VIEW DEFAULTS — terrain, hillshade, sky, camera
@@ -114,7 +114,12 @@
             enabled: true,               // false = never route through it
             probe: true,                 // probe unknown hosts once per session
             tileCacheSeconds: 86400,
-            timeoutMs: 15000
+            timeoutMs: 15000,
+            /* Hosts a layer may be relayed from (?u=) in addition to the ones
+             * this registry and the country LiDAR modules already use. Only a
+             * layer of your own needs an entry here — never a private host:
+             * loopback/private addresses are refused by the proxy outright. */
+            extraHosts: []
         },
         perf: {
             /* Phones: 1 device pixel ratio, fewer DEM tiles, shorter tile life */
@@ -1231,20 +1236,192 @@
 
     function get(id) { return BY_ID[id] || null; }
 
-    function list() { return LAYERS.slice(); }
+    /* ═══════════════════════════════════════════════════════════════════════
+     *  MIRROR STUBS — layers that only exist on the live 2D map
+     * -----------------------------------------------------------------------
+     *  The registry describes the services; the 2D map decides which of them
+     *  are actually drawn. A layer the 2D app builds on its own (a plugin, a
+     *  runtime overlay, a group the panel creates lazily, a layer registered
+     *  from the console) has no definition here, and used to be invisible to
+     *  everything that reads this registry — including the 3D view.
+     *
+     *  js/map3d-mirror.js describes exactly those layers. They are folded in
+     *  as read-only stub definitions, so `list()`/`ordered()`/`diagnostics()`
+     *  cover every visible layer. An explicit definition always wins.
+     * ═══════════════════════════════════════════════════════════════════════ */
+    var STUBS = { cache: null, at: 0 };
+
+    var STUB_KIND = {
+        raster: 'xyz',
+        image: 'image-overlay',
+        vector: 'geojson',
+        markers: 'marker',
+        cluster: 'cluster',
+        heat: 'heatmap',
+        video: 'video',
+        unsupported: 'unsupported'
+    };
+
+    function mirrorStubs() {
+        var mirror = root && root.DetectLabMirror;
+        if (!mirror || typeof mirror.collect !== 'function' || typeof mirror.describe !== 'function') return [];
+        var map = root._dlMap || root.map;
+        if (!map || typeof map.eachLayer !== 'function') return [];
+        /* `list()` is called from the status panel and the tests, so the walk
+         * is cached for a second — the mirror itself is the source of truth,
+         * this only avoids re-walking an unchanged map. */
+        var now = Date.now();
+        if (STUBS.cache && now - STUBS.at < 1000) return STUBS.cache;
+        var out = [];
+        try {
+            var collected = mirror.collect(map);
+            (collected.items || []).forEach(function (item) {
+                if (!item || !item.key || BY_ID[item.key]) return;      /* explicit definition wins */
+                out.push(stubDef(item));
+            });
+        } catch (e) { out = []; }
+        STUBS.cache = out;
+        STUBS.at = now;
+        return out;
+    }
+
+    function stubDef(item) {
+        var title = item.label || item.key;
+        return {
+            id: item.key,
+            stub: true,                       /* mirrored from the live 2D map */
+            group: 'mirror',
+            z: item.z == null ? 1000 : item.z,
+            kind: STUB_KIND[item.kind] || 'xyz',
+            kind3d: item.kind,
+            url: item.template || item.url || '',
+            template: item.template || '',
+            layer: '',
+            opacity: item.opacity == null ? 1 : item.opacity,
+            tileSize: item.tileSize || 256,
+            minZoom: item.minzoom == null ? 0 : item.minzoom,
+            maxZoom: item.maxzoom == null ? 20 : item.maxzoom,
+            bounds: item.bounds || null,
+            attribution: item.attribution || '',
+            cors: 'unknown',
+            proxy: 'auto',
+            modes: null,
+            ui: { mirror: true },
+            title: { ro: title, en: title },
+            notes: 'mirrored from the live 2D map (' + item.kind + '); tile URLs are built by the 2D layer itself'
+        };
+    }
+
+    /** Explicit definitions + everything the live 2D map is showing. */
+    function list() { return LAYERS.concat(mirrorStubs()); }
 
     function byGroup(group) {
-        return LAYERS.filter(function (def) { return def.group === group; });
+        return list().filter(function (def) { return def.group === group; });
     }
 
     /* Draw order for the 3D deck: base first, then the 2D pane z-index, then
      * the panel order — exactly what Leaflet does with its panes. */
     function ordered() {
-        return LAYERS.slice().sort(function (a, b) {
+        var all = list();
+        return all.sort(function (a, b) {
             var za = a.z == null ? 1000 : a.z, zb = b.z == null ? 1000 : b.z;
             if (za !== zb) return za - zb;
-            return LAYERS.indexOf(a) - LAYERS.indexOf(b);
+            return all.indexOf(a) - all.indexOf(b);
         });
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     *  MATCHING — which definition is a live 2D layer built from?
+     * -----------------------------------------------------------------------
+     *  Used by js/map3d-mirror.js when it translates a Leaflet layer: a layer
+     *  that matches a definition inherits its title, attribution, CORS/proxy
+     *  policy and zoom window instead of being an anonymous tile layer.
+     *  Matching is deliberately strict (host + path + LAYERS), so a runtime
+     *  layer of the user's own is never mistaken for a defined one.
+     * ═══════════════════════════════════════════════════════════════════════ */
+    function normalizeUrl(url) {
+        return String(url || '')
+            .replace(/^https?:\/\//i, '')
+            .replace(/\{[^}]*\}/g, '{x}')
+            .replace(/\?.*$/, '')
+            .replace(/\/+$/, '')
+            .toLowerCase();
+    }
+
+    function normalizeLayers(value) {
+        return String(value || '').split(',').map(function (part) { return part.trim().toLowerCase(); })
+            .filter(Boolean).sort().join(',');
+    }
+
+    function matchDef(probe) {
+        if (!probe || !probe.url) return null;
+        var url = normalizeUrl(probe.url);
+        var layers = normalizeLayers(probe.layers);
+        var version = probe.version == null ? '' : String(probe.version);
+        for (var i = 0; i < LAYERS.length; i += 1) {
+            var def = LAYERS[i];
+            var candidates = [def.url].concat(Object.keys(def.alt || {}).map(function (key) { return def.alt[key]; }));
+            for (var c = 0; c < candidates.length; c += 1) {
+                if (normalizeUrl(candidates[c]) !== url) continue;
+                var defLayers = normalizeLayers(def.layer || def.layers);
+                /* A WMS/WMTS request carries its LAYERS: when both sides have
+                 * one it must be the same service, so two definitions sharing
+                 * an endpoint are never interchangeable. */
+                if (layers && defLayers && layers !== defLayers) continue;
+                if (version && def.version && String(def.version) !== version && layers && defLayers) continue;
+                return def;                                            /* first exact hit wins */
+            }
+        }
+        return null;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     *  HOST POLICY — may the 3D view fetch a host directly?
+     *  Answers with what the definitions already declare about their hosts, so
+     *  a tile request is routed (direct or via the same-origin proxy) without
+     *  waiting for a failed request. 'unknown' = try direct, heal if it fails.
+     * ═══════════════════════════════════════════════════════════════════════ */
+    var HOSTS = null;
+
+    function hostOf(def) {
+        var url = def && (def.url || def.template || '');
+        var m = String(url).match(/^https?:\/\/([^/?#]+)/i);
+        return m ? m[1].toLowerCase() : '';
+    }
+
+    function hostPolicy() {
+        if (HOSTS) return HOSTS;
+        HOSTS = {};
+        function note(host, cors, proxy) {
+            if (!host) return;
+            var verdict = (proxy === 'never') ? 'never'
+                : (proxy === 'always' || cors === 'no') ? 'always'
+                    : (cors === 'yes' ? 'never' : 'unknown');
+            /* An explicit "never" is only overridden by an explicit "always". */
+            if (!HOSTS[host] || verdict === 'always' || (HOSTS[host] === 'unknown' && verdict === 'never')) {
+                HOSTS[host] = verdict;
+            }
+        }
+        LAYERS.forEach(function (def) {
+            note(hostOf(def), def.cors, def.proxy);
+            Object.keys(def.alt || {}).forEach(function (key) {
+                note(hostOf({ url: def.alt[key] }), def.cors, def.proxy);
+            });
+        });
+        /* Hosts whose verdict is documented in MAP_3D_TERRAIN.md §“CORS /
+         * transport” — kept here so the first 3D paint already takes the right
+         * route instead of burning a wave of failed tiles. `auto`/`unknown`
+         * hosts are deliberately absent: the viewer tries them directly and
+         * heals to the proxy for the rest of the session. */
+        note('server.arcgisonline.com', 'yes', 'never');
+        note('services.arcgisonline.com', 'yes', 'never');
+        note('tiles.arcgis.com', 'yes', 'never');
+        note('s3.amazonaws.com', 'yes', 'never');
+        note('api.maptiler.com', 'yes', 'never');
+        note('image.discomap.eea.europa.eu', 'no', 'always');
+        note('copernicus.discomap.eea.europa.eu', 'no', 'always');
+        note('geoserve.cast.uark.edu', 'no', 'always');
+        return HOSTS;
     }
 
     /* ═══════════════════════════════════════════════════════════════════════
@@ -1699,6 +1876,13 @@
 
     /** Is the layer currently switched on in the 2D panel? */
     function is2dActive(def) {
+        /* A mirrored (stub) layer only exists in this list while the live 2D
+         * map is showing it — the mirror is the answer. */
+        if (def.stub) {
+            var mirror = root && root.DetectLabMirror;
+            if (mirror && typeof mirror.layerByKey === 'function') return !!mirror.layerByKey(def.id);
+            return false;
+        }
         var el = uiElement(def, 'toggle');
         if (el) return !!el.checked;
         /* Layers without a switch of their own follow a select (satellite
@@ -1861,6 +2045,10 @@
         all: list,
         byGroup: byGroup,
         ordered: ordered,
+        /* mirrored stub definitions + host routing policy */
+        mirrorStubs: mirrorStubs,
+        hostPolicy: hostPolicy,
+        matchDef: matchDef,
         cenagisCatalog: cenagisCatalog,
         cenagis: { url: CENAGIS.url, version: CENAGIS.version, format: CENAGIS.format, transparent: CENAGIS.transparent, opacity: CENAGIS.opacity },
         resolve: resolveDef,

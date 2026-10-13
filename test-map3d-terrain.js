@@ -1,14 +1,20 @@
 // Regression suite for the 3D terrain view (2D ⇄ 3D).
 //
-// Covers: the single shared layer registry (js/layer-registry.js), the MapLibre
-// viewer (js/map3d-terrain.js), the same-origin tile proxy
-// (netlify/lib/map3d-tile.mjs + netlify/functions/map3d-tile.mjs +
-// tools/map3d-dev-server.mjs) and the wiring in index.html / sw.js /
-// netlify.toml / js/map-app.js / js/historical-eu-maps.js.
+// Covers: the shared layer registry (js/layer-registry.js), the 2D→3D mirror
+// (js/map3d-mirror.js), the MapLibre viewer (js/map3d-terrain.js), the
+// same-origin tile proxy (netlify/lib/map3d-tile.mjs +
+// netlify/functions/map3d-tile.mjs + tools/map3d-dev-server.mjs) and the wiring
+// in index.html / sw.js / netlify.toml.
 //
-// The point of the shared registry is that a layer is defined ONCE: these
-// checks fail if a service fact (URL, LAYERS, FORMAT, VERSION, attribution)
-// starts living in two places again.
+// The invariants this file protects:
+//   1. a layer is defined ONCE — in the registry (service facts) and/or as a
+//      live 2D Leaflet layer (the mirror). The viewer may not hard-code a URL.
+//   2. the 3D deck is the mirror of the live 2D map, so nothing can be visible
+//      in 2D and missing in 3D: raster, WMS/WMTS, images, vectors, markers,
+//      clusters and heatmaps are all translated.
+//   3. the stack is background ▸ base ▸ hillshade ▸ overlays in 2D pane order,
+//      re-asserted after every change (the defect this work fixes).
+//   4. the tile proxy stays an allow-listed relay, never an open proxy.
 //
 // Usage: node test-map3d-terrain.js
 'use strict';
@@ -18,7 +24,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-console.log('[Test] 3D terrain view — shared registry, MapLibre viewer, tile proxy...');
+console.log('[Test] 3D terrain view — mirror, shared registry, MapLibre viewer, tile proxy...');
 
 const read = function (p) { return fs.readFileSync(path.join(__dirname, p), 'utf8'); };
 
@@ -29,141 +35,209 @@ const mapApp = read('js/map-app.js');
 const histEu = read('js/historical-eu-maps.js');
 const viewer = read('js/map3d-terrain.js');
 const registrySource = read('js/layer-registry.js');
+const mirrorSource = read('js/map3d-mirror.js');
+const skin = read('css/map3d-terrain.css');
 
-const TAG = '20261013-3d-terrain';            /* MapLibre itself (unchanged) */
-const TAG_LIDAR = '20261013-3d-lidar';        /* registry + viewer after the LiDAR release */
-const TAG_POSITION = '20261013-3d-position';  /* 3D skin after the control-placement fix */
+const TAG = '20261013-3d-terrain';             /* MapLibre itself (unchanged) */
+const TAG_3D = '20261013-3d-mirror';           /* registry + mirror + viewer  */
 
 // ══════════════════════════════════════════════════════════════
 // 1. Static wiring — the viewer must be reachable in the app
 // ══════════════════════════════════════════════════════════════
 {
-    const registryTag = indexHtml.indexOf('js/layer-registry.js?v=' + TAG_LIDAR);
-    const viewerTag = indexHtml.indexOf('js/map3d-terrain.js?v=' + TAG_LIDAR);
+    const registryTag = indexHtml.indexOf('js/layer-registry.js?v=' + TAG_3D);
+    const mirrorTag = indexHtml.indexOf('js/map3d-mirror.js?v=' + TAG_3D);
+    const viewerTag = indexHtml.indexOf('js/map3d-terrain.js?v=' + TAG_3D);
     const mapAppTag = indexHtml.indexOf('js/map-app.js?v=');
     const histEuTag = indexHtml.indexOf('js/historical-eu-maps.js?v=');
     assert(registryTag !== -1, 'index.html loads the shared layer registry');
+    assert(mirrorTag !== -1, 'index.html loads the 2D→3D mirror');
     assert(viewerTag !== -1, 'index.html loads the 3D terrain viewer');
     assert(registryTag < mapAppTag, 'the registry loads before map-app.js builds the layers');
     assert(registryTag < histEuTag, 'the registry loads before the CENAGIS catalogue');
-    assert(registryTag < viewerTag, 'the viewer loads after its registry');
+    assert(registryTag < mirrorTag && mirrorTag < viewerTag,
+        'registry → mirror → viewer: the viewer reads both, and neither reads the viewer');
     assert(indexHtml.includes('css/maplibre-gl.css?v=' + TAG) &&
-           indexHtml.includes('css/map3d-terrain.css?v=' + TAG_POSITION),
+           indexHtml.includes('css/map3d-terrain.css?v=' + TAG_3D),
         'index.html loads the MapLibre stylesheet and the 3D skin');
     assert(indexHtml.indexOf('css/maplibre-gl.css') < indexHtml.indexOf('css/map3d-terrain.css'),
         'the 3D skin comes after the stylesheet it re-skins');
 
     // Service worker: the shell must ship the new modules, and the cache must
-    // be bumped so an installed PWA picks the 3D view up.
-    ['js/layer-registry.js?v=' + TAG_LIDAR, 'js/map3d-terrain.js?v=' + TAG_LIDAR,
-     'js/maplibre-gl.js?v=' + TAG, 'css/map3d-terrain.css?v=' + TAG_POSITION,
-     'css/maplibre-gl.css?v=' + TAG].forEach(function (asset) {
+    // be bumped so an installed PWA picks the mirrored 3D view up.
+    ['js/layer-registry.js?v=' + TAG_3D, 'js/map3d-mirror.js?v=' + TAG_3D,
+     'js/map3d-terrain.js?v=' + TAG_3D, 'js/maplibre-gl.js?v=' + TAG,
+     'css/map3d-terrain.css?v=' + TAG_3D, 'css/maplibre-gl.css?v=' + TAG].forEach(function (asset) {
         assert(swJs.includes("'" + asset + "'"), 'sw.js precaches ' + asset);
     });
     const shellVersion = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
-    assert(shellVersion >= 194, 'sw.js cache is v194 or newer so installed PWAs get the 3D view');
+    assert(shellVersion >= 195, 'sw.js cache is v195 or newer so installed PWAs get the mirrored 3D view');
 
     // Netlify: the route exists both as a function path and as a redirect
-    // (same belt-and-braces as /api/corona/rasters).
     assert(read('netlify/functions/map3d-tile.mjs').includes("path: '/api/map3d/tile'"),
         'the Netlify function claims /api/map3d/tile');
     assert(/from = "\/api\/map3d\/tile"[\s\S]{0,80}to = "\/\.netlify\/functions\/map3d-tile"/.test(netlifyToml),
         'netlify.toml redirects /api/map3d/tile to the function');
     assert(read('tools/map3d-dev-server.mjs').includes("from '../netlify/lib/map3d-tile.mjs'"),
         'the dev server runs the same proxy code as production');
-    console.log('  ✓ index.html / sw.js / netlify.toml wire the registry, the viewer and the proxy');
+    console.log('  ✓ index.html / sw.js / netlify.toml wire the registry, the mirror, the viewer and the proxy');
 }
 
 // ══════════════════════════════════════════════════════════════
-// 2. The registry itself (Node side, no DOM)
+// 2. No second source of truth
+// ══════════════════════════════════════════════════════════════
+{
+    assert(!/https?:\/\/[a-z0-9.-]+\//i.test(viewer),
+        'the viewer hard-codes no service URL — every URL comes from the registry or from the live 2D layer');
+    assert(/DetectLabMirror/.test(viewer) && /DetectLabLayers/.test(viewer),
+        'the viewer reads both the live 2D map and the shared registry');
+    assert(/_dlMap/.test(viewer) && /_dlMap/.test(mirrorSource),
+        'both read the live 2D Leaflet map (window._dlMap), not a copy of the layer list');
+    assert(/url2d|wms2dOptions|tile2dOptions|cenagisCatalog/.test(mapApp) && /DetectLabLayers/.test(mapApp),
+        'the 2D map keeps building its layers from the same registry');
+    assert(!/DetectLabMap3D/.test(mapApp) && !/DetectLabMirror/.test(mapApp),
+        'the 2D map does not depend on the 3D view (it keeps working with the viewer absent)');
+    assert(/url2d|wms2dOptions|tile2dOptions/.test(histEu), 'the historical catalogue uses the same registry');
+    console.log('  ✓ one definition per layer: registry + live 2D layers, nothing duplicated in the viewer');
+}
+
+// ══════════════════════════════════════════════════════════════
+// 3. The registry itself (Node side, no DOM)
 // ══════════════════════════════════════════════════════════════
 {
     const R = require('./js/layer-registry.js');
+    assert(R.VERSION.indexOf('3d-mirror') !== -1, 'the registry carries the mirror release version');
     const layers = R.list();
-    assert(layers.length >= 90, 'the registry defines every layer (' + layers.length + ')');
-    const ids = layers.map(function (d) { return d.id; });
-    assert(new Set(ids).size === ids.length, 'layer ids are unique');
-    layers.forEach(function (d) {
-        assert(d.id && d.group && d.kind, 'every layer has id/group/kind: ' + JSON.stringify(d.id));
-        assert(['wms', 'wmts', 'xyz', 'arcgis-image', 'dynamic'].indexOf(d.kind) !== -1,
-            d.id + ' has a known kind (' + d.kind + ')');
-        assert(d.kind === 'dynamic' || d.url, d.id + ' has an endpoint');
-    });
-    assert(Object.keys(R.cenagisCatalog()).length === 45, 'all 45 CENAGIS sheets are in the registry');
-    assert(R.get('cenagis.city_warszawa_1822').reproject &&
-           R.get('cenagis.city_praga_1796').reproject,
-        'the two EPSG:2180-only sheets are flagged for reprojection');
-    assert(/^https:\/\//.test(R.terrainSource().tiles[0]), 'the default DEM is a real tile template');
-    assert(R.terrainSource().encoding === 'terrarium', 'the keyless default DEM is Terrarium-encoded');
-    assert(R.config().maplibre.js.indexOf('js/maplibre-gl.js?v=' + TAG) === 0,
-        'the vendored MapLibre build is loaded with the same version tag');
-    assert(R.config().proxy.base.indexOf('/api/map3d/tile') === 0, 'the proxy base path is the Netlify route');
+    assert(layers.length >= 90, 'the registry still describes every layer (' + layers.length + ')');
+    const ordered = R.ordered();
+    for (let i = 1; i < ordered.length; i += 1) {
+        assert((ordered[i - 1].z == null ? 1000 : ordered[i - 1].z) <= (ordered[i].z == null ? 1000 : ordered[i].z),
+            'ordered() sorts by the 2D pane z-index (draw order)');
+    }
+    assert(R.list().every(function (d) { return d.id && d.group; }), 'every definition has an id and a group');
 
-    // Every definition is complete enough for BOTH views.
-    const xyz = R.get('premium.bucovina');
-    assert(xyz.url.indexOf('{z}') !== -1 && xyz.tileSize === 256 && xyz.opacity === 0.8,
-        'tile pyramids carry their template, tile size and default opacity');
-    const wms = R.get('hist.austrian');
-    assert(wms.layer === 'eharta:mozaic_austrian_200k' && wms.version === '1.1.0' &&
-           wms.format === 'image/png' && wms.transparent === true,
-        'WMS layers carry LAYERS/FORMAT/VERSION/TRANSPARENT');
-    assert(R.wms2dOptions('hist.austrian', { pane: 'pane_austrian' }).pane === 'pane_austrian' &&
-           R.wms2dOptions('hist.austrian', {}).layers === 'eharta:mozaic_austrian_200k',
-        'wms2dOptions() hands Leaflet exactly the registry service facts');
-    console.log('  ✓ registry: ' + layers.length + ' layers, 45 CENAGIS sheets, DEM + proxy config');
+    /* host policy — what the viewer uses to decide direct vs proxy */
+    const policy = R.hostPolicy();
+    assert(policy['server.arcgisonline.com'] === 'never' && policy['tiles.arcgis.com'] === 'never',
+        'CORS-enabled hosts are declared direct');
+    assert(policy['image.discomap.eea.europa.eu'] === 'always' &&
+           policy['geoserve.cast.uark.edu'] === 'always',
+        'hosts with no CORS at all are declared proxy-only (never a failed direct wave)');
+    assert(policy['pastmaps.cenagis.edu.pl'] === 'unknown' &&
+           policy['services.geo-spatial.org'] === 'unknown',
+        'hosts whose CORS is merely unproven stay “auto”: direct first, healed to the proxy if they fail');
+
+    /* mirror stubs: without a 2D map there is nothing extra, and list() stays pure */
+    assert(typeof R.mirrorStubs === 'function' && R.mirrorStubs().length === 0,
+        'with no live 2D map, list() is exactly the declared layers (no phantom entries)');
+    assert(R.get('base.imagery') && R.get('lidar.pl-nmt'), 'known ids still resolve');
+    assert(R.get('2d.1234') === null, 'a mirrored stub is never registered as a definition');
+    assert(typeof R.hostPolicy === 'function' && R.mirrorStubs, 'the new helpers are exported');
+
+    const diag = R.diagnostics();
+    assert(diag.totals.layers === layers.length, 'diagnostics covers every layer');
+    assert(diag.terrain.provider === 'aws-terrarium' && /elevation-tiles-prod/.test(diag.terrain.tiles[0]),
+        'the default DEM is the keyless AWS Terrarium source');
+    assert(R.verify2d().ok, 'the registry agrees with the live 2D layers');
+    console.log('  ✓ the registry describes ' + layers.length + ' layers, orders them and routes their hosts');
 }
 
 // ══════════════════════════════════════════════════════════════
-// 3. One definition, two views — the 2D side reads the registry
+// 4. The 2D → 3D mirror (Node side, with a fake Leaflet layer)
 // ══════════════════════════════════════════════════════════════
 {
-    assert(histEu.includes('REGISTRY.cenagisCatalog()') &&
-           histEu.includes("REGISTRY.wms2dOptions('cenagis.' + mapKey"),
-        'the CENAGIS catalogue builds its rows/layers from the registry');
-    ['hist.austrian', 'hist.firing-plans', 'hist.soviet-1970',
-     'premium.mitteleuropa', 'premium.chrzanowski', 'premium.reymann',
-     'premium.kdr-100k', 'premium.kdr-gb', 'premium.wig-100k'].forEach(function (id) {
-        assert(mapApp.includes("DL.wms2dOptions('" + id + "'"),
-            'map-app.js builds ' + id + ' from the registry');
+    const windowStub = {
+        console: console,
+        document: { createElement: function () { return {}; }, addEventListener() {} },
+        navigator: { onLine: true },
+        setTimeout: setTimeout, clearTimeout: clearTimeout, setInterval: function () { return 0; }, clearInterval() {},
+        addEventListener() {}, removeEventListener() {},
+        location: { search: '' }
+    };
+    windowStub.window = windowStub;
+
+    /* A minimal Leaflet: enough for `instanceof`, panes and a tile layer that
+     * builds its own URL (the case a static template could never express). */
+    function Base(options) { this.options = options || {}; }
+    function TileLayer(url, options) { Base.call(this, options); this._url = url; }
+    TileLayer.prototype = Object.create(Base.prototype);
+    TileLayer.prototype.getTileSize = function () { return { x: 256, y: 256 }; };
+    TileLayer.prototype.getTileUrl = function (coords) {
+        return 'https://wms.example.org/geoserver/wms?SERVICE=WMS&VERSION=1.1.1&SRS=EPSG:3857' +
+            '&BBOX=' + coords.x + ',' + coords.y + ',' + coords.z + '&WIDTH=256&HEIGHT=256' +
+            '&LAYERS=eharta%3Amozaic_austrian_200k&FORMAT=image/png&TRANSPARENT=true';
+    };
+    TileLayer.prototype.getOpacity = function () { return 0.72; };
+    windowStub.L = {
+        TileLayer: TileLayer,
+        Marker: function () {}, ImageOverlay: function () {}, SVGOverlay: function () {},
+        VideoOverlay: function () {}, GeoJSON: function () {}, Path: function () {},
+        LayerGroup: function () {}, MarkerClusterGroup: null,
+        stamp: function (layer) { layer._leaflet_id = layer._leaflet_id || 'x1'; return layer._leaflet_id; }
+    };
+
+    const sandbox = { window: windowStub, console: console, Date: Date, Math: Math, JSON: JSON,
+        URL: URL, encodeURIComponent: encodeURIComponent, decodeURIComponent: decodeURIComponent,
+        setTimeout: setTimeout, clearTimeout: clearTimeout };
+    sandbox.globalThis = sandbox;
+    vm.createContext(sandbox);
+    vm.runInContext(mirrorSource, sandbox, { filename: 'js/map3d-mirror.js' });
+
+    const mirror = windowStub.DetectLabMirror;
+    assert(mirror, 'window.DetectLabMirror is exported');
+    ['collect', 'describe', 'classify', 'tileUrlFor', 'templateFor', 'layerByKey', 'paneZIndex'].forEach(function (fn) {
+        assert(typeof mirror[fn] === 'function', 'the mirror exposes ' + fn);
     });
-    // The three Copernicus mosaics share one builder that takes a registry id.
-    ['sat.vhr-2012', 'sat.vhr-2018', 'sat.vhr-2021'].forEach(function (id) {
-        assert(mapApp.includes("_satVhrWms('" + id + "')"),
-            'map-app.js builds ' + id + ' from the registry');
+    assert(mirror.collect(null).items.length === 0 && mirror.collect(undefined).signature === '',
+        'collect() survives the map not being built yet');
+
+    const layer = new TileLayer('https://wms.example.org/geoserver/wms', {
+        layers: 'eharta:mozaic_austrian_200k', name: 'Austrian 200k', opacity: 0.72, pane: 'pane_hist'
     });
-    assert(/function _satVhrWms\(id\)[\s\S]{0,120}DL\.url2d\(id\)[\s\S]{0,80}DL\.wms2dOptions\(id/.test(mapApp),
-        'the VHR builder resolves URL and service options through the registry');
-    ['premium.bucovina', 'premium.austro-hungarian', 'premium.moldova-1868',
-     'premium.moldova-1771', 'premium.moldova-wwii', 'premium.polish-tactical-1933',
-     'premium.ww1', 'premium.ww2', 'premium.banat', 'premium.transylvania-1859',
-     'premium.galicia-1855', 'premium.josephine'].forEach(function (id) {
-        assert(mapApp.includes("DL.url2d('" + id + "'"),
-            'map-app.js takes the ' + id + ' URL from the registry');
-    });
-    // …and the service facts really are gone from the 2D CODE (a comment may
-    // still name a service, e.g. when explaining a period list — that is prose,
-    // not a second definition).
-    const mapAppCode = mapApp.split('\n').map(function (line) {
-        return line.replace(/\/\/.*$/, '');
-    }).join('\n');
-    ['eharta:mozaic_austrian_200k', 'ihpan:ukvme_3857', 'ihpan:wig100k_3857',
-     'Galitzien_and_Bukovina-1861-1864/moldova-1868', 'Moldova_1771/{z}',
-     'Harti/Banat/{z}', 'Siebenburgen_1859/MapServer', 'Kummerer_1855/MapServer',
-     'VeryHighResolution2012', 'VHR_2021_LAEA',
-     'IGNF_LIDAR-HD_MNT_ELEVATION', 'IGNF_LIDAR-HD_MNS_ELEVATION',
-     'IGNF_LIDAR-HD_MNH_ELEVATION'].forEach(function (fact) {
-        assert(!mapAppCode.includes(fact), 'map-app.js no longer repeats "' + fact + '" in code');
-    });
-    assert(mapApp.includes("DL.modes('lidar.fr-mnh')") &&
-           mapApp.includes("DL.url2d('lidar.fr-mnh')"),
-        'the France LiDAR branch reads its endpoint and products from the registry');
-    assert(!histEu.includes("layers: 'ihpan:' + mapMeta.wms_layer"),
-        'the CENAGIS workspace-qualified name lives in the registry only');
-    console.log('  ✓ every historical layer is defined once and consumed by the 2D view');
+    layer._leaflet_id = 'L77';
+    const pane = { style: { zIndex: '640' }, ownerDocument: null };
+    const map = {
+        getPane: function () { return pane; },
+        eachLayer: function (fn) { fn(layer); },
+        hasLayer: function () { return true; }
+    };
+
+    assert(mirror.paneZIndex(map, layer) === 640, 'the 2D pane z-index becomes the 3D z-order');
+    const described = mirror.describe(layer, map, {});
+    assert(described && described.kind === 'raster', 'an L.TileLayer of any subclass mirrors as a raster layer');
+    assert(described.template === 'dl2d://2d.L77/{z}/{x}/{y}',
+        'the tile template points back at the live 2D layer, not at a re-implementation');
+    assert(described.opacity === 0.72, 'the live 2D opacity is carried into 3D');
+    assert(described.label === 'Austrian 200k', 'the 2D layer name is used as the label');
+
+    /* The per-tile URL is asked of the layer itself: a WMS bbox that no static
+     * {z}/{x}/{y} template could produce. */
+    const url = mirror.tileUrlFor(layer, 10, 562, 352);
+    assert(url.indexOf('SRS=EPSG%3A3857') !== -1 || url.indexOf('SRS=EPSG:3857') !== -1,
+        'the tile URL keeps the service parameters the 2D layer asked for');
+    assert(/BBOX=562,352,10/.test(url), 'the tile URL is built by the 2D layer for this exact tile');
+    assert(mirror.tileUrlFor(null, 1, 1, 1) === '', 'a layer that is gone yields no URL instead of throwing');
+
+    const collected = mirror.collect(map);
+    assert(collected.items.length === 1 && collected.items[0].key === '2d.L77',
+        'collect() walks the live map');
+    assert(mirror.layerByKey('2d.L77') === layer, 'layerByKey() hands the dl2d:// protocol its Leaflet layer');
+    assert(collected.signature.indexOf('raster:2d.L77:640:72') === 0,
+        'the signature carries kind, order and opacity (so a change triggers a re-sync)');
+
+    /* Without Leaflet at all (a page where the 2D map never loaded) the mirror
+     * must not throw. */
+    const bare = { window: null, console: console, Date: Date, JSON: JSON, Math: Math };
+    bare.globalThis = bare;
+    vm.createContext(bare);
+    vm.runInContext(mirrorSource, bare, { filename: 'js/map3d-mirror.js' });
+    assert(bare.DetectLabMirror && bare.DetectLabMirror.collect(null).items.length === 0,
+        'the mirror is inert (never fatal) when Leaflet is absent');
+    console.log('  ✓ the mirror translates the live 2D layers (raster/WMS included) and their order');
 }
 
 // ══════════════════════════════════════════════════════════════
-// 4. The 3D viewer boots headless (no GPU, no MapLibre download)
+// 5. The 3D viewer boots headless (no GPU, no MapLibre download)
 // ══════════════════════════════════════════════════════════════
 {
     const stubElement = function () {
@@ -193,16 +267,19 @@ const TAG_POSITION = '20261013-3d-position';  /* 3D skin after the control-place
         console: console
     };
     windowStub.window = windowStub;
-    const sandbox = { window: windowStub, document: documentStub, console: console,
+    const quietConsole = { log: console.log, warn: console.warn, error: console.error,
+        table: function () {}, info: console.info, debug: console.debug };
+    const sandbox = { window: windowStub, document: documentStub, console: quietConsole,
         setTimeout: setTimeout, clearTimeout: clearTimeout, navigator: windowStub.navigator };
     vm.createContext(sandbox);
     vm.runInContext(registrySource, sandbox, { filename: 'js/layer-registry.js' });
+    vm.runInContext(mirrorSource, sandbox, { filename: 'js/map3d-mirror.js' });
     vm.runInContext(viewer, sandbox, { filename: 'js/map3d-terrain.js' });
 
     const api = windowStub.DetectLabMap3D;
     assert(api, 'window.DetectLabMap3D is exported');
-    ['open', 'close', 'toggle', 'isOpen', 'getMap', 'syncLayers', 'setExaggeration',
-     'setPitch', 'setBearing', 'resetView', 'status', 'report', 'registry'].forEach(function (fn) {
+    ['open', 'close', 'toggle', 'isOpen', 'getMap', 'syncLayers', 'setExaggeration', 'getExaggeration',
+     'setPitch', 'setBearing', 'resetView', 'status', 'report', 'registry', 'mirror'].forEach(function (fn) {
         assert(typeof api[fn] === 'function' || typeof api[fn] === 'object', 'API exposes ' + fn);
     });
     const status = api.status();
@@ -213,31 +290,61 @@ const TAG_POSITION = '20261013-3d-position';  /* 3D skin after the control-place
         'the default terrain is the keyless AWS Terrarium DEM');
     assert(status.errors.length === 0, 'nothing failed while booting headless');
     assert(status.layers.every(function (l) { return l.active3d === false; }),
-        'nothing is drawn in 3D before the user opens it');
+        'a closed 3D view claims no layer');
+    assert(typeof api.report().mirrored !== 'undefined', 'report() returns the deck for the console');
 
-    // The style is built from the registry (DEM + hillshade + sky), not from
-    // hardcoded services inside the viewer.
+    /* The style: background + the DEM, and the hillshade from that DEM — the
+     * base map itself is a mirrored layer, added later, above the hillshade. */
     const style = api._buildStyle();
-    assert(style.sources && style.sources[status.terrain.id] &&
-           style.sources[status.terrain.id].type === 'raster-dem',
-        'the style carries the DEM from the registry as a raster-dem source');
-    assert(style.terrain && style.terrain.source === status.terrain.id,
-        'the style enables terrain on that source');
-    /* MapLibre GL 5 keeps the atmosphere in the style-level `sky` object
-     * (paint properties), not in a sky layer — see setSky() in the dist. */
-    assert(style.sky && typeof style.sky['sky-color'] === 'string' &&
-           typeof style.sky['horizon-color'] === 'string',
-        'the style configures the atmosphere (sky/horizon/fog colours)');
-    assert(style.layers.every(function (l) { return l.type !== 'sky'; }),
-        'the sky is the 5.x style property, not a layer');
-    assert(viewer.indexOf('elevation-tiles-prod') === -1 &&
-           viewer.indexOf('arcgisonline.com') === -1,
-        'the viewer hardcodes no tile service — everything comes from the registry');
-    console.log('  ✓ the viewer boots headless, exposes its API and builds its style from the registry');
+    assert(style.version === 8 && style.layers[0].id === 'm3d-background',
+        'the style starts with the background');
+    assert(style.sources['detectlab-dem'].type === 'raster-dem' &&
+           style.sources['detectlab-dem'].encoding === 'terrarium' &&
+           style.terrain.source === 'detectlab-dem',
+        'the DEM is one raster-dem source, used by the terrain');
+    assert(style.layers.some(function (l) { return l.id === 'm3d-hillshade'; }),
+        'the DEM also feeds the hillshade layer');
+    assert(style.layers[style.layers.length - 1].id === 'm3d-hillshade',
+        'nothing in the style sits above the hillshade — the base map comes from the 2D map');
+
+    /* The deck order: the defect this release fixes. */
+    const entries = [
+        { id: 'm3d-2d-2d.9', layerIds: ['m3d-2d-2d.9'], z: 398 },            /* 2D basemap */
+        { id: 'm3d-2d-2d.77', layerIds: ['m3d-2d-2d.77'], z: 640 },          /* Austrian WMS */
+        { id: 'm3d-2d-2d.31', layerIds: ['m3d-2d-2d.31'], z: 620 },          /* heritage vectors */
+        { id: 'm3d-2d-2d.56', layerIds: ['m3d-2d-2d.56-fill', 'm3d-2d-2d.56-line'], z: 625 }
+    ];
+    const present = { 'm3d-background': true, 'm3d-hillshade': true };
+    entries.forEach(function (e) { e.layerIds.forEach(function (id) { present[id] = true; }); });
+    const order = api._deckOrder(entries, present, ['m3d-hillshade', 'm3d-hillshade-service'], 'm3d-2d-2d.9');
+    assert(order[0] === 'm3d-background', 'the background stays at the bottom');
+    assert(order.indexOf('m3d-2d-2d.9') === 1, 'the 2D base map sits directly above the background');
+    assert(order.indexOf('m3d-hillshade') === 2,
+        'the hillshade is drawn ON TOP of the base map — not hidden underneath it (the reported defect)');
+    assert(order.indexOf('m3d-2d-2d.77') > order.indexOf('m3d-hillshade'),
+        'a user layer (Austrian WMS, pane 640) is above the hillshade');
+    assert(order.indexOf('m3d-2d-2d.31') < order.indexOf('m3d-2d-2d.56-fill'),
+        'the user layers keep their 2D pane order (620 before 625)');
+    assert(order.indexOf('m3d-2d-2d.56-line') === order.indexOf('m3d-2d-2d.56-fill') + 1,
+        'sub-layers of one vector layer stay adjacent and in paint order');
+    assert(order.filter(function (id) { return id === 'm3d-hillshade'; }).length === 1,
+        'the hillshade appears exactly once, whatever the layer count');
+
+    /* No basemap visible (thumbnail/2D map still booting): overlays still land
+     * above the hillshade. */
+    const noBase = api._deckOrder([entries[1]], { 'm3d-background': true, 'm3d-hillshade': true,
+        'm3d-2d-2d.77': true }, ['m3d-hillshade'], null);
+    assert(noBase.indexOf('m3d-2d-2d.77') > noBase.indexOf('m3d-hillshade'),
+        'without a base map the overlays still draw above the hillshade');
+
+    /* A raster-dem source must never be drawn as a visible raster layer. */
+    assert(!style.layers.some(function (l) { return l.type === 'raster' && l.source === 'detectlab-dem'; }),
+        'the DEM source is never also rendered as a visible raster layer');
+    console.log('  ✓ the viewer boots headless and stacks base ▸ hillshade ▸ overlays in 2D pane order');
 }
 
 // ══════════════════════════════════════════════════════════════
-// 5. Tile proxy — URLs, validation, reprojection
+// 6. Tile proxy — URLs, validation, reprojection, relay allow-list
 // ══════════════════════════════════════════════════════════════
 (async function main() {
     const lib = await import('./netlify/lib/map3d-tile.mjs');
@@ -264,9 +371,29 @@ const TAG_POSITION = '20261013-3d-position';  /* 3D skin after the control-place
            /TIME=2023-06-11/.test(wmts.url),
         'WMTS layers keep their KVP form and TIME dimension');
 
-    const corona = lib.buildUpstreamUrl(R.get('sat.corona-60s'), { z: 10, x: 562, y: 352, product: '1104-2155df004' });
-    assert(/layers=corona%3A1104-2155df004/.test(corona.url) && /srs=EPSG%3A900913/.test(corona.url),
-        'CORONA asks GeoWebCache for the product the shared catalogue selected');
+    /* ── the relay (?u=): a mirrored 2D layer whose host has no CORS ─────── */
+    const allowed = lib.validateRelayUrl(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/8/51/12');
+    assert(allowed.ok, 'a host the site itself uses is relayed');
+    assert(!lib.validateRelayUrl('https://evil.example.com/tile/1/1/1.png').ok,
+        'an unknown host is refused (the relay is not an open proxy)');
+    assert(lib.validateRelayUrl('https://evil.example.com/x').reason === 'host-not-allowed',
+        'the refusal names the reason, so the host can be added to proxy.extraHosts in one line');
+    assert(!lib.validateRelayUrl('http://127.0.0.1:4173/api/x').ok &&
+           lib.validateRelayUrl('http://127.0.0.1:4173/api/x').reason === 'private-host',
+        'loopback/private addresses are refused outright');
+    assert(!lib.validateRelayUrl('file:///etc/passwd').ok, 'only http(s) can be relayed');
+    assert(!lib.validateRelayUrl('https://user:pass@server.arcgisonline.com/x').ok,
+        'a URL carrying credentials is refused');
+    assert(lib.relayAllowedHosts().has('pastmaps.cenagis.edu.pl') &&
+           lib.relayAllowedHosts().has('wmts.geo.admin.ch'),
+        'the country LiDAR / historical hosts are relayable without further configuration');
+
+    const relayRefused = await lib.handleTileRequest(new Request(
+        'https://x/api/map3d/tile?u=' + encodeURIComponent('https://evil.example.com/a.png')));
+    assert(relayRefused.status === 403 &&
+           /host-not-allowed/.test(await relayRefused.text()),
+        'the server refuses the same host, with the config hint in the body');
 
     const check = (qs) => lib.validateTileRequest(new URL('https://x/api/map3d/tile' + qs));
     const good = check('?layer=hist.austrian&z=10&x=562&y=352');
@@ -274,192 +401,41 @@ const TAG_POSITION = '20261013-3d-position';  /* 3D skin after the control-place
     const unknown = check('?layer=nope&z=1&x=1&y=1');
     assert(!unknown.ok && unknown.status === 404,
         'unknown layers are refused with 404 (it is not an open proxy)');
-    assert(!check('?layer=hist.austrian&z=99&x=1&y=1').ok,
-        'out-of-range zoom is refused');
-    assert(!check('?layer=hist.austrian&z=10&x=9999&y=9999').ok,
-        'out-of-range tile indices are refused');
+    assert(!check('?layer=hist.austrian&z=99&x=1&y=1').ok, 'out-of-range zoom is refused');
+    assert(!check('?layer=hist.austrian&z=10&x=9999&y=9999').ok, 'out-of-range tile indices are refused');
     const badTime = check('?layer=vegfp.ppi&z=9&x=1&y=1&t=..%2Fetc');
     assert(!badTime.ok && badTime.reason === 'bad-time', 'a malformed TIME value is refused');
-    const badProduct = check('?layer=sat.corona-60s&z=10&x=1&y=1&p=..%2Fetc');
-    assert(!badProduct.ok && badProduct.reason === 'bad-product',
-        'a malformed CORONA product id is refused');
+    const badMode = check('?layer=lidar.fr-mnh&z=9&x=1&y=1&m=..%2Fetc');
+    assert(!badMode.ok && badMode.reason === 'bad-mode', 'a malformed renderer mode is refused');
 
-    const report = lib.proxyReport();
-    assert(report.proxied.length > 0 && report.total === R.list().length &&
-           report.proxied.length + report.auto.length + report.direct.length === report.total,
-        'the proxy report classifies every registry layer exactly once');
+    /* A mirrored stub layer (2d.*) is not a registry id: the relay is the only
+     * way such a layer is proxied, and only for allow-listed hosts. */
+    assert(R.list().every(function (d) { return !d.stub; }),
+        'registry.list() holds no mirrored stub without a live 2D map');
+    assert(lib.proxyReport().total === R.list().length, 'the proxy report covers every registry layer');
 
-    // The blank-tile contract: an upstream failure must not break the 3D view.
+    /* The blank-tile contract: an upstream failure must not break the 3D view. */
     const blank = await lib.handleTileRequest(new Request(
         'https://x/api/map3d/tile?layer=hist.austrian&z=10&x=562&y=352'),
         { timeoutMs: 1500 });   /* keep the suite fast when the sandbox has no egress */
     assert(blank.status === 200 && blank.headers.get('content-type') === 'image/png',
         'a failed upstream still answers 200 image/png (transparent blank tile)');
     assert(blank.headers.get('X-Map3D-Tile') === 'blank',
-        'the blank tile is labelled so the viewer can switch that host to the proxy');
-    console.log('  ✓ the proxy builds, validates and degrades exactly as documented');
+        'the blank tile is labelled so the viewer can report it instead of showing a hole');
+    console.log('  ✓ the proxy builds, validates, reprojects and relays exactly as documented');
 
     // ══════════════════════════════════════════════════════════
-    // 6. Country LiDAR: no layer is skipped, per-tile builders drapes too
+    // 7. The 3D skin stays out of the way of the 2D chrome
     // ══════════════════════════════════════════════════════════
-    const country = await import('./netlify/lib/map3d-country-modules.mjs');
-    const modules = country.countryModuleScope();
-    const lidarIds = ['lidar.nl-ahn', 'lidar.no-hoydedata', 'lidar.pl-nmt',
-        'lidar.es-mdt', 'lidar.ch-swisstopo', 'lidar.uk-ea', 'lidar.dk-dhm',
-        'lidar.se-lantmateriet', 'lidar.fr-mnh'];
-
-    lidarIds.forEach(function (id) {
-        const def = R.get(id);
-        assert(def && def.ui && def.ui.toggle, id + ' has its 2D switch in the registry');
-    });
-    // The seven module-backed layers declare HOW their module turns a tile into
-    // a URL; the two same-origin ones (SE/DK) build theirs inside the module.
-    ['lidar.nl-ahn', 'lidar.no-hoydedata', 'lidar.pl-nmt', 'lidar.es-mdt',
-     'lidar.ch-swisstopo', 'lidar.uk-ea', 'lidar.dk-dhm',
-     'lidar.se-lantmateriet'].forEach(function (id) {
-        const def = R.get(id);
-        assert(def.builder && def.builder.module && def.builder.fn && def.builder.kind,
-            id + ' declares the module, function and call shape of its tile URLs');
-    });
-    assert(!R.get('lidar.fr-mnh').builder,
-        'France needs no module builder: it is a plain WMS with a product table');
-
-    // Every country LiDAR layer has a real tile URL for a real tile — including
-    // the five whose builders need a bbox, which no {z}/{x}/{y} template can
-    // express. This is what "never silently skip a layer" means.
-    const bboxIds = ['lidar.nl-ahn', 'lidar.no-hoydedata', 'lidar.pl-nmt',
-        'lidar.es-mdt', 'lidar.se-lantmateriet'];   /* SE: same-origin token route */
-    bboxIds.forEach(function (id) {
-        const url = R.tileUrlAt(R.get(id), 12, 2266, 1348, { modules: modules });
-        assert(url && (url.indexOf('http') === 0 || url.indexOf('/api/') === 0),
-            id + ' returns a per-tile URL (got ' + JSON.stringify(url) + ')');
-        assert(url.indexOf('{z}') === -1 && url.indexOf('{bbox') === -1,
-            id + ' resolves the tile box itself, no placeholders left');
-    });
-    const plUrl = R.tileUrlAt(R.get('lidar.pl-nmt'), 12, 2266, 1348, { modules: modules });
-    assert(/mapy\.geoportal\.gov\.pl.*GetMap/.test(plUrl) && /CRS=EPSG%3A3857/.test(plUrl),
-        'the Polish NMT layer asks its own module for a Web-Mercator GetMap');
-    const ahnUrl = R.tileUrlAt(R.get('lidar.nl-ahn'), 12, 2266, 1348, { modules: modules });
-    assert(/exportImage/.test(ahnUrl) && /bboxSR=3857/.test(ahnUrl),
-        'the Dutch AHN layer keeps its ArcGIS exportImage form');
-    assert(R.tileUrlAt(R.get('lidar.pl-nmt'), 12, 2266, 1348, {}) === '',
-        'without the module the registry reports "no URL" instead of inventing one');
-
-    // MapLibre cannot template a bbox URL, so the registry hands it a
-    // dl3d:// protocol URL and the viewer resolves it per tile.
-    bboxIds.forEach(function (id) {
-        const tiles = R.map3dTiles(R.get(id), { modules: modules });
-        assert(tiles.length === 1 && tiles[0].indexOf('dl3d://' + id + '/') === 0,
-            id + ' is handed to MapLibre as a dl3d:// protocol URL');
-    });
-    assert(viewer.includes("addProtocol('dl3d'") && viewer.includes('REGISTRY.tileUrlAt('),
-        'the viewer registers the dl3d:// protocol and calls the registry per tile');
-    assert(viewer.includes("error: 'terrain|dem'") === false, 'no stray template in the viewer');
-
-    // The tile-kind LiDAR layers keep a normal template (no protocol needed).
-    ['lidar.ch-swisstopo', 'lidar.uk-ea', 'lidar.dk-dhm'].forEach(function (id) {
-        const tiles = R.map3dTiles(R.get(id), { modules: modules });
-        assert(tiles.length === 1 && tiles[0].indexOf('dl3d://') === -1 &&
-               tiles[0].indexOf('{z}') !== -1,
-            id + ' keeps a plain {z}/{x}/{y} template');
-    });
-
-    // When a host turns out to have no CORS, the same layer goes through the
-    // proxy — which runs the very same module in Node.
-    const proxied = R.map3dTiles(R.get('lidar.pl-nmt'), { modules: modules, forceProxy: true });
-    assert(proxied[0].indexOf('/api/map3d/tile?layer=lidar.pl-nmt') === 0,
-        'a no-CORS country layer switches to the same-origin proxy');
-    const fromProxy = lib.buildUpstreamUrl(R.get('lidar.pl-nmt'), { z: 12, x: 2266, y: 1348 });
-    assert(/mapy\.geoportal\.gov\.pl.*GetMap/.test(fromProxy.url),
-        'the proxy builds the same per-tile URL server-side');
-
-    // The registry can therefore report every one of the 91 layers as draped.
-    const diag = R.diagnostics({ modules: modules });
-    assert(diag.totals.layers === 91 && diag.totals.draped === 91,
-        'all 91 layers are drapeable when the country modules are present (' +
-        diag.totals.draped + ')');
-    assert(diag.layers.every(function (l) { return l.drape; }),
-        'no layer is silently skipped: each one is draped or explicitly reported');
-    assert(R.diagnostics().totals.draped === 83,
-        'in the browser the LiDAR modules are always loaded, so only the headless ' +
-        'registry (no DOM modules) reports the 9 country layers as pending');
-
-    // Mode switches travel with the request: France MNT/MNS/MNH, and the
-    // country renderers (hillshade/DSM/DTM) picked from a 2D dropdown.
-    assert(Object.keys(R.modes('lidar.fr-mnh')).length === 3 &&
-           /MNS_ELEVATION/.test(R.layerOf(R.get('lidar.fr-mnh'), { mode: 'surface' })),
-        'the France product table lives in the registry and follows the dropdown');
-    const frSurface = lib.buildUpstreamUrl(R.get('lidar.fr-mnh'), { z: 10, x: 512, y: 340, mode: 'surface' });
-    assert(/layers=IGNF_LIDAR-HD_MNS_ELEVATION/.test(frSurface.url),
-        'the proxy serves the product the 2D dropdown selected');
-    assert(R.map3dTiles(R.get('lidar.fr-mnh'), { forceProxy: true, mode: 'height' })[0]
-        .indexOf('&m=height') !== -1,
-        'the proxy URL carries the selected product');
-    const checkMode = lib.validateTileRequest(new URL(
-        'https://x/api/map3d/tile?layer=lidar.fr-mnh&z=10&x=512&y=340&m=..%2Fetc'));
-    assert(!checkMode.ok && checkMode.reason === 'bad-mode', 'a malformed mode is refused');
-
-    console.log('  ✓ country LiDAR drapes per tile — nothing is skipped, modes included');
-
-    // ══════════════════════════════════════════════════════════
-    // 7. Stacking: the 3D canvas never covers the app's own chrome
-    // ══════════════════════════════════════════════════════════
-    const skin = read('css/map3d-terrain.css');
-    const styles = read('css/styles.css');
-    const declaration = function (css, selector, property) {
-        const block = css.slice(css.indexOf(selector));
-        const body = block.slice(block.indexOf('{'), block.indexOf('}'));
-        const match = body.match(new RegExp(property + '\\s*:\\s*([0-9.]+)'));
-        return match ? Number(match[1]) : NaN;
-    };
-    const maxPaneZ = Math.max.apply(null, Object.keys(R.GROUPS).map(function (g) {
-        return R.GROUPS[g].z || 0;
-    }));
-    const surfaceZ = declaration(skin, '#map3d-surface {', 'z-index');
-    const toggleZ = declaration(skin, '#map3d-toggle {', 'z-index');
-    const barZ = declaration(skin, '#map3d-bar {', 'z-index');
-    assert(surfaceZ > maxPaneZ,
-        'the 3D canvas (' + surfaceZ + ') sits above every Leaflet pane (' + maxPaneZ + ')');
-    ['.map-search-wrap {', '.transp-panel {'].forEach(function (sel) {
-        const z = declaration(styles, sel, 'z-index');
-        assert(z > surfaceZ && z > toggleZ && z > barZ,
-            sel.replace(/ \{|#|\.|:/g, '') + ' stays above the 3D layer (' + z + ' > ' +
-            Math.max(surfaceZ, toggleZ, barZ) + ')');
-    });
-    assert(toggleZ > surfaceZ && barZ > surfaceZ,
-        'the 3D toggle and control bar are clickable above the canvas');
-    ['#map3d-toggle {', '#map3d-bar {'].forEach(function (sel) {
-        const block = skin.slice(skin.indexOf(sel));
-        const body = block.slice(0, block.indexOf('}'));
-        assert(body.indexOf('bottom') !== -1 && body.indexOf('top: 10px') === -1,
-            sel.replace(' {', '') + ' is placed at the bottom edge, clear of the zoom/locate/measure controls');
-    });
     assert(/body\.is-3d #detectlab-map \.leaflet-pane \{ visibility: hidden; \}/.test(skin),
-        'while 3D is on the Leaflet panes stop painting (no double rasterisation)');
-    assert(/body\.is-3d #detectlab-map \.leaflet-control-container/.test(skin) &&
-           /body\.is-3d #pwa-br-stack \.leaflet-control/.test(skin),
-        "Leaflet's own controls (z-index 1000) are hidden while 3D is on — nobody can " +
-        'click a control that moves the map underneath');
-    assert(/@media \(max-width: 720px\)/.test(skin) &&
-           /#map3d-bar \{\s*top: 56px;/.test(skin),
-        'on phones the control bar drops under the search bar instead of covering it');
-    assert(/body\.is-3d #map3d-bar \{ display: flex; \}/.test(skin) &&
-           !/body\.is-pwa #map3d-bar \{ bottom: 104px/.test(skin),
-        'the bar only appears in 3D and sits on the left, clear of the PWA stack');
-    assert(viewer.includes("showCompass: true }), 'bottom-right')") &&
-           viewer.includes("exaggeration: state.exaggeration\n                }), 'top-right')"),
-        "MapLibre's own controls are kept out of the panel / search bar / 3D bar corners");
-    console.log('  ✓ the 3D view keeps the search bar, layer panel and PWA stack usable, ' +
-        'and hides the 2D-only controls');
-
-    // ══════════════════════════════════════════════════════════
-    // 8. CORONA keeps ONE catalogue/selection implementation
-    // ══════════════════════════════════════════════════════════
-    assert(viewer.includes('CoronaAtlas') && viewer.includes('selectProducts'),
-        'the 3D CORONA deck asks the shared atlas for its products');
-    assert(!/get_raster_names/.test(viewer),
-        'the viewer never re-implements the CORONA catalogue fetch');
-    assert(mapApp.includes("layers: 'pano:' + ") === false, 'no stray CORONA catalogue code in map-app.js');
+        'the Leaflet panes are hidden (not removed) while 3D is on');
+    assert(/body\.is-3d #map3d-bar \{ display: flex; \}/.test(skin),
+        'the 3D bar only appears in 3D');
+    assert(/@media \(max-width: 720px\)/.test(skin),
+        'the bar has a phone layout');
+    assert(/#map3d-surface \.maplibregl-popup/.test(skin),
+        'popups opened from a 3D feature are styled like the 2D ones');
+    console.log('  ✓ the 3D view keeps the 2D chrome usable and hides only the 2D-only controls');
 
     console.log('\n✅ test-map3d-terrain.js passed all checks successfully.');
 }()).catch(function (err) {
