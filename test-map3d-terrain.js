@@ -79,7 +79,7 @@ const mirrorSource = read('js/map3d-mirror.js');
 const skin = read('css/map3d-terrain.css');
 
 const TAG = '20261013-3d-terrain';             /* MapLibre itself (unchanged) */
-const TAG_3D = '20261014-3d-blend';            /* mirror + viewer              */
+const TAG_3D = '20261014-3d-vectors';            /* mirror + viewer              */
 const TAG_REGISTRY = '20261014-wms-audit';     /* shared registry (WMS audit)  */
 
 // ══════════════════════════════════════════════════════════════

@@ -183,6 +183,10 @@
 
     function classify(layer, Leaflet) {
         if (!layer) return 'unsupported';
+        /* A layer that paints outside Leaflet's layer tree (the heritage
+         * points + 600 m radii are drawn on raw map-pane canvases) can offer
+         * its features explicitly; it is mirrored as per-feature vector. */
+        if (typeof layer._dl3dFeatures === 'function') return 'vector';
         if (isTileLayer(layer, Leaflet)) return 'raster';
         /* Not an L.TileLayer, but it paints its own tiles (a custom L.Layer with
          * createTile: the country LiDAR canvases, the heritage canvas). */
@@ -301,21 +305,65 @@
             var icon = layer.options && layer.options.icon;
             var opts = icon && icon.options;
             if (!opts) return null;
-            var url = opts.iconUrl || (opts.icon && opts.icon.src) || null;
-            if (!url) return null;
             var size = opts.iconSize || [24, 24];
             if (typeof size === 'number') size = [size, size];
             var anchor = opts.iconAnchor || [size[0] / 2, size[1] / 2];
             if (typeof anchor === 'number') anchor = [anchor, anchor];
-            return {
-                url: String(url),
-                /* MapLibre anchors an icon by its top-left corner offset from the
-                 * point; Leaflet's iconAnchor is the pixel of the icon that sits
-                 * on the point. */
+            var spec = {
                 iconOffset: [-Math.round(anchor[0] - size[0] / 2), -Math.round(anchor[1] - size[1] / 2)],
                 size: [Math.round(size[0]), Math.round(size[1])]
             };
+            var url = opts.iconUrl || (opts.icon && opts.icon.src) || null;
+            if (url) { spec.url = String(url); return spec; }
+            /* L.DivIcon carries no URL: its look is inline HTML. Inline SVG
+             * (the DARE Roman-site glyphs) rasterises losslessly as an SVG
+             * image, so the 3D pin is the SAME glyph, not a generic dot.
+             * A zero-size divIcon (OSM Places: a transparent anchor whose only
+             * visible part is its permanent text tooltip) is label-only —
+             * drawing a dot for it invents a pin 2D never shows. Any other
+             * HTML (emoji/text badges) is kept verbatim for the renderer to
+             * draw as a text symbol. */
+            var html = opts.html == null ? '' : String(opts.html);
+            if (!html.trim()) {
+                if (!spec.size[0] || !spec.size[1]) spec.labelOnly = true;
+                return spec.labelOnly ? spec : null;
+            }
+            var svg = html.match(/<svg[\s\S]*?<\/svg>/i);
+            if (svg) {
+                var markup = svg[0];
+                if (!/xmlns=/i.test(markup)) markup = markup.replace(/<svg/i, '<svg xmlns="http://www.w3.org/2000/svg"');
+                if (!/\swidth=/i.test(markup)) markup = markup.replace(/<svg/i, '<svg width="' + (spec.size[0] || 26) + '" height="' + (spec.size[1] || 26) + '"');
+                spec.url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(markup);
+                return spec;
+            }
+            spec.html = html.replace(/<[^>]*>/g, '').trim();
+            if (!spec.html) spec.labelOnly = true;
+            return spec;
         } catch (e) { return null; }
+    }
+
+    function iconHash(text) {
+        var h = 5381;
+        for (var i = 0; i < text.length; i += 1) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
+        return (h >>> 0).toString(36);
+    }
+
+    /* Register an icon spec on a descriptor and return its per-feature id.
+     * GeoJSON properties handed to MapLibre must be primitives, so a feature
+     * carries only `iconId`; the spec itself travels on item.icons. */
+    function registerIcon(item, spec) {
+        if (!spec) return '';
+        if (spec.labelOnly && !spec.url && !spec.html) return 'label-only';
+        var key = String(spec.url || spec.html || '');
+        if (!key) return '';
+        var id = 'i' + iconHash(key + '|' + (spec.size || []).join('x'));
+        item.icons = item.icons || {};
+        if (!item.icons[id]) item.icons[id] = spec;
+        return id;
+    }
+
+    function plainText(value) {
+        return String(value == null ? '' : value).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
     }
 
     function dashArray(value) {
@@ -862,7 +910,11 @@
                         feat.properties = feat.properties || {};
                         feat.properties.popup = popupHtml(child);
                         feat.properties.tooltip = tooltipText(child);
-                        feat.properties.icon = iconOf(child);
+                        feat.properties.label = plainText(feat.properties.tooltip);
+                        var cIcon = registerIcon(base, iconOf(child));
+                        if (cIcon === 'label-only') feat.properties.noDot = 1;
+                        else if (cIcon) feat.properties.iconId = cIcon;
+                        delete feat.properties.icon;
                         clusterFeatures.push(feat);
                     });
                 });
@@ -871,6 +923,7 @@
             var co = layer.options || {};
             return Object.assign(base, {
                 geojson: featureCollection(clusterFeatures),
+                icons: base.icons || {},
                 cluster: {
                     radius: co.maxClusterRadius == null ? 60 : Number(co.maxClusterRadius),
                     maxZoom: co.disableClusteringAtZoom == null ? 14 : Number(co.disableClusteringAtZoom) - 1,
@@ -883,26 +936,81 @@
         if (kind === 'markers') {
             var geometry = geometryOf(layer);
             if (!geometry || (geometry.geometry && geometry.geometry.type !== 'Point')) return null;
+            var tooltip = tooltipText(layer);
             geometry.properties = Object.assign({}, geometry.properties, {
                 popup: popupHtml(layer),
-                tooltip: tooltipText(layer),
-                icon: iconOf(layer),
+                tooltip: tooltip,
+                label: plainText(tooltip),
                 z: base.z
             });
+            var mIcon = registerIcon(base, iconOf(layer));
+            if (mIcon === 'label-only') geometry.properties.noDot = 1;
+            else if (mIcon) geometry.properties.iconId = mIcon;
+            delete geometry.properties.icon;
             return Object.assign(base, {
                 geojson: featureCollection([geometry]),
+                icons: base.icons || {},
                 label: base.label || 'markers'
             });
         }
 
         if (kind === 'vector') {
+            /* Virtual vector (heritage canvases): features + per-feature paint
+             * come from the layer itself; no Leaflet geometry exists. */
+            if (typeof layer._dl3dFeatures === 'function') {
+                var virt = null;
+                try { virt = layer._dl3dFeatures(); } catch (e) { virt = null; }
+                if (!virt || !virt.geojson || !(virt.geojson.features || []).length) return null;
+                return Object.assign(base, {
+                    geojson: virt.geojson,
+                    types: geometryTypes(virt.geojson),
+                    paints: virt.paints || pathPaints(layer),
+                    icons: virt.icons || {},
+                    perFeature: true,
+                    stamp: virt.stamp || '',
+                    popup: '',
+                    tooltip: '',
+                    label: base.label || virt.label || 'vector'
+                });
+            }
             var gj = geometryOf(layer);
             if (!gj) return null;
             var paints = pathPaints(layer);
+            var fc = gj.type === 'FeatureCollection' ? gj : featureCollection([gj]);
+            /* An L.GeoJSON built with pointToLayer (DARE sites) holds real
+             * L.Markers: toGeoJSON() keeps the point but drops the marker's
+             * divIcon/popup. Re-attach them per feature (matched by position)
+             * so 3D draws the category glyph, not a generic circle. */
+            try {
+                var Leaflet2 = Leaflet;
+                if (Leaflet2.Marker && typeof layer.eachLayer === 'function') {
+                    var byPos = {};
+                    (fc.features || []).forEach(function (f) {
+                        if (f && f.geometry && f.geometry.type === 'Point') {
+                            var c = f.geometry.coordinates;
+                            byPos[c[0].toFixed(6) + ',' + c[1].toFixed(6)] = f;
+                        }
+                    });
+                    layer.eachLayer(function (child) {
+                        if (!(child instanceof Leaflet2.Marker) || typeof child.getLatLng !== 'function') return;
+                        var ll = child.getLatLng();
+                        var f = byPos[ll.lng.toFixed(6) + ',' + ll.lat.toFixed(6)];
+                        if (!f) return;
+                        f.properties = f.properties || {};
+                        if (!f.properties.popup) f.properties.popup = popupHtml(child);
+                        if (!f.properties.tooltip) f.properties.tooltip = tooltipText(child);
+                        if (!f.properties.label) f.properties.label = plainText(f.properties.tooltip);
+                        var vIcon = registerIcon(base, iconOf(child));
+                        if (vIcon === 'label-only') f.properties.noDot = 1;
+                        else if (vIcon) f.properties.iconId = vIcon;
+                    });
+                }
+            } catch (e) { /* plain vector geometry still mirrors */ }
             return Object.assign(base, {
-                geojson: gj.type === 'FeatureCollection' ? gj : featureCollection([gj]),
+                geojson: fc,
                 types: geometryTypes(gj),
                 paints: paints,
+                icons: base.icons || {},
                 popup: popupHtml(layer),
                 tooltip: tooltipText(layer),
                 label: base.label || (layer.constructor && layer.constructor.name) || 'vector'
@@ -935,7 +1043,7 @@
             opacity: item.opacity,
             paints: item.paints || null,
             types: item.types || null,
-            icon: item.icon || null,
+            perFeature: !!item.perFeature,
             popup: item.popup || '',
             tooltip: item.tooltip || ''
         });
@@ -964,6 +1072,7 @@
             if (current && canMerge(current, item)) {
                 var features = item.geojson.type === 'FeatureCollection' ? item.geojson.features : [item.geojson];
                 (features || []).forEach(function (f) { current.geojson.features.push(f); });
+                if (item.icons) { current.icons = current.icons || {}; Object.keys(item.icons).forEach(function (k) { current.icons[k] = item.icons[k]; }); }
                 current.count += (features || []).length;
                 return;
             }
@@ -974,6 +1083,7 @@
                 key: (key || keyOf(parent)) + '/b' + bundles,
                 layer: parent || item.layer || null,
                 geojson: featureCollection((first || []).slice()),
+                icons: item.icons ? Object.assign({}, item.icons) : {},
                 count: (first || []).length,
                 sig: paintSignature(item),
                 bundled: true
@@ -1135,7 +1245,7 @@
             var size = 0;
             if (i.geojson) size = (i.geojson.features || []).length;
             if (i.kind === 'image') size = String(i.url).length;
-            return [i.kind, i.key, i.z, Math.round((i.opacity == null ? 1 : i.opacity) * 100), size].join(':');
+            return [i.kind, i.key, i.z, Math.round((i.opacity == null ? 1 : i.opacity) * 100), size, i.stamp || ''].join(':');
         }).join('|');
     }
 

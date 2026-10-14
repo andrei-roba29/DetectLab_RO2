@@ -467,6 +467,14 @@
         function proxiedUrl() {
             return options.proxyUrl || (proxyBase() + '?u=' + encodeURIComponent(url));
         }
+        /* Mirrored WMS layers: 2D Leaflet loads them as plain <img> (no CORS
+         * needed), so most WMS hosts have never had to send CORS headers.
+         * Trying direct first cost every tile of the first wave a failed
+         * fetch + retry through the proxy — the "WMS crawls in 3D" report.
+         * The dl2d handler flags those (preferProxy): one proxied request
+         * per tile from the start, direct kept as fallback if the proxy
+         * refuses the host (403 = not on its allow-list). */
+        if (options.preferProxy && proxyBase()) useProxy = true;
         var target = useProxy ? proxiedUrl() : url;
         return root.fetch(target, { mode: 'cors', credentials: 'omit', signal: signal })
             .then(function (response) {
@@ -488,6 +496,11 @@
                 throw new Error(((response && response.status) || 0) + ' for ' + target);
             })
             .catch(function (error) {
+                if (useProxy && !options.proxyUrl) {
+                    /* Proxy refused/unreachable: a CORS-enabled upstream can
+                     * still serve the tile directly — better than a hole. */
+                    return root.fetch(url, { mode: 'cors', credentials: 'omit', signal: signal });
+                }
                 if (!useProxy && proxyBase() && host) {
                     /* A CORS-less host fails exactly like this: remember the
                      * verdict for the session and retry through the proxy. */
@@ -564,7 +577,9 @@
             if (!layer) return Promise.reject(new Error('[Map3D] the 2D layer behind ' + key + ' is gone'));
             var url = MIRROR.tileUrlFor(layer, z, x, y);
             if (url) {
-                return fetchTile(url, abortController).then(function (tile) {
+                var isWms = !!((layer.options && (layer.options.layers || layer.options.layer)) ||
+                    /[?&](service=wms|request=getmap)/i.test(url));
+                return fetchTile(url, abortController, { preferProxy: isWms }).then(function (tile) {
                     return blendedTile(layer, url, tile.data).then(function (data) { return { data: data }; });
                 });
             }
@@ -1300,37 +1315,67 @@
         var hasLine = types.some(function (t) { return /LineString|MultiLineString/.test(t); });
         var hasPoint = types.some(function (t) { return /Point/.test(t); });
         var hasCircle = item.circle === true;
+        /* Per-feature paint (heritage bridge): each feature carries its own
+         * colour/radius (layer-0 green vs layer-6 red sites, 600 m radii as
+         * polygons), so the single Leaflet paint becomes a fallback coalesce. */
+        var fillPaint = paints.fill, linePaint = paints.line, circlePaint = paints.circle;
+        if (item.perFeature) {
+            fillPaint = Object.assign({}, paints.fill, {
+                'fill-color': ['coalesce', ['get', 'fillColor'], ['get', 'color'], paints.fill['fill-color'] || '#3388ff'],
+                'fill-opacity': ['coalesce', ['get', 'fillOpacity'], paints.fill['fill-opacity'] == null ? 0.2 : paints.fill['fill-opacity']]
+            });
+            linePaint = Object.assign({}, paints.line, {
+                'line-color': ['coalesce', ['get', 'color'], paints.line['line-color'] || '#3388ff'],
+                'line-opacity': ['coalesce', ['get', 'opacity'], paints.line['line-opacity'] == null ? 1 : paints.line['line-opacity']]
+            });
+            circlePaint = Object.assign({}, paints.circle, {
+                'circle-color': ['coalesce', ['get', 'fillColor'], ['get', 'color'], paints.circle['circle-color'] || '#3388ff'],
+                'circle-stroke-color': ['coalesce', ['get', 'color'], paints.circle['circle-stroke-color'] || '#3388ff'],
+                'circle-radius': ['coalesce', ['get', 'radius'], paints.circle['circle-radius'] == null ? 5 : paints.circle['circle-radius']],
+                'circle-opacity': ['coalesce', ['get', 'fillOpacity'], paints.circle['circle-opacity'] == null ? 0.9 : paints.circle['circle-opacity']]
+            });
+        }
 
         if (hasPolygon) {
             var fillId = entry.id + '-fill';
             if (!map.getLayer(fillId)) {
-                map.addLayer({ id: fillId, type: 'fill', source: sourceId, paint: paints.fill });
+                map.addLayer({ id: fillId, type: 'fill', source: sourceId, filter: ['match', ['geometry-type'], ['Polygon', 'MultiPolygon'], true, false], paint: fillPaint });
             } else {
-                setPaint(fillId, paints.fill);
+                setPaint(fillId, fillPaint);
             }
             ids.push(fillId);
         }
         if (hasPolygon || hasLine) {
             var lineId = entry.id + '-line';
             if (!map.getLayer(lineId)) {
-                map.addLayer({ id: lineId, type: 'line', source: sourceId, paint: paints.line, layout: layout });
+                map.addLayer({ id: lineId, type: 'line', source: sourceId, paint: linePaint, layout: layout });
             } else {
-                setPaint(lineId, paints.line);
+                setPaint(lineId, linePaint);
                 setLayout(lineId, layout);
             }
             ids.push(lineId);
         }
         if (hasPoint) {
             var circleId = entry.id + '-circle';
+            var pointFilter = item.perFeature || (item.icons && Object.keys(item.icons).length)
+                ? ['all', ['==', ['geometry-type'], 'Point'], ['!', ['has', 'iconId']], ['!', ['has', 'noDot']]]
+                : null;
             if (!map.getLayer(circleId)) {
-                map.addLayer({
+                var circleSpec = {
                     id: circleId, type: 'circle', source: sourceId,
-                    paint: hasCircle ? paints.circle : Object.assign({}, paints.circle, { 'circle-opacity': 0.85 })
-                });
+                    paint: item.perFeature ? circlePaint
+                        : (hasCircle ? paints.circle : Object.assign({}, paints.circle, { 'circle-opacity': 0.85 }))
+                };
+                if (pointFilter) circleSpec.filter = pointFilter;
+                map.addLayer(circleSpec);
             } else {
-                setPaint(circleId, hasCircle ? paints.circle : Object.assign({}, paints.circle, { 'circle-opacity': 0.85 }));
+                setPaint(circleId, item.perFeature ? circlePaint
+                    : (hasCircle ? paints.circle : Object.assign({}, paints.circle, { 'circle-opacity': 0.85 })));
             }
             ids.push(circleId);
+            /* Pins inside a GeoJSON (DARE markers via pointToLayer) and any
+             * per-feature labels: same symbol treatment as plain markers. */
+            markerSymbolLayers(entry, sourceId, item, { suffix: '' }).forEach(function (id) { ids.push(id); });
         }
         return ids;
     }
@@ -1388,17 +1433,61 @@
         return item.geojson;
     }
 
+
+    /* Symbol (per-feature icon) + label layers for a point source whose
+     * features carry iconId/label/noDot (mirror contract). Used by markers,
+     * clusters and GeoJSON point layers alike (DARE glyphs, OSM Places
+     * labels, event pins): the icon comes from the feature, never from the
+     * first feature of the bundle. Returns layer ids created/ensured. */
+    function markerSymbolLayers(entry, sourceId, item, opts) {
+        opts = opts || {};
+        var ids = [];
+        var icons = item.icons || {};
+        var iconIds = Object.keys(icons);
+        var ready = iconIds.length > 0;
+        iconIds.forEach(function (id) {
+            if (!ensureImage(icons[id].url, function () { scheduleSync(); })) ready = false;
+        });
+        if (ready && iconIds.length) {
+            var symbolId = entry.id + opts.suffix + '-icon';
+            var layout = {
+                'icon-image': ['image', ['get', 'iconId']],
+                'icon-size': 1,
+                'icon-allow-overlap': true,
+                'icon-ignore-placement': true,
+                'icon-anchor': 'center'
+            };
+            if (!map.getLayer(symbolId)) {
+                map.addLayer({ id: symbolId, type: 'symbol', source: sourceId,
+                    filter: ['has', 'iconId'], layout: layout });
+            }
+            ids.push(symbolId);
+        }
+        var labelId = entry.id + opts.suffix + '-label';
+        if (!map.getLayer(labelId)) {
+            map.addLayer({
+                id: labelId, type: 'symbol', source: sourceId,
+                filter: ['all', ['has', 'label'], ['!=', ['get', 'label'], '']],
+                layout: {
+                    'text-field': ['get', 'label'],
+                    'text-size': 11,
+                    'text-offset': [0, 1.1],
+                    'text-anchor': 'top',
+                    'text-allow-overlap': false,
+                    'text-optional': true
+                },
+                paint: { 'text-color': '#ffffff', 'text-halo-color': '#111827', 'text-halo-width': 1.2 }
+            });
+        }
+        ids.push(labelId);
+        return ids;
+    }
+
     function renderMarkers(entry, tries) {
         tries = tries || 0;
         var item = entry.item;
         var sourceId = entry.id + '-src';
         var data = markerSourceData(item);
-        var feature = (data.features || [])[0];
-        var iconSpec = feature && feature.properties && feature.properties.icon;
-        var iconId = null;
-        if (iconSpec && iconSpec.url) {
-            iconId = ensureImage(iconSpec.url, function () { scheduleSync(); });
-        }
         if (map.getSource(sourceId)) {
             setSourceData(sourceId, data);
         } else {
@@ -1406,61 +1495,26 @@
             state.sourceData[sourceId] = data;
         }
         var ids = [];
+        /* Fallback dot: only for features with no icon of their own and not
+         * label-only (OSM Places anchors must not sprout invented pins). */
         var circleId = entry.id + '-dot';
-        var o = feature && feature.properties && feature.properties.paint;
         if (!map.getLayer(circleId)) {
             map.addLayer({
                 id: circleId, type: 'circle', source: sourceId,
+                filter: ['all', ['!', ['has', 'iconId']], ['!', ['has', 'noDot']]],
                 paint: {
                     'circle-radius': 5,
                     'circle-color': '#f59e0b',
                     'circle-stroke-color': '#1f2937',
                     'circle-stroke-width': 1.5,
-                    'circle-opacity': iconId ? 0 : (item.opacity == null ? 0.95 : item.opacity)
+                    'circle-opacity': item.opacity == null ? 0.95 : item.opacity
                 }
             });
         } else {
-            map.setPaintProperty(circleId, 'circle-opacity', iconId ? 0 : (item.opacity == null ? 0.95 : item.opacity));
+            map.setPaintProperty(circleId, 'circle-opacity', item.opacity == null ? 0.95 : item.opacity);
         }
         ids.push(circleId);
-        if (iconId) {
-            var symbolId = entry.id + '-icon';
-            var layout = {
-                'icon-image': iconId,
-                'icon-size': 1,
-                'icon-allow-overlap': true,
-                'icon-ignore-placement': true,
-                'icon-anchor': 'center',
-                'icon-offset': (iconSpec.iconOffset && iconSpec.iconOffset.length === 2) ? iconSpec.iconOffset : [0, 0]
-            };
-            if (!map.getLayer(symbolId)) {
-                map.addLayer({ id: symbolId, type: 'symbol', source: sourceId, layout: layout });
-            } else {
-                Object.keys(layout).forEach(function (k) {
-                    try { map.setLayoutProperty(symbolId, k, layout[k]); } catch (e) { /* ignore */ }
-                });
-            }
-            ids.push(symbolId);
-        }
-        var text = feature && feature.properties && feature.properties.tooltip;
-        if (text && String(text).replace(/<[^>]*>/g, '').trim().length && String(text).length < 60) {
-            var textId = entry.id + '-label';
-            var textLayout = {
-                'text-field': String(text).replace(/<[^>]*>/g, '').trim(),
-                'text-size': 11,
-                'text-offset': [0, 1.2],
-                'text-anchor': 'top',
-                'text-allow-overlap': false,
-                'text-optional': true
-            };
-            if (!map.getLayer(textId)) {
-                map.addLayer({
-                    id: textId, type: 'symbol', source: sourceId, layout: textLayout,
-                    paint: { 'text-color': '#ffffff', 'text-halo-color': '#111827', 'text-halo-width': 1.2 }
-                });
-            }
-            ids.push(textId);
-        }
+        markerSymbolLayers(entry, sourceId, item, { suffix: '' }).forEach(function (id) { ids.push(id); });
         state.status[entry.id] = { state: 'on', mode: 'direct', kind: 'marker', mirrored: true, label: item.label };
         return { sourceIds: [sourceId], layerIds: ids, interactive: true };
     }
@@ -1507,7 +1561,8 @@
                 paint: { 'text-color': '#ffffff' }
             });
             map.addLayer({
-                id: dotId, type: 'circle', source: sourceId, filter: ['!', ['has', 'point_count']],
+                id: dotId, type: 'circle', source: sourceId,
+                filter: ['all', ['!', ['has', 'point_count']], ['!', ['has', 'iconId']], ['!', ['has', 'noDot']]],
                 paint: {
                     'circle-radius': 5,
                     'circle-color': '#f59e0b',
@@ -1518,6 +1573,7 @@
             });
         }
         ids.push(ringId, countId, dotId);
+        markerSymbolLayers(entry, sourceId, item, { suffix: '' }).forEach(function (id) { ids.push(id); });
         state.status[entry.id] = {
             state: 'on', mode: 'direct', kind: 'cluster', mirrored: true,
             label: item.label, features: (item.geojson.features || []).length

@@ -1,0 +1,56 @@
+/* hist-shift.css — panoul „Mută harta istorică" (long-press pe hartă).
+   Apare doar la long-press; nu ocupă spațiu în UI în rest. */
+.hist-shift-panel {
+    position: absolute;
+    left: 50%;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
+    transform: translateX(-50%);
+    z-index: 1200;
+    width: min(320px, calc(100vw - 24px));
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(6, 14, 30, 0.94);
+    border: 1px solid rgba(200, 169, 110, 0.45);
+    color: #f5f0eb;
+    font-family: Outfit, system-ui, sans-serif;
+    box-shadow: 0 10px 34px rgba(0, 0, 0, 0.55);
+    pointer-events: auto;
+}
+.hist-shift-panel.is-active { border-color: rgba(230, 120, 60, 0.85); }
+.hist-shift-head {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 0.8rem; font-weight: 600; margin-bottom: 6px;
+}
+.hist-shift-close {
+    background: none; border: none; color: rgba(245, 240, 235, 0.75);
+    font-size: 1.05rem; line-height: 1; cursor: pointer; padding: 2px 6px;
+}
+.hist-shift-select {
+    width: 100%; margin-bottom: 8px; padding: 5px 6px; border-radius: 7px;
+    background: rgba(255, 255, 255, 0.08); color: #f5f0eb;
+    border: 1px solid rgba(255, 255, 255, 0.14); font-size: 0.74rem;
+}
+.hist-shift-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.hist-shift-state { font-size: 0.76rem; }
+.hist-shift-switch { flex-shrink: 0; }
+.hist-shift-meta {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin-top: 7px;
+}
+.hist-shift-offset { font-size: 0.68rem; color: rgba(245, 240, 235, 0.65); }
+.hist-shift-reset {
+    background: rgba(255, 255, 255, 0.08); color: #f5f0eb; cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 7px;
+    font-size: 0.68rem; padding: 4px 8px;
+}
+.hist-shift-hint, .hist-shift-nolayer {
+    margin-top: 7px; font-size: 0.66rem; line-height: 1.35;
+    color: rgba(245, 240, 235, 0.6);
+}
+/* În modul mutare, harta arată că drag-ul mișcă suprapunerea, nu baza. */
+.hist-shift-active { cursor: move !important; }
+.hist-shift-active .leaflet-tile-container,
+.hist-shift-active .leaflet-image-layer { will-change: transform; }

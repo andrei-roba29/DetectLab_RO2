@@ -466,7 +466,9 @@
 //   (the Roman-roads featureGroup crashed the page as 20 000 sources), caps the
 //   deck, and the viewer repaints the CSS-blended Romanian LiDAR hillshades —
 //   which MapLibre cannot blend — so they appear instead of a white sheet.
-const CACHE_NAME = 'detectlab-v203-3d-blend';
+// v204: 3D per-feature pins/labels (OSM Places, DARE), heritage points+radii bridge, WMS proxy-first.
+// v205: long-press move/lock for every historical map (free + premium).
+const CACHE_NAME = 'detectlab-v205-hist-shift';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -496,10 +498,15 @@ const PRECACHE_URLS = [
   'js/layer-registry.js?v=20261013-3d-mobile',
   'js/layer-registry.js?v=20261013-3d-mirror',
   'js/layer-registry.js',
+  'js/hist-shift.js?v=20261014-hist-shift',
+  'css/hist-shift.css?v=20261014-hist-shift',
+  'js/map3d-mirror.js?v=20261014-3d-vectors',
+  'js/map-app.js?v=20261014-3d-vectors',
   'js/map3d-mirror.js?v=20261014-3d-blend',
   'js/map3d-mirror.js?v=20261013-3d-mobile',
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
+  'js/map3d-terrain.js?v=20261014-3d-vectors',
   'js/map3d-terrain.js?v=20261014-3d-blend',
   'js/map3d-terrain.js?v=20261014-3d-slider-layout',
   'js/map3d-terrain.js?v=20261013-3d-mobile',
