@@ -384,3 +384,320 @@ body.is-pwa.is-3d #map3d-bar {
     overflow-y: auto;
     scrollbar-width: thin;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * The LiDAR focus (js/lidar-3d-focus.js)
+ * --------------------------------------------------------------------------
+ * Shown over the 2D map — pressing 3D with a LiDAR layer switched on never
+ * opens 3D straight away: it asks for a point and a fetching distance first,
+ * prefetches that disc, and only then switches renderer. Colours follow the
+ * 3D surface (its veil and bar) so the dialog reads as part of the same step.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+#map3d-focus {
+    position: absolute;
+    inset: 0;
+    /* Above the layer panel (1001/1002) and the search bar: this is a modal
+     * decision about what the next view may load. */
+    z-index: 1400;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 16px;
+    /* The card takes the clicks; the map behind it keeps its gestures. */
+    pointer-events: none;
+    font-family: 'Outfit', sans-serif;
+    color: rgba(245, 240, 235, 0.94);
+}
+
+#map3d-focus .m3d-focus-card {
+    pointer-events: auto;
+    width: min(460px, 100%);
+    max-height: calc(100% - 24px);
+    overflow-y: auto;
+    background: rgba(6, 14, 30, 0.94);
+    border: 1px solid rgba(200, 169, 110, 0.42);
+    border-radius: 12px;
+    padding: 14px 16px 16px;
+    box-shadow: 0 18px 44px rgba(2, 6, 14, 0.6);
+    font-size: 0.82rem;
+    line-height: 1.35;
+}
+
+#map3d-focus .m3d-focus-card[hidden] { display: none; }
+
+.m3d-focus-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+#map3d-focus h2 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: rgba(200, 169, 110, 0.98);
+}
+
+#map3d-focus .m3d-focus-x {
+    background: none;
+    border: none;
+    color: rgba(245, 240, 235, 0.75);
+    font: inherit;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 6px;
+}
+
+#map3d-focus .m3d-focus-x:hover { background: rgba(184, 216, 240, 0.14); }
+
+#map3d-focus .m3d-focus-lead {
+    margin: 0 0 12px;
+    color: rgba(245, 240, 235, 0.78);
+    font-size: 0.78rem;
+}
+
+#map3d-focus .m3d-focus-block {
+    border-top: 1px solid rgba(184, 216, 240, 0.14);
+    padding-top: 10px;
+    margin-top: 10px;
+}
+
+#map3d-focus .m3d-focus-label {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    margin-bottom: 6px;
+}
+
+#map3d-focus .m3d-focus-cap {
+    font-style: normal;
+    font-size: 0.68rem;
+    opacity: 0.66;
+}
+
+#map3d-focus .m3d-focus-layers {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 132px;
+    overflow-y: auto;
+}
+
+#map3d-focus .m3d-focus-layer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 9px;
+    border: 1px solid rgba(184, 216, 240, 0.2);
+    border-radius: 8px;
+    background: rgba(184, 216, 240, 0.06);
+    cursor: pointer;
+    font-size: 0.76rem;
+    /* Comfortable for a thumb: the whole row is the target. */
+    min-height: 34px;
+}
+
+#map3d-focus .m3d-focus-layer.is-on {
+    border-color: rgba(200, 169, 110, 0.75);
+    background: rgba(200, 169, 110, 0.16);
+}
+
+#map3d-focus .m3d-focus-layer input { accent-color: #c8a96e; margin: 0; }
+
+#map3d-focus .m3d-focus-hintline,
+#map3d-focus .m3d-focus-empty {
+    margin: 8px 0 0;
+    font-size: 0.7rem;
+    opacity: 0.7;
+}
+
+#map3d-focus .m3d-focus-radius {
+    width: 100%;
+    height: 24px;
+    margin: 2px 0 6px;
+    accent-color: #c8a96e;
+    cursor: pointer;
+}
+
+#map3d-focus .m3d-focus-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+#map3d-focus .m3d-focus-chips button {
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(184, 216, 240, 0.24);
+    background: rgba(184, 216, 240, 0.08);
+    color: inherit;
+    font: inherit;
+    font-size: 0.72rem;
+    cursor: pointer;
+}
+
+#map3d-focus .m3d-focus-chips button.is-on {
+    border-color: rgba(200, 169, 110, 0.8);
+    background: rgba(200, 169, 110, 0.2);
+}
+
+#map3d-focus .m3d-focus-point-block .m3d-focus-pick {
+    width: 100%;
+    padding: 9px 10px;
+    border-radius: 8px;
+    border: 1px dashed rgba(200, 169, 110, 0.6);
+    background: rgba(200, 169, 110, 0.08);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    min-height: 36px;
+}
+
+#map3d-focus .m3d-focus-point-block .m3d-focus-pick:hover { background: rgba(200, 169, 110, 0.18); }
+
+#map3d-focus .m3d-focus-estimate {
+    margin: 12px 0 0;
+    font-size: 0.72rem;
+    color: rgba(200, 169, 110, 0.9);
+}
+
+#map3d-focus .m3d-focus-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+#map3d-focus .m3d-focus-actions button {
+    flex: 1 1 auto;
+    padding: 11px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(184, 216, 240, 0.24);
+    background: rgba(184, 216, 240, 0.08);
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    min-height: 44px;
+}
+
+#map3d-focus .m3d-focus-go {
+    background: rgba(200, 169, 110, 0.3);
+    border-color: rgba(200, 169, 110, 0.85);
+}
+
+#map3d-focus .m3d-focus-go:disabled { opacity: 0.45; cursor: default; }
+
+#map3d-focus .m3d-focus-progress { margin-top: 12px; }
+
+#map3d-focus .m3d-focus-bar {
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(184, 216, 240, 0.16);
+    overflow: hidden;
+}
+
+#map3d-focus .m3d-focus-bar i {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: inherit;
+    background: linear-gradient(90deg, rgba(200, 169, 110, 0.7), rgba(200, 169, 110, 1));
+    transition: width 140ms linear;
+}
+
+#map3d-focus .m3d-focus-progress-text {
+    margin-top: 8px;
+    font-size: 0.74rem;
+    color: rgba(245, 240, 235, 0.82);
+}
+
+#map3d-focus .m3d-focus-stop {
+    margin-top: 10px;
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(184, 216, 240, 0.24);
+    background: rgba(184, 216, 240, 0.08);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    min-height: 44px;
+}
+
+/* While the user is choosing the point the card steps aside: the hint is the
+ * only thing on screen, and it must not swallow the tap it is asking for. */
+#map3d-focus .m3d-focus-hint {
+    pointer-events: auto;
+    position: absolute;
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: calc(100% - 24px);
+    padding: 9px 12px;
+    border-radius: 999px;
+    background: rgba(6, 14, 30, 0.92);
+    border: 1px solid rgba(200, 169, 110, 0.5);
+    font-size: 0.76rem;
+}
+
+#map3d-focus .m3d-focus-hint button {
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(184, 216, 240, 0.28);
+    background: rgba(184, 216, 240, 0.1);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+/* Crosshair while picking: the next tap is the centre of the LiDAR area. */
+#detectlab-map.m3d-picking { cursor: crosshair; }
+#detectlab-map.m3d-picking * { cursor: crosshair !important; }
+
+/* ── the LiDAR line inside the 3D control bar ───────────────────────────── */
+#map3d-bar .m3d-lidar {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(200, 169, 110, 0.4);
+    background: rgba(6, 14, 30, 0.72);
+    font-size: 0.68rem;
+    color: rgba(245, 240, 235, 0.86);
+}
+
+#map3d-bar .m3d-lidar[hidden] { display: none; }
+
+#map3d-bar .m3d-lidar-text { line-height: 1.3; }
+
+#map3d-bar .m3d-lidar-actions { display: flex; gap: 6px; }
+
+#map3d-bar .m3d-lidar-actions button {
+    flex: 1 1 auto;
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(200, 169, 110, 0.55);
+    background: rgba(200, 169, 110, 0.14);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    min-height: 32px;
+}
+
+#map3d-bar .m3d-lidar-actions button:hover { background: rgba(200, 169, 110, 0.26); }
+
+@media (max-width: 720px) {
+    #map3d-focus { padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px)); }
+    #map3d-focus .m3d-focus-card { padding: 12px 12px 14px; max-height: calc(100% - 16px); }
+    #map3d-focus .m3d-focus-layers { max-height: 108px; }
+}

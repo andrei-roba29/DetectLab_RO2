@@ -97,6 +97,25 @@
         blendWarned: false,              /* the repaint failure was already reported */
         cappedSeen: {},                  /* deck-budget lines already reported     */
         retintedTiles: 0,                /* tiles repainted for a CSS blend mode   */
+        /* ── LiDAR focus (js/lidar-3d-focus.js) ──────────────────────────────
+         * ONE LiDAR layer may be draped in 3D, and only inside the disc the user
+         * picked and prefetched. state.focus is that decision, state.lidarOff
+         * means “the user removed LiDAR from 3D”, and state.primed is the tile
+         * cache the prefetch filled (see prefetchTiles below). */
+        focus: null,                     /* { key, defId, label, lat, lng, radiusKm, bounds, mask, tiles } */
+        lidarOff: false,                 /* LiDAR deliberately not drawn in 3D     */
+        lidarNotes: [],                  /* what had to be left out, and why       */
+        primed: {},                      /* url → raw bytes the prefetch downloaded */
+        primedOut: {},                   /* url → { sig, data } after blend + clip  */
+        primedLayer: {},                 /* url → the layer key it was prepared for */
+        primedOrder: [],                 /* FIFO eviction order                     */
+        primedBytes: 0,
+        primedHits: 0,
+        prefetching: false,
+        /* The entry gate: an async function the LiDAR focus installs so that
+         * pressing “3D” on a map with a LiDAR layer on can ask first. */
+        entryGate: null,
+        gateRunning: null,
         pendingImages: {},
         supported: {},                   /* resolved host policy cache           */
         lastSync: 0,
@@ -230,9 +249,17 @@
         }
     }
 
+    /* window._currentLang is a FUNCTION installed by js/translations.js; reading
+     * it as a string (which this used to do) silently landed on COPY.en, so the
+     * Romanian copy below was unreachable. */
     function lang() {
         try {
-            if (root._currentLang) return root._currentLang;
+            if (typeof root._currentLang === 'function') {
+                var value = root._currentLang();
+                if (typeof value === 'string' && /^(ro|en)/i.test(value)) return /^en/i.test(value) ? 'en' : 'ro';
+            } else if (typeof root._currentLang === 'string' && /^(ro|en)/i.test(root._currentLang)) {
+                return /^en/i.test(root._currentLang) ? 'en' : 'ro';
+            }
             var l = document.documentElement && document.documentElement.lang;
             return /^en/i.test(l || '') ? 'en' : 'ro';
         } catch (e) { return 'ro'; }
@@ -271,7 +298,15 @@
             terrainOff: 'Modelul de elevație nu s-a putut încărca',
             mirrored: 'oglindite din harta 2D',
             base: 'hartă de bază',
-            attribution: 'Surse'
+            attribution: 'Surse',
+            lidarFocus: 'LiDAR în 3D',
+            lidarUnprepared: 'LiDAR: pregătește zona pentru 3D',
+            lidarOff: 'LiDAR scos din vederea 3D (un singur strat LiDAR o dată)',
+            lidarSingle: 'Un singur strat LiDAR în 3D',
+            lidarChoose: 'Alege zona LiDAR',
+            lidarChange: 'Schimbă zona',
+            lidarClear: 'Scoate',
+            lidarTiles: 'tile pregătite'
         },
         en: {
             button: '3D',
@@ -305,7 +340,15 @@
             terrainOff: 'The elevation model could not be loaded',
             mirrored: 'mirrored from the 2D map',
             base: 'base map',
-            attribution: 'Sources'
+            attribution: 'Sources',
+            lidarFocus: 'LiDAR in 3D',
+            lidarUnprepared: 'LiDAR: prepare the area for 3D',
+            lidarOff: 'LiDAR removed from the 3D view (one LiDAR layer at a time)',
+            lidarSingle: 'One LiDAR layer in 3D',
+            lidarChoose: 'Choose the LiDAR area',
+            lidarChange: 'Change the area',
+            lidarClear: 'Remove',
+            lidarTiles: 'tiles prepared'
         }
     };
     function t(key) { var l = lang(); return (COPY[l] && COPY[l][key]) || COPY.en[key] || key; }
@@ -455,8 +498,108 @@
     }
 
     /** Fetch one tile, healing a host that turns out to have no CORS. */
+    /* ═══════════════════════════════════════════════════════════════════════
+     *  PREFETCHED TILES — the LiDAR focus disc
+     * -----------------------------------------------------------------------
+     *  A LiDAR hillshade is heavy (a 1 m ArcGIS tile is tens of kilobytes, and
+     *  the same tiles are what MapLibre decodes into a texture), so opening 3D
+     *  over one used to show a half-drawn sheet while a pyramid of tiles the
+     *  user may never look at was being fetched. js/lidar-3d-focus.js therefore
+     *  asks for a point and a distance, downloads exactly the tiles of that
+     *  disc (bounded by the 10 km radius), and only then lets 3D open.
+     *
+     *  What is downloaded is kept HERE, in memory, keyed by upstream URL:
+     *    state.primed[url]     – what the service sent (never re-downloaded)
+     *    state.primedOut[url]  – { sig, data } after the CSS-blend repaint and
+     *                            the disc clip, i.e. the exact bytes MapLibre
+     *                            is handed (never re-encoded either)
+     *  The cache is byte-budgeted and FIFO-evicted, lives across 3D sessions
+     *  (closing 3D and opening it again on the same disc is instant) and is
+     *  dropped tile by tile when the focus moves or closes.
+     * ═══════════════════════════════════════════════════════════════════════ */
+    var PRIME_DESKTOP = { entries: 2400, bytes: 96 * 1024 * 1024 };
+    var PRIME_MOBILE = { entries: 900, bytes: 28 * 1024 * 1024 };
+
+    function primeBudget() { return isMobile() ? PRIME_MOBILE : PRIME_DESKTOP; }
+
+    function primeBytesOf(data) {
+        if (!data) return 0;
+        if (typeof data.byteLength === 'number') return data.byteLength;
+        return 0;
+    }
+
+    /** The bytes the service sent for this tile, or null. */
+    function primedRaw(url) {
+        var hit = url ? state.primed[url] : null;
+        if (!hit) return null;
+        state.primedHits += 1;
+        return hit;
+    }
+
+    /**
+     * The finished bytes (blend repainted, disc clipped) for this tile, or null.
+     * `sig` is the pipeline signature: a tile of a layer whose blend/clip
+     * changed is recomputed from the raw bytes instead of being reused.
+     */
+    function primedOutput(url, sig) {
+        var hit = url ? state.primedOut[url] : null;
+        if (!hit || hit.sig !== (sig || '')) return null;
+        state.primedHits += 1;
+        return hit.data;
+    }
+
+    function primedPut(url, data, output, sig) {
+        if (!url || !data) return;
+        var store = output ? state.primedOut : state.primed;
+        var entry = output ? { sig: sig || '', data: data } : data;
+        var previous = store[url];
+        if (previous) {
+            state.primedBytes -= primeBytesOf(previous.data || previous);
+        } else if (!state.primed[url] && !state.primedOut[url]) {
+            /* One FIFO slot per tile, not per store. A tile whose bytes were
+             * repainted for the relief is the same tile: counting it twice made
+             * the bar's “N tiles ready” and status().lidar.primed.entries say
+             * double, and cost the cache half its budget before it evicted. */
+            state.primedOrder.push(url);
+        }
+        store[url] = entry;
+        state.primedBytes += primeBytesOf(data);
+        var budget = primeBudget();
+        while (state.primedOrder.length > budget.entries || state.primedBytes > budget.bytes) {
+            var oldest = state.primedOrder.shift();
+            if (oldest === undefined) break;
+            var raw = state.primed[oldest];
+            var out = state.primedOut[oldest];
+            if (raw) { state.primedBytes -= primeBytesOf(raw); delete state.primed[oldest]; }
+            if (out) { state.primedBytes -= primeBytesOf(out.data); delete state.primedOut[oldest]; }
+        }
+    }
+
+    /** Forget prefetched tiles (no filter = all of them). */
+    function clearPrimed(filter) {
+        state.primedOrder.slice().forEach(function (url) {
+            if (filter && !filter(url)) return;
+            var raw = state.primed[url];
+            var out = state.primedOut[url];
+            if (raw) state.primedBytes -= primeBytesOf(raw);
+            if (out) state.primedBytes -= primeBytesOf(out.data);
+            delete state.primed[url];
+            delete state.primedOut[url];
+            var at = state.primedOrder.indexOf(url);
+            if (at !== -1) state.primedOrder.splice(at, 1);
+        });
+        if (state.primedBytes < 0) state.primedBytes = 0;
+        return true;
+    }
+
     function fetchTile(url, abortController, options) {
         options = options || {};
+        /* Already downloaded for this very tile? Then there is no request to
+         * make — this is what makes the prefetched disc appear instantly. */
+        if (!options.force) {
+            var primed = primedRaw(url);
+            if (primed) return Promise.resolve({ data: primed });
+        }
         var signal = abortController && abortController.signal;
         var host = hostOfUrl(url);
         var useProxy = shouldProxy(host);
@@ -541,6 +684,10 @@
         var size = 256;
         try { if (layer && layer.getTileSize) size = layer.getTileSize().x || 256; } catch (e) { size = 256; }
         if (typeof MIRROR.retintTile !== 'function') return Promise.resolve(payload);
+        /* A prefetched tile is already repainted — the disc the user prepared
+         * must be served from memory, not recomputed on the first pan. */
+        var prefetched = prefetchedForLayer(url, layer, blend);
+        if (prefetched) return Promise.resolve(prefetched);
         var hit = state.blendCache[url];
         if (hit) return Promise.resolve(hit.slice(0));      /* never the cached buffer itself */
         return MIRROR.retintTile(payload, size, blend).then(function (bytes) {
@@ -561,6 +708,303 @@
         });
     }
 
+    /* ═══════════════════════════════════════════════════════════════════════
+     *  THE LIDAR FOCUS DISC — one layer, one area, already in memory
+     * -----------------------------------------------------------------------
+     *  js/lidar-3d-focus.js decides WHICH LiDAR layer may be draped and over
+     *  WHICH disc; everything else here is the enforcement:
+     *
+     *    • plan()        drops every other LiDAR layer, so 3D can never try to
+     *                    drape two national pyramids at once (the report that
+     *                    starts this work: “Romania 1m/pixel agregare / AB …
+     *                    slow, broken, or simply never there”).
+     *    • renderRaster() gives the focused source the disc's bounds, so
+     *                    MapLibre never asks for a tile outside the prepared
+     *                    area — the difference between a few hundred tiles and
+     *                    a country.
+     *    • the protocols below clip every tile of that layer to the disc, so
+     *                    what the user prepared is exactly what is drawn.
+     *    • prefetchTiles() does the preparing: the same fetchTile/blend/clip
+     *                    path the 3D view uses, stored in state.primed.
+     * ═══════════════════════════════════════════════════════════════════════ */
+
+    /** Does this deck item / registry definition belong to the focused LiDAR layer? */
+    function focusMatches(item) {
+        var f = state.focus;
+        if (!f || !item) return false;
+        /* Two key spaces meet here. The deck key of a mirrored layer
+         * (`2d.<stamp>`) is what dl2d:// and the disc clip are addressed by; the
+         * LiDAR family key the tag carries (`lidar.ro1m`, `def:lidar.fr-mnh`) is
+         * what the dialog, the mirror item and the registry agree on. A focus
+         * carries both, and either may be the one that names this item. */
+        if (item.lidarKey && (item.lidarKey === f.key || item.lidarKey === f.lidarKey)) return true;
+        if (item.defId && f.defId && item.defId === f.defId) return true;
+        return false;
+    }
+
+    function focusKeyOf(item) {
+        if (!item) return null;
+        return item.lidarKey || item.defId || null;
+    }
+
+    /** The disc a mirrored layer / registry definition is drawn inside. */
+    function maskOf(key) {
+        var f = state.focus;
+        if (!f || !key) return null;
+        if (key === f.key || key === f.lidarKey || (f.defId && key === f.defId)) return f.mask || f;
+        return null;
+    }
+    function focusMaskFor(key) { return maskOf(key); }
+
+    /** The disc's identity, for a given layer ('' when that layer is not focused). */
+    function focusSigFor(key) {
+        var mask = maskOf(key);
+        if (!mask) return '';
+        return 'disc@' + mask.lat + ',' + mask.lng + ',' + mask.radiusKm;
+    }
+
+    /**
+     * The identity of the finishing pipeline a tile goes through. Prepared bytes
+     * may only be reused while this is unchanged (same blend, same disc); a
+     * focus that moved, or a layer that switched product, recomputes.
+     */
+    function pipelineSigFor(key, url) {
+        var layer = key && MIRROR.layerByKey ? MIRROR.layerByKey(key) : null;
+        var blend = layer && typeof MIRROR.blendOf === 'function' ? (MIRROR.blendOf(layer) || '') : '';
+        return blend + '|' + focusSigFor(key);
+    }
+
+    /** True when the focus disc excludes this tile of the focused layer on purpose. */
+    function focusExcludesTile(key, z, x, y) {
+        var mask = focusMaskFor(key);
+        if (!mask || !MIRROR.disc || typeof MIRROR.disc.touchesTile !== 'function') return false;
+        return !MIRROR.disc.touchesTile(mask, z, x, y);
+    }
+
+    /** The prepared bytes of this tile, when it belongs to the focused layer. */
+    function prefetchedForLayer(url, layer, blend) {
+        var key = layer ? MIRROR.keyFor(layer) : null;
+        if (!key || state.primedLayer[url] !== key) return null;
+        return primedOutput(url, (blend || '') + '|' + focusSigFor(key));
+    }
+
+    /**
+     * Clip a finished tile to the focused disc.
+     *
+     * Resolves with the bytes to hand MapLibre: the tile itself when it is
+     * entirely inside the disc, a transparent 1×1 PNG when the disc excludes it
+     * completely, and repainted PNG bytes for the tiles the rim crosses. Only
+     * the focused layer is ever clipped, and only its own tiles are remembered.
+     */
+    function clipFocusedTile(key, url, payload, tile) {
+        var mask = focusMaskFor(key);
+        if (!mask || !payload || !MIRROR.disc || typeof MIRROR.disc.maskTile !== 'function') {
+            return Promise.resolve(payload);
+        }
+        var sig = pipelineSigFor(key, url);
+        var layer = MIRROR.layerByKey(key);
+        var size = 256;
+        try { if (layer && layer.getTileSize) size = layer.getTileSize().x || 256; } catch (e) { size = 256; }
+        return MIRROR.disc.maskTile(payload, size, tile, mask).then(function (bytes) {
+            var data = bytes || MIRROR.disc.blankTile();
+            state.primedLayer[url] = key;
+            primedPut(url, data, true, sig);
+            return data;
+        }, function () { return payload; });
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     *  PREFETCH — “mold the disc onto the relief before entering 3D”
+     * -----------------------------------------------------------------------
+     *  js/lidar-3d-focus.js plans the tiles (which zooms, which z/x/y, bounded
+     *  by the 10 km radius) and hands the list over. Every tile goes through
+     *  the SAME path the 3D view would use — fetchTile (proxy/CORS decisions
+     *  included), the CSS-blend repaint, the disc clip — so nothing can be
+     *  prepared one way and drawn another. What comes out is in memory
+     *  (state.primed / state.primedOut) and 3D opens on a disc that is already
+     *  there.
+     *
+     *  Concurrency is modest (6, 4 on phones) on purpose: the point of the
+     *  exercise is a provider that stops answering when 200 tiles are asked for
+     *  at once, and a progress bar that actually advances.
+     * ═══════════════════════════════════════════════════════════════════════ */
+    function prefetchConcurrency() { return isMobile() ? 4 : 6; }
+
+    function prefetchTiles(list, options) {
+        options = options || {};
+        var entries = (list || []).slice();
+        var total = entries.length;
+        var report = {
+            total: total, done: 0, prepared: 0, failed: 0, stopped: false,
+            bytes: 0, startedAt: Date.now(), finishedAt: 0, errors: []
+        };
+        if (!total) {
+            report.finishedAt = Date.now();
+            if (options.onProgress) { try { options.onProgress(report); } catch (e) { /* ignore */ } }
+            return Promise.resolve(report);
+        }
+        state.prefetching = true;
+        var concurrency = Math.max(1, Math.min(12, Number(options.concurrency) || prefetchConcurrency()));
+        var cancelled = false;
+
+        function stopped() {
+            if (report.done >= total) return true;          /* nothing left to do */
+            if (!options.shouldStop) return false;
+            var yes = false;
+            try { yes = !!options.shouldStop(report); } catch (e) { yes = false; }
+            if (yes) cancelled = true;
+            return yes;
+        }
+
+        function prepare(entry) {
+            var defId = entry.defId || null;
+            var key = entry.layerKey || (defId ? 'def:' + defId : null);
+            var tile = { z: entry.z, x: entry.x, y: entry.y };
+            var templateUrl = entry.template || (key ? 'dl2d://' + key + '/' + entry.z + '/' + entry.x + '/' + entry.y : entry.url);
+
+            /* A layer that draws its own tiles (a country module building a
+             * WMS GetMap per tile) has no URL to fetch: it is rendered through
+             * the live 2D layer, exactly as the dl2d:// protocol does it. */
+            if (entry.route === 'canvas') {
+                if (typeof MIRROR.renderTile !== 'function') return Promise.reject(new Error('no renderTile in the mirror'));
+                if (focusExcludesTile(key, entry.z, entry.x, entry.y)) {
+                    state.primedLayer[templateUrl] = key;
+                    primedPut(templateUrl, MIRROR.disc.blankTile(), true, pipelineSigFor(key, templateUrl));
+                    return Promise.resolve();
+                }
+                return MIRROR.renderTile(MIRROR.layerByKey(key), entry.z, entry.x, entry.y).then(function (bytes) {
+                    /* renderTile repaints a CSS-blended layer itself. */
+                    return clipFocusedTile(key, templateUrl, bytes, tile).then(function () {});
+                });
+            }
+
+            var proxyUrl = null;
+            var preferProxy = !!entry.preferProxy;
+            if (defId) {
+                var def = REGISTRY.get(defId);
+                if (!def) return Promise.reject(new Error('unknown layer ' + defId));
+                proxyUrl = REGISTRY.proxyTemplate(def, { time: REGISTRY.timeOf(def), mode: REGISTRY.modeOf(def, {}) });
+            }
+            return fetchTile(entry.url, null, { proxyUrl: proxyUrl, preferProxy: preferProxy })
+                .then(function (tile) {
+                    primedPut(entry.url, tile.data, false);
+                    report.bytes += primeBytesOf(tile.data);
+                    var layer = key && MIRROR.layerByKey ? MIRROR.layerByKey(key) : null;
+                    return blendedTile(layer, entry.url, tile.data).then(function (bytes) {
+                        return clipFocusedTile(key, entry.url, bytes, tile).then(function () {});
+                    });
+                });
+        }
+
+        function worker() {
+            if (stopped()) return Promise.resolve();
+            var entry = entries.shift();
+            if (!entry) return Promise.resolve();
+            return prepare(entry).then(function () {
+                report.done += 1;
+                report.prepared += 1;
+            }, function (error) {
+                report.done += 1;
+                report.failed += 1;
+                if (report.errors.length < 5) {
+                    report.errors.push(String((error && error.message) || error) + ' — ' + entry.url);
+                }
+            }).then(function () {
+                if (options.onProgress) { try { options.onProgress(report); } catch (e) { /* ignore */ } }
+                return worker();
+            });
+        }
+
+        var lanes = [];
+        for (var i = 0; i < concurrency; i += 1) lanes.push(worker());
+        return Promise.all(lanes).then(function () {
+            report.stopped = cancelled;
+            report.finishedAt = Date.now();
+            state.prefetching = false;
+            if (options.onProgress) { try { options.onProgress(report); } catch (e) { /* ignore */ } }
+            return report;
+        });
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     *  THE FOCUS ITSELF — one LiDAR layer, one disc
+     * ═══════════════════════════════════════════════════════════════════════ */
+
+    /**
+     * Decide what the 3D view may drape.
+     *
+     * focus = { key, lidarKey?, defId?, label, lat, lng, radiusKm, bounds?, mask? }
+     *   key      the dl2d key of the live 2D layer (what the mirror named it) —
+     *            what dl2d://, the clip and the prepared tiles are addressed by
+     *   lidarKey the LiDAR family key the mirror put on the item (`lidar.ro1m`)
+     *            — what one-layer-at-a-time is decided by (js/lidar-3d-focus.js
+     *            sends both; either may be the one that names a given item)
+     *   defId    the registry definition, for a layer drawn from the registry
+     *   mask     { lat, lng, radiusKm } — the disc every tile is clipped to
+     *   bounds   [w, s, e, n] the raster source may load (computed here if absent)
+     */
+    function setLidarFocus(focus) {
+        var next = focus && (focus.key || focus.lidarKey || focus.defId) ? focus : null;
+        if (next) {
+            if (!next.mask && next.lat != null && next.lng != null && next.radiusKm) {
+                next.mask = { lat: Number(next.lat), lng: Number(next.lng), radiusKm: Number(next.radiusKm) };
+            }
+            if (!next.bounds && next.mask && MIRROR.disc) next.bounds = MIRROR.disc.bounds(next.mask);
+            next.at = Date.now();
+        }
+        var changed = !sameFocus(state.focus, next);
+        state.focus = next;
+        if (next) state.lidarOff = false;
+        if (changed) {
+            /* The prepared tiles of the previous disc are of no use for the new
+             * one, and neither is the prepared/live source of its layer. */
+            Object.keys(state.primedLayer).forEach(function (url) { delete state.primedLayer[url]; });
+            refreshFocusedSource();
+        }
+        if (state.open) syncLayers();
+        refreshFocusRow();
+        return state.focus;
+    }
+
+    function sameFocus(a, b) {
+        if (!a || !b) return !a && !b;
+        function disc(f) {
+            var m = f.mask || f;
+            return [f.key || '', f.lidarKey || '', f.defId || '',
+                Number(m.lat), Number(m.lng), Number(m.radiusKm)].join('|');
+        }
+        return disc(a) === disc(b);
+    }
+
+    /** Do not drape any LiDAR layer in 3D (the user removed it from the bar). */
+    function clearLidarFocus() {
+        state.focus = null;
+        state.lidarOff = true;
+        Object.keys(state.primedLayer).forEach(function (url) { delete state.primedLayer[url]; });
+        refreshFocusedSource();
+        if (state.open) syncLayers();
+        refreshFocusRow();
+        return true;
+    }
+
+    function currentFocus() { return state.focus; }
+
+    /**
+     * Force the focused source to be rebuilt: its bounds and the clip of every
+     * tile depend on the disc, and MapLibre caches both per source. Only the
+     * sources that were marked as focused are touched — the rest of the deck is
+     * none the wiser, so changing the LiDAR area does not re-download the map
+     * underneath it.
+     */
+    function refreshFocusedSource() {
+        Object.keys(state.rendered).forEach(function (id) {
+            var status = state.status[id];
+            if (!status || !status.focused) return;
+            removeRendered(id);
+        });
+        refreshFocusOutline();
+    }
+
     function registerProtocols(maplibre) {
         if (state.protocols || !maplibre || typeof maplibre.addProtocol !== 'function') return;
         state.protocols = true;
@@ -573,14 +1017,24 @@
             var z = Number(match[2]);
             var x = Number(match[3]);
             var y = Number(match[4]);
+            var templateUrl = String(params.url);
+            var coords = { z: z, x: x, y: y };
             var layer = MIRROR.layerByKey(key);
             if (!layer) return Promise.reject(new Error('[Map3D] the 2D layer behind ' + key + ' is gone'));
+            /* Prepared by the LiDAR focus: no network, no rendering, no clip
+             * work — the disc the user waited for is handed over as it is. */
+            var prepared = primedOutput(templateUrl, pipelineSigFor(key, templateUrl));
+            if (prepared) return Promise.resolve({ data: prepared });
+            /* Outside the disc on purpose: not a hole, a decision. */
+            if (focusExcludesTile(key, z, x, y)) return Promise.resolve({ data: MIRROR.disc.blankTile() });
             var url = MIRROR.tileUrlFor(layer, z, x, y);
             if (url) {
                 var isWms = !!((layer.options && (layer.options.layers || layer.options.layer)) ||
                     /[?&](service=wms|request=getmap)/i.test(url));
                 return fetchTile(url, abortController, { preferProxy: isWms }).then(function (tile) {
-                    return blendedTile(layer, url, tile.data).then(function (data) { return { data: data }; });
+                    return blendedTile(layer, url, tile.data).then(function (data) {
+                        return clipFocusedTile(key, url, data, coords).then(function (bytes) { return { data: bytes }; });
+                    });
                 });
             }
             /* No URL: the layer draws its own tiles (canvas / custom plugin).
@@ -588,7 +1042,9 @@
             if (typeof MIRROR.renderTile === 'function') {
                 return MIRROR.renderTile(layer, z, x, y).then(function (data) {
                     state.renderedTiles += 1;
-                    return { data: data };
+                    /* renderTile already repainted a CSS-blended layer, so only
+                     * the disc clip is left to apply here. */
+                    return clipFocusedTile(key, templateUrl, data, coords).then(function (bytes) { return { data: bytes }; });
                 }).catch(function (error) {
                     pushError(key + ' could not draw tile ' + z + '/' + x + '/' + y + ': ' +
                         ((error && error.message) || error));
@@ -602,13 +1058,24 @@
         maplibre.addProtocol('dl3d', function (params, abortController) {
             var match = String((params && params.url) || '').match(/^dl3d:\/\/([^/]+)\/(\d+)\/(\d+)\/(\d+)/);
             if (!match) return Promise.reject(new Error('[Map3D] malformed dl3d:// URL'));
-            var def = REGISTRY.get(decodeURIComponent(match[1]));
-            var url = def ? REGISTRY.tileUrlAt(def, Number(match[2]), Number(match[3]), Number(match[4])) : '';
+            var defId = decodeURIComponent(match[1]);
+            var z = Number(match[2]);
+            var x = Number(match[3]);
+            var y = Number(match[4]);
+            var def = REGISTRY.get(defId);
+            var templateUrl = String(params.url);
+            var prepared = primedOutput(templateUrl, pipelineSigFor('def:' + defId, templateUrl));
+            if (prepared) return Promise.resolve({ data: prepared });
+            if (focusExcludesTile('def:' + defId, z, x, y)) return Promise.resolve({ data: MIRROR.disc.blankTile() });
+            var url = def ? REGISTRY.tileUrlAt(def, z, x, y) : '';
             if (!url) return Promise.reject(new Error('[Map3D] no per-tile URL for ' + match[1]));
             /* Proxied per-tile layers are rebuilt by the proxy from the same
              * definition (`?layer=…&m=<mode>`), never relayed URL by URL. */
             var proxyUrl = def ? REGISTRY.proxyTemplate(def, { time: REGISTRY.timeOf(def), mode: REGISTRY.modeOf(def, {}) }) : null;
-            return fetchTile(url, abortController, { proxyUrl: proxyUrl });
+            return fetchTile(url, abortController, { proxyUrl: proxyUrl }).then(function (tileData) {
+                return clipFocusedTile('def:' + defId, url, tileData.data, { z: z, x: x, y: y })
+                    .then(function (bytes) { return { data: bytes }; });
+            });
         });
     }
 
@@ -743,6 +1210,12 @@
             '<div class="m3d-row m3d-bearing-row"><label for="map3d-bearing"><span>' + t('bearing') + '</span>',
             '<b class="m3d-bearing-val"></b></label>',
             '<input id="map3d-bearing" type="range" class="m3d-bearing" min="0" max="360" step="1"></div>',
+            '<div class="m3d-lidar" hidden>',
+            '<span class="m3d-lidar-text"></span>',
+            '<span class="m3d-lidar-actions">',
+            '<button type="button" class="m3d-lidar-change"></button>',
+            '<button type="button" class="m3d-lidar-clear"></button>',
+            '</span></div>',
             '<div class="m3d-actions">',
             '<button type="button" class="m3d-reset">' + t('reset') + '</button>',
             '<button type="button" class="m3d-north">↑ N</button>',
@@ -750,6 +1223,15 @@
             '</div>'
         ].join('');
         host.appendChild(bar);
+        /* The LiDAR focus row is the viewer's own report of what it drew; the
+         * two buttons only announce the intent — js/lidar-3d-focus.js owns the
+         * dialog, the prefetch and the 2D circle behind them. */
+        bar.querySelector('.m3d-lidar-change').addEventListener('click', function () {
+            announce('detectlab:map3d-lidar-change');
+        });
+        bar.querySelector('.m3d-lidar-clear').addEventListener('click', function () {
+            announce('detectlab:map3d-lidar-clear');
+        });
 
         var exag = bar.querySelector('.m3d-exag');
         var pitch = bar.querySelector('.m3d-pitch');
@@ -797,7 +1279,58 @@
         });
         bar.paintLabels = paintLabels;
         paintLabels();
+        refreshFocusRow();
         return bar;
+    }
+
+    /** One DOM event, the app's own `detectlab:` convention. */
+    function announce(name, detail) {
+        try {
+            document.dispatchEvent(new CustomEvent(name, { detail: detail || {} }));
+        } catch (e) { /* no CustomEvent (headless): the event is informational */ }
+    }
+
+    /**
+     * What the LiDAR row says, and why it is not decoration.
+     *
+     * Three states have to be distinguishable at a glance, because they look
+     * identical on the terrain:
+     *   • a disc is drawn            → which layer, how big, how many tiles ready
+     *   • other LiDAR layers are on  → they are NOT drawn (one at a time), named
+     *   • LiDAR was removed from 3D  → the button back into the dialog
+     */
+    function refreshFocusRow() {
+        if (!bar) return;
+        var row = bar.querySelector('.m3d-lidar');
+        if (!row) return;
+        var text = row.querySelector('.m3d-lidar-text');
+        var change = row.querySelector('.m3d-lidar-change');
+        var clear = row.querySelector('.m3d-lidar-clear');
+        var focus = state.focus;
+        var notes = state.lidarNotes || [];
+        var lines = [];
+        if (focus) {
+            var disc = focus.mask || focus;
+            lines.push(t('lidarFocus') + ': ' + (focus.label || focus.key) + ' · ' +
+                (Math.round(Number(disc.radiusKm) * 10) / 10) + ' km');
+            /* More than one LiDAR layer on the 2D map and only one draped: say
+             * it, because “my second LiDAR layer is missing in 3D” is answered
+             * nowhere else. */
+            if (notes.length && notes[0].reason === 'focused' && notes[0].count > 1) {
+                lines.push(t('lidarSingle'));
+            }
+        } else if (state.lidarOff) {
+            lines.push(t('lidarOff'));
+        } else if (notes.length) {
+            lines.push(t('lidarUnprepared'));
+        }
+        var prepared = state.primedOrder.length;
+        if (prepared) lines.push(prepared + ' ' + t('lidarTiles'));
+        change.textContent = focus ? t('lidarChange') : t('lidarChoose');
+        clear.textContent = t('lidarClear');
+        row.hidden = !lines.length;
+        text.textContent = lines.join(' · ');
+        refreshFocusOutline();
     }
 
     function refreshBarCopy() {
@@ -809,6 +1342,7 @@
         if (rows[2]) rows[2].textContent = t('bearing');
         var reset = bar.querySelector('.m3d-reset');
         if (reset) { reset.textContent = t('reset'); reset.title = t('resetTitle'); }
+        refreshFocusRow();
         refreshToggle();
     }
 
@@ -847,6 +1381,69 @@
         } catch (e) {
             /* never break the 2D map because of a view hand-off */
         }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     *  CAMERA — the disc the user prepared is what they get to see
+     * ═══════════════════════════════════════════════════════════════════════ */
+
+    /**
+     * The zoom at which the whole disc fits the viewport.
+     *
+     * The disc is the promise of the focus dialog (“this is the LiDAR you will
+     * get in 3D”), so it has to be on screen when 3D opens — unless the 2D view
+     * already shows it, in which case the camera is left exactly where the user
+     * left it (`focusCamera` below is the judge).
+     */
+    function focusFitZoom(focus) {
+        if (!focus) return null;
+        var disc = focus.mask || focus;
+        var radiusKm = Number(disc.radiusKm);
+        if (!(radiusKm > 0)) return null;
+        var host = wrapper();
+        var width = (host && host.clientWidth) || 1024;
+        var height = (host && host.clientHeight) || 768;
+        /* The disc's diameter must fit the smaller viewport side, leaving a
+         * margin so the outline and its surroundings are visible too. */
+        var side = Math.max(160, Math.min(width, height) * 0.78);
+        var metresPerPixel = (radiusKm * 2000) / side;
+        /* Ground metres per pixel of a 256 px Web-Mercator tile at zoom 0. */
+        var atZoomZero = 156543.03392804097 * Math.cos(Number(disc.lat) * Math.PI / 180);
+        var zoom = Math.log2(atZoomZero / metresPerPixel);
+        var layer = state.focus && state.focus.key ? MIRROR.layerByKey(state.focus.key) : null;
+        if (!layer && state.focus && state.focus.lidarKey) layer = MIRROR.layerByKey(state.focus.lidarKey);
+        var ceiling = 20;
+        try {
+            if (layer && layer.options) {
+                ceiling = Number(layer.options.maxNativeZoom || layer.options.maxZoom || 20);
+            }
+        } catch (e) { ceiling = 20; }
+        return Math.max(0, Math.min(ceiling, zoom));
+    }
+
+    function focusCamera(cam) {
+        var focus = state.focus;
+        if (!focus || !focus.mask) return cam;
+        var fit = focusFitZoom(focus);
+        if (fit == null) return cam;
+        var lmap = leafletMap();
+        var alreadyVisible = false;
+        try {
+            if (lmap && typeof lmap.getBounds === 'function' && focus.bounds) {
+                var view = lmap.getBounds();
+                var corner0 = [focus.bounds[1], focus.bounds[0]];
+                var corner1 = [focus.bounds[3], focus.bounds[2]];
+                alreadyVisible = view.contains(corner0) && view.contains(corner1) &&
+                    Number(lmap.getZoom()) >= fit;
+            }
+        } catch (e) { alreadyVisible = false; }
+        if (alreadyVisible) return cam;
+        return {
+            center: [(focus.bounds[0] + focus.bounds[2]) / 2, (focus.bounds[1] + focus.bounds[3]) / 2],
+            zoom: fit,
+            bearing: cam.bearing,
+            pitch: cam.pitch == null ? CONFIG.camera.pitch : cam.pitch
+        };
     }
 
     function resetView(animate) {
@@ -997,6 +1594,10 @@
             if (def.runtimeOverlays) return;
             if (claimed[def.id]) return;
             if (covered(def)) return;                              /* the mirror has it */
+            /* A LiDAR layer the focus did not choose is not drawn at all (see
+             * lidarFilter): the registry fallback must respect the same rule,
+             * or a layer would sneak back in through this second route. */
+            if (!registryLidarAllowed(def)) return;
             var live = def.ui && def.ui.var2d ? root[def.ui.var2d] : null;
             var onMap = !!(live && leafletMap() && typeof leafletMap().hasLayer === 'function' &&
                 (leafletMap().hasLayer(live) || (typeof live.getLayers === 'function' && live.getLayers().length)));
@@ -1021,9 +1622,67 @@
         return !!errors[key];
     }
 
+    /**
+     * ONE LiDAR layer at a time.
+     *
+     * National LiDAR pyramids are the heaviest thing on this map: a single 1 m
+     * hillshade covers a country, and two of them at once (which the 2D panel
+     * happily allows, since stacking is how you compare them on flat imagery)
+     * is a deck MapLibre cannot finish opening. The 3D view therefore draws the
+     * layer the user chose in the focus dialog, and only inside the disc that
+     * was prefetched for it. Anything else LiDAR is left out BY DECISION — and
+     * says so in status().lidar, never silently.
+     */
+    function lidarItems() {
+        return state.mirror.items.filter(function (item) { return !!item.lidarKey; });
+    }
+
+    function lidarFilter() {
+        var items = lidarItems();
+        var notes = [];
+        if (state.lidarOff) {
+            if (items.length) notes.push({ reason: 'off', count: items.length });
+            state.lidarNotes = notes;
+            return function (item) { return !item.lidarKey; };
+        }
+        if (state.focus) {
+            var found = null;
+            items.forEach(function (item) { if (focusMatches(item)) found = item; });
+            notes.push(found
+                ? { reason: 'focused', count: items.length, kept: found.lidarLabel || found.lidarKey }
+                : { reason: 'missing', count: items.length, kept: state.focus.label || state.focus.key });
+            state.lidarNotes = notes;
+            return function (item) {
+                if (!item.lidarKey) return true;
+                return !!(found && item.key === found.key);
+            };
+        }
+        /* No focus, but LiDAR is on the 2D map: 3D is being asked for a LiDAR
+         * layer it has no prepared disc for (a LiDAR layer switched on while 3D
+         * was already open, or 3D opened from the console). Draping it here is
+         * exactly the slow, blank load this whole path exists to prevent —
+         * nothing is draped, and the bar names the state and points at the
+         * dialog (“Choose the area”). */
+        if (items.length) notes.push({ reason: 'unprepared', count: items.length });
+        state.lidarNotes = notes;
+        return function (item) { return !item.lidarKey; };
+    }
+
+    /** Is this registry definition the LiDAR layer the 3D view is allowed to drape? */
+    function registryLidarAllowed(def) {
+        if (!def || def.group !== 'lidar') return true;
+        var key = 'def:' + def.id;
+        if (state.lidarOff) return false;
+        if (state.focus) {
+            return state.focus.defId === def.id || state.focus.key === key || state.focus.lidarKey === key;
+        }
+        return false;   /* without a focus the mirror's own single layer is kept */
+    }
+
     function plan() {
         var cfg = REGISTRY.config();
-        var items = state.mirror.items.slice();
+        var lidarKeep = lidarFilter();
+        var items = state.mirror.items.slice().filter(lidarKeep);
         var entries = [];
         var seq = 0;
 
@@ -1130,6 +1789,13 @@
             fadeDuration: fadeDuration()
         };
         if (item.bounds) spec.bounds = item.bounds;
+        /* The focused LiDAR layer is limited to the disc the user prepared: a
+         * raster source with `bounds` never asks for a tile outside it, which is
+         * the difference between a few hundred prepared tiles and a national
+         * pyramid nobody asked for. The tiles that only graze the disc's
+         * rectangle are clipped pixel by pixel in the protocol handler. */
+        var focused = !!(state.focus && focusMatches(item));
+        if (focused && state.focus.bounds) spec.bounds = state.focus.bounds;
         if (!map.getSource(sourceId)) {
             map.addSource(sourceId, spec);
         } else {
@@ -1161,7 +1827,10 @@
             mirrored: true,
             defId: item.defId || null,
             label: item.label,
-            paneZ: item.z
+            paneZ: item.z,
+            /* One LiDAR layer at a time, inside one prepared disc. */
+            lidarKey: item.lidarKey || null,
+            focused: focused
         };
         return { sourceIds: [sourceId], layerIds: [layerId] };
     }
@@ -1204,6 +1873,8 @@
             time: REGISTRY.timeOf(def),
             mode: def.modes || (def.kind === 'dynamic' && typeof def.resolve === 'function') ? REGISTRY.modeOf(def, {}) : ''
         });
+        var focused = !!(state.focus && focusMatches({ defId: def.id, lidarKey: 'def:' + def.id }));
+        if (focused && state.focus.bounds) spec.bounds = state.focus.bounds;
         if (!spec.tiles || !spec.tiles.length) {
             state.status[entry.id] = { state: 'unsupported', reason: 'no tile template (module not loaded?)' };
             return null;
@@ -1232,7 +1903,9 @@
             host: (def.url || '').replace(/^https?:\/\//, '').split('/')[0],
             mirrored: false,
             kind: def.kind,
-            label: (def.title && (def.title[lang()] || def.title.en)) || def.id
+            label: (def.title && (def.title[lang()] || def.title.en)) || def.id,
+            lidarKey: def.group === 'lidar' ? 'def:' + def.id : null,
+            focused: focused
         };
         return { sourceIds: [entry.id], layerIds: [entry.id] };
     }
@@ -1694,6 +2367,7 @@
         applyDeck(p);
         watchSourceHealth();
         syncAttribution();
+        refreshFocusRow();
         state.lastSync = Date.now();
     }
 
@@ -1744,8 +2418,54 @@
     }
 
     /** Deterministic stacking: bottom → top, re-asserted with beforeId. */
+    /* ═══════════════════════════════════════════════════════════════════════
+     *  THE DISC, DRAWN — so “where does the LiDAR end, and why?” is answerable
+     * -----------------------------------------------------------------------
+     *  A clipped raster with no outline reads as a broken layer: the user pans,
+     *  the LiDAR stops, and nothing says that this was the prepared disc. The
+     *  outline (plus the label in the 3D bar) is what turns it into a decision.
+     * ═══════════════════════════════════════════════════════════════════════ */
+    var FOCUS_SOURCE = 'm3d-lidar-disc';
+    var FOCUS_LINE = 'm3d-lidar-disc-line';
+
+    function refreshFocusOutline() {
+        if (!map) return;
+        var focus = state.focus;
+        var wanted = !!(focus && focus.lidarOff !== true && !state.lidarOff && MIRROR.disc && MIRROR.disc.geojson);
+        var data = wanted ? MIRROR.disc.geojson(focus.mask || focus, 96) : null;
+        if (!wanted || !data) {
+            try { if (map.getLayer(FOCUS_LINE)) map.removeLayer(FOCUS_LINE); } catch (e) { /* ignore */ }
+            try { if (map.getSource(FOCUS_SOURCE)) map.removeSource(FOCUS_SOURCE); } catch (e) { /* ignore */ }
+            delete state.sourceData[FOCUS_SOURCE];
+            return;
+        }
+        try {
+            if (!map.getSource(FOCUS_SOURCE)) {
+                map.addSource(FOCUS_SOURCE, { type: 'geojson', data: data });
+            } else {
+                /* Through the shared upload gate, like every other GeoJSON this
+                 * view has: the disc only moves when the user moves it. */
+                setSourceData(FOCUS_SOURCE, data);
+            }
+            if (!map.getLayer(FOCUS_LINE)) {
+                map.addLayer({
+                    id: FOCUS_LINE,
+                    type: 'line',
+                    source: FOCUS_SOURCE,
+                    paint: {
+                        'line-color': '#c8a96e',
+                        'line-width': 2,
+                        'line-dasharray': [2, 2],
+                        'line-opacity': 0.9
+                    }
+                });
+            }
+        } catch (e) { /* a broken outline never blocks the deck */ }
+    }
+
     function applyDeck(p) {
         if (!map) return;
+        refreshFocusOutline();
         var present = {};
         ['m3d-background', 'm3d-hillshade', 'm3d-hillshade-service'].forEach(function (id) {
             present[id] = !!map.getLayer(id);
@@ -1880,7 +2600,51 @@
         return options;
     }
 
+    /**
+     * The entry gate.
+     *
+     * A LiDAR layer cannot be draped the way the rest of the deck is: a 1 m
+     * national hillshade is a pyramid of heavy tiles, and opening 3D over one
+     * produced exactly the report this feature exists for — layers that load
+     * slowly, look broken, or never appear at all. js/lidar-3d-focus.js installs
+     * this gate, and it is what asks the user for a point and a distance,
+     * prefetches that disc, and only then lets the viewer open.
+     *
+     * The gate resolves `false` when the user cancels (3D then simply does not
+     * open), and the promise is shared: a second tap on the 3D button while the
+     * dialog is up cannot start a second dialog or a second download.
+     */
+    function runEntryGate() {
+        if (typeof state.entryGate !== 'function') return null;
+        if (state.gateRunning) return state.gateRunning;
+        var gate = state.entryGate;
+        state.gateRunning = Promise.resolve()
+            .then(function () { return gate(); })
+            .then(function (allowed) {
+                state.gateRunning = null;
+                if (!allowed || state.open) return !!state.open;
+                return openNow();
+            }, function (error) {
+                state.gateRunning = null;
+                pushError('the LiDAR focus could not be prepared: ' + ((error && error.message) || error));
+                console.warn('[Map3D] entry gate failed:', error);
+                return fail3D(error);
+            });
+        return state.gateRunning;
+    }
+
+    function setEntryGate(gate) {
+        state.entryGate = typeof gate === 'function' ? gate : null;
+        return true;
+    }
+
     function open() {
+        if (state.open) return Promise.resolve(true);
+        if (typeof state.entryGate === 'function') return runEntryGate();
+        return openNow();
+    }
+
+    function openNow() {
         if (state.open) return Promise.resolve(true);
         if (!wrapper()) {
             console.warn('[Map3D] #detectlab-map is not in the DOM yet');
@@ -1907,7 +2671,7 @@
             if (!state.open) return true;
             registerProtocols(maplibre);
             var cfg = REGISTRY.config();
-            var cam = cameraFrom2D();
+            var cam = focusCamera(cameraFrom2D());
             var profile = deviceProfile();
 
             /* One attempt at full quality, one at the minimum a phone will
@@ -2209,6 +2973,37 @@
             /* Blended (CSS-emulated) tiles repainted this session — a support
              * report should show the LiDAR hillshades actually being served. */
             retintedTiles: state.retintedTiles,
+            /* The LiDAR focus: which single layer may be draped, over which
+             * disc, how many tiles of it are already in memory, and what the
+             * one-layer rule had to leave out. */
+            lidar: {
+                focus: state.focus ? {
+                    key: state.focus.key || null,
+                    lidarKey: state.focus.lidarKey || null,
+                    defId: state.focus.defId || null,
+                    label: state.focus.label || '',
+                    lat: state.focus.mask ? state.focus.mask.lat : state.focus.lat,
+                    lng: state.focus.mask ? state.focus.mask.lng : state.focus.lng,
+                    radiusKm: state.focus.mask ? state.focus.mask.radiusKm : state.focus.radiusKm,
+                    bounds: state.focus.bounds || null,
+                    at: state.focus.at || null
+                } : null,
+                off: !!state.lidarOff,
+                drawn: state.status && Object.keys(state.status).reduce(function (list, id) {
+                    var entry = state.status[id];
+                    if (entry && entry.focused) {
+                        list.push({ id: id, label: entry.label || id, key: entry.lidarKey || null });
+                    }
+                    return list;
+                }, []),
+                notes: (state.lidarNotes || []).slice(),
+                primed: {
+                    entries: state.primedOrder.length,
+                    bytes: state.primedBytes,
+                    hits: state.primedHits,
+                    budget: primeBudget()
+                }
+            },
             capped: state.mirror.capped || [],
             unsupported3d: state.mirror.unsupported,
             layers: REGISTRY.ordered().map(function (def) {
@@ -2295,7 +3090,34 @@
          * without a GPU. */
         _blendedTile: blendedTile,
         _setSourceData: setSourceData,
-        _setSourceTiles: setSourceTiles
+        _setSourceTiles: setSourceTiles,
+        /* ── the LiDAR focus (js/lidar-3d-focus.js drives all of this) ────
+         * setEntryGate() installs the “ask first” hook that open() consults;
+         * prefetchTiles() downloads + finishes a prepared disc; setLidarFocus()
+         * is the decision itself, and applies to a running 3D view live. */
+        setEntryGate: setEntryGate,
+        hasEntryGate: function () { return typeof state.entryGate === 'function'; },
+        openWithoutGate: openNow,
+        prefetchTiles: prefetchTiles,
+        setLidarFocus: setLidarFocus,
+        clearLidarFocus: clearLidarFocus,
+        getLidarFocus: currentFocus,
+        focusFitZoom: function () { return focusFitZoom(state.focus); },
+        clearPrimed: clearPrimed,
+        primedBytes: function () { return state.primedBytes; },
+        /* “Is this tile already prepared for this layer?” — the focus dialog
+         * asks before it promises a download. */
+        isPrepared: function (url, layerKey) {
+            if (!url || !state.primedOut[url]) return false;
+            if (layerKey && state.primedLayer[url] && state.primedLayer[url] !== layerKey) return false;
+            return true;
+        },
+        _focusSig: function (key) { return focusSigFor(key); },
+        _pipelineSig: function (key, url) { return pipelineSigFor(key, url); },
+        _clipFocusedTile: clipFocusedTile,
+        _focusExcludesTile: focusExcludesTile,
+        _lidarFilter: lidarFilter,
+        _focusCamera: focusCamera
     };
 
     root.DetectLabMap3D = api;
