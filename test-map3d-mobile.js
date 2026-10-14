@@ -287,12 +287,12 @@ const shellVersion = Number((swJs.match(/CACHE_NAME = 'detectlab-v(\d+)-/) || []
 assert(shellVersion >= 196,
     'sw.js cache is v196 or newer so installed PWAs get the mobile fix (found v' + shellVersion + ')');
 /* Each asset is versioned by whatever last changed it: the registry by the
- * WMS/WMTS audit, the viewer by the CSS-blend work, the sheet by the slider
- * layout that introduced these controls. */
+ * WMS/WMTS audit, the viewer and sheet by the compact PWA
+ * 3D controls. */
 const TAGS = {
     'js/layer-registry.js': '20261014-wms-audit',
-    'js/map3d-terrain.js': '20261014-3d-vectors',
-    'css/map3d-terrain.css': '20261014-3d-slider-layout'
+    'js/map3d-terrain.js': '20261014-3d-clean-controls',
+    'css/map3d-terrain.css': '20261014-3d-clean-controls'
 };
 ['js/map3d-terrain.js', 'js/layer-registry.js', 'css/map3d-terrain.css'].forEach(function (asset) {
     const tag = TAGS[asset];
