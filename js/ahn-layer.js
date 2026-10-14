@@ -143,6 +143,18 @@
     var BLANK_TILE = 'data:image/png;base64,' +
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 
+    /* Tell the availability guard (js/wms-health.js) that a tile could not be
+       fetched. The module deliberately hides the failure from Leaflet, so the
+       guard would never see a `tileerror`; this keeps the layer watched and
+       lets a real outage become a visible, provider-named notice instead of a
+       blank grid. No-op when the guard is absent or the layer unwatched. */
+    function reportTileFailure(layer) {
+        try {
+            var health = root.DetectLabWmsHealth;
+            if (health && typeof health.noteFailure === 'function') health.noteFailure(layer);
+        } catch (e) {}
+    }
+
     function mode(key) {
         return CONFIG.MODES[key] || CONFIG.MODES[CONFIG.DEFAULT_MODE];
     }
@@ -259,6 +271,9 @@
             // Graceful failure: swap in a transparent pixel and report success,
             // so Leaflet neither retries nor logs and the user never sees a
             // broken-image icon. One console warning per layer, not per tile.
+            // The failure still reaches the availability guard — it removes
+            // the layer and explains the provider once a whole run of tiles
+            // has failed, so “blank grid” never stays unexplained.
             tile.onerror = function () {
                 if (settled) return;
                 settled = true;
@@ -269,6 +284,7 @@
                     console.warn('[AhnLidar] a relief tile could not be loaded (' +
                         mode(self.options.mode).service + '); further failures are silent');
                 }
+                reportTileFailure(self);
                 done(null, tile);
             };
 

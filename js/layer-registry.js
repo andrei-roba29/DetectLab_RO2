@@ -230,7 +230,17 @@
      * GeoServer for the tile bbox transformed into EPSG:2180.
      * ═══════════════════════════════════════════════════════════════════════ */
     var CENAGIS = {
-        url: 'https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms',
+        /* The IH PAN GeoServer. When that server is down — as it was on
+         * 2026-10-13, when every raster GetMap answered 200 with an ECW
+         * “Unable to create a valid ImageInputStream” exception body — the
+         * whole catalogue can be re-pointed at a mirror / cached copy with
+         * one line on the page (before this script loads):
+         *
+         *     window.DETECTLAB_CENAGIS_WMS = 'https://mirror.example.org/geoserver/ihpan/wms';
+         *
+         * js/wms-health.js watches that host too, so a mirror is guarded the
+         * same way the original service is. See CENAGIS_WMS_HEALTH.md. */
+        url: (root && root.DETECTLAB_CENAGIS_WMS) || 'https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms',
         workspace: 'ihpan',
         version: '1.3.0',
         format: 'image/png',

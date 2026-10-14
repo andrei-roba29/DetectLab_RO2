@@ -185,6 +185,16 @@ GET …/dhm_terraen_skyggekort_DAF?service=WMTS&request=GetTile&…&TileMatrix=4
 </ExceptionReport>
 ```
 
+The three messages are chosen by the probe ladder (`_probeAuthOnce`, tiles
+2/4/2): a 401/403 **without** a client-supplied token, or the proxy's JSON
+`{"error":"dataforsyningen_token_missing"}`, means *this deployment has no
+token* → `TOKEN_MISSING_MESSAGE`; a 401/403 with a token, or a token
+`ExceptionReport`, means *the token was rejected* → `AUTH_MESSAGE`; a 404
+without a client token means the proxy route itself is missing →
+`PROXY_MISSING_MESSAGE`. All three are reported through
+`DetectLabWmsHealth.markUnavailable()` (see `CENAGIS_WMS_HEALTH.md`), so the
+row is switched off with the reason attached instead of staying blank.
+
 This matters for error handling: the service answers with an **XML body**,
 not necessarily a bare `401`. Both proxies therefore sniff the body as well
 as the status code and normalise the result to a real `401
@@ -521,7 +531,10 @@ and
 | `KEEP_BUFFER` | `1` | preloading |
 | `BOUNDS` | `[[54.4265, 7.99125], [57.7781, 15.5995]]` | published coverage |
 | `ATTRIBUTION` | CC BY 4.0 text | shown in the Leaflet attribution control |
-| `AUTH_MESSAGE` | *Invalid or missing Dataforsyningen token* | the 401/403 notice |
+| `AUTH_MESSAGE` | *Invalid or missing Dataforsyningen token* | the 401/403 notice when a token *was* supplied but rejected |
+| `TOKEN_MISSING_MESSAGE` | *The Denmark LiDAR layer is not configured on this deployment: the tile proxy (/api/geo/dk-dhm) has no DATAFORSYNINGEN_TOKEN…* | the notice when the deployment has no token at all — a configuration gap, not a provider outage |
+| `PROXY_MISSING_MESSAGE` | *Denmark LiDAR proxy (/api/geo/dk-dhm) is not deployed on this server…* | a 404 from the same-origin proxy route (shell deployed without its functions) |
+| `TOGGLE_ID` | `lidarDkLidarToggle` | the row the guard switches off when it reports the failure |
 | `MODES` | `terrain`, `surface` | the two products |
 
 **To change region or product**, edit `MODES` and `BOUNDS`. Any other

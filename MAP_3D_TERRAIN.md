@@ -301,7 +301,75 @@ never from the layer provider — a WMS only ever contributes flat imagery.
    module name; in the browser and in the proxy they are evaluated, so
    `/api/map3d/status` and `node test-map3d-terrain.js` show **91/91 draped**.
 
-## 6. Mobile — WebGL, why 3D used to snap straight back to 2D, and what changed
+## 6. The Roman-roads crash, the blank LiDAR tiles, and what the deck budget does
+
+Three reports, one release, all of them in the 2D → 3D mirror and the way it hands a deck
+to MapLibre. This is what each one was, and what the code does now.
+
+**1. “Roman roads + 3D = the page crashes.”** The roads are ~20 000 polylines collected
+in one `L.featureGroup`. The mirror walked the group and produced **one 3D source and one
+3D layer per polyline** — 20 000 of each — and re-described the whole group on every
+1.5 s poll and every `moveend`, rebuilding a ~500 KB signature each time. The bundling
+added here merges siblings that draw identically: the same kind, paint, order, popup and
+tooltip. The result for that group is **10 bundles of 20 000 features** (`2d.R1/b1` …),
+each with the label `roman (20,000 features)`, and the poll pass reuses them
+(`DetectLabMirror.invalidate(group)` drops the cache; the opacity slider is part of the
+cache key, so moving it redraws).
+
+Budgets, all in `js/map3d-mirror.js` and all reported to the user rather than enforced
+silently:
+
+| limit | value | why |
+| --- | --- | --- |
+| features per bundle | 20 000 | one GeoJSON upload per merge, not one per polyline |
+| bundles per group | 24 | children that paint differently still cannot explode |
+| deck items | 400 | a flat map with thousands of loose layers |
+| layers examined | 1 600 | the walk itself stops, so a pathological map cannot hang the page |
+
+What the budget had to leave out appears in `.status().capped` as a sentence naming how
+many layers, is pushed **once** into `.status().errors` (so “the layer is missing in 3D”
+is always answerable, and never repeats on every poll), and is printed by `.report()`.
+
+**2. “The Romanian LiDAR layers look like a white sheet / never load in 3D.”** `ro1m`
+(Romania 1m/pixel agregare) and `ro2m` are hillshades whose background is white; the 2D
+map removes it with CSS:
+`filter: invert(1); mix-blend-mode: screen` (`css/styles.css`). MapLibre has no blend
+modes — and the vendored build has no `raster-color` either — so the mirrored tile
+arrived as the service sent it, i.e. an opaque white rectangle over the terrain.
+
+The mirror now carries the blend (`item.blend === 'invert-screen'`, read from the layer's
+own class name) and the viewer repaints every such tile before handing it to MapLibre:
+**white, with alpha = 1 − luminance**. That is not an approximation of a dark base — it
+is the stylesheet's arithmetic for *any* base: screen over a base `b` of an inverted tile
+`1 − c` is `1 − c + c·b`, and white at alpha `(1 − c)` composited over `b` is
+`(1 − c) + c·b`. Grayscale hillshades come out pixel-exact; `tools/probe-3d-blend.js`
+prints the worst channel error over a full ramp (0.0000). Transparent source pixels stay
+transparent, so a tile with holes keeps them.
+
+Repainted tiles are cached (160 tiles, dropped when 3D closes): MapLibre evicts decoded
+tiles, and re-downloading *and* re-encoding a 1 m hillshade tile on every pan back is what
+made these layers feel like they never finished loading. `.status().retintedTiles` counts
+them, so a support report can show they are being served.
+
+The layer keeps 2D fidelity elsewhere too: `maxzoom` is taken from `maxNativeZoom` (16 for
+`ro1m`/`ro2m`), so MapLibre **overzooms the z16 tiles** above that instead of asking a 1 m
+service for dozens of deep tiles — the “really slow at high zoom” half of the report.
+
+**3. Tiles that were already loaded were being reloaded.** `syncLayers()` runs on every
+pan, panel change and 1.5 s poll. It used to call `source.setData(geojson)` and
+`source.setTiles(template)` unconditionally — in MapLibre that re-parses the GeoJSON and
+**re-loads the whole raster source, aborting in-flight requests**. Two caches (keyed by
+source id, cleared when the source is removed or 3D closes) make both calls no-ops while
+the data or the template is unchanged; a host that healed to the proxy forces the reload
+it needs. Before this, a LiDAR layer in 3D re-requested every visible tile every 1.5
+seconds, which looks exactly like “it loads really slow, sometimes blank, sometimes fine”.
+
+**Still a property of the data, not a bug:** beyond its published zoom (e.g. z16 for the
+Romanian 1 m service) or outside its coverage, a provider answers with a blank or
+all-white tile. The 3D view draws what it was sent at that zoom; only the white *sheet*
+over the whole layer was ours to fix, and that is the blend above.
+
+## 7. Mobile — WebGL, why 3D used to snap straight back to 2D, and what changed
 
 **Symptom (iPhone Safari, mobile browser *and* installed PWA):** tapping **3D** made a
 dark rectangle flash once and the app went straight back to the 2D map, with no error
@@ -355,7 +423,7 @@ Regression suite: `node test-map3d-mobile.js` (9 groups — profile, constructor
 safe-mode retry, visible failures, touch targets, probe, context loss, phone timeouts, PWA
 cache).
 
-## 7. Performance notes (desktop and narrow mobile)
+## 8. Performance notes (desktop and narrow mobile)
 
 * Nothing but the registry (~107 kB) and the viewer (~60 kB) is parsed with the page;
   **MapLibre GL (1.0 MB) and any tile are only fetched when 3D is opened**.
@@ -370,7 +438,7 @@ cache).
   own scroll, the device pixel ratio is capped *in the constructor* and the DEM zoom
   ceiling is lowered; the 3D button stays reachable bottom-centre. Terrain + hillshade at
   a 3× exaggeration is the expensive combination on old phones — prefer 1.0–1.5× there.
-  See §6 for the phone budget (pixel ratio, canvas ceiling, tile cache, MSAA).
+  See §7 for the phone budget (pixel ratio, canvas ceiling, tile cache, MSAA).
 * Per-tile layers (`dl3d://`) cost one extra URL build per tile in the browser — a
   function call, no extra request. Through the proxy they are one hop like any other
   layer, with the same in-memory + CDN caching.
@@ -380,7 +448,7 @@ cache).
   later enable a CORS header on a provider, flip its `cors` field in the registry to
   `'yes'` and its tiles go direct.
 
-## 8. Verification performed / how to verify
+## 9. Verification performed / how to verify
 
 * `node test-map3d-mobile.js` — the phone/WebGL path: device profile, constructor options,
   safe-mode retry, failures that stay visible, touch targets, the context-loss watch.
@@ -388,7 +456,16 @@ cache).
   headless boot of the viewer (style, terrain, sky, status), the proxy's URL builder,
   validator, re-projection and blank-tile contract, **the per-tile route for all nine
   country LiDAR layers** (module → `tileUrlAt` → `dl3d://` → proxy) and the
-  **91/91-draped** diagnostics.
+  **91/91-draped** diagnostics. It also covers §6: the sibling merge (25 001 polylines →
+  2 bundles, cache, `invalidate()`, opacity change, the per-group and deck budgets with
+  their `capped` reports), the blend descriptor for `lidar-ro1m-tiles`, the pixel maths of
+  the repaint against the CSS formula, the repaint + cache running end-to-end with the
+  layer `map-app.js` really builds, and the idempotent `setData`/`setTiles` calls.
+* `node tools/probe-3d-blend.js` — the same two mechanisms with the **real Leaflet**
+  bundle and the numbers that justify the budgets: the `ro1m` descriptor and tile URL,
+  a 200 000-polyline featureGroup (10 bundles, 200 000 features, ~1 s for the first pass,
+  ~20 ms for each cached poll pass, 292-character signature), and the blend error against
+  the CSS it replaces.
 * `curl 'http://localhost:4173/api/map3d/tile?layer=lidar.pl-nmt&z=12&x=2266&y=1348'`
   returns the labelled blank tile (`X-Map3D-Upstream: error`) in a sandbox without
   egress; on the live deploy the same call returns the GUGiK relief tile.
@@ -399,7 +476,7 @@ cache).
   for CORS/4xx/5xx and confirm the layer list at the top of the bar marks it **on**. A
   host that fails appears as `— switching to the proxy` in the console and then recovers.
 
-## 9. Adding a new layer so it appears in 2D **and** 3D
+## 10. Adding a new layer so it appears in 2D **and** 3D
 
 1. Add **one entry** to `js/layer-registry.js` (the panel group order, the 2D pane
    z-index and – for a WMS – the service facts):

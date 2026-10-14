@@ -340,7 +340,7 @@ check('index.html loads swisstopo-relief-layer.js before map-app.js',
     scriptSrcs.indexOf('js/swisstopo-relief-layer.js') < scriptSrcs.indexOf('js/map-app.js'));
 check('the service worker pre-caches it', sw.indexOf('js/swisstopo-relief-layer.js') !== -1);
 check('the service worker cache name was bumped',
-    /detectlab-v159|detectlab-v1[6-9]\d/.test(sw));
+    /detectlab-v159|detectlab-v(1[6-9]|2[0-9])\d/.test(sw));
 check('the Switzerland layer is built by the module', /SwisstopoRelief\.createLayer/.test(mapApp));
 check('the Switzerland row no longer requests the metadata layer',
     mapAppCode.indexOf('ch.swisstopo.swisssurface3d.metadata') === -1 &&

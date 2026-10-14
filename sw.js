@@ -456,7 +456,17 @@
 // v198: place/coordinate search exits 3D before flying to the 2D result.
 // v199: country switching exits terrain before fitting and replacing outlines.
 // v200: separate transparent 3D sliders and PWA lower-half/top-left controls.
-const CACHE_NAME = 'detectlab-v200-3d-slider-layout';
+// v201: the availability guard covers every third-party WMS/WMTS host and names
+//   the provider that failed; the Denmark DHM layer says when this deployment
+//   has no Dataforsyningen token instead of asking for “a token”.
+// v202: the guard also adopts the country modules' WMTS/ArcGIS layers when they
+//   go on the map (probe or tile watch) and the layers that hide tile errors
+//   from Leaflet report them through DetectLabWmsHealth.noteFailure.
+// v203: the 3D mirror merges identically-painted sibling layers into one source
+//   (the Roman-roads featureGroup crashed the page as 20 000 sources), caps the
+//   deck, and the viewer repaints the CSS-blended Romanian LiDAR hillshades —
+//   which MapLibre cannot blend — so they appear instead of a white sheet.
+const CACHE_NAME = 'detectlab-v203-3d-blend';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -482,12 +492,15 @@ const PRECACHE_URLS = [
   // 3D terrain view (2D ⇄ 3D) — shared layer registry + MapLibre GL viewer.
   // js/maplibre-gl.js is precached as well: opening 3D on a cold PWA offline
   // must not depend on the network.
+  'js/layer-registry.js?v=20261014-wms-audit',
   'js/layer-registry.js?v=20261013-3d-mobile',
   'js/layer-registry.js?v=20261013-3d-mirror',
   'js/layer-registry.js',
+  'js/map3d-mirror.js?v=20261014-3d-blend',
   'js/map3d-mirror.js?v=20261013-3d-mobile',
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
+  'js/map3d-terrain.js?v=20261014-3d-blend',
   'js/map3d-terrain.js?v=20261014-3d-slider-layout',
   'js/map3d-terrain.js?v=20261013-3d-mobile',
   'js/map3d-terrain.js?v=20261013-3d-mirror',
@@ -572,6 +585,7 @@ const PRECACHE_URLS = [
   'js/corona-coverage-layer.js?v=20261008-corona-coverage',
   'js/hoydedata-layer.js',
   'js/hoydedata-layer.js?v=20261006-norway',
+  'js/hoydedata-layer.js?v=20261014-tile-failure-hook',
   'js/map-app.js?v=20261006-corona-europe',
   'js/geoportal-nmt-layer.js',
   'js/geoportal-nmt-layer.js?v=20261006-poland',
@@ -580,6 +594,7 @@ const PRECACHE_URLS = [
   'js/ign-mdt-layer.js?v=20261007-spain-mapa-lidar',
   'js/ahn-layer.js',
   'js/ahn-layer.js?v=20261006-ahn',
+  'js/ahn-layer.js?v=20261014-tile-failure-hook',
   'js/swisstopo-relief-layer.js',
   'js/swisstopo-relief-layer.js?v=20261006-swisstopo',
   'js/ea-lidar-wmts-layer.js',
@@ -587,6 +602,7 @@ const PRECACHE_URLS = [
   'js/dataforsyningen-dhm-layer.js',
   'js/dataforsyningen-dhm-layer.js?v=20261006-dk-dhm',
   'js/dataforsyningen-dhm-layer.js?v=20261007-dk-dhm-wmts',
+  'js/dataforsyningen-dhm-layer.js?v=20261014-dk-token-message',
   'js/dataforsyningen-dhm-layer.js?v=20261008-dk-proxy-notice',
   'js/lantmateriet-hojdmodell-layer.js',
   'js/lantmateriet-hojdmodell-layer.js?v=20261007-se-hojdmodell',
@@ -1085,6 +1101,8 @@ const PRECACHE_URLS = [
   'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
   'js/globe-country-picker.js?v=20261014-country-exit-3d',
   'js/globe-country-picker.js?v=20261013-no-change-pill',
+  'js/wms-health.js?v=20261014-provider-guard',
+  'js/wms-health.js?v=20261014-guard-watch',
   'js/wms-health.js?v=20261013-wms-guard',
   // v167: country dock glued under the search bar (country switcher +
   // World-hillshade checkbox) and the “Exit view” button of the locked

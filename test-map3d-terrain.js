@@ -28,6 +28,46 @@ console.log('[Test] 3D terrain view — mirror, shared registry, MapLibre viewer
 
 const read = function (p) { return fs.readFileSync(path.join(__dirname, p), 'utf8'); };
 
+/* The smallest 2D canvas the mirror's CSS-blend repaint needs. Node has no
+ * ImageData and no canvas, so the pixels travel in a plain clamped array and
+ * toBlob() hands back those same bytes — enough to prove what the repaint does
+ * to every pixel, which is all that can go wrong here. */
+const fakeCanvas = function (width, height) {
+    const canvas = { width: width, height: height, _pixels: null };
+    /* The caller sets width/height after createElement(), exactly as the mirror
+     * does, so the pixel buffer follows the size rather than the constructor. */
+    const alloc = function () {
+        const need = canvas.width * canvas.height * 4;
+        if (!canvas._pixels || canvas._pixels.length !== need) canvas._pixels = new Uint8ClampedArray(need);
+        return canvas._pixels;
+    };
+    canvas.getContext = function (kind) {
+        if (kind !== '2d') return null;          /* Node has no WebGL: keep the probe honest */
+        return {
+            drawImage: function (image) { alloc().set(image._pixels.slice(0, canvas.width * canvas.height * 4)); },
+            getImageData: function (x, y, w, h) { return { data: alloc().slice(), width: w, height: h }; },
+            putImageData: function (frame) { alloc().set(frame.data); }
+        };
+    };
+    canvas.toBlob = function (done) {
+        done({ arrayBuffer: function () { return Promise.resolve(alloc().slice().buffer); } });
+    };
+    return canvas;
+};
+/* Stand-in for the browser's image decoder: the bytes ARE the pixels here, so
+ * retintTile()'s whole chain (bytes → canvas → repaint → PNG bytes) runs. */
+const fakeImageDecoder = function (blob) {
+    return blob.arrayBuffer().then(function (buffer) {
+        return { width: 256, height: 256, _pixels: new Uint8ClampedArray(buffer) };
+    });
+};
+/* The registry-driven viewer sandbox and its live 2D layer, kept for the async
+ * blend assertions in §6b (they need promises, and the file's sync blocks do
+ * not). */
+let viewApi = null;
+let viewRo1m = null;
+let viewWindow = null;
+
 const indexHtml = read('index.html');
 const swJs = read('sw.js');
 const netlifyToml = read('netlify.toml');
@@ -39,15 +79,16 @@ const mirrorSource = read('js/map3d-mirror.js');
 const skin = read('css/map3d-terrain.css');
 
 const TAG = '20261013-3d-terrain';             /* MapLibre itself (unchanged) */
-const TAG_3D = '20261013-3d-mobile';           /* registry + mirror + viewer  */
+const TAG_3D = '20261014-3d-blend';            /* mirror + viewer              */
+const TAG_REGISTRY = '20261014-wms-audit';     /* shared registry (WMS audit)  */
 
 // ══════════════════════════════════════════════════════════════
 // 1. Static wiring — the viewer must be reachable in the app
 // ══════════════════════════════════════════════════════════════
 {
-    const registryTag = indexHtml.indexOf('js/layer-registry.js?v=' + TAG_3D);
+    const registryTag = indexHtml.indexOf('js/layer-registry.js?v=' + TAG_REGISTRY);
     const mirrorTag = indexHtml.indexOf('js/map3d-mirror.js?v=' + TAG_3D);
-    const viewerTag = indexHtml.indexOf('js/map3d-terrain.js?v=20261014-3d-slider-layout');
+    const viewerTag = indexHtml.indexOf('js/map3d-terrain.js?v=' + TAG_3D);
     const mapAppTag = indexHtml.indexOf('js/map-app.js?v=');
     const histEuTag = indexHtml.indexOf('js/historical-eu-maps.js?v=');
     assert(registryTag !== -1, 'index.html loads the shared layer registry');
@@ -65,8 +106,8 @@ const TAG_3D = '20261013-3d-mobile';           /* registry + mirror + viewer  */
 
     // Service worker: the shell must ship the new modules, and the cache must
     // be bumped so an installed PWA picks the mirrored 3D view up.
-    ['js/layer-registry.js?v=' + TAG_3D, 'js/map3d-mirror.js?v=' + TAG_3D,
-     'js/map3d-terrain.js?v=20261014-3d-slider-layout', 'js/maplibre-gl.js?v=' + TAG,
+    ['js/layer-registry.js?v=' + TAG_REGISTRY, 'js/map3d-mirror.js?v=' + TAG_3D,
+     'js/map3d-terrain.js?v=' + TAG_3D, 'js/maplibre-gl.js?v=' + TAG,
      'css/map3d-terrain.css?v=20261014-3d-slider-layout', 'css/maplibre-gl.css?v=' + TAG].forEach(function (asset) {
         assert(swJs.includes("'" + asset + "'"), 'sw.js precaches ' + asset);
     });
@@ -164,6 +205,23 @@ const TAG_3D = '20261013-3d-mobile';           /* registry + mirror + viewer  */
     function Base(options) { this.options = options || {}; }
     function TileLayer(url, options) { Base.call(this, options); this._url = url; }
     TileLayer.prototype = Object.create(Base.prototype);
+    /* A vector that draws itself, like the 20 000 polylines of the Roman roads. */
+    function Path(options) { Base.call(this, options); }
+    Path.prototype = Object.create(Base.prototype);
+    Path.prototype.getOpacity = function () { return this.options.opacity == null ? 1 : this.options.opacity; };
+    Path.prototype.toGeoJSON = function () {
+        return { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: this._coords } };
+    };
+    /* …and the featureGroup they are added to, which is what the 3D mirror sees.
+     * It must really be an L.LayerGroup: that is how the mirror tells a group
+     * (walk its children) from one leaf layer. */
+    function LayerGroup(options) { Base.call(this, options); }
+    LayerGroup.prototype = Object.create(Base.prototype);
+    function FeatureGroup(layers, options) { Base.call(this, options); this._layers = (layers || []).slice(); }
+    FeatureGroup.prototype = Object.create(LayerGroup.prototype);
+    FeatureGroup.prototype.getLayers = function () { return this._layers; };
+    FeatureGroup.prototype.eachLayer = function (fn) { this._layers.forEach(function (l) { fn(l); }); };
+    FeatureGroup.prototype.addLayer = function (l) { this._layers.push(l); };
     TileLayer.prototype.getTileSize = function () { return { x: 256, y: 256 }; };
     TileLayer.prototype.getTileUrl = function (coords) {
         return 'https://wms.example.org/geoserver/wms?SERVICE=WMS&VERSION=1.1.1&SRS=EPSG:3857' +
@@ -174,8 +232,8 @@ const TAG_3D = '20261013-3d-mobile';           /* registry + mirror + viewer  */
     windowStub.L = {
         TileLayer: TileLayer,
         Marker: function () {}, ImageOverlay: function () {}, SVGOverlay: function () {},
-        VideoOverlay: function () {}, GeoJSON: function () {}, Path: function () {},
-        LayerGroup: function () {}, MarkerClusterGroup: null,
+        VideoOverlay: function () {}, GeoJSON: function () {}, Path: Path,
+        LayerGroup: LayerGroup, FeatureGroup: FeatureGroup, MarkerClusterGroup: null,
         stamp: function (layer) { layer._leaflet_id = layer._leaflet_id || 'x1'; return layer._leaflet_id; }
     };
 
@@ -228,6 +286,145 @@ const TAG_3D = '20261013-3d-mobile';           /* registry + mirror + viewer  */
     assert(collected.signature.indexOf('raster:2d.L77:640:72') === 0,
         'the signature carries kind, order and opacity (so a change triggers a re-sync)');
 
+    /* ── the layers the 2D stylesheet blends, and the Roman-roads group ──── */
+
+    /* css/styles.css paints the Romanian 1 m / 2 m LiDAR hillshades with
+     * `filter: invert(1); mix-blend-mode: screen`. MapLibre has no blend modes,
+     * so the mirror has to carry the blend and the viewer repaint the tile —
+     * without both, these layers arrive in 3D as an opaque white sheet (the
+     * “Romania 1m/pixel agregare never loads in 3D” report). */
+    const ro1m = new TileLayer('https://tiles.arcgis.com/tiles/wCvLzGFkz06gCfBg/arcgis/rest/services/1m/MapServer/tile/{z}/{y}/{x}', {
+        name: 'Romania 1m/pixel agregare', className: 'lidar-ro1m-tiles',
+        maxNativeZoom: 16, opacity: 0.85, pane: 'pane_lidar'
+    });
+    ro1m._leaflet_id = 'R1';
+    const roMap = {
+        getPane: function () { return { style: { zIndex: '610' }, ownerDocument: null }; },
+        eachLayer: function (fn) { fn(ro1m); },
+        hasLayer: function () { return true; }
+    };
+    const roItem = mirror.describe(ro1m, roMap, {});
+    assert(roItem && roItem.kind === 'raster' && roItem.blend === 'invert-screen',
+        'a CSS-blended 2D layer carries its blend into 3D instead of draping a white sheet of tiles');
+    assert(roItem.render === 'url' && roItem.template === 'dl2d://2d.R1/{z}/{x}/{y}',
+        'the blended layer still asks its own 2D layer for every tile URL');
+    assert(roItem.maxzoom === 16,
+        'the 1 m service is never asked past its native zoom — MapLibre overzooms the z16 tiles instead');
+    assert(mirror.blendOf(new TileLayer('u', { className: 'lidar-ro2m-tiles' })) === 'invert-screen' &&
+           mirror.blendOf(layer) === null,
+        'only the layers the stylesheet blends are repainted; everything else keeps the pixels it was sent');
+
+    /* The repaint is the stylesheet's arithmetic, in the pixels: screen over the
+     * base is white with alpha 1 − luminance. */
+    const ramp = new Uint8ClampedArray([0, 0, 0, 255, 255, 255, 255, 255, 128, 128, 128, 255, 7, 7, 7, 0]);
+    const blended = mirror.blendPixels({ data: ramp, width: 2, height: 2 }, 'invert-screen');
+    assert(blended.data[0] === 255 && blended.data[1] === 255 && blended.data[2] === 255 && blended.data[3] === 255,
+        'a black tile pixel becomes opaque white — the hillshade line of the inverted tile');
+    assert(blended.data[7] === 0,
+        'the white ArcGIS background becomes fully transparent: this is the white sheet the 2D CSS filter removes');
+    assert(Math.abs(blended.data[11] - 127) <= 1, 'mid grey becomes half-transparent white');
+    assert(blended.data[15] === 0, 'a tile pixel that is already transparent stays invisible');
+    let worstBlend = 0;
+    for (let c = 0; c < 256; c += 1) {
+        const px = mirror.blendPixels({ data: new Uint8ClampedArray([c, c, c, 255]) }, 'invert-screen').data;
+        const base = 0.35;                                   /* any base, not just a dark one */
+        const css = 1 - (1 - base) * (c / 255);              /* screen(base, invert(tile))    */
+        const ours = px[3] / 255 + (1 - px[3] / 255) * base; /* white, alpha 1 − luma         */
+        worstBlend = Math.max(worstBlend, Math.abs(css - ours));
+    }
+    assert(worstBlend < 1 / 255,
+        'the repainted tile equals screen(invert(tile)) within a rounding step (worst ' + worstBlend.toFixed(4) + ')');
+
+    /* A group of siblings that draw identically becomes ONE 3D source. The
+     * Roman roads are ~20 000 polylines in a featureGroup; one source, one
+     * layer and one 500 KB signature per polyline is what crashed the page as
+     * soon as 3D was switched on. */
+    function roads(count) {
+        const kids = [];
+        for (let i = 0; i < count; i += 1) {
+            const road = new Path({ color: '#FF5A36', weight: 1.8, opacity: 0.8, interactive: false, pane: 'pane_roman' });
+            road._leaflet_id = 'p' + i;
+            road._coords = [[26, 44 + i * 1e-5], [26.1, 44.1 + i * 1e-5]];
+            kids.push(road);
+        }
+        const group = new FeatureGroup(kids, { pane: 'pane_roman' });
+        group._leaflet_id = 'G1';
+        return group;
+    }
+    const group = roads(25001);
+    const groupMap = {
+        getPane: function () { return { style: { zIndex: '625' }, ownerDocument: null }; },
+        eachLayer: function (fn) { fn(group); },
+        hasLayer: function () { return true; }
+    };
+    const bundled = mirror.collect(groupMap);
+    assert(bundled.items.length === 2,
+        '25 001 identically-painted polylines become 2 3D sources (20 000 features each)');
+    assert(bundled.items[0].geojson.features.length === 20000 &&
+           bundled.items[1].geojson.features.length === 5001,
+        'the merge splits on the feature budget and keeps every feature');
+    assert(bundled.items[0].key === '2d.G1/b1' && bundled.items[1].key === '2d.G1/b2',
+        'a bundle gets its own key, so it maps to its own 3D source');
+    assert(bundled.items[0].count === 20000 && /\(20,000 features\)/.test(bundled.items[0].label),
+        'the bundle label says how much of the group it carries — the status panel cannot overstate it');
+    assert(bundled.signature.length < 400,
+        'the signature of a merged group is a handful of bytes, not one entry per polyline (' +
+        bundled.signature.length + ' chars)');
+    const bundling = bundled.signature;
+    const again = mirror.collect(groupMap);
+    assert(again.signature === bundling && again.items[0] === bundled.items[0],
+        'the second collect (the 1.5 s poll while 3D is open) returns the cached bundles unchanged');
+    mirror.invalidate(group);
+    const fresh = mirror.collect(groupMap);
+    assert(fresh.items[0] !== bundled.items[0] && fresh.signature === bundling,
+        'invalidate() drops the cache without changing what the group contains');
+    group.getLayers()[0].options.opacity = 0.4;
+    const restyled = mirror.collect(groupMap);
+    assert(restyled.items[0] !== fresh.items[0] &&
+           restyled.items[0].paints.line['line-opacity'] === 0.4,
+        'the opacity slider is noticed even though the child count did not change');
+    /* Distinct paints cannot be merged — but the deck has a ceiling, and what it
+     * had to leave out is reported instead of silently dropped. */
+    const mixedKids = [];
+    for (let i = 0; i < 30; i += 1) {
+        const road = new Path({ color: '#0000' + (10 + i), weight: 1 + i, opacity: 0.9 });
+        road._leaflet_id = 'm' + i;
+        road._coords = [[26, 44 + i * 1e-3], [26.1, 44.1 + i * 1e-3]];
+        mixedKids.push(road);
+    }
+    const mixed = new FeatureGroup(mixedKids, {});
+    mixed._leaflet_id = 'G2';
+    const mixedRes = mirror.collect({
+        getPane: function () { return { style: { zIndex: '600' }, ownerDocument: null }; },
+        eachLayer: function (fn) { fn(mixed); },
+        hasLayer: function () { return true; }
+    });
+    assert(mixedRes.items.length === 24,
+        'a group whose children all paint differently stops at the per-group bundle budget');
+    assert(mixedRes.capped.length === 1 && /six|6|budget/i.test(mixedRes.capped[0]),
+        'what the budget left out is reported (capped) so the 3D panel can say so — got: ' + mixedRes.capped.join('; '));
+
+    /* The deck has a hard ceiling, and the mirror stops *walking* once it is
+     * reached: 4 000 loose sibling-less layers must not be described (and their
+     * 4 000 sources created) just so the budged could then drop them. */
+    const scattered = [];
+    for (let i = 0; i < 4000; i += 1) {
+        const one = new Path({ color: '#12345' + (i % 10), weight: 1 + (i % 7), opacity: 0.9 });
+        one._leaflet_id = 's' + i;
+        one._coords = [[26, 44 + i * 1e-4], [26.1, 44.1 + i * 1e-4]];
+        scattered.push(one);
+    }
+    const scatteredMap = {
+        getPane: function () { return { style: { zIndex: '600' }, ownerDocument: null }; },
+        eachLayer: function (fn) { scattered.forEach(fn); },
+        hasLayer: function () { return true; }
+    };
+    const deck = mirror.collect(scatteredMap);
+    assert(deck.items.length === 400,
+        'the 3D deck never exceeds its 400-layer budget (' + deck.items.length + ')');
+    assert(deck.capped.length >= 1 && /budget/.test(deck.capped.join(' ')),
+        'and says what the budget left out instead of silently hiding layers');
+
     /* Without Leaflet at all (a page where the 2D map never loaded) the mirror
      * must not throw. */
     const bare = { window: null, console: console, Date: Date, JSON: JSON, Math: Math };
@@ -256,12 +453,16 @@ const TAG_3D = '20261013-3d-mobile';           /* registry + mirror + viewer  */
     const documentStub = {
         readyState: 'complete',
         head: stubElement(), body: stubElement(), documentElement: stubElement(),
-        createElement: stubElement, getElementById() { return null; },
+        createElement(tag) { return tag === 'canvas' ? fakeCanvas(32, 32) : stubElement(); },
+        getElementById() { return null; },
         querySelector() { return null; }, querySelectorAll() { return []; },
         addEventListener() {}, removeEventListener() {}
     };
     const windowStub = {
         document: documentStub,
+        Blob: Blob,                       /* the blend repaint round-trips its bytes through one */
+        URL: URL,
+        createImageBitmap: fakeImageDecoder,
         setTimeout: setTimeout, clearTimeout: clearTimeout,
         setInterval: function () { return 0; }, clearInterval: function () {},
         addEventListener() {}, removeEventListener() {},
@@ -273,6 +474,7 @@ const TAG_3D = '20261013-3d-mobile';           /* registry + mirror + viewer  */
     const quietConsole = { log: console.log, warn: console.warn, error: console.error,
         table: function () {}, info: console.info, debug: console.debug };
     const sandbox = { window: windowStub, document: documentStub, console: quietConsole,
+        Blob: Blob, URL: URL, Promise: Promise,
         setTimeout: setTimeout, clearTimeout: clearTimeout, navigator: windowStub.navigator };
     vm.createContext(sandbox);
     vm.runInContext(registrySource, sandbox, { filename: 'js/layer-registry.js' });
@@ -281,8 +483,10 @@ const TAG_3D = '20261013-3d-mobile';           /* registry + mirror + viewer  */
 
     const api = windowStub.DetectLabMap3D;
     assert(api, 'window.DetectLabMap3D is exported');
+    viewApi = api;
     ['open', 'close', 'toggle', 'isOpen', 'getMap', 'syncLayers', 'setExaggeration', 'getExaggeration',
-     'setPitch', 'setBearing', 'resetView', 'status', 'report', 'registry', 'mirror'].forEach(function (fn) {
+     'setPitch', 'setBearing', 'resetView', 'status', 'report', 'registry', 'mirror',
+     '_blendedTile', '_setSourceData', '_setSourceTiles'].forEach(function (fn) {
         assert(typeof api[fn] === 'function' || typeof api[fn] === 'object', 'API exposes ' + fn);
     });
     const status = api.status();
@@ -295,6 +499,8 @@ const TAG_3D = '20261013-3d-mobile';           /* registry + mirror + viewer  */
     assert(status.layers.every(function (l) { return l.active3d === false; }),
         'a closed 3D view claims no layer');
     assert(typeof api.report().mirrored !== 'undefined', 'report() returns the deck for the console');
+    assert(Array.isArray(status.capped) && typeof status.retintedTiles === 'number',
+        'status() carries the deck budget (“capped”) and the count of repainted blend tiles');
 
     /* The style: background + the DEM, and the hillshade from that DEM — the
      * base map itself is a mirrored layer, added later, above the hillshade. */
@@ -343,6 +549,31 @@ const TAG_3D = '20261013-3d-mobile';           /* registry + mirror + viewer  */
     /* A raster-dem source must never be drawn as a visible raster layer. */
     assert(!style.layers.some(function (l) { return l.type === 'raster' && l.source === 'detectlab-dem'; }),
         'the DEM source is never also rendered as a visible raster layer');
+    /* A live 2D map, so §6 can drive the real mirror → viewer path: the
+     * Romanian 1 m hillshade, added exactly as map-app.js adds it (an ArcGIS
+     * XYZ tile layer with the stylesheet's blend class). */
+    function StubTileLayer(url, options) { this.options = options || {}; this._url = url; }
+    StubTileLayer.prototype.getTileSize = function () { return { x: 256, y: 256 }; };
+    StubTileLayer.prototype.getTileUrl = function (coords) { return this._url + '/' + coords.z + '/' + coords.x + '/' + coords.y; };
+    StubTileLayer.prototype.getOpacity = function () { return this.options.opacity == null ? 1 : this.options.opacity; };
+    const ro1mLayer = new StubTileLayer('https://tiles.arcgis.com/tiles/wCvLzGFkz06gCfBg/arcgis/rest/services/1m/MapServer/tile/{z}/{y}/{x}', {
+        name: 'Romania 1m/pixel agregare', className: 'lidar-ro1m-tiles', maxNativeZoom: 16,
+        opacity: 0.85, pane: 'pane_lidar'
+    });
+    ro1mLayer._leaflet_id = 'R1';
+    windowStub.L = {
+        TileLayer: StubTileLayer, Marker: function () {}, ImageOverlay: function () {},
+        SVGOverlay: function () {}, VideoOverlay: function () {}, GeoJSON: function () {},
+        Path: function () {}, LayerGroup: function () {}, MarkerClusterGroup: null,
+        stamp: function (layer) { layer._leaflet_id = layer._leaflet_id || 'x1'; return layer._leaflet_id; }
+    };
+    viewWindow = windowStub;
+    viewWindow._dlMap = {
+        getPane: function () { return { style: { zIndex: '610' }, ownerDocument: null }; },
+        eachLayer: function (fn) { fn(ro1mLayer); },
+        hasLayer: function () { return true; }
+    };
+    viewRo1m = ro1mLayer;
     console.log('  ✓ the viewer boots headless and stacks base ▸ hillshade ▸ overlays in 2D pane order');
 }
 
@@ -426,6 +657,105 @@ const TAG_3D = '20261013-3d-mobile';           /* registry + mirror + viewer  */
     assert(blank.headers.get('X-Map3D-Tile') === 'blank',
         'the blank tile is labelled so the viewer can report it instead of showing a hole');
     console.log('  ✓ the proxy builds, validates, reprojects and relays exactly as documented');
+
+    // ══════════════════════════════════════════════════════════
+    // 6b. The Romanian LiDAR hillshades: blended in 2D, repainted for 3D
+    // ══════════════════════════════════════════════════════════
+    /* The mirror sees the live 2D layer the way map-app.js adds it … */
+    const mirrorDeck = viewApi._mirror();
+    const ro1mItem = mirrorDeck.items.filter(function (i) { return i.key === '2d.R1'; })[0];
+    assert(ro1mItem && ro1mItem.kind === 'raster' && ro1mItem.blend === 'invert-screen',
+        '“Romania 1m/pixel agregare” reaches the 3D deck as a raster carrying the CSS blend');
+    assert(ro1mItem.template === 'dl2d://2d.R1/{z}/{x}/{y}' && ro1mItem.opacity === 0.85,
+        'its tiles are asked of the 2D layer itself, at the opacity the 2D slider is on');
+    assert(viewApi.status().mirrored.some(function (m) { return m.blend === 'invert-screen'; }),
+        'status() names the emulated blend, so a support report can show it');
+
+    /* …and the viewer repaints each of its tiles: white, alpha 1 − luminance. */
+    const SIZE = 256;
+    const image = new Uint8ClampedArray(SIZE * SIZE * 4);
+    for (let i = 0; i < image.length; i += 4) {
+        const c = (i / 4) % 256;                 /* a grayscale hillshade ramp: black → white */
+        image[i] = image[i + 1] = image[i + 2] = c;
+        image[i + 3] = 255;
+    }
+    const tileUrl = 'https://tiles.arcgis.com/tiles/wCvLzGFkz06gCfBg/arcgis/rest/services/1m/MapServer/tile/16/2345/1234';
+    const repainted = new Uint8ClampedArray(await viewApi._blendedTile(viewRo1m, tileUrl, image.buffer));
+    assert(repainted.length === image.length, 'the repaint keeps the tile size (a 256² tile is still 256²)');
+    assert(repainted[0] === 255 && repainted[1] === 255 && repainted[2] === 255 && repainted[3] === 255,
+        'the darkest pixel of the tile is opaque white');
+    assert(repainted[255 * 4 + 3] === 0,
+        'the white ArcGIS background pixel is fully transparent — the white sheet is gone in 3D too');
+    assert(repainted.some(function (v, i) { return i % 4 === 3 && v > 0 && v < 255; }),
+        'the hillshade itself stays visible, as white lines at partial alpha');
+    assert(viewApi.status().retintedTiles === 1, 'a repainted tile is counted (status().retintedTiles)');
+
+    /* Second request for the same tile: from the repaint cache, not the network,
+     * and never the same buffer (MapLibre may take ownership of it). */
+    const again = new Uint8ClampedArray(await viewApi._blendedTile(viewRo1m, tileUrl, image.buffer));
+    assert(viewApi.status().retintedTiles === 1 && again[0] === repainted[0] && again[3] === repainted[3],
+        'the same tile is repainted once and served from the cache afterwards');
+    assert(again.buffer !== repainted.buffer,
+        'the cached bytes are copied out, so MapLibre cannot detach the cache’s buffer');
+
+    /* A layer the stylesheet does not blend must keep the pixels it was sent. */
+    const plain = new Uint8ClampedArray(image);
+    const untouched = new Uint8ClampedArray(await viewApi._blendedTile(
+        { options: {}, getTileSize: function () { return { x: 256, y: 256 }; } }, 'https://example.org/plain/1/1/1', plain.buffer));
+    assert(untouched[3] === 255 && untouched[0] === 0, 'a layer without a blend class is passed through untouched');
+    assert(viewApi._setSourceData('m3d-2d-2d.R1-src', null) === false,
+        'setSourceData() is inert while no 3D map is open (it never throws at the caller)');
+
+    /* A layer the deck budget leaves out must explain itself, once: the
+     * complaint that starts this whole section. */
+    const savedDlMap = viewWindow._dlMap;
+    const loose = [];
+    for (let i = 0; i < 2000; i += 1) {
+        const one = Object.create(viewWindow.L.Path.prototype);
+        one.options = { color: '#1a2b3c', weight: 3, opacity: 1 };
+        one._leaflet_id = 'loose' + i;
+        one.toGeoJSON = function () { return { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [[26, 44], [26.1, 44.1]] } }; };
+        loose.push(one);
+    }
+    viewWindow._dlMap = {
+        getPane: function () { return { style: { zIndex: '600' }, ownerDocument: null }; },
+        eachLayer: function (fn) { loose.forEach(fn); },
+        hasLayer: function () { return true; }
+    };
+    const budgetLines = function () {
+        return viewApi.status().errors.map(function (e) { return e.message; })
+            .filter(function (m) { return /budget/.test(m); });
+    };
+    viewApi._mirror();
+    viewApi._mirror();
+    const budgetFirst = budgetLines();
+    viewApi._mirror();
+    const budgetSecond = budgetLines();
+    assert(budgetFirst.length >= 1 && budgetSecond.length === budgetFirst.length &&
+           budgetFirst.every(function (m, i) { return budgetFirst.indexOf(m) === i; }),
+        'a deck that hit its budget says so in status().errors — each line once, not on every poll');
+    viewWindow._dlMap = savedDlMap;
+
+    /* The wiring itself: the dl2d:// protocol repaints, and no renderer may
+     * re-upload data MapLibre already has (a 20 000-feature reparse per pan is
+     * exactly what made 3D crawl while the Roman roads were on). */
+    assert(viewer.includes('return blendedTile(layer, url, tile.data)'),
+        'the dl2d:// protocol sends fetched tiles through the blend repaint');
+    assert(viewer.includes('setSourceData(sourceId, item.geojson)') &&
+           !/\.setData\(/.test(viewer.replace(/source\.setData\(data\);/g, '')),
+        'every GeoJSON upload goes through setSourceData() — the only setData() left is the one inside it');
+    assert(viewer.includes('if (state.sourceData[sourceId] === data) return true;'),
+        'setSourceData() skips the re-upload when MapLibre already holds that exact object');
+    assert(viewer.includes('if (!force && state.sourceTiles[sourceId] === key) return true;'),
+        'setSourceTiles() skips the reload when the tile template has not changed — a steady-state sync must not ' +
+        'restart every LiDAR tile request (that is what made 3D “load forever”)');
+    assert(viewer.includes('setSourceTiles(sourceId, source.tiles.slice(), true)'),
+        'a host healed to the proxy still forces the reload — the template is unchanged but must be re-resolved');
+    assert(viewApi._setSourceTiles('m3d-2d-2d.R1-src', ['dl2d://2d.R1/{z}/{x}/{y}']) === false,
+        'setSourceTiles() is inert while no 3D map is open');
+    assert((viewer.match(/state\.sourceData\[sourceId\] = /g) || []).length === 5,
+        'the upload cache is written by setSourceData() and by each of the four GeoJSON renderers');
+    console.log('  ✓ the blended LiDAR hillshades are repainted (and cached), not painted as a white sheet');
 
     // ══════════════════════════════════════════════════════════
     // 7. The 3D skin stays out of the way of the 2D chrome
