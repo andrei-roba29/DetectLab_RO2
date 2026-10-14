@@ -390,7 +390,7 @@ check('index.html loads ign-mdt-layer.js before map-app.js',
     scriptSrcs.indexOf('js/ign-mdt-layer.js') < scriptSrcs.indexOf('js/map-app.js'));
 check('the service worker pre-caches it', sw.indexOf('js/ign-mdt-layer.js') !== -1);
 check('the service worker cache name was bumped for this change',
-    /detectlab-v16[8-9]|detectlab-v1[7-9]\d/.test(sw));
+    /detectlab-v16[8-9]|detectlab-v(1[7-9]|2[0-9])\d/.test(sw));
 check('the Spain layer is built by the module', /IgnMdt\.createLayer/.test(mapApp));
 check('the app exposes the new Spain WMS endpoint, not the WMTS one',
     /window\.SPAIN_LIDAR_WMS_URL = SPAIN_LIDAR_WMS_URL/.test(mapApp) &&

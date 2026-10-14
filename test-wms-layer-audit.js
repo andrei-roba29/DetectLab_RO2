@@ -1,0 +1,207 @@
+// Regression suite for tools/audit-wms-layers.mjs — the offline audit of every
+// WMS / WMTS layer the site can draw.
+//
+// The audit tool is the thing that answers “check all WMS/WMTS layers”: it
+// rebuilds each layer's real request with the same code the map uses
+// (js/layer-registry.js plus the country LiDAR modules) and verifies it against
+// the service's documented contract. This suite makes sure that answer stays
+// green and that the guard covers every third-party endpoint, so a new layer
+// cannot be added without either being watched or failing this test.
+//
+// Usage: node test-wms-layer-audit.js
+'use strict';
+
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+const { execFileSync } = require('child_process');
+
+console.log('[Test] WMS / WMTS layer audit (registry → real requests)...');
+
+const root = __dirname;
+const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
+
+// ══════════════════════════════════════════════════════════════
+// 1. The tool runs, and finds no hard error
+// ══════════════════════════════════════════════════════════════
+let report;
+try {
+    const out = execFileSync(process.execPath, [path.join('tools', 'audit-wms-layers.mjs'), '--json'],
+        { cwd: root, encoding: 'utf8' });
+    report = JSON.parse(out);
+} catch (err) {
+    // A non-zero exit still prints the JSON report on stdout — show why.
+    let parsed = null;
+    try { parsed = JSON.parse(err.stdout || ''); } catch (e) { parsed = null; }
+    const detail = parsed ? parsed.errors.map((e) => e.id + ' [' + e.code + '] ' + e.message).join('\n')
+        : (err.stdout || '') + (err.stderr || '');
+    assert.fail('tools/audit-wms-layers.mjs exits non-zero — fix these layers:\n' + detail);
+}
+assert(report && Array.isArray(report.layers), 'the audit returns a machine-readable report');
+assert.strictEqual(report.errors.length, 0,
+    'no WMS/WMTS layer breaks a hard invariant: ' +
+    report.errors.map((e) => e.id + ' [' + e.code + '] ' + e.message).join('; '));
+assert(report.totals.layers >= 70, 'the audit covers the whole catalogue (got ' + report.totals.layers + ')');
+console.log('  ✓ ' + report.totals.layers + ' WMS/WMTS/dynamic layers audited, no errors');
+
+// ══════════════════════════════════════════════════════════════
+// 2. Every third-party endpoint is watched by the availability guard
+// ══════════════════════════════════════════════════════════════
+const remote = report.layers.filter((l) => l.guardPath === 'probe' || l.guardPath === 'watch');
+const unwatched = report.layers.filter((l) => l.guardPath === 'none');
+assert.strictEqual(unwatched.length, 0,
+    'no third-party layer is left silent: ' + unwatched.map((l) => l.id + ' → ' + l.endpoint).join(', '));
+assert(remote.length >= 60, 'the guard covers the catalogue (got ' + remote.length + ')');
+console.log('  ✓ ' + remote.length + ' third-party layers guarded (probe or watch), 0 unwatched');
+
+// Spot checks: the hosts that matter, with the provider name the notice shows.
+const byId = new Map(report.layers.map((l) => [l.id, l]));
+const expect = function (id, guardPath, provider) {
+    const l = byId.get(id);
+    assert(l, 'layer ' + id + ' is part of the audit (rename it in both places)');
+    assert.strictEqual(l.guardPath, guardPath, id + ' must be guarded via ' + guardPath + ', got ' + l.guardPath);
+    if (provider) {
+        assert(l.provider.indexOf(provider) !== -1,
+            id + ' must name its provider (' + provider + '), got ' + l.provider);
+    }
+};
+expect('cenagis.ukvme', 'probe', 'CENAGIS');
+expect('premium.mitteleuropa', 'probe', 'CENAGIS');
+expect('hist.austrian', 'probe', 'geo-spatial.org');
+expect('lidar.fr-mnh', 'probe', 'IGN France');
+expect('sat.vhr-2018', 'probe', 'Copernicus');
+expect('sat.corona-60s', 'watch', 'CAST');
+expect('vegfp.ppi', 'watch', 'VITO');
+['lidar.nl-ahn', 'lidar.no-hoydedata', 'lidar.pl-nmt', 'lidar.es-mdt',
+    'lidar.ch-swisstopo', 'lidar.uk-ea'].forEach((id) => {
+    const l = byId.get(id);
+    assert(l && l.guardPath === 'watch' && l.provider,
+        id + ' must be watched with a named provider (got ' + (l && l.guardPath) + ')');
+});
+console.log('  ✓ every family names its provider (CENAGIS, eHarta, IGN, Copernicus, CAST, VITO, …)');
+
+// ══════════════════════════════════════════════════════════════
+// 3. The sample requests are real requests
+// ══════════════════════════════════════════════════════════════
+report.layers.forEach(function (l) {
+    if (l.kind !== 'wms') return;
+    const url = l.sample2d || '';
+    assert(/^https:\/\//.test(url), l.id + ': the 2D GetMap URL is https (' + url.slice(0, 60) + ')');
+    assert(/service=WMS/i.test(url) && /request=GetMap/i.test(url), l.id + ': GetMap KVP present');
+    assert(new RegExp('layers=' + encodeURIComponent(l.layer).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(url),
+        l.id + ': the URL asks for its own LAYERS');
+    assert(/[?&]bbox=[-\d.]+,[-\d.]+,[-\d.]+,[-\d.]+/.test(url), l.id + ': a real bbox is requested');
+    const versionedCrs = /version=1\.1\.(0|1)/.test(url) ? /[?&]srs=EPSG%3A3857/i.test(url)
+        : /[?&]crs=EPSG%3A3857/i.test(url);
+    const wgs84 = /(srs|crs)=EPSG%3A4326/i.test(url);
+    assert(versionedCrs || wgs84, l.id + ': the version/CRS pair matches the WMS spec');
+    // Values, not the whole string: “poznan_3857” contains “nan” and a
+    // substring check would flag a perfectly good layer.
+    const bboxNums = ((url.match(/[?&]bbox=([^&]+)/i) || [])[1] || '').split(',').map(Number);
+    assert.strictEqual(bboxNums.length, 4, l.id + ': the bbox has four numbers');
+    assert(bboxNums.every((n) => Number.isFinite(n)) && bboxNums[2] > bboxNums[0] && bboxNums[3] > bboxNums[1],
+        l.id + ': the bbox is finite and increasing');
+    url.split(/[?&]/).slice(1).forEach(function (kv) {
+        const value = kv.slice(kv.indexOf('=') + 1);
+        assert(!/^(undefined|null|nan|infinity)$/i.test(value),
+            l.id + ': parameter ' + kv.split('=')[0] + ' leaked a placeholder (' + value + ')');
+    });
+});
+report.layers.filter((l) => l.kind === 'wmts').forEach(function (l) {
+    const url = l.sample2d || '';
+    ['SERVICE=WMTS', 'REQUEST=GetTile', 'TILEMATRIXSET=', 'TILEMATRIX=', 'TILEROW=', 'TILECOL=']
+        .forEach((needle) => assert(url.indexOf(needle) !== -1, l.id + ': WMTS KVP carries ' + needle));
+    assert(!/\{z\}|\{x\}|\{y\}/.test(url), l.id + ': the sample resolves the tile placeholders');
+});
+console.log('  ✓ every sample request is KVP-correct and fully resolved');
+
+// ══════════════════════════════════════════════════════════════
+// 4. The country modules really build URLs in Node
+// ══════════════════════════════════════════════════════════════
+Object.keys(report.modules).forEach(function (name) {
+    const m = report.modules[name];
+    assert(m.present, 'js module for ' + name + ' exists (' + m.file + ')');
+    assert(m.loaded, name + ' loads in the audit sandbox (' + (m.error || 'ok') + ')');
+});
+report.layers.filter((l) => l.kind === 'dynamic' && !l.runtime && l.endpoint && l.endpoint.indexOf('/') !== 0)
+    .forEach(function (l) {
+        assert(l.sample2d && l.sample2d.indexOf('http') === 0,
+            l.id + ' returns a concrete tile URL (' + l.sample2d + ')');
+    });
+console.log('  ✓ ' + Object.keys(report.modules).length +
+    ' country modules load and build their tile URLs');
+
+// ══════════════════════════════════════════════════════════════
+// 5. The generated report matches the registry (no doc drift)
+// ══════════════════════════════════════════════════════════════
+const doc = read('WMS_WMTS_LAYER_AUDIT.md');
+report.layers.forEach(function (l) {
+    assert(doc.indexOf('`' + l.id + '`') !== -1,
+        'WMS_WMTS_LAYER_AUDIT.md documents ' + l.id +
+        ' — regenerate it with: node tools/audit-wms-layers.mjs --write=WMS_WMTS_LAYER_AUDIT.md');
+});
+assert(/node tools\/audit-wms-layers\.mjs --write=WMS_WMTS_LAYER_AUDIT\.md/.test(doc),
+    'the report says how to regenerate itself');
+const guardSource = read('js/wms-health.js');
+report.guardHosts.forEach(function (host) {
+    assert(doc.indexOf(host) !== -1 || guardSource.indexOf(host) !== -1,
+        'host ' + host + ' is documented in the guard or the report');
+});
+console.log('  ✓ the report lists every audited layer and host');
+
+// ══════════════════════════════════════════════════════════════
+// 6. The provider list is the one the guard uses
+// ══════════════════════════════════════════════════════════════
+report.guardHosts.forEach(function (host) {
+    assert(guardSource.indexOf("'" + host + "'") !== -1,
+        host + ' is declared in js/wms-health.js HOSTS');
+});
+assert(report.guardHosts.length >= 12, 'the guard watches every third-party family (got ' +
+    report.guardHosts.length + ')');
+console.log('  ✓ ' + report.guardHosts.length + ' guarded hosts cross-checked against js/wms-health.js');
+
+// ══════════════════════════════════════════════════════════════
+// 7. The report answers the questions the audit exists for
+// ══════════════════════════════════════════════════════════════
+['## The three errors that started this audit',
+ '## What is checked',
+ '### Small print',
+ '## The layers',
+ '## What a failure looks like, per provider',
+ '## Deployment requirements (server side)',
+ '## Sample request URLs',
+ '## What to do when one of them breaks'].forEach(function (heading) {
+    assert(doc.indexOf(heading) !== -1, 'WMS_WMTS_LAYER_AUDIT.md has the "' + heading + '" section');
+});
+// The three reported errors are all accounted for, with owner attribution.
+assert(/ukvme_3857/.test(doc) && /kdr_3857/.test(doc),
+    'the CENAGIS 200-with-a-Java-exception failure is documented with its layers');
+assert(/ImageInputStream/.test(doc), 'the ECW/ImageInputStream root cause is quoted');
+assert(/dataforsyningen_token_missing/.test(doc),
+    'the Dataforsyningen token failure and the proxy’s 401 body are documented');
+assert(/external/.test(doc), 'the report says which failures are out of our control');
+
+// ══════════════════════════════════════════════════════════════
+// 8. Every module that hides a tile failure still reports it
+// ══════════════════════════════════════════════════════════════
+Object.keys(report.modules).forEach(function (name) {
+    const m = report.modules[name];
+    if (!m.present) return;
+    const src = read(m.file);
+    if (!/done\(null\s*,\s*(tile|canvas)\)/.test(src)) return;
+    const hasOwnPath = /showAuthNotice|reportUnavailable|TOKEN_MISSING_MESSAGE|noteFailure/.test(src);
+    assert(hasOwnPath,
+        m.file + ' hides a failed tile from Leaflet but neither reports it to the guard ' +
+        '(DetectLabWmsHealth.noteFailure) nor shows its own notice');
+});
+const guardSrc = read('js/wms-health.js');
+assert(/noteFailure: noteFailure/.test(guardSrc),
+    'DetectLabWmsHealth exposes noteFailure() for the modules that swallow tile errors');
+['js/ahn-layer.js', 'js/hoydedata-layer.js'].forEach(function (file) {
+    assert(read(file).indexOf('noteFailure') !== -1,
+        file + ' reports its swallowed tile failures to the guard');
+    assert(read(file).indexOf('reportTileFailure') !== -1, file + ' has the reporting helper');
+});
+console.log('  ✓ modules that hide tile failures still report them to the guard');
+
+console.log('\n✅ test-wms-layer-audit.js passed all checks successfully.');

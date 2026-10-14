@@ -286,8 +286,16 @@ console.log('\n[9] installed PWAs are updated');
 const shellVersion = Number((swJs.match(/CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1] || 0);
 assert(shellVersion >= 196,
     'sw.js cache is v196 or newer so installed PWAs get the mobile fix (found v' + shellVersion + ')');
+/* Each asset is versioned by whatever last changed it: the registry by the
+ * WMS/WMTS audit, the viewer by the CSS-blend work, the sheet by the slider
+ * layout that introduced these controls. */
+const TAGS = {
+    'js/layer-registry.js': '20261014-wms-audit',
+    'js/map3d-terrain.js': '20261014-3d-blend',
+    'css/map3d-terrain.css': '20261014-3d-slider-layout'
+};
 ['js/map3d-terrain.js', 'js/layer-registry.js', 'css/map3d-terrain.css'].forEach(function (asset) {
-    const tag = asset === 'js/layer-registry.js' ? '20261013-3d-mobile' : '20261014-3d-slider-layout';
+    const tag = TAGS[asset];
     assert(indexHtml.indexOf(asset + '?v=' + tag) !== -1,
         'index.html loads ' + asset + ' with the new cache-busting tag');
     assert(swJs.indexOf("'" + asset + "?v=" + tag + "'") !== -1,

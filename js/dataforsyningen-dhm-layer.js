@@ -212,6 +212,16 @@
         // OGC "User not authorized" exception body).
         AUTH_MESSAGE: 'Invalid or missing Dataforsyningen token',
 
+        // Shown once when the SAME-ORIGIN PROXY answers
+        // {"error":"dataforsyningen_token_missing"} — i.e. this deployment has
+        // no DATAFORSYNINGEN_TOKEN at all. That is not a token the visitor can
+        // fix (nor a server outage), so the message says what is missing and
+        // who can enable it, instead of the bare "Invalid or missing token"
+        // that reads like a browser problem. See DENMARK_LIDAR_DATAFORSYNINGEN.md.
+        TOKEN_MISSING_MESSAGE: 'The Denmark LiDAR layer is not configured on this deployment: the tile proxy ' +
+            '(/api/geo/dk-dhm) has no DATAFORSYNINGEN_TOKEN, so no tile can be requested. An administrator can ' +
+            'enable Danmarks Højdemodel by setting that variable (see DENMARK_LIDAR_DATAFORSYNINGEN.md).',
+
         // Shown once when the same-origin proxy route itself is absent (HTTP
         // 404 in proxy mode): the deployment in front of the site predates
         // netlify/functions/dk-dhm.mjs (or the Express geoProxy route is not
@@ -221,6 +231,11 @@
         // silently blank. A visible notice turns that into a one-glance
         // diagnosis instead.
         PROXY_MISSING_MESSAGE: 'Denmark LiDAR proxy (/api/geo/dk-dhm) is not deployed on this server — redeploy the site with its Netlify functions (or the Express backend) to enable Danmarks Højdemodel',
+
+        // The panel switch this layer belongs to (js/map-app.js). Used only to
+        // stop the row looking “on” once the service has said it cannot serve
+        // a single tile, and as the fallback when the shared guard is absent.
+        TOGGLE_ID: 'lidarDkLidarToggle',
 
         /* ── products ────────────────────────────────────────────────────── */
 
@@ -512,8 +527,7 @@
         if (typeof document === 'undefined' || !document.body) {
             console.warn('[DataforsyningenDHM] ' + message);
             return;
-        }
-        var box = document.createElement('div');
+        }        var box = document.createElement('div');
         box.id = 'dkDhmTokenNotice';
         box.setAttribute('role', 'status');
         box.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);' +
@@ -532,6 +546,31 @@
         box.appendChild(close);
         document.body.appendChild(box);
         setTimeout(function () { if (box.parentNode) box.parentNode.removeChild(box); }, 12000);
+    }
+
+    /* A layer that cannot be served at all (no token on this deployment, a
+       rejected token, a route that was never deployed) is switched off and
+       its row is dimmed, not left looking “on but empty”. The shared guard
+       (js/wms-health.js) owns that UI: it knows the row/switch from the layer
+       registry, it dims the row with the message as its tooltip and it can put
+       the switch back with its Retry button. Without the guard (a page that
+       loads this module alone) the row is switched off directly. */
+    function reportUnavailable(layer, message) {
+        showAuthNotice(message);
+        var guard = null;
+        try { guard = root.DetectLabWmsHealth; } catch (e) { guard = null; }
+        if (guard && typeof guard.markUnavailable === 'function' && layer) {
+            try { guard.markUnavailable(layer, message, { provider: 'Dataforsyningen (Denmark)' }); return; } catch (e) {}
+        }
+        try {
+            if (typeof document === 'undefined') return;
+            var toggle = document.getElementById(CONFIG.TOGGLE_ID);
+            if (toggle && toggle.checked) {
+                toggle.checked = false;
+                if (typeof toggle.onchange === 'function') toggle.onchange.call(toggle, { target: toggle });
+            }
+            if (layer && layer._map && typeof layer._map.removeLayer === 'function') layer._map.removeLayer(layer);
+        } catch (e) {}
     }
 
     /* ═══════════════════════════════════════════════════════════════════════
@@ -785,9 +824,13 @@
             // One small tile over Denmark, not a full tile run. Level 2
             // col 4 row 2 sits over Jutland and always exists.
             var url = tileUrl(this.options.mode, 2, 4, 2, clientToken());
+            var self = this;
             fetch(url, { method: 'GET', cache: 'no-store' }).then(function (res) {
                 if (res.status === 401 || res.status === 403) {
-                    showAuthNotice(CONFIG.AUTH_MESSAGE);
+                    // Proxy mode answers 401 only when the deployment has no
+                    // token at all (see reportTokenError below); a direct-mode
+                    // 401/403 is Dataforsyningen rejecting the token.
+                    reportUnavailable(self, clientToken() ? CONFIG.AUTH_MESSAGE : CONFIG.TOKEN_MISSING_MESSAGE);
                     return;
                 }
                 if (res.status === 404 && !clientToken()) {
@@ -804,15 +847,20 @@
                     // ExceptionReport saying "User not authorized".
                     return res.text().then(function (body) {
                         if (/not authorized|unauthorized|token/i.test(body)) {
-                            showAuthNotice(CONFIG.AUTH_MESSAGE);
+                            reportUnavailable(self, CONFIG.AUTH_MESSAGE);
                         }
                     });
                 }
                 if (type && type.indexOf('json') !== -1) {
-                    // Proxy mode: {"error":"dataforsyningen_token_missing"}.
+                    // Proxy mode: {"error":"dataforsyningen_token_missing"} is
+                    // a deployment without the variable — a configuration
+                    // problem, not an invalid token the visitor could fix.
                     return res.json().then(function (body) {
-                        if (body && /token/i.test(String(body.error || ''))) {
-                            showAuthNotice(CONFIG.AUTH_MESSAGE);
+                        var code = String((body && body.error) || '');
+                        if (code.indexOf('token_missing') !== -1) {
+                            reportUnavailable(self, CONFIG.TOKEN_MISSING_MESSAGE);
+                        } else if (/token|auth/i.test(code)) {
+                            reportUnavailable(self, CONFIG.AUTH_MESSAGE);
                         }
                     });
                 }
@@ -861,6 +909,7 @@
         tileUrl: tileUrl,
         createLayer: createLayer,
         showAuthNotice: showAuthNotice,
+        reportUnavailable: reportUnavailable,
         clearSourceCache: clearSourceCache,
         modeKeys: function () { return Object.keys(CONFIG.MODES); }
     };

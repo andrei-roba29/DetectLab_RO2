@@ -30,8 +30,9 @@ for (const pwa of [false, true]) {
     assert.strictEqual(controls[0].corner, pwa ? 'top-left' : 'bottom-right');
     assert.strictEqual(controls[0].control.options.showCompass, !pwa);
 }
+const SLIDER_TAGS = { 'js/map3d-terrain.js': '20261014-3d-blend', 'css/map3d-terrain.css': '20261014-3d-slider-layout' };
 for (const file of ['js/map3d-terrain.js', 'css/map3d-terrain.css']) {
-    const url = file + '?v=20261014-3d-slider-layout';
+    const url = file + '?v=' + SLIDER_TAGS[file];
     assert(html.includes(url) && sw.includes("'" + url + "'"), 'updated asset cache wiring: ' + file);
 }
 assert(Number(sw.match(/CACHE_NAME = 'detectlab-v(\d+)-/)[1]) >= 200);

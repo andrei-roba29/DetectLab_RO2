@@ -89,6 +89,14 @@
         images: {},                      /* icon url → registered MapLibre image */
         blankWarned: {},                 /* proxy URL → already reported blank */
         renderedTiles: 0,                /* tiles drawn by a 2D layer itself */
+        /* What the deck already has: re-uploading or reloading any of it on the
+         * next sync is what made 3D crawl (§6 of MAP_3D_TERRAIN.md). */
+        sourceData: {},                  /* sourceId → the GeoJSON already uploaded */
+        sourceTiles: {},                 /* sourceId → the tile template already loaded */
+        blendCache: {},                  /* url → repainted tile bytes             */
+        blendWarned: false,              /* the repaint failure was already reported */
+        cappedSeen: {},                  /* deck-budget lines already reported     */
+        retintedTiles: 0,                /* tiles repainted for a CSS blend mode   */
         pendingImages: {},
         supported: {},                   /* resolved host policy cache           */
         lastSync: 0,
@@ -420,7 +428,7 @@
                 var source = map && map.getSource(sourceId);
                 if (!source || !source.tiles || !source.tiles.length) return;
                 if (hostOfUrl(source.tiles[0]) !== host) return;
-                if (setSourceTiles(sourceId, source.tiles.slice())) retried += 1;
+                if (setSourceTiles(sourceId, source.tiles.slice(), true)) retried += 1;
             });
         });
         pushError('host ' + host + ' has no CORS — retrying it through ' + proxyBase() +
@@ -497,6 +505,49 @@
             .then(function (data) { return { data: data }; });
     }
 
+    /* ═══════════════════════════════════════════════════════════════════════
+     *  CSS BLEND MODES THE MIRROR CANNOT CARRY
+     * -----------------------------------------------------------------------
+     *  The 2D map paints the Romanian 1 m / 2 m LiDAR hillshades with
+     *  `filter: invert(1); mix-blend-mode: screen` (css/styles.css). MapLibre
+     *  has no blend modes, so a mirrored tile arrived as the service sent it —
+     *  an opaque white sheet over the terrain, which is exactly the “these
+     *  LiDAR layers never load in 3D” report. The mirror repaints every such
+     *  tile (white, alpha = 1 − luminance) in js/map3d-mirror.js before it is
+     *  handed to MapLibre; this is where the fetch and that repaint meet.
+     *
+     *  The repainted bytes are kept: MapLibre evicts decoded tiles, and
+     *  re-downloading *and* re-encoding a 1 m hillshade tile every time the user
+     *  pans back over it is what made these layers feel like they never load.
+     * ═══════════════════════════════════════════════════════════════════════ */
+    var BLEND_CACHE_MAX = 160;
+
+    function blendedTile(layer, url, payload) {
+        var blend = typeof MIRROR.blendOf === 'function' ? MIRROR.blendOf(layer) : null;
+        if (!blend) return Promise.resolve(payload);
+        var size = 256;
+        try { if (layer && layer.getTileSize) size = layer.getTileSize().x || 256; } catch (e) { size = 256; }
+        if (typeof MIRROR.retintTile !== 'function') return Promise.resolve(payload);
+        var hit = state.blendCache[url];
+        if (hit) return Promise.resolve(hit.slice(0));      /* never the cached buffer itself */
+        return MIRROR.retintTile(payload, size, blend).then(function (bytes) {
+            var keys = Object.keys(state.blendCache);
+            if (keys.length >= BLEND_CACHE_MAX) delete state.blendCache[keys[0]];
+            state.blendCache[url] = bytes;
+            state.retintedTiles += 1;
+            return bytes;
+        }, function (error) {
+            /* An un-repainted tile is wrong but visible, and it beats a hole in
+             * the terrain: keep it, and say so once. */
+            if (!state.blendWarned) {
+                state.blendWarned = true;
+                pushError('could not repaint the blended tiles of ' + url.slice(0, 120) + ': ' +
+                    ((error && error.message) || error));
+            }
+            return payload;
+        });
+    }
+
     function registerProtocols(maplibre) {
         if (state.protocols || !maplibre || typeof maplibre.addProtocol !== 'function') return;
         state.protocols = true;
@@ -512,7 +563,11 @@
             var layer = MIRROR.layerByKey(key);
             if (!layer) return Promise.reject(new Error('[Map3D] the 2D layer behind ' + key + ' is gone'));
             var url = MIRROR.tileUrlFor(layer, z, x, y);
-            if (url) return fetchTile(url, abortController);
+            if (url) {
+                return fetchTile(url, abortController).then(function (tile) {
+                    return blendedTile(layer, url, tile.data).then(function (data) { return { data: data }; });
+                });
+            }
             /* No URL: the layer draws its own tiles (canvas / custom plugin).
              * Ask the 2D layer for these pixels instead of re-implementing it. */
             if (typeof MIRROR.renderTile === 'function') {
@@ -997,6 +1052,8 @@
         }
         if (entry.sourceIds) {
             entry.sourceIds.forEach(function (sourceId) {
+                delete state.sourceData[sourceId];
+                delete state.sourceTiles[sourceId];
                 try { if (map.getSource(sourceId)) map.removeSource(sourceId); } catch (e) { /* ignore */ }
             });
         }
@@ -1005,11 +1062,41 @@
         delete state.status[id];
     }
 
-    function setSourceTiles(sourceId, tiles) {
+    /* MapLibre re-parses whatever setData() is handed, and sync() runs on every
+     * pan, panel change and 1.5 s poll. The mirror hands out the *identical*
+     * GeoJSON object while a layer has not changed (its group cache), so
+     * re-uploading it would reparse a 20 000-feature Roman-roads bundle on every
+     * moveend — the “3D crawls while the roads are on” report. */
+    function setSourceData(sourceId, data) {
+        if (!map) return false;                       /* 3D closed: nothing to upload to */
         var source = map.getSource(sourceId);
         if (!source) return false;
+        if (state.sourceData[sourceId] === data) return true;
         try {
-            if (typeof source.setTiles === 'function') { source.setTiles(tiles); return true; }
+            source.setData(data);
+            state.sourceData[sourceId] = data;
+        } catch (e) { return false; }
+        return true;
+    }
+
+    /* setTiles() re-loads the whole source — every visible tile is asked for
+     * again, and MapLibre aborts the requests already in flight. Renderers run
+     * on every pan, panel change and 1.5 s poll, so a steady-state sync must not
+     * call it: the template is remembered, and only a real change (or a forced
+     * reload after a host healed) reaches the map. Reloading every 1.5 s is what
+     * made the LiDAR layers look like they never finish loading in 3D. */
+    function setSourceTiles(sourceId, tiles, force) {
+        if (!map) return false;                       /* 3D closed: nothing to reload */
+        var source = map.getSource(sourceId);
+        if (!source) return false;
+        var key = (tiles || []).join('|');
+        if (!force && state.sourceTiles[sourceId] === key) return true;
+        try {
+            if (typeof source.setTiles === 'function') {
+                source.setTiles(tiles);
+                state.sourceTiles[sourceId] = key;
+                return true;
+            }
         } catch (e) { /* ignore */ }
         return false;
     }
@@ -1033,7 +1120,7 @@
         } else {
             try {
                 var current = map.getSource(sourceId).tiles || [];
-                if (current[0] !== spec.tiles[0]) setSourceTiles(sourceId, spec.tiles);
+                if (current[0] !== spec.tiles[0]) setSourceTiles(sourceId, spec.tiles, true);
                 if (typeof map.getSource(sourceId).setMaxZoom === 'function') { /* MapLibre updates via source reload */ }
             } catch (e) { /* ignore */ }
         }
@@ -1052,6 +1139,9 @@
         state.status[entry.id] = {
             state: 'on',
             mode: viaProtocol ? 'live 2D layer' : (shouldProxy(hostOfUrl(tiles[0])) ? 'proxy' : 'direct'),
+            /* The 2D look of these layers comes from a CSS blend mode MapLibre
+             * lacks; the tiles are repainted instead (see blendedTile). */
+            blend: item.blend || null,
             kind: item.kind,
             mirrored: true,
             defId: item.defId || null,
@@ -1166,9 +1256,10 @@
         var sourceId = entry.id + '-src';
         var layerId = entry.id;
         if (map.getSource(sourceId)) {
-            try { map.getSource(sourceId).setData(item.geojson); } catch (e) { /* ignore */ }
+            setSourceData(sourceId, item.geojson);
         } else {
             map.addSource(sourceId, { type: 'geojson', data: item.geojson });
+            state.sourceData[sourceId] = item.geojson;
         }
         if (!map.getLayer(layerId)) {
             var paint = {
@@ -1261,9 +1352,10 @@
         var item = entry.item;
         var sourceId = entry.id + '-src';
         if (map.getSource(sourceId)) {
-            try { map.getSource(sourceId).setData(item.geojson); } catch (e) { /* ignore */ }
+            setSourceData(sourceId, item.geojson);
         } else {
             map.addSource(sourceId, { type: 'geojson', data: item.geojson });
+            state.sourceData[sourceId] = item.geojson;
         }
         var layerIds = vectorLayersFor(entry, sourceId);
         state.status[entry.id] = { state: 'on', mode: 'direct', kind: 'vector', mirrored: true, label: item.label, features: (item.geojson.features || []).length };
@@ -1308,9 +1400,10 @@
             iconId = ensureImage(iconSpec.url, function () { scheduleSync(); });
         }
         if (map.getSource(sourceId)) {
-            try { map.getSource(sourceId).setData(data); } catch (e) { /* ignore */ }
+            setSourceData(sourceId, data);
         } else {
             map.addSource(sourceId, { type: 'geojson', data: data });
+            state.sourceData[sourceId] = data;
         }
         var ids = [];
         var circleId = entry.id + '-dot';
@@ -1383,10 +1476,11 @@
             clusterMaxZoom: Math.max(0, Math.min(20, item.cluster.maxZoom))
         };
         if (map.getSource(sourceId)) {
-            try { map.getSource(sourceId).setData(item.geojson); } catch (e) { /* ignore */ }
+            setSourceData(sourceId, item.geojson);
             try { map.getSource(sourceId).setClusterOptions({ clusterRadius: spec.clusterRadius, clusterMaxZoom: spec.clusterMaxZoom }); } catch (e) { /* ignore */ }
         } else {
             map.addSource(sourceId, spec);
+            state.sourceData[sourceId] = item.geojson;
         }
         var ids = [];
         var ringId = entry.id + '-ring';
@@ -1484,6 +1578,14 @@
         var lmap = leafletMap();
         if (!lmap) return;
         var result = MIRROR.collect(lmap);
+        /* Whatever the deck budget had to leave out is reported once, so a layer
+         * that is visible in 2D and missing in 3D explains itself in
+         * status().errors instead of being silently absent. */
+        (result.capped || []).forEach(function (line) {
+            if (state.cappedSeen[line]) return;
+            state.cappedSeen[line] = true;
+            pushError(line);
+        });
         state.mirror = result;
     }
 
@@ -1915,6 +2017,11 @@
         state.bound = {};
         state.images = {};
         state.pendingImages = {};
+        state.sourceData = {};
+        state.sourceTiles = {};
+        state.blendCache = {};
+        state.blendWarned = false;
+        state.cappedSeen = {};
         popup = null;
         hideVeil();
         document.body.classList.remove('is-3d');
@@ -2037,8 +2144,13 @@
             directHosts: Object.keys(state.directHosts),
             deckOrder: state.deckOrder || [],
             mirrored: state.mirror.items.map(function (item) {
-                return { id: 'm3d-2d-' + item.key, kind: item.kind, z: item.z, opacity: item.opacity, label: item.label, live: !!item.layer };
+                return { id: 'm3d-2d-' + item.key, kind: item.kind, z: item.z, opacity: item.opacity,
+                    label: item.label, blend: item.blend || null, features: item.count || null, live: !!item.layer };
             }),
+            /* Blended (CSS-emulated) tiles repainted this session — a support
+             * report should show the LiDAR hillshades actually being served. */
+            retintedTiles: state.retintedTiles,
+            capped: state.mirror.capped || [],
             unsupported3d: state.mirror.unsupported,
             layers: REGISTRY.ordered().map(function (def) {
                 var entry = state.status[def.id] || null;
@@ -2118,7 +2230,13 @@
         getLastError: function () { return state.lastError || ''; },
         _deckOrder: computeDeckOrder,
         _mirror: function () { collectMirror(); return state.mirror; },
-        _fetchTile: fetchTile
+        _fetchTile: fetchTile,
+        /* CSS-blend emulation (see blendedTile) and the upload cache: exposed so
+         * the suite can prove a blended tile is really repainted, and cached,
+         * without a GPU. */
+        _blendedTile: blendedTile,
+        _setSourceData: setSourceData,
+        _setSourceTiles: setSourceTiles
     };
 
     root.DetectLabMap3D = api;

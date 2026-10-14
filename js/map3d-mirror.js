@@ -81,6 +81,48 @@
     }
     stamp.counter = 0;
 
+    /* ── budget ─────────────────────────────────────────────────────────────
+       A group may hold tens of thousands of child layers: the Roman road
+       network (js/map-app.js) adds ONE L.polyline per road segment, and the
+       Babel/battle/patrimoniu layers add thousands of markers. Mirroring such
+       a group child by child produced one 3D source + one MapLibre layer per
+       child — hundreds of thousands of them — and the tab died while the deck
+       was being built (a full re-walk every 1.5 s on top of it). Siblings that
+       draw the same way are now merged into a single GeoJSON item per chunk,
+       the result is cached on the group, and the deck has a hard item budget so
+       no 2D layer can ever blow the 3D view up again. */
+    var MAX_BUNDLE_FEATURES = 20000;   /* features in one merged 3D source    */
+    var MAX_BUNDLES_PER_GROUP = 24;    /* merged sources taken from one group */
+    var MAX_ITEMS = 400;               /* mirrored items in the whole deck    */
+
+    /* ── CSS-blended rasters ────────────────────────────────────────────────
+       Some 2D layers are only readable because CSS blends them into the base
+       map (css/styles.css):
+           .lidar-ro2m-tiles, .lidar-ro1m-tiles { filter: invert(1); mix-blend-mode: screen; }
+       The ArcGIS hillshades behind them are white-backed, so 2D shows the
+       relief lines glowing over the satellite imagery. MapLibre has no blend
+       modes: mirrored as-is, the same tiles cover the terrain with an opaque
+       white sheet — which is exactly what “the Romanian LiDAR does not load in
+       3D” looked like. The descriptor carries the blend and the pixels are
+       repainted here (blendPixels / retintTile below, driven by the viewer's
+       dl2d:// protocol): white lines with alpha = 1 − luminance, which IS
+       screen(base, invert(pixel)) — pixel for pixel. */
+    var BLEND_BY_CLASS = {
+        'lidar-ro1m-tiles': 'invert-screen',
+        'lidar-ro2m-tiles': 'invert-screen'
+    };
+
+    function blendOf(layer) {
+        var def = layer && layer._dlBlend;
+        if (def) return def;
+        var className = (layer && layer.options && layer.options.className) || '';
+        var names = String(className).split(/\s+/);
+        for (var i = 0; i < names.length; i += 1) {
+            if (names[i] && BLEND_BY_CLASS[names[i]]) return BLEND_BY_CLASS[names[i]];
+        }
+        return null;
+    }
+
     function keyOf(layer) { return '2d.' + stamp(layer); }
 
     function templateFor(layer) {
@@ -479,6 +521,13 @@
                     }, 'image/png');
                     return;
                 }
+                if (canvas.convertToBlob) {            /* OffscreenCanvas */
+                    canvas.convertToBlob({ type: 'image/png' }).then(function (blob) {
+                        if (!blob) { reject(new Error('tile canvas produced no PNG')); return; }
+                        blob.arrayBuffer().then(resolve, reject);
+                    }, reject);
+                    return;
+                }
                 var url = canvas.toDataURL('image/png');
                 resolve(dataUrlToBytes(url));
             } catch (e) { reject(e); }
@@ -510,6 +559,114 @@
         return canvasToBytes(canvas);
     }
 
+    /* ── CSS blend modes, repainted into the pixels ─────────────────────────
+     * css/styles.css paints the Romanian 1 m / 2 m LiDAR hillshades with
+     * `filter: invert(1); mix-blend-mode: screen`. MapLibre has neither blend
+     * modes nor this build's `raster-color`, so a mirrored tile of those layers
+     * arrives as the service sent it: an opaque white sheet that hides the
+     * terrain — the “LiDAR layers never load in 3D” report.
+     *
+     * Screen is exactly reproducible in the pixels. Drawing the tile with
+     * source alpha `a` and colour `c` over a base `b` gives
+     *     (1 − a)·b + a·[1 − (1 − b)·c]                     (screen of invert)
+     * and painting white with alpha `a·(1 − c)` gives
+     *     (1 − a·(1 − c))·b + a·(1 − c)
+     * which is the same value for every `b`. So repainting the tile as white
+     * with alpha = 1 − luminance reproduces the 2D look over any base, not just
+     * a dark one. Grayscale hillshades — what these services return — come out
+     * pixel-exact; only a colourful tile differs, and only where its own
+     * channels disagree.
+     * ─────────────────────────────────────────────────────────────────────── */
+
+    /** The one blend this code can emulate, applied to RGBA pixels in place. */
+    function blendPixels(frame, blend) {
+        if (!frame || blend !== 'invert-screen') return frame;
+        var d = frame.data || frame;
+        for (var i = 0; i < d.length; i += 4) {
+            var alpha = d[i + 3];
+            /* Rec. 601 luma: the weights CSS's invert()/screen pair behaves
+             * like on a gray tile, and within a rounding step on any other. */
+            var luma = (d[i] * 77 + d[i + 1] * 150 + d[i + 2] * 29) >> 8;
+            d[i] = 255;
+            d[i + 1] = 255;
+            d[i + 2] = 255;
+            d[i + 3] = ((alpha * (255 - luma)) + 127) / 255 | 0;
+        }
+        return frame;
+    }
+
+    function newCanvas(width, height) {
+        var canvas = null;
+        try {
+            if (typeof root.OffscreenCanvas === 'function') canvas = new root.OffscreenCanvas(width, height);
+        } catch (e) { canvas = null; }
+        if (!canvas) {
+            var doc = root.document;
+            canvas = doc && doc.createElement ? doc.createElement('canvas') : null;
+            if (!canvas) return null;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        return canvas;
+    }
+
+    /** Draw any pixel source (bytes, <img>, ImageBitmap, canvas) into a canvas. */
+    function toCanvas(source, size) {
+        if (source && typeof source.getContext === 'function') return Promise.resolve(source);
+        var fallback = size || 256;
+        function draw(image) {
+            var width = image.naturalWidth || image.width || fallback;
+            var height = image.naturalHeight || image.height || fallback;
+            var canvas = newCanvas(width, height);
+            if (!canvas) return Promise.reject(new Error('cannot repaint the tile (no canvas)'));
+            var ctx = canvas.getContext('2d');
+            try { ctx.drawImage(image, 0, 0, width, height); }
+            catch (e) { return Promise.reject(e); }
+            return canvas;
+        }
+        if (source && (source.naturalWidth || source.width)) return Promise.resolve(draw(source));
+        var bytes = source;
+        if (bytes && bytes.data !== undefined) bytes = bytes.data;      /* {data: ArrayBuffer} */
+        if (!bytes) return Promise.reject(new Error('no tile pixels to repaint'));
+        var blob = null;
+        try { blob = new root.Blob([bytes], { type: 'image/png' }); }
+        catch (e) { blob = null; }
+        if (!blob) return Promise.reject(new Error('cannot repaint the tile (no Blob)'));
+        if (typeof root.createImageBitmap === 'function') {
+            return root.createImageBitmap(blob).then(draw);
+        }
+        return new Promise(function (resolve, reject) {
+            var url = root.URL && root.URL.createObjectURL ? root.URL.createObjectURL(blob) : '';
+            if (!url) { reject(new Error('cannot repaint the tile (no image decoder)')); return; }
+            var img = new root.Image();
+            img.onload = function () {
+                try { root.URL.revokeObjectURL(url); } catch (e) { /* ignore */ }
+                resolve(draw(img));
+            };
+            img.onerror = function () {
+                try { root.URL.revokeObjectURL(url); } catch (e) { /* ignore */ }
+                reject(new Error('the tile could not be decoded for repainting'));
+            };
+            img.src = url;
+        });
+    }
+
+    /**
+     * Repaint one tile for a layer whose 2D look comes from a CSS blend mode.
+     * `payload` is what the service sent (ArrayBuffer / typed array), a tile the
+     * layer drew (canvas) or an <img>/ImageBitmap. Resolves with PNG bytes.
+     */
+    function retintTile(payload, size, blend) {
+        if (!blend) return Promise.resolve(payload);
+        return toCanvas(payload, size).then(function (canvas) {
+            var ctx = canvas.getContext('2d');
+            var frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            blendPixels(frame, blend);
+            ctx.putImageData(frame, 0, 0);
+            return canvasToBytes(canvas);
+        });
+    }
+
     /**
      * Render one tile through the Leaflet layer itself.
      * Resolves with the PNG bytes, exactly as the 2D map would have drawn them.
@@ -521,6 +678,17 @@
         }
         var size = 256;
         try { if (layer.getTileSize) size = layer.getTileSize().x || 256; } catch (e) { size = 256; }
+        /* Leaflet's own helpers (L.GridLayer._tileCoordsToBounds, which every
+           country module calls from tileUrl) expect an L.Point with the zoom on
+           it — a plain {x,y,z} throws “coords.scaleBy is not a function” and
+           every tile of that layer came out blank in 3D. */
+        var coords = { x: x, y: y, z: z };
+        try {
+            if (Leaflet && typeof Leaflet.point === 'function') {
+                coords = Leaflet.point(x, y);
+                coords.z = z;
+            }
+        } catch (e) { coords = { x: x, y: y, z: z }; }
         return new Promise(function (resolve, reject) {
             var shim = Object.create(layer);
             shim._tileZoom = z;
@@ -538,6 +706,8 @@
                 root.clearTimeout(timer);
                 if (!tile) { reject(new Error('the 2D layer produced no tile')); return; }
                 try {
+                    var blend = blendOf(layer);
+                    if (blend) { retintTile(tile, size, blend).then(resolve, reject); return; }
                     if (tile.getContext) { canvasToBytes(tile).then(resolve, reject); return; }
                     imageToBytes(tile, size).then(resolve, reject);
                 } catch (e) { reject(e); }
@@ -545,7 +715,7 @@
 
             var tile = null;
             try {
-                tile = layer.createTile.call(shim, { x: x, y: y, z: z }, function (error) {
+                tile = layer.createTile.call(shim, coords, function (error) {
                     if (error) {
                         if (!settled) { settled = true; root.clearTimeout(timer); reject(error); }
                         return;
@@ -643,6 +813,7 @@
             return Object.assign(base, {
                 template: templateFor(layer),
                 render: (layer.getTileUrl || layer._url) ? 'url' : 'canvas',
+                blend: blendOf(layer),
                 tileSize: size,
                 minzoom: layer.options && layer.options.minZoom != null ? Number(layer.options.minZoom) : 0,
                 maxzoom: layer.options && (layer.options.maxNativeZoom || layer.options.maxZoom) != null
@@ -751,15 +922,137 @@
         }
     }
 
+    /* ── merging siblings ───────────────────────────────────────────────────
+       Items that draw identically are concatenated into one GeoJSON feature
+       collection, so a group of N polylines becomes a handful of 3D sources
+       instead of N of them. Content stays identical: same features, same paint,
+       same order. */
+    function paintSignature(item) {
+        return JSON.stringify({
+            kind: item.kind,
+            z: item.z,
+            pane: item.pane,
+            opacity: item.opacity,
+            paints: item.paints || null,
+            types: item.types || null,
+            icon: item.icon || null,
+            popup: item.popup || '',
+            tooltip: item.tooltip || ''
+        });
+    }
+
+    function canMerge(bundle, item) {
+        if (bundle.kind !== item.kind) return false;
+        if (bundle.sig !== paintSignature(item)) return false;
+        if ((bundle.geojson.features || []).length + (item.geojson && item.geojson.features || []).length
+                > MAX_BUNDLE_FEATURES) return false;
+        return true;
+    }
+
+    function bundleSiblings(items, parent, key) {
+        var out = [];
+        var bundles = 0;
+        var dropped = 0;
+        var current = null;
+        items.forEach(function (item) {
+            var mergeable = item.kind === 'vector' || item.kind === 'markers' || item.kind === 'heat';
+            if (!mergeable || !item.geojson) {
+                current = null;
+                out.push(item);
+                return;
+            }
+            if (current && canMerge(current, item)) {
+                var features = item.geojson.type === 'FeatureCollection' ? item.geojson.features : [item.geojson];
+                (features || []).forEach(function (f) { current.geojson.features.push(f); });
+                current.count += (features || []).length;
+                return;
+            }
+            if (bundles >= MAX_BUNDLES_PER_GROUP) { dropped += 1; return; }
+            bundles += 1;
+            var first = item.geojson.type === 'FeatureCollection' ? item.geojson.features : [item.geojson];
+            current = Object.assign({}, item, {
+                key: (key || keyOf(parent)) + '/b' + bundles,
+                layer: parent || item.layer || null,
+                geojson: featureCollection((first || []).slice()),
+                count: (first || []).length,
+                sig: paintSignature(item),
+                bundled: true
+            });
+            out.push(current);
+        });
+        /* The label of a bundle says how much of the group it carries, so the
+           3D status panel is honest about what was merged. */
+        out.forEach(function (item) {
+            if (!item.bundled || item.count == null) return;
+            if (item.count === 1) return;
+            item.label = (item.label || 'layer') + ' (' + item.count.toLocaleString() + ' features)';
+        });
+        return { items: out, dropped: dropped };
+    }
+
+    /**
+     * Walk a group, with the merged result cached on the group.
+     *
+     * The 3D view re-collects the whole 2D map every 1.5 s; describing 100 000
+     * polylines on every pass is what made the page unusable while the Roman
+     * roads were on, even after the fixes to the deck itself. The cache is
+     * keyed by the group's own child count, its pane and the paint of its first
+     * child (the opacity slider rewrites every child's style, so a change is
+     * visible there), and any caller that knows better can drop it with
+     * DetectLabMirror.invalidate(layer).
+     */
+    /* The paint of one child, cheaply — the opacity slider rewrites every
+       child's style without changing the child count, so this is what makes the
+       cached bundle notice. */
+    function styleStamp(child) {
+        var o = (child && child.options) || {};
+        var icon = o.icon && o.icon.options;
+        return [o.color, o.weight, o.opacity, o.fillColor, o.fillOpacity, o.radius,
+            o.dashArray, o.lineCap, o.lineJoin, icon && (icon.iconUrl || icon.html)]
+            .join(',');
+    }
+
+    function walkGroup(map, layer, out, depth) {
+        var childrenLength = 0, first = null, last = null;
+        try {
+            var children = layer.getLayers ? layer.getLayers() : null;
+            childrenLength = children ? children.length : 0;
+            if (childrenLength) { first = children[0]; last = children[childrenLength - 1]; }
+        } catch (e) { childrenLength = 0; }
+
+        var cache = layer._dlMirrorBundle;
+        /* NB: not named `stamp` — that is the id helper above. */
+        var cacheKey = [
+            childrenLength,
+            first ? stamp(first) : '',
+            last ? stamp(last) : '',
+            paneZIndex(map, layer),
+            opacityOf(layer),
+            styleStamp(first)
+        ].join('|');
+        if (cache && cache.stamp === cacheKey && cache.depth === depth) {
+            cache.items.forEach(function (item) { out.push(item); });
+            return cache.dropped || 0;
+        }
+
+        var collected = [];
+        try {
+            layer.eachLayer(function (child) { walk(map, child, collected, depth + 1); });
+        } catch (e) { /* ignore */ }
+        var bundled = bundleSiblings(collected, layer, keyOf(layer));
+        layer._dlMirrorBundle = { stamp: cacheKey, depth: depth, items: bundled.items, dropped: bundled.dropped };
+        bundled.items.forEach(function (item) { out.push(item); });
+        return bundled.dropped;
+    }
+
     function walk(map, layer, out, depth) {
         if (!layer || depth > 4) return;
         var Leaflet = L();
         var kind = classify(layer, Leaflet);
         if (kind === 'group') {
-            try {
-                layer.eachLayer(function (child) { walk(map, child, out, depth + 1); });
-            } catch (e) { /* ignore */ }
-            return;
+            /* The dropped count must travel back: it is what tells the user that
+             * the 3D deck could not carry every sibling of this group. */
+            return walkGroup(map, layer, out, depth);
         }
         if (kind === 'cluster') {
             /* A cluster group renders its children itself: mirror it as one
@@ -772,16 +1065,28 @@
         if (descriptor) out.push(descriptor);
     }
 
+    /* What the budget had to leave out, as human-readable lines: shown by the
+     * 3D status panel and quoted by the support report. */
+    var lastCapped = [];
+
     function collect(map) {
         if (!map || typeof map.eachLayer !== 'function') {
-            return { items: [], unsupported: [], signature: '', byKey: {} };
+            return { items: [], unsupported: [], capped: [], signature: '', byKey: {} };
         }
         var items = [];
         var unsupported = [];
+        var capped = [];
+        var droppedChildren = 0;
+        var skippedLayers = 0;
         byKey = {};
         map.eachLayer(function (layer) {
+            /* A map with thousands of *top-level* layers (no group to merge
+             * within) would otherwise be described in full before the deck
+             * budget could drop it — the work, not just the deck, has to be
+             * bounded. */
+            if (items.length > MAX_ITEMS * 4) { skippedLayers += 1; return; }
             var before = items.length;
-            try { walk(map, layer, items, 0); }
+            try { droppedChildren += walk(map, layer, items, 0) || 0; }
             catch (e) { failures[keyOf(layer)] = String((e && e.message) || e); }
             if (items.length === before) {
                 var d = safeDescribe(map, layer);
@@ -791,6 +1096,19 @@
                 }
             }
         });
+        if (droppedChildren > 0) {
+            capped.push(droppedChildren.toLocaleString() + ' sibling layer(s) beyond the 3D merge budget were ' +
+                'left out of the 3D view (they stay on the 2D map)');
+        }
+        if (skippedLayers > 0) {
+            capped.push(skippedLayers.toLocaleString() + ' further 2D layer(s) were not even examined: the 3D ' +
+                'deck budget of ' + MAX_ITEMS + ' was already full');
+        }
+        if (items.length > MAX_ITEMS) {
+            capped.push((items.length - MAX_ITEMS).toLocaleString() + ' mirrored layer(s) beyond the 3D deck ' +
+                'budget of ' + MAX_ITEMS + ' were left out of the 3D view');
+            items = items.slice(0, MAX_ITEMS);
+        }
         var unique = [];
         var seen = {};
         items.forEach(function (item) {
@@ -801,10 +1119,12 @@
             byKey[item.key] = item.layer || null;
         });
         items = unique;
+        lastCapped = capped;
         return {
             items: items,
-            unsupported: unsupported,
-            signature: signatureOf(items) + '|' + unsupported.join(','),
+            unsupported: unsupported.concat(capped),
+            capped: capped,
+            signature: signatureOf(items) + '|' + unsupported.join(',') + '|' + capped.join(','),
             byKey: byKey
         };
     }
@@ -821,6 +1141,20 @@
 
     function isRotated(layer) { return isRotatedOverlay(layer); }
 
+    /* Drop the merged cache of a group (and of its parents) after changing its
+       children without touching the count — a style rewrite of every child is
+       picked up by the paint stamp, an in-place geometry swap is not. */
+    function invalidate(layer) {
+        var node = layer;
+        var guard = 0;
+        while (node && guard < 8) {
+            if (node._dlMirrorBundle) node._dlMirrorBundle = null;
+            node = node._group || node._parentGroup || null;
+            guard += 1;
+        }
+        return true;
+    }
+
     root.DetectLabMirror = {
         VERSION: VERSION,
         collect: collect,
@@ -835,6 +1169,16 @@
         isRotated: isRotated,
         errors: function () { return Object.assign({}, failures); },
         renderTile: renderTile,
+        retintTile: retintTile,
+        blendPixels: blendPixels,
+        invalidate: invalidate,
+        blendOf: blendOf,
+        capped: function () { return lastCapped.slice(); },
+        BUDGET: {
+            maxBundleFeatures: MAX_BUNDLE_FEATURES,
+            maxBundlesPerGroup: MAX_BUNDLES_PER_GROUP,
+            maxItems: MAX_ITEMS
+        },
         PANE_Z: PANE_Z
     };
 }(typeof window !== 'undefined' && window ? window

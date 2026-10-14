@@ -1,10 +1,12 @@
-// Regression suite for js/wms-health.js — the third-party WMS availability
-// guard that keeps a silently-broken CENAGIS / IH PAN layer from flooding the
-// network with undecodable “200 OK” tiles.
+// Regression suite for js/wms-health.js — the availability guard that keeps a
+// silently-broken third-party WMS/WMTS layer (CENAGIS / IH PAN and every other
+// watched provider) from flooding the network with undecodable “200 OK” tiles.
 //
 // Covers: the one-probe gate on layer add, the cooldown, tile-error tripping,
-// retry, the offline path, the GetMap URL the probe builds, and the wiring in
-// index.html / sw.js / js/map-app.js / js/historical-eu-maps.js.
+// retry, the offline path, the GetMap URL the probe builds, the provider named
+// in the notice, registry-driven row resolution, watch-only hosts, the
+// configuration-error path (markUnavailable) and the wiring in index.html /
+// sw.js / js/map-app.js / js/historical-eu-maps.js.
 //
 // Usage: node test-wms-health.js
 'use strict';
@@ -14,7 +16,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-console.log('[Test] WMS availability guard (CENAGIS / IH PAN)...');
+console.log('[Test] WMS availability guard (third-party providers)...');
 
 const read = function (p) { return fs.readFileSync(path.join(__dirname, p), 'utf8'); };
 
@@ -27,18 +29,18 @@ const mapApp = read('js/map-app.js');
 const histEu = read('js/historical-eu-maps.js');
 const registry = read('js/layer-registry.js');
 
-const guardTag = indexHtml.indexOf('js/wms-health.js?v=20261013-wms-guard');
+const guardTag = indexHtml.indexOf('js/wms-health.js?v=20261014-guard-watch');
 assert(guardTag !== -1, 'index.html loads the versioned WMS guard');
 assert(guardTag > indexHtml.indexOf('js/leaflet.js'), 'the guard loads after Leaflet');
 assert(guardTag < indexHtml.indexOf('js/map-app.js?v=20261014-search-exit-3d'),
     'the guard loads before map-app.js creates the CENAGIS layers');
 assert(guardTag < indexHtml.indexOf('js/historical-eu-maps.js?v=20261013-flat-hist-maps'),
     'the guard loads before the country-map catalog wraps it');
-assert(swJs.includes('js/wms-health.js?v=20261013-wms-guard'), 'sw.js precaches the guard');
+assert(swJs.includes('js/wms-health.js?v=20261014-guard-watch'), 'sw.js precaches the guard');
 assert(swJs.includes('js/map-app.js?v=20261014-search-exit-3d'), 'sw.js precaches the re-versioned map app');
 assert(swJs.includes('js/historical-eu-maps.js?v=20261013-flat-hist-maps'), 'sw.js precaches the re-versioned catalog');
 const shellVersion = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
-assert(shellVersion >= 191, 'sw.js cache is v191 or newer so installed PWAs pick the guard up');
+assert(shellVersion >= 201, 'sw.js cache is v201 or newer so installed PWAs pick the provider-aware guard up');
 console.log('  ✓ index.html / sw.js load and precache the guard in order');
 
 // Premium panel: every CENAGIS layer names its row + switch for the guard.
@@ -62,6 +64,30 @@ assert(histEu.includes('layer._detectlabUiKeys = [mapKey];') &&
        histEu.includes('layer._detectlabUiTitle = mapMeta.title'),
     'the country catalog hands the guard its row key and display title');
 console.log('  ✓ app modules tag their CENAGIS layers for the guard');
+
+// Every third-party WMS/WMTS host the registry uses must be listed in HOSTS,
+// so a new layer cannot be added without the guard noticing it. The hosts of
+// the registry's WMS/WMTS/dynamic definitions are the contract; same-origin
+// (/api/…) routes are excluded because they answer a JSON error themselves.
+const DL_MOD = require('./js/layer-registry.js');
+const guardSource = read('js/wms-health.js');
+const missingHosts = [];
+DL_MOD.ordered().forEach(function (def) {
+    if (['wms', 'wmts', 'dynamic'].indexOf(def.kind) === -1) return;
+    const url = String(def.url || '');
+    if (!url || url.charAt(0) === '/') return;
+    const host = (url.match(/^https?:\/\/([^/?#]+)/i) || [])[1];
+    if (!host) return;
+    if (guardSource.indexOf("'" + host + "'") === -1) missingHosts.push(def.id + ' → ' + host);
+});
+assert(missingHosts.length === 0,
+    'every third-party endpoint is in the guard HOSTS map; missing: ' + missingHosts.join(', '));
+// And the notice is not hard-coded to one provider any more.
+assert(!/The map provider’s server \(CENAGIS/.test(guardSource),
+    'the notice text names the failing provider instead of hard-coding CENAGIS');
+assert(/providerFor: providerFor/.test(guardSource) && /markUnavailable: markUnavailable/.test(guardSource),
+    'the guard exposes providerFor() and markUnavailable() to the modules');
+console.log('  ✓ every third-party WMS/WMTS host of the registry is watched');
 
 // ══════════════════════════════════════════════════════════════
 // 2. Sandbox — a stub DOM + a stub Leaflet good enough for the guard
@@ -129,6 +155,28 @@ function matches(el, sel) {
     return false;
 }
 
+/* A `lidar-country-row` / premium row shape: <div id="lidarXRow"><label>
+   <input id="lidarXToggle"></label></div>, with the parentElement links the
+   guard walks to find the row of a switch. */
+function addCountryRow(doc, spec) {
+    const row = doc.createElement('div');
+    row.id = spec.rowId;
+    row.className = spec.className || 'lidar-country-row';
+    const label = doc.createElement('label');
+    const toggle = doc.createElement('input');
+    toggle.id = spec.toggleId;
+    toggle.type = 'checkbox';
+    toggle.checked = false;
+    label.parentElement = row;
+    toggle.parentElement = label;
+    row.appendChild(label);
+    doc.body.appendChild(row);
+    doc._all.push(row, toggle);
+    doc._byId[toggle.id] = toggle;
+    doc._byId[row.id] = row;
+    return { row, toggle };
+}
+
 function makeDocument(catalog) {
     const byId = {};
     const all = [];
@@ -156,6 +204,12 @@ function makeDocument(catalog) {
         // Legacy path — the guard prefers window.Event and falls back here.
         createEvent: function () { return { type: '', initEvent(t) { this.type = t; } }; }
     };
+    doc._byId = byId;
+    doc._all = all;
+    addCountryRow(doc, { rowId: 'lidarFrLidarRow', toggleId: 'lidarFrLidarToggle', className: 'lidar-country-row' });
+    addCountryRow(doc, { rowId: 'lidarDkLidarRow', toggleId: 'lidarDkLidarToggle', className: 'lidar-country-row' });
+    addCountryRow(doc, { rowId: 'lidarNoLidarRow', toggleId: 'lidarNoLidarToggle', className: 'lidar-country-row' });
+    addCountryRow(doc, { rowId: 'austrianMapRow', toggleId: 'austrianMapToggle' });
     Object.keys(catalog).forEach((key) => {
         const row = makeEl('div');
         row.className = 'cenagis-map-row hist-eu-map-row';
@@ -269,11 +323,30 @@ function makeMap() {
     return map;
 }
 
-function loadGuard() {
+function stubRegistry(defs) {
+    return {
+        get: function (id) { return defs[id] || null; },
+        matchDef: function (probe) {
+            if (!probe || !probe.url) return null;
+            return Object.keys(defs).map((k) => defs[k]).find((d) => {
+                if (!d || !d.url || d.url !== probe.url) return false;
+                if (d.layer && probe.layers && d.layer !== probe.layers) return false;
+                return true;
+            }) || null;
+        },
+        tileUrlAt: function (def, z, x, y) {
+            if (!def || !def._probe) return '';
+            return def._probe(z, x, y);
+        }
+    };
+}
+
+function loadGuard(extra) {
     const doc = makeDocument({
         mitteleuropa: { title: 'Übersichtskarte von Mitteleuropa (1893–1945)' },
         kdr100k: { title: 'Karte des Deutschen Reiches (1878–1945)' }
     });
+    if (extra && extra.registry) doc.registry = extra.registry;
     const sandbox = {
         console, setTimeout, clearTimeout, setInterval, clearInterval,
         Promise, Date, Math, JSON, encodeURIComponent, parseFloat, String, Object, Array,
@@ -287,12 +360,162 @@ function loadGuard() {
     installImageStub(sandbox);
     sandbox.L = sandbox.window.L = makeLeaflet(sandbox);
     sandbox._currentLang = function () { return 'en'; };
+    if (extra && extra.registry) sandbox.window.DetectLabLayers = extra.registry;
+    if (extra && extra.modules) Object.keys(extra.modules).forEach((k) => { sandbox.window[k] = extra.modules[k]; });
 
     const code = fs.readFileSync(path.join(__dirname, 'js/wms-health.js'), 'utf8');
     vm.createContext(sandbox);
     vm.runInContext(code, sandbox, { filename: 'js/wms-health.js' });
     assert(sandbox.DetectLabWmsHealth, 'the guard exposes window.DetectLabWmsHealth');
     return sandbox;
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// 4. Provider awareness — registry-driven rows, watch-only hosts,
+//    configuration errors, module-built probe URLs
+// ══════════════════════════════════════════════════════════════
+async function providerTests() {
+    const FRANCE = 'https://data.geopf.fr/wms-r/wms';
+    const CAST = 'https://geoserve.cast.uark.edu/geoserver/gwc/service/wms';
+    const REG = {
+        'lidar.fr-mnh': {
+            id: 'lidar.fr-mnh', url: FRANCE, layer: 'IGNF_LIDAR-HD_MNT_ELEVATION.ELEVATIONGRIDCOVERAGE.SHADOW',
+            title: { en: 'France · IGN LiDAR HD', ro: 'Franța · IGN LiDAR HD' },
+            ui: { toggle: 'lidarFrLidarToggle', select: 'franceLidarModeSelect' }
+        },
+        'hist.austrian': {
+            id: 'hist.austrian', url: 'https://services.geo-spatial.org/geoserver/eharta/wms',
+            layer: 'eharta:mozaic_austrian_200k', title: { en: 'Austrian Map 1910' },
+            ui: { toggle: 'austrianMapToggle' }
+        },
+        'lidar.dk-dhm': {
+            id: 'lidar.dk-dhm', url: '/api/geo/dk-dhm', layer: 'dhm',
+            title: { en: 'Denmark · Dataforsyningen DHM' },
+            ui: { toggle: 'lidarDkLidarToggle', select: 'denmarkLidarModeSelect' }
+        },
+        'lidar.no-hoydedata': {
+            id: 'lidar.no-hoydedata', url: 'https://hoydedata.no/arcgis/rest/services',
+            builder: { module: 'Hoydedata', fn: 'exportImageUrl', kind: 'bbox' },
+            title: { en: 'Norway · Kartverket høydedata' }, ui: { toggle: 'lidarNoLidarToggle', select: 'norwayLidarModeSelect' }
+        },
+        'lidar.nl-ahn': {
+            id: 'lidar.nl-ahn', url: 'https://ahn.arcgisonline.nl/arcgis/rest/services/Hoogtebestand',
+            builder: { module: 'AhnLidar', fn: 'exportImageUrl', kind: 'bbox' },
+            title: { en: 'Netherlands · AHN (DTM/DSM)' }, ui: { select: 'ahnModeSelect' },
+            _probe: (z, x, y) => 'https://ahn.arcgisonline.nl/arcgis/rest/services/Hoogtebestand/exportImage?bbox=' +
+                z + ',' + x + ',' + y + '&f=image'
+        }
+    };
+    const sandbox = loadGuard({ registry: stubRegistry(REG) });
+    const G = sandbox.window.DetectLabWmsHealth;
+    const map = makeMap();
+
+    // ── 4a. A failing provider that is not CENAGIS is named correctly ──
+    const fr = sandbox.L.tileLayer.wms(FRANCE, { layers: REG['lidar.fr-mnh'].layer });
+    assert(fr._detectlabWmsGuard, 'a WMS layer of any listed host is guarded automatically');
+    const frToggle = sandbox.document.getElementById('lidarFrLidarToggle');
+    frToggle.checked = true;                       // the user just switched the country row on
+    fr.onAdd(map);
+    await flush();
+    answerImage(sandbox.__images[sandbox.__images.length - 1], false);
+    await flush();
+    const frNodes = G._test.noticeNodes();
+    assert(/IGN France/.test(frNodes.body.textContent),
+        'the notice names the provider that failed (IGN France), got: ' + frNodes.body.textContent);
+    assert(!/CENAGIS/.test(frNodes.body.textContent), 'a French failure is not blamed on CENAGIS');
+    assert(/France · IGN LiDAR HD/.test(frNodes.body.textContent), 'the notice names the layer from the registry title');
+    assert(frToggle.checked === false, 'the country row switch is turned off');
+    const frRow = sandbox.document.getElementById('lidarFrLidarRow');
+    assert(frRow.getAttribute('data-wms-state') === 'down', 'the country row is marked down');
+    assert(/IGN France/.test(String(frRow.getAttribute('title'))), 'the row tooltip names the provider');
+    console.log('  ✓ a non-CENAGIS provider failure names its own provider and row');
+
+    // ── 4b. Watch-only hosts never pay for a probe and keep their switch ──
+    const cast = sandbox.L.tileLayer.wms(CAST, { layers: 'corona:product' });
+    assert(cast._detectlabGuardMode === 'watch', 'the CORONA host is watch-only');
+    const casts = sandbox.__images.length;
+    cast.onAdd(map);
+    await flush();
+    assert(sandbox.__images.length === casts, 'a watch-only layer is not probed');
+    assert(cast.addCalls === 1, 'a watch-only layer is added straight away');
+    cast.fireTiles('tileerror');
+    cast.fireTiles('tileerror');
+    cast.fireTiles('tileerror');
+    assert(G.isDownFor(cast), 'three failed tiles trip a watch-only layer');
+    assert(/CAST/.test(G._test.noticeNodes().body.textContent), 'the notice names the CORONA provider');
+    console.log('  ✓ watch-only hosts are trip-explainable without a probe or a row change');
+
+    // ── 4c. Configuration errors use their own wording, not “server down” ──
+    G.retry();
+    const dk = { _dlDefId: 'lidar.dk-dhm', _url: '/api/geo/dk-dhm', options: { layers: 'dhm' } };
+    const dkToggle = sandbox.document.getElementById('lidarDkLidarToggle');
+    dkToggle.checked = true;
+    G.markUnavailable(dk, 'The Denmark LiDAR layer is not configured on this deployment (no DATAFORSYNINGEN_TOKEN).');
+    const dkNodes = G._test.noticeNodes();
+    assert(/not configured on this deployment/.test(dkNodes.body.textContent),
+        'a configuration error keeps its own message instead of blaming the provider');
+    assert(dkToggle.checked === false, 'the unconfigured row is switched off');
+    assert(/not configured/.test(String(sandbox.document.getElementById('lidarDkLidarRow').getAttribute('title'))),
+        'the unconfigured row carries the reason');
+    assert(G.retry().indexOf('lidar.dk-dhm') !== -1, 'Retry can put the row back on the list');
+    console.log('  ✓ configuration errors (missing token) read as configuration errors');
+
+    // ── 4d. Module-built layers get a real probe URL from the registry ──
+    const ahnLayer = { _url: '', _dlDefId: 'lidar.nl-ahn', options: {}, on() {}, off() {} };
+    const ahnUrl = G.probeUrlFor(ahnLayer, map);
+    assert(/exportImage/.test(String(ahnUrl)) && /f=image/.test(String(ahnUrl)),
+        'a module-backed layer is probed through its own URL builder, got: ' + ahnUrl);
+    const guardedAhn = G.adopt(ahnLayer);
+    assert(guardedAhn && guardedAhn._detectlabWmsGuard, 'a module layer on a listed host is adopted from the live map');
+    console.log('  ✓ module-built layers are probed through the registry builder');
+
+    // ── 4e. Retry replays the app handler of a registry-defined row ──
+    // Put the row back into the state the guard left it in after 4a (switch
+    // off, key remembered) and check that Retry finds it through the registry
+    // — the country rows do not follow the `<key>Row` naming convention.
+    frToggle.events.length = 0;
+    frToggle.checked = false;
+    G._test.blocked['lidar.fr-mnh'] = true;
+    G._test.verdicts[G._test.verdictKey(fr)] = { state: 'down', at: Date.now(), reason: 'test' };
+    G.retry();
+    assert(frToggle.checked === true && frToggle.events.some((e) => e.type === 'change'),
+        'Retry switches the registry-defined row back on and replays the app handler');
+    console.log('  ✓ retry reaches rows the app named in the registry');
+
+    // ── 4f. A module that swallows tile errors reports them itself ──
+    // js/ahn-layer.js and js/hoydedata-layer.js paint a transparent tile
+    // instead of letting Leaflet fire `tileerror`, so they call
+    // DetectLabWmsHealth.noteFailure(). Three of those must trip the same path
+    // as three real tile errors.
+    G.retry();
+    const noLayer = {
+        _url: '', _dlDefId: 'lidar.no-hoydedata', options: {},
+        addCalls: 0, onCalls: 0,
+        onAdd: function () { this.addCalls++; },
+        onRemove: function () {},
+        on: function () { this.onCalls++; },
+        off: function () {}
+    };
+    const noToggle = sandbox.document.getElementById('lidarNoLidarToggle');
+    noToggle.checked = true;
+    const adopted = G.adopt(noLayer);
+    assert(adopted && adopted._detectlabWmsGuard, 'the Norway module layer is adopted');
+    assert(adopted._detectlabGuardMode === 'watch', 'adoption never probes an already-built layer');
+    assert(G.noteFailure(noLayer) === false, 'before the layer is on the map there is nothing to count');
+    noLayer.onAdd(map);
+    assert(noLayer.addCalls === 1 && noLayer.onCalls >= 2, 'a watch-mode layer is added and its tiles watched');
+    assert(G.noteFailure(noLayer) === true, 'noteFailure() reaches a watched layer');
+    G.noteFailure(noLayer);
+    assert(!G.isDownFor(noLayer), 'two swallowed failures are not yet an outage');
+    G.noteFailure(noLayer);
+    assert(G.isDownFor(noLayer), 'three swallowed failures trip the layer');
+    assert(/Kartverket|høydedata/i.test(G._test.noticeNodes().body.textContent),
+        'the notice names the Norwegian provider');
+    assert(noToggle.checked === false, 'the Norway row switch is turned off');
+    assert(G.noteFailure({}) === false && G.noteFailure(null) === false,
+        'noteFailure() is a safe no-op for anything unwatched');
+    console.log('  ✓ modules that hide tile errors feed the guard through noteFailure()');
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -449,6 +672,8 @@ function loadGuard() {
     assert(G._test.nameFor(named, 'kdr100k') === 'Karte des Deutschen Reiches (1878–1945)',
         'a key without a title falls back to its row text');
     console.log('  ✓ notice names come from the layer title, the row, or the key');
+
+    await providerTests();
 
     console.log('\n✅ test-wms-health.js passed all checks successfully.');
 })().catch(function (err) {
