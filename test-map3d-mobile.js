@@ -291,7 +291,7 @@ assert(shellVersion >= 196,
  * layout that introduced these controls. */
 const TAGS = {
     'js/layer-registry.js': '20261014-wms-audit',
-    'js/map3d-terrain.js': '20261014-3d-blend',
+    'js/map3d-terrain.js': '20261014-3d-vectors',
     'css/map3d-terrain.css': '20261014-3d-slider-layout'
 };
 ['js/map3d-terrain.js', 'js/layer-registry.js', 'css/map3d-terrain.css'].forEach(function (asset) {

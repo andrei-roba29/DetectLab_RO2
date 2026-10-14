@@ -5366,13 +5366,88 @@
                 });
             });
 
+            // ── HERITAGE → 3D BRIDGE ──
+            // Heritage points and their 600 m radii are NOT Leaflet layers:
+            // they are painted on the raw map-pane canvases above (_sitesCanvas
+            // for pins, _displayCanvas for radii) for performance. The 3D
+            // mirror walks Leaflet layers, so those two surfaces were
+            // invisible to it — only the lazy L.GeoJSON polygons (z11+) ever
+            // appeared in 3D. This invisible Leaflet layer offers the same
+            // records to the mirror (js/map3d-mirror.js: `_dl3dFeatures`) as
+            // per-feature GeoJSON: coloured points + geodesic 600 m circles.
+            // It adds no DOM and draws nothing in 2D; polygons stay out of it
+            // because they already mirror as real GeoJSON layers.
+            var _heritage3dCache = { stamp: '', geojson: null };
+            function _heritageCirclePolygon(latlng, radiusM) {
+                var coords = [];
+                var latRad = latlng.lat * Math.PI / 180;
+                var dLat = radiusM / 111320;
+                var dLng = radiusM / (111320 * Math.max(Math.abs(Math.cos(latRad)), 0.2));
+                for (var i = 0; i < 24; i++) {
+                    var a = (i / 24) * Math.PI * 2;
+                    coords.push([latlng.lng + Math.sin(a) * dLng, latlng.lat + Math.cos(a) * dLat]);
+                }
+                coords.push(coords[0].slice());
+                return coords;
+            }
+            function _heritage3dFeatures() {
+                if (!_heritageDataReady) return { geojson: { type: 'FeatureCollection', features: [] }, stamp: 'nodata' };
+                var shapeCount = 0;
+                Object.keys(_circleStore).forEach(function (k) { shapeCount += (_circleStore[k] || []).length; });
+                var stamp = [_heritagePointRecords.length, shapeCount, _circlesVisible ? 1 : 0,
+                    Math.round(FLAT_OPACITY * 100)].join('|');
+                if (_heritage3dCache.stamp === stamp && _heritage3dCache.geojson) {
+                    return { geojson: _heritage3dCache.geojson, stamp: stamp, label: 'Patrimoniu (heritage)' };
+                }
+                var features = [];
+                if (_circlesVisible) {
+                    var seenRadius = {};
+                    Object.keys(_circleStore).forEach(function (k) {
+                        (_circleStore[k] || []).forEach(function (shape) {
+                            if (!shape || shape.type !== 'circle' || !shape.latlng || features.length > 40000) return;
+                            var radius = shape.radius || 600;
+                            var key = shape.latlng.lat.toFixed(5) + ',' + shape.latlng.lng.toFixed(5) + ',' + radius;
+                            if (seenRadius[key]) return;
+                            seenRadius[key] = true;
+                            features.push({
+                                type: 'Feature',
+                                properties: { color: '#C42B2B', fillColor: '#C42B2B', fillOpacity: Math.round(FLAT_OPACITY * 100) / 100, opacity: 0.6, kind: 'radius' },
+                                geometry: { type: 'Polygon', coordinates: [_heritageCirclePolygon(shape.latlng, radius)] }
+                            });
+                        });
+                    });
+                }
+                _heritagePointRecords.forEach(function (record) {
+                    if (!record.latlng) return;
+                    var props = record.properties || {};
+                    var name = props.NUMESIT || props.Eticheta || props.Nume || props.Toponim || '';
+                    features.push({
+                        type: 'Feature',
+                        properties: {
+                            color: record.color || '#C42B2B', fillColor: record.color || '#C42B2B',
+                            radius: record.radius || 5, fillOpacity: 0.9, kind: 'site',
+                            popup: name ? '<div class="m3d-popup-body"><b>' + String(name).replace(/</g, '&lt;') + '</b></div>' : ''
+                        },
+                        geometry: { type: 'Point', coordinates: [record.latlng.lng, record.latlng.lat] }
+                    });
+                });
+                var geojson = { type: 'FeatureCollection', features: features };
+                _heritage3dCache = { stamp: stamp, geojson: geojson };
+                return { geojson: geojson, stamp: stamp, label: 'Patrimoniu (heritage)' };
+            }
+            var Heritage3dBridge = L.Layer.extend({ onAdd: function () {}, onRemove: function () {} });
+            var _heritage3dBridge = new Heritage3dBridge({ pane: 'pane_patrimoniu' });
+            _heritage3dBridge._dl3dFeatures = _heritage3dFeatures;
+            window._heritage3dBridge = _heritage3dBridge;
+
             // Single unified togglePatrimoniuLayer — handles WMS layer AND radius circles
             window.togglePatrimoniuLayer = function (on) {
                 var layer = window._patrimoniuLayer;
                 var m = window._dlMap;
                 if (!layer || !m) return;
                 if (on && !_heritageDataReady) _startLocalLayerDataLoad();
-                if (on) { layer.addTo(m); } else { m.removeLayer(layer); }
+                if (on) { layer.addTo(m); if (!m.hasLayer(_heritage3dBridge)) _heritage3dBridge.addTo(m); }
+                else { m.removeLayer(layer); if (m.hasLayer(_heritage3dBridge)) m.removeLayer(_heritage3dBridge); }
                 // Keep the WMS fallback (if active) in sync with the same toggle
                 if (window._patrimoniuWmsFallback) {
                     if (on) { window._patrimoniuWmsFallback.addTo(m); } else { m.removeLayer(window._patrimoniuWmsFallback); }
