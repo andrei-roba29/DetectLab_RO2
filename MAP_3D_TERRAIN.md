@@ -1,10 +1,11 @@
 # 3D terrain view (2D ⇄ 3D) — how it works, what is served, how to extend it
 
-*Added in `js/layer-registry.js`, `js/map3d-terrain.js`, `css/map3d-terrain.css`,
-`netlify/lib/map3d-tile.mjs`, `netlify/lib/map3d-country-modules.mjs`,
-`netlify/functions/map3d-tile.mjs`, `tools/map3d-dev-server.mjs`; wired in
-`index.html`, `sw.js`, `netlify.toml` and consumed by `js/map-app.js` /
-`js/historical-eu-maps.js`. Regression suite: `node test-map3d-terrain.js`.*
+*Added in `js/layer-registry.js`, `js/map3d-terrain.js`, `js/lidar-3d-focus.js`,
+`css/map3d-terrain.css`, `netlify/lib/map3d-tile.mjs`,
+`netlify/lib/map3d-country-modules.mjs`, `netlify/functions/map3d-tile.mjs`,
+`tools/map3d-dev-server.mjs`; wired in `index.html`, `sw.js`, `netlify.toml` and consumed by
+`js/map-app.js` / `js/historical-eu-maps.js`. Regression suites:
+`node test-map3d-terrain.js`, `node test-map3d-mobile.js`, `node test-lidar-3d-focus.js`.*
 
 **Status: all 91 registry layers are drapeable.** Nothing is left behind in 2D: the
 nine country LiDAR layers whose URL builders need a real tile bbox are draped tile by
@@ -19,7 +20,10 @@ map: a MapLibre GL JS view in which every layer that is switched on in the 2D pa
 **draped over real elevation** (a raster DEM). Nothing about the 2D view changed — the
 3D surface is simply drawn on top of it, and closing 3D removes it again.
 
-* **Toggle** – the “3D” button, or `window.DetectLabMap3D.toggle()`.
+* **Toggle** – the “3D” button, or `window.DetectLabMap3D.toggle()`. With a **LiDAR**
+  layer switched on, the button first asks *which* layer, *where* and *how far* — LiDAR in
+  3D is limited to a **10 km radius per load** and one layer at a time, and the tiles of
+  that disc are downloaded and draped before the view opens (§6.4).
 * **Camera** – opening 3D keeps the 2D centre/zoom (and Leaflet's bearing, if the
   rotation control was used); closing 3D writes the 3D camera back into Leaflet.
 * **Layers** – the *same* checkboxes decide what 3D draws. Switch a historical map on in
@@ -369,6 +373,100 @@ Romanian 1 m service) or outside its coverage, a provider answers with a blank o
 all-white tile. The 3D view draws what it was sent at that zoom; only the white *sheet*
 over the whole layer was ours to fix, and that is the blend above.
 
+### 6.4 LiDAR in 3D: one layer, one disc, prepared before the view opens
+
+**4. “Some LiDAR layers still load really slow, or look really bad, or don't load at all
+in 3D — e.g. Romania 1m/pixel agregare, AB.”** The blend and the caching above fix *how* a
+LiDAR tile is drawn, but not *how many* of them are asked for. A national LiDAR pyramid is
+not a layer, it is a few hundred thousand heavy tiles, and the user's own sub-layers
+(`ro1m`, `ro2m`, `ab`, `hd`, … in `js/map-app.js`) plus the nine country modules all sit in
+`window._lidarGroup`. Opening 3D with one switched on handed MapLibre the opening camera
+and let it ask that provider for every tile it could see, at every zoom — over one slow
+service, that is a blank sheet with a spinner behind it.
+
+`js/lidar-3d-focus.js` (loaded after the viewer, ~30 kB, no dependencies) changes the
+order of events. It installs itself as the viewer's **entry gate**
+(`DetectLabMap3D.setEntryGate`); the 3D button still calls `toggle()`/`open()`, but `open()`
+now asks the gate first and only opens when it is answered with a prepared disc:
+
+1. **The limit is stated, not implied.** A sheet over the 2D map says LiDAR in 3D loads at
+   most a **10 km radius at a time**, and asks for the point and the distance. The slider
+   is 1–10 km with 1/2/5/10 quick chips; nothing in the dialog, the plan or the viewer can
+   exceed `MAX_RADIUS_KM = 10`.
+2. **One LiDAR layer at a time.** The dialog lists every LiDAR layer the 2D map is
+   showing, as a radio group. The 2D map may stack as many as it likes (that is how the
+   products are compared); the 3D deck keeps exactly one, `status().lidar.drawn` names it
+   and `status().lidar.notes` carries `{reason: 'focused', count, kept}` for the ones left
+   out — the bar then adds “One LiDAR layer in 3D” so “my other layer is missing in 3D” is
+   answerable. The choice is remembered in the focus, so the state survives closing and
+   reopening 3D.
+3. **A point on the map**, chosen by tapping the 2D map (`window._dlLidarFocusPicking`
+   tells `js/lidar-scanner.js` to stand down while the tap belongs to the dialog). The disc
+   is drawn on the 2D map immediately — a dashed outline with a centre dot in the pane
+   `pane_lidar_3d_focus` (z 656, above every LiDAR pane), so the area being prepared is
+   visible while it downloads.
+4. **The plan.** `planDisc()` resolves the zoom at which the disc fills the viewport
+   (`zFit`), takes one level below and two above it, clips that window to the layer's own
+   `minZoom`/`maxNativeZoom`, keeps only the tiles that really intersect the disc and stops
+   at a budget (`{url: 700, canvas: 260}`, `window.DETECTLAB_LIDAR_3D` overrides). Tiles are
+   ordered **centre-first**, and what the budget had to drop is reported (`plan.trimmed`),
+   never silently lost.
+5. **The prefetch runs through the same pipeline 3D draws with.** `prefetchTiles()` calls
+   the viewer's own `fetchTile()` (so the CORS/proxy decision per host — including the WMS
+   `preferProxy` rule — is the same one the deck makes), then the same `blendedTile()`
+   repaint (a Romanian hillshade tile is repainted before it is stored) and the same disc
+   clip. Concurrency is 6 (4 on phones) on purpose: the point is a slow provider and a
+   progress bar that moves, not 200 simultaneous requests. The dialog shows
+   `{done}/{total}`, the failures and a Stop button, and the *same* count the bar will
+   report afterwards.
+6. **Only then does 3D open**, framed on the disc (`focusCamera()`) at the zoom that fits
+   it, from tiles that are already decoded and in memory.
+
+The disc is a **circle, not a rectangle**. `disc.maskTile()` (in the mirror) hands a tile
+wholly inside the disc through untouched, returns null for one the disc does not touch (the
+viewer substitutes a 1×1 transparent PNG, so the terrain under it is intact), and repaints
+only the rim tiles with a one-pixel feather. The focused 3D source is also **bounded to the
+disc's rectangle**, so MapLibre never asks outside the prepared area — and `tl2d://` tiles
+of that layer outside the disc are answered with the blank tile instead of a request.
+
+Prepared tiles live in the viewer (`state.primed` / `state.primedOut`, one FIFO slot per
+tile), byte-budgeted at 2 400 entries / 96 MB on desktop and 900 / 28 MB on phones, and they
+**survive closing 3D**: reopening on the same disc downloads nothing at all
+(`status().lidar.primed` counts them, `clearPrimed()` forgets them). Moving the disc or
+closing the focus drops the tiles of the old one.
+
+Two key spaces meet on this path and both travel with the focus: the **deck key** of a
+mirrored layer (`2d.<stamp>`, what `dl2d://` and the clip are addressed by) and the **LiDAR
+family key** the tag carries (`lidar.ro1m`, `def:lidar.fr-mnh`, what the mirror item, the
+registry and the dialog agree on). `js/map-app.js` tags every LiDAR sub-layer it builds with
+`_dlLidar = { key, label }` (next to the existing `_dlDefId`), which is where the dialog
+learns the label the user sees in the panel.
+
+Anything the viewer knows about the focus is readable without a debugger:
+
+```js
+DetectLabMap3D.status().lidar      // focus, off, drawn, notes, primed {entries,bytes,hits,budget}
+DetectLabLidar3D.status()          // the dialog: layers, plan (levels, trimmed, route), lastPrepare
+DetectLabLidar3D.MAX_RADIUS_KM     // 10
+```
+
+The 3D bar grows a LiDAR line while a disc is loaded (which layer, how wide, how many tiles
+ready) with **Change the area** and **Remove from 3D** buttons; those announce
+`detectlab:map3d-lidar-change` / `detectlab:map3d-lidar-clear` and the focus module owns the
+rest — the viewer never opens a dialog of its own. **Change the area** reopens the same
+dialog: with 3D closed it prepares a new disc before opening (`mode: 'gate'`), with 3D open
+it re-points the running view in place (`mode: 'live'`, the viewer is not reopened and the
+dialog steps aside once the new tiles are in). Removing LiDAR from 3D
+(`clearLidarFocus()`) draws neither LiDAR layer and says so.
+
+There is one state the dialog cannot reach: a LiDAR layer on the 2D map **without** a
+prepared disc (a LiDAR layer switched on while 3D is already open, or 3D opened from the
+console). The viewer then drapes **no** LiDAR layer — opening a national pyramid behind the
+user's back is exactly the load this path exists to prevent — records
+`{reason: 'unprepared', count}` in `status().lidar.notes` and the bar shows
+“LiDAR: prepare the area for 3D”, whose button is the dialog. Nothing is silently blank:
+the state is named, and it is one press away from being prepared.
+
 ## 7. Mobile — WebGL, why 3D used to snap straight back to 2D, and what changed
 
 **Symptom (iPhone Safari, mobile browser *and* installed PWA):** tapping **3D** made a
@@ -461,6 +559,24 @@ cache).
   their `capped` reports), the blend descriptor for `lidar-ro1m-tiles`, the pixel maths of
   the repaint against the CSS formula, the repaint + cache running end-to-end with the
   layer `map-app.js` really builds, and the idempotent `setData`/`setTiles` calls.
+* `node test-lidar-3d-focus.js` — LiDAR in 3D (§6.4): the wiring (`_dlLidar` tags, the
+  scanner stand-down, the version tags), the disc maths (bounds, tile windows, the
+  circle-vs-rectangle classification, the feathered rim, the blank tile), the planner (a
+  10 km disc stays bounded, the zoom window respects the layer's own limits, the order is
+  centre-first at every level, trimming is reported and counted in the estimate) and the
+  viewer end-to-end in a headless sandbox: the mirror describes both tagged layers, the
+  one-layer rule keeps exactly the focused layer and reports the rest (`focused`, `count`),
+  a LiDAR layer with **no** prepared disc is draped by nobody and reported as
+  `unprepared`, an explicit removal draws neither and says `off`, the focus clips only its
+  own layer, a prefetch over the plan makes **one request per tile and none on a second run**,
+  `isPrepared()` answers, and the entry gate is honoured (refusal keeps 3D shut, a pending
+  gate is shared, an allowed gate reaches the surface). The dialog is driven through a
+  minimal DOM: the 10 km limit and the radio group, the chips re-planning the disc, the
+  point pick (including Escape), the progress block, the 2D disc, the two ends of the
+  gate — confirm opens, cancel does not — and the bar's own two buttons: **Change the
+  area** reopening the dialog in gate mode when 3D is closed (then opening the view on the
+  prepared disc) and in live mode when 3D is open (the view stays, the focus is
+  re-pointed), and **Remove** clearing the focus and the 2D disc.
 * `node tools/probe-3d-blend.js` — the same two mechanisms with the **real Leaflet**
   bundle and the numbers that justify the budgets: the `ro1m` descriptor and tile URL,
   a 200 000-polyline featureGroup (10 bundles, 200 000 features, ~1 s for the first pass,

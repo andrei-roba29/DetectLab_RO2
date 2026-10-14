@@ -7124,7 +7124,15 @@
             function _buildLidarLeafletLayer(key, cfg) {
                 var lidarLayer = _buildLidarLeafletLayerRaw(key, cfg);
                 /* Tag only — the 2D behaviour of the layer is untouched. */
-                if (lidarLayer && key && LIDAR_DEF_IDS[key]) lidarLayer._dlDefId = LIDAR_DEF_IDS[key];
+                if (lidarLayer && key) {
+                    if (LIDAR_DEF_IDS[key]) lidarLayer._dlDefId = LIDAR_DEF_IDS[key];
+                    /* LiDAR family + human name, for the 3D focus (js/lidar-3d-focus.js)
+                     * and for the mirror (js/map3d-mirror.js → item.lidarKey): the 3D
+                     * view drapes ONE LiDAR layer at a time, over one prepared disc of
+                     * at most 10 km radius, and it has to be able to name the layers it
+                     * may choose from. Nothing here changes how the layer draws. */
+                    lidarLayer._dlLidar = { key: 'lidar.' + key, label: (cfg && cfg.label) || key };
+                }
                 return lidarLayer;
             }
             function _buildLidarLeafletLayerRaw(key, cfg) {

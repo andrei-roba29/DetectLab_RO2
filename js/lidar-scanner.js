@@ -529,9 +529,12 @@
     }
     /* Unghiul de desenare al hărții offline are prioritate: în acel mod un tap
        nu trebuie să lase și un pin cu cerc de rază pe hartă (vezi
-       js/offline-maps.js → window._dlOfflineDrawActive). */
+       js/offline-maps.js → window._dlOfflineDrawActive). Același lucru pentru
+       alegerea centrului zonei LiDAR de 3D (js/lidar-3d-focus.js →
+       window._dlLidarFocusPicking): acolo tap-ul aparține dialogului. */
     function offlineDrawing(){ try { return !!window._dlOfflineDrawActive; } catch (e) { return false; } }
-    function onMapClick(e){ if(active&&!scanning&&!offlineDrawing())drawSelection(e.latlng); }
+    function lidarFocusPicking(){ try { return !!window._dlLidarFocusPicking; } catch (e) { return false; } }
+    function onMapClick(e){ if(active&&!scanning&&!offlineDrawing()&&!lidarFocusPicking())drawSelection(e.latlng); }
     function load() {
         if (pointsPromise) return pointsPromise;
         setStatus('Loading points / Se încarcă punctele…');

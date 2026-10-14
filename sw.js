@@ -471,7 +471,15 @@
 // v206: simplify PWA 3D controls (terrain exaggeration + reset/north/flat).
 // v207: remove redundant 3D desktop buttons; display MapLibre credits bottom-left.
 // v208: remove the PWA's compact MapLibre info button; preserve visible credits.
-const CACHE_NAME = 'detectlab-v208-3d-clean-controls';
+// v209: LiDAR in the 3D view (js/lidar-3d-focus.js). A national LiDAR pyramid
+//   cannot be draped like a historical sheet, so pressing 3D with a LiDAR layer
+//   switched on now asks for ONE layer, a point and a fetching distance (10 km
+//   maximum), prefetches exactly that disc through the viewer's own tile path
+//   and only then opens 3D — framed on the disc, on tiles already in memory.
+//   The viewer keeps them (state.primed), clips every tile to the disc and
+//   refuses to drape a second LiDAR layer at the same time. Cache bumped so an
+//   installed PWA picks up the new module, viewer, mirror, map-app and skin.
+const CACHE_NAME = 'detectlab-v209-lidar-3d-focus';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -503,12 +511,19 @@ const PRECACHE_URLS = [
   'js/layer-registry.js',
   'js/hist-shift.js?v=20261014-hist-shift',
   'css/hist-shift.css?v=20261014-hist-shift',
+  'js/map3d-mirror.js?v=20261014-lidar-3d-focus',
   'js/map3d-mirror.js?v=20261014-3d-vectors',
+  'js/map-app.js?v=20261014-lidar-3d-focus',
   'js/map-app.js?v=20261014-3d-vectors',
+  /* LiDAR in the 3D view: the focus dialog, the prefetch and the entry gate. */
+  'js/lidar-3d-focus.js?v=20261014-lidar-3d-focus',
+  'js/lidar-3d-focus.js',
+  'js/lidar-scanner.js?v=20261014-lidar-3d-focus',
   'js/map3d-mirror.js?v=20261014-3d-blend',
   'js/map3d-mirror.js?v=20261013-3d-mobile',
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
+  'js/map3d-terrain.js?v=20261014-lidar-3d-focus',
   'js/map3d-terrain.js?v=20261014-3d-clean-controls',
   'js/map3d-terrain.js?v=20261014-3d-desktop-controls',
   'js/map3d-terrain.js?v=20261014-3d-pwa-controls',
@@ -521,6 +536,7 @@ const PRECACHE_URLS = [
   'js/maplibre-gl.js?v=20261013-3d-terrain',
   'js/maplibre-gl.js',
   'css/maplibre-gl.css?v=20261013-3d-terrain',
+  'css/map3d-terrain.css?v=20261014-lidar-3d-focus',
   'css/map3d-terrain.css?v=20261014-3d-clean-controls',
   'css/map3d-terrain.css?v=20261014-3d-pwa-controls',
   'css/map3d-terrain.css?v=20261014-3d-slider-layout',

@@ -54,7 +54,7 @@
      * importing the module must never be fatal. */
     if (!root) return;
 
-    var VERSION = '2026-10-13-3d-mirror-v1';
+    var VERSION = '2026-10-14-lidar-3d-focus-v1';
 
     /* Leaflet's own pane z-index defaults — used when a layer has no pane. */
     var PANE_Z = {
@@ -123,7 +123,276 @@
         return null;
     }
 
+    /* ── LiDAR layers (the 3D focus disc of js/lidar-3d-focus.js) ───────────
+     * Every LiDAR sub-layer the app builds is tagged by js/map-app.js with
+     * `_dlLidar = { key, label }`; the nine country modules carry a registry id
+     * (`_dlDefId`) whose definition has `group: 'lidar'`; and anything living in
+     * the live `window._lidarGroup` is LiDAR by construction.
+     *
+     * WHY the descriptor has to carry it: the 3D view is allowed to drape ONE
+     * LiDAR layer at a time, and only inside the disc the user prefetched
+     * (10 km radius maximum). The mirror is the only place that sees both the
+     * live Leaflet layer and its registry definition, so it is the only place
+     * that can answer “is this layer LiDAR, and which family is it?” without
+     * either side re-implementing the other.
+     *
+     * `def:` keys name a registry definition (a layer that is drawn from the
+     * registry fallback rather than mirrored); the plain `2d.<id>` keys are the
+     * mirror's own, and they are what the 2D focus picker sees. */
+    function lidarTag(layer, def) {
+        var tag = layer && layer._dlLidar;
+        if (tag && tag.key) return { key: String(tag.key), label: String(tag.label || '') };
+        if (def && def.group === 'lidar') return { key: 'def:' + def.id, label: titleOf(def) || def.id };
+        var group = root._lidarGroup;
+        var inGroup = false;
+        try {
+            inGroup = !!(group && layer && typeof group.hasLayer === 'function' && group.hasLayer(layer));
+        } catch (e) { inGroup = false; }
+        if (inGroup) {
+            var opts = (layer && layer.options) || {};
+            return {
+                key: keyOf(layer),
+                label: String(opts.name || opts.attribution || (def ? titleOf(def) : '') || keyOf(layer))
+            };
+        }
+        return null;
+    }
+
+    /** The stable key the 3D focus names this very layer by (null when not LiDAR). */
+    function lidarKeyOf(layer, def) {
+        var tag = lidarTag(layer, def);
+        return tag ? tag.key : null;
+    }
+
+    /* ── Web-Mercator tile maths + the LiDAR focus disc ─────────────────────
+     * The focus disc is defined in GROUND metres (the radius the user chose), so
+     * every question about it — which tiles hold it, what rectangle a MapLibre
+     * source may ask for, which pixels survive the clip — is answered with the
+     * same helpers below. The plan, the prefetch and what the 3D view draws can
+     * therefore never disagree about the disc.
+     *
+     * The per-pixel check uses the local equirectangular metric (metres per
+     * degree of latitude/longitude at the disc's latitude). Over 10 km that is
+     * within a metre of haversine — and it makes the per-pixel loop a couple of
+     * multiplications instead of four trigonometry calls, which matters: a
+     * 10 km disc is a few hundred tiles × 65 536 pixels. */
+    var EARTH_CIRCUMFERENCE = 40075016.686;
+    var METRES_PER_DEGREE = 111320;
+
+    function clampLat(lat) { return Math.max(-85.05112878, Math.min(85.05112878, lat)); }
+    function lngAt(x, z) { return x / Math.pow(2, z) * 360 - 180; }
+    function latAt(y, z) {
+        var n = Math.PI - 2 * Math.PI * y / Math.pow(2, z);
+        return 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+    }
+    function lngToTileX(lng, z) { return (lng + 180) / 360 * Math.pow(2, z); }
+    function latToTileY(lat, z) {
+        var rad = clampLat(lat) * Math.PI / 180;
+        return (1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2 * Math.pow(2, z);
+    }
+    function tileBounds(z, x, y) {
+        return {
+            west: lngAt(x, z), north: latAt(y, z),
+            east: lngAt(x + 1, z), south: latAt(y + 1, z)
+        };
+    }
+    /** Ground metres per pixel of a 256 px (or `tileSize`) Web-Mercator tile. */
+    function groundMetresPerPixel(lat, z, tileSize) {
+        var size = tileSize || 256;
+        return EARTH_CIRCUMFERENCE * Math.cos(clampLat(lat) * Math.PI / 180) / (size * Math.pow(2, z));
+    }
+    /** Ground metres per tile — the LOD yardstick of the prefetch planner. */
+    function groundMetresPerTile(lat, z, tileSize) {
+        return groundMetresPerPixel(lat, z, tileSize) * (tileSize || 256);
+    }
+    function metresPerDegreeLng(lat) {
+        return METRES_PER_DEGREE * Math.max(0.01, Math.cos(clampLat(lat) * Math.PI / 180));
+    }
+    /** Approximate ground distance (metres) between a point and a lat/lng box. */
+    function distanceToBoxM(lat, lng, box) {
+        var mLng = metresPerDegreeLng(lat);
+        var dLat = Math.max(0, box.south - lat, lat - box.north) * METRES_PER_DEGREE;
+        var dLng = Math.max(0, box.west - lng, lng - box.east) * mLng;
+        return Math.sqrt(dLat * dLat + dLng * dLng);
+    }
+    /** Great-circle distance (metres) — the honest one, for reporting. */
+    function distanceM(a, b) {
+        var rad = Math.PI / 180;
+        var dLat = (b.lat - a.lat) * rad;
+        var dLng = (b.lng - a.lng) * rad;
+        var s = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        return 2 * 6378137 * Math.asin(Math.min(1, Math.sqrt(s)));
+    }
+    /** The local metric's distance (metres) — the one the pixel mask uses. */
+    function localDistanceM(disc, lat, lng) {
+        var dLat = (lat - disc.lat) * METRES_PER_DEGREE;
+        var dLng = (lng - disc.lng) * metresPerDegreeLng(disc.lat);
+        return Math.sqrt(dLat * dLat + dLng * dLng);
+    }
+    /** Normalise whatever the caller passes as a focus: { lat, lng, radiusKm }. */
+    function discOf(spec) {
+        if (!spec) return null;
+        var lat = Number(spec.lat), lng = Number(spec.lng), radiusKm = Number(spec.radiusKm);
+        if (!isFinite(lat) || !isFinite(lng) || !(radiusKm > 0)) return null;
+        return { lat: lat, lng: lng, radiusKm: radiusKm, radiusM: radiusKm * 1000 };
+    }
+    /** The lng/lat rectangle a raster source may ask tiles for. */
+    function discBounds(spec) {
+        var disc = discOf(spec);
+        if (!disc) return null;
+        var dLat = disc.radiusKm / 111.32;
+        var dLng = disc.radiusKm / (111.32 * Math.max(0.01, Math.cos(disc.lat * Math.PI / 180)));
+        return [
+            Math.max(-180, disc.lng - dLng), Math.max(-85, disc.lat - dLat),
+            Math.min(180, disc.lng + dLng), Math.min(85, disc.lat + dLat)
+        ];
+    }
+    /** Inclusive tile window whose tiles can intersect the disc at `z`. */
+    function discTileWindow(spec, z) {
+        var disc = discOf(spec);
+        var n = Math.pow(2, z);
+        if (!disc) return { z: z, x0: 0, y0: 0, x1: n - 1, y1: n - 1, count: n * n };
+        var dLat = disc.radiusKm / 111.32;
+        var dLng = disc.radiusKm / (111.32 * Math.max(0.01, Math.cos(disc.lat * Math.PI / 180)));
+        var x0 = Math.max(0, Math.floor(lngToTileX(disc.lng - dLng, z)));
+        var x1 = Math.min(n - 1, Math.floor(lngToTileX(disc.lng + dLng, z)));
+        var y0 = Math.max(0, Math.floor(latToTileY(disc.lat + dLat, z)));
+        var y1 = Math.min(n - 1, Math.floor(latToTileY(disc.lat - dLat, z)));
+        return { z: z, x0: x0, y0: y0, x1: x1, y1: y1, count: Math.max(0, (x1 - x0 + 1) * (y1 - y0 + 1)) };
+    }
+    /** Does the tile share any ground with the disc? (the tile window is only a box) */
+    function discTouchesTile(spec, z, x, y) {
+        var disc = discOf(spec);
+        if (!disc) return true;
+        return distanceToBoxM(disc.lat, disc.lng, tileBounds(z, x, y)) <= disc.radiusM;
+    }
+    /** Does the tile lie entirely inside the disc (no pixel work needed)? */
+    function discContainsTile(spec, z, x, y) {
+        var disc = discOf(spec);
+        if (!disc) return false;
+        var b = tileBounds(z, x, y);
+        /* Distance is convex over the tile, so its maximum is at a corner — and
+         * it is measured with the very metric the pixel mask uses, so “inside”
+         * here means every pixel really is inside (never a leak at the edge). */
+        return Math.max(
+            localDistanceM(disc, b.north, b.west),
+            localDistanceM(disc, b.north, b.east),
+            localDistanceM(disc, b.south, b.west),
+            localDistanceM(disc, b.south, b.east)
+        ) <= disc.radiusM;
+    }
+    /** A closed lat/lng ring around the disc (the outline drawn in 3D / 2D). */
+    function discRing(spec, steps) {
+        var disc = discOf(spec);
+        if (!disc) return null;
+        var count = Math.max(16, Math.round(steps || 72));
+        var mLng = metresPerDegreeLng(disc.lat);
+        var ring = [];
+        for (var i = 0; i <= count; i += 1) {
+            var a = (i / count) * Math.PI * 2;
+            ring.push([
+                disc.lng + (disc.radiusM * Math.cos(a)) / mLng,
+                disc.lat + (disc.radiusM * Math.sin(a)) / METRES_PER_DEGREE
+            ]);
+        }
+        return ring;
+    }
+    function discGeojson(spec, steps) {
+        var ring = discRing(spec, steps);
+        if (!ring) return null;
+        return { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring] } }] };
+    }
+
+    /** The alpha a pixel of `tile` gets inside the disc, applied in place. */
+    function maskPixels(frame, size, tile, spec) {
+        var disc = discOf(spec);
+        if (!frame || !disc) return frame;
+        var d = frame.data || frame;
+        var px = Math.max(1, Math.round(size));
+        /* Column/row lookup tables: the pixel loop must not call Math.pow()
+         * twice per pixel (65 536 of them per tile, a few hundred tiles). */
+        var rows = new Float64Array(px);
+        var cols = new Float64Array(px);
+        for (var p = 0; p < px; p += 1) {
+            rows[p] = (latAt(tile.y + (p + 0.5) / px, tile.z) - disc.lat) * METRES_PER_DEGREE;
+            cols[p] = (lngAt(tile.x + (p + 0.5) / px, tile.z) - disc.lng) * metresPerDegreeLng(disc.lat);
+        }
+        /* One pixel of feathering: the edge of the disc is a curve, and a hard
+         * threshold would give it a staircase. */
+        var feather = groundMetresPerPixel(disc.lat, tile.z, px);
+        for (var i = 0; i < d.length; i += 4) {
+            var index = i / 4;
+            var tx = index % px;
+            var ty = (index - tx) / px;
+            var dLat = rows[ty];
+            var dLng = cols[tx];
+            var dist = Math.sqrt(dLat * dLat + dLng * dLng);
+            if (dist >= disc.radiusM) { d[i + 3] = 0; continue; }
+            var left = disc.radiusM - dist;
+            if (left < feather) d[i + 3] = ((d[i + 3] * (left / feather)) + 0.5) | 0;
+        }
+        return frame;
+    }
+
+    /**
+     * Clip one tile to the disc.
+     *
+     * Resolves with the tile bytes unchanged when the tile is entirely inside
+     * the disc, with `null` when none of it is (the caller draws nothing there),
+     * and with repainted PNG bytes only for the tiles the disc's edge crosses —
+     * typically a few dozen of the few hundred the disc is made of.
+     */
+    function maskTile(payload, size, tile, spec) {
+        var disc = discOf(spec);
+        if (!disc || !tile) return Promise.resolve(payload);
+        if (!discTouchesTile(spec, tile.z, tile.x, tile.y)) return Promise.resolve(null);
+        if (discContainsTile(spec, tile.z, tile.x, tile.y)) return Promise.resolve(payload);
+        return toCanvas(payload, size).then(function (canvas) {
+            var ctx = canvas.getContext('2d');
+            var frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            maskPixels(frame, canvas.width, tile, spec);
+            ctx.putImageData(frame, 0, 0);
+            return canvasToBytes(canvas);
+        });
+    }
+
+    /* A 1×1 fully transparent PNG (68 bytes), for the tiles the disc excludes
+     * completely: MapLibre gets a decodable texture instead of a failed
+     * request, which is what keeps the terrain under the disc intact. Decoded
+     * here rather than with atob() — the headless suites have no DOM. */
+    var BLANK_PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=';
+    var BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    var blankTileBytes = null;
+
+    function decodeBase64(text) {
+        var clean = String(text).replace(/[^A-Za-z0-9+/]/g, '');
+        var out = new Uint8Array(Math.floor(clean.length * 3 / 4));
+        var buffer = 0, bits = 0, at = 0;
+        for (var i = 0; i < clean.length; i += 1) {
+            var value = BASE64_ALPHABET.indexOf(clean.charAt(i));
+            if (value < 0) continue;
+            buffer = (buffer << 6) | value;
+            bits += 6;
+            if (bits >= 8) {
+                bits -= 8;
+                out[at] = (buffer >> bits) & 0xff;
+                at += 1;
+            }
+        }
+        return at === out.length ? out : out.slice(0, at);
+    }
+
+    /** The transparent tile the 3D view draws where the disc excludes a tile. */
+    function blankTile() {
+        if (!blankTileBytes) blankTileBytes = decodeBase64(BLANK_PNG_BASE64);
+        return blankTileBytes.buffer.slice(0);
+    }
+
     function keyOf(layer) { return '2d.' + stamp(layer); }
+
+    /** The mirror's own key for a live layer — the one a dl2d:// template carries. */
+    function keyFor(layer) { return keyOf(layer); }
 
     function templateFor(layer) {
         return 'dl2d://' + keyOf(layer) + '/{z}/{x}/{y}';
@@ -510,14 +779,29 @@
         return out;
     }
 
+    /**
+     * The page language. `window._currentLang` is a FUNCTION installed by
+     * js/translations.js (`function () { return currentLang; }`), so reading it
+     * as a string — which this used to do — always landed on the English
+     * fallback and the Romanian titles of every 3D layer were unreachable.
+     */
+    function currentLang() {
+        try {
+            if (typeof root._currentLang === 'function') {
+                var v = root._currentLang();
+                if (typeof v === 'string' && /^(ro|en)/i.test(v)) return /^en/i.test(v) ? 'en' : 'ro';
+            } else if (typeof root._currentLang === 'string' && /^(ro|en)/i.test(root._currentLang)) {
+                return /^en/i.test(root._currentLang) ? 'en' : 'ro';
+            }
+            if (document && document.documentElement && /^en/i.test(document.documentElement.lang || '')) return 'en';
+        } catch (e) { /* fall through */ }
+        return 'ro';
+    }
+
     /** Title of a registry definition in the current page language. */
     function titleOf(def) {
         if (!def) return '';
-        var lang = 'ro';
-        try {
-            if (root._currentLang) lang = root._currentLang;
-            else if (document && document.documentElement && /^en/i.test(document.documentElement.lang || '')) lang = 'en';
-        } catch (e) { /* keep ro */ }
+        var lang = currentLang();
         var title = def.title;
         if (typeof title === 'string') return title;
         return (title && (title[lang] || title.en || title.ro)) || def.id || '';
@@ -813,6 +1097,7 @@
         var kind = classify(layer, Leaflet);
         var def = defFor(layer);
         var pane = paneNameOf(map, layer);
+        var lidar = lidarTag(layer, def);
         var base = {
             key: keyOf(layer),
             kind: kind,
@@ -820,6 +1105,10 @@
             pane: pane,
             opacity: opacityOf(layer),
             defId: def ? def.id : null,
+            /* The LiDAR family this layer belongs to, or null: the 3D view
+             * drapes at most ONE of them and only inside the focus disc. */
+            lidarKey: lidar ? lidar.key : null,
+            lidarLabel: lidar ? lidar.label : '',
             label: String(layer.options && layer.options.name || '').trim() ||
                 (def ? titleOf(def) : '') || paneLabel(pane) || null,
             attribution: (layer.options && typeof layer.options.attribution === 'string' && layer.options.attribution)
@@ -1273,6 +1562,29 @@
         tileUrlFor: tileUrlFor,
         templateFor: templateFor,
         layerByKey: layerByKey,
+        keyFor: keyFor,
+        lidarKeyOf: lidarKeyOf,
+        /** The LiDAR focus disc: geometry, planning helpers and the pixel clip. */
+        disc: {
+            of: discOf,
+            bounds: discBounds,
+            ring: discRing,
+            geojson: discGeojson,
+            tileWindow: discTileWindow,
+            touchesTile: discTouchesTile,
+            containsTile: discContainsTile,
+            maskPixels: maskPixels,
+            maskTile: maskTile,
+            blankTile: blankTile,
+            metresPerTile: groundMetresPerTile,
+            metresPerPixel: groundMetresPerPixel,
+            distanceM: distanceM,
+            tileBounds: tileBounds,
+            latAt: latAt,
+            lngAt: lngAt,
+            latToTileY: latToTileY,
+            lngToTileX: lngToTileX
+        },
         paneZIndex: paneZIndex,
         paneNameOf: paneNameOf,
         signatureOf: signatureOf,

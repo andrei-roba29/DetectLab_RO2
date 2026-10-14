@@ -291,8 +291,8 @@ assert(shellVersion >= 196,
  * 3D controls. */
 const TAGS = {
     'js/layer-registry.js': '20261014-wms-audit',
-    'js/map3d-terrain.js': '20261014-3d-clean-controls',
-    'css/map3d-terrain.css': '20261014-3d-clean-controls'
+    'js/map3d-terrain.js': '20261014-lidar-3d-focus',
+    'css/map3d-terrain.css': '20261014-lidar-3d-focus'
 };
 ['js/map3d-terrain.js', 'js/layer-registry.js', 'css/map3d-terrain.css'].forEach(function (asset) {
     const tag = TAGS[asset];
