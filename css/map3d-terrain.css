@@ -182,22 +182,25 @@ body.is-3d #map3d-toggle .m3d-dot { background: #c8a96e; box-shadow: 0 0 8px rgb
     gap: 8px;
     width: 208px;
     max-width: calc(100% - 20px);
-    padding: 10px;
-    border-radius: 10px;
-    border: 1px solid rgba(184, 216, 240, 0.22);
-    background: rgba(6, 14, 30, 0.86);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     color: rgba(245, 240, 235, 0.92);
     font-family: 'Outfit', sans-serif;
     font-size: 0.72rem;
-    backdrop-filter: blur(6px);
+    /* No shared backdrop: only the individual slider strips are tinted.
+     * Gaps between them remain transparent and let map gestures through. */
+    pointer-events: none;
     max-height: calc(100% - 46px);
     overflow-y: auto;
 }
 
 body.is-3d #map3d-bar { display: flex; }
 
+#map3d-bar > * { pointer-events: auto; flex-shrink: 0; }
 #map3d-bar.collapsed .m3d-row,
-#map3d-bar.collapsed #map3d-status { display: none; }
+#map3d-bar.collapsed .m3d-actions { display: none; }
 
 .m3d-head {
     display: flex;
@@ -220,9 +223,27 @@ body.is-3d #map3d-bar { display: flex; }
     padding: 2px 4px;
 }
 
-.m3d-row { display: flex; flex-direction: column; gap: 4px; }
-.m3d-row > label { display: flex; justify-content: space-between; gap: 6px; opacity: 0.85; }
-.m3d-row input[type="range"] { width: 100%; accent-color: #c8a96e; }
+#map3d-bar .m3d-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(184, 216, 240, 0.24);
+    background: rgba(6, 14, 30, 0.48);
+    backdrop-filter: blur(4px);
+}
+#map3d-bar .m3d-row > label { display: flex; justify-content: space-between; gap: 6px; }
+#map3d-bar .m3d-row input[type="range"] {
+    display: block;
+    width: 100%;
+    height: 20px;
+    margin: 0;
+    accent-color: #c8a96e;
+    cursor: pointer;
+}
+#map3d-bar .m3d-row:focus-within { border-color: #c8a96e; }
+#map3d-bar .m3d-head { text-shadow: 0 1px 3px #060e1e; }
 
 .m3d-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 
@@ -239,21 +260,14 @@ body.is-3d #map3d-bar { display: flex; }
 
 .m3d-actions button:hover { background: rgba(184, 216, 240, 0.18); }
 
-#map3d-status { display: flex; flex-direction: column; gap: 3px; }
-#map3d-status .m3d-st {
-    display: flex;
-    align-items: baseline;
-    gap: 5px;
-    line-height: 1.35;
-    color: rgba(245, 240, 235, 0.75);
-}
-#map3d-status .m3d-st b { font-weight: 600; color: rgba(245, 240, 235, 0.92); }
-#map3d-status .m3d-st.is-warn { color: #f0c98a; }
-#map3d-status .m3d-st.is-bad { color: #f08a8a; }
-#map3d-status .m3d-st.is-proxy { color: #9ad8f5; }
-#map3d-status .m3d-sum { margin-top: 4px; opacity: 0.6; }
-
 /* MapLibre's own controls inside the surface */
+/* The help button occupies top:14px / height:36px (16px in desktop
+ * fullscreen). Reserve that row for it and the fullscreen exit button;
+ * z-index alone cannot make two controls in the same spot usable. */
+#map3d-surface .maplibregl-ctrl-top-right {
+    top: calc(60px + env(safe-area-inset-top, 0px));
+}
+
 #map3d-surface .maplibregl-ctrl-group { background: rgba(6, 14, 30, 0.82); }
 #map3d-surface .maplibregl-ctrl-group button + button { border-top-color: rgba(184, 216, 240, 0.18); }
 #map3d-surface .maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(0.92) hue-rotate(180deg); }
@@ -274,9 +288,7 @@ body.is-3d #map3d-bar { display: flex; }
     #map3d-bar {
         width: 168px;
         font-size: 0.68rem;
-        padding: 8px;
-        top: 8px;
-        right: 8px;
+        padding: 0;
     }
     #map3d-toggle {
         bottom: 58px;
@@ -335,10 +347,33 @@ body.is-3d #map3d-bar { display: flex; }
 #map3d-surface .maplibregl-popup.m3d-popup a { color: rgba(200, 169, 110, 0.95); }
 #map3d-surface .maplibregl-popup.m3d-popup .m3d-popup-body b { color: rgba(245, 240, 235, 0.9); }
 
-/* ── the status rows the 3D bar shows below the sliders ───────────────── */
-#map3d-status .m3d-attrib {
-    margin-top: 3px;
-    font-size: 0.62rem;
-    opacity: 0.55;
-    line-height: 1.35;
+
+/* Installed PWA: float the separate slider strips in the lower half of the
+ * viewport, centred, above the 2D/3D switch and bottom floating actions.
+ * Keep this after the narrow/short-screen web rules so they cannot move it
+ * back underneath the search bar. On short screens the strips scroll rather
+ * than covering the top controls or falling off-screen. */
+body.is-pwa.is-3d #map3d-bar {
+    top: auto;
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(108px + env(safe-area-inset-bottom, 0px));
+    width: 280px;
+    max-width: calc(100% - 100px);
+    max-height: max(44px, calc(50% - 108px - env(safe-area-inset-bottom, 0px)));
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+
+/* Same 14px top/side inset and 36px width as the help button opposite.
+ * The bearing slider / north action already replace the navigation compass. */
+body.is-pwa.is-3d #map3d-surface .maplibregl-ctrl-top-left {
+    top: calc(14px + env(safe-area-inset-top, 0px));
+    left: 14px;
+}
+body.is-pwa.is-3d #map3d-surface .maplibregl-ctrl-top-left .maplibregl-ctrl { margin: 0; }
+body.is-pwa.is-3d #map3d-surface .maplibregl-ctrl-top-left .maplibregl-ctrl-group button {
+    width: 36px;
+    height: 36px;
 }

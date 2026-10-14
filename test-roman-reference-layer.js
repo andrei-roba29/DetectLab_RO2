@@ -87,10 +87,10 @@ console.log('  ✓ progressive NDJSON loading and visible progress preserved');
 assert(subscriptions.includes("'toggleRomanSub'"), 'Roman sublayer API is premium-gated');
 assert(subscriptions.includes("'toggleRomanDareCategories'"), 'DARE All/None API is premium-gated');
 assert(subscriptions.includes('euMaps.toggleCenagisLayer = function (mapKey, on)'), 'CENAGIS catalog toggle is premium-gated');
-assert(html.includes('js/map-app.js?v=20261013-fr-lidar'), 'index.html loads the 2D compatibility map-app script');
-assert(sw.includes('js/map-app.js?v=20261013-fr-lidar'), 'current map-app script is in the service-worker cache');
+assert(html.includes('js/map-app.js?v=20261014-search-exit-3d'), 'index.html loads the 2D compatibility map-app script');
+assert(sw.includes('js/map-app.js?v=20261014-search-exit-3d'), 'current map-app script is in the service-worker cache');
 assert(sw.includes('js/subscriptions.js?v=20261008-premium-roman-guard'), 'premium guard script is in the service-worker cache');
-assert(sw.includes('css/styles.css?v=20261008-roman-dare-icons'), 'DARE marker CSS is in the service-worker cache');
+assert(sw.includes('css/styles.css?v=20261014-map-control-spacing'), 'DARE marker CSS is in the service-worker cache');
 console.log('  ✓ Premium guards and PWA asset versions verified');
 
 console.log('✅ test-roman-reference-layer.js passed all checks successfully.');

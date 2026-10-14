@@ -47,14 +47,14 @@ const CA_BBOX = [-141.0, 41.0, -52.0, 83.0];    // Canada (group availability fa
    ══════════════════════════════════════════════════════════════ */
 assert(/#transpPanel\.country-filter-active \.country-layer-unavailable\s*\{\s*display:\s*none\s*!important/.test(css),
     'styles.css hides rows marked country-layer-unavailable while the filter is active');
-assert(html.includes('css/styles.css?v=20261008-roman-dare-icons'), 'index.html loads the re-versioned styles.css');
-assert(html.includes('js/map-app.js?v=20261013-fr-lidar'), 'index.html loads the ArcGIS-basemap map-app.js');
+assert(html.includes('css/styles.css?v=20261014-map-control-spacing'), 'index.html loads the re-versioned styles.css');
+assert(html.includes('js/map-app.js?v=20261014-search-exit-3d'), 'index.html loads the ArcGIS-basemap map-app.js');
 assert(html.includes('js/historical-eu-maps.js?v=20261013-flat-hist-maps'), 'index.html loads the country-attribution catalog');
-assert(html.includes('js/globe-country-picker.js?v=20261013-no-change-pill'), 'index.html loads the re-versioned picker');
-['css/styles.css?v=20261008-roman-dare-icons',
- 'js/map-app.js?v=20261013-fr-lidar',
+assert(html.includes('js/globe-country-picker.js?v=20261014-country-exit-3d'), 'index.html loads the re-versioned picker');
+['css/styles.css?v=20261014-map-control-spacing',
+ 'js/map-app.js?v=20261014-search-exit-3d',
  'js/historical-eu-maps.js?v=20261013-flat-hist-maps',
- 'js/globe-country-picker.js?v=20261013-no-change-pill'].forEach(function (p) {
+ 'js/globe-country-picker.js?v=20261014-country-exit-3d'].forEach(function (p) {
     assert(sw.includes("'" + p + "'"), 'sw.js precaches ' + p);
 });
 const shellVersion = Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
@@ -559,6 +559,23 @@ assert(typeof T.refreshCountryBoundsLayer === 'function', 'refreshCountryBoundsL
     assert.equal(T.state.boundsFeature, null, 'the drawn geometry is forgotten too');
     assert.equal(map.removed.length, 2, 'the Danish outline removed on unlock');
     assert.equal(map.maxBounds, null, 'maxBounds released');
+
+    // A reattached/replaced map must not reuse an outline owned by the old
+    // map, and removing a layer externally must not fool the geometry cache.
+    T.restrictLeafletToCountry(map, DK_BBOX);
+    const oldOutline = T.state.boundsLayer;
+    const nextMap = new MockMap();
+    nextMap.hasLayer = layer => nextMap.added.includes(layer) && !nextMap.removed.includes(layer);
+    gateSandbox._dlMap = nextMap;
+    T.refreshCountryBoundsLayer();
+    assert(map.removed.includes(oldOutline), 'outline removed from its owning map, not the new active map');
+    assert.equal(T.state.boundsMap, nextMap, 'new outline records its owning map');
+    assert.notEqual(T.state.boundsLayer, oldOutline, 'identical geometry is rebuilt on a new map');
+    const detachedOutline = T.state.boundsLayer;
+    nextMap.removeLayer(detachedOutline);
+    T.refreshCountryBoundsLayer();
+    assert.notEqual(T.state.boundsLayer, detachedOutline, 'an externally detached outline is rebuilt');
+    T.unlockCountryView();
 
     // A selection bbox is never turned into a visible rectangle, anywhere.
     assert.equal(rectangleCalls, 0, 'the bounds overlay never falls back to L.rectangle');

@@ -195,7 +195,7 @@
      * itself be the reason the real one is refused.
      */
     function webglProbe(force) {
-        /* Memoised: status()/renderStatus() call this on every repaint. open()
+        /* Memoised: status() call this on every repaint. open()
          * passes force=true because a device that refused a context minutes
          * ago may well grant one now. */
         if (!force && state.probe) return state.probe;
@@ -663,22 +663,21 @@
         bar.id = 'map3d-bar';
         bar.innerHTML = [
             '<div class="m3d-head"><span>' + t('title') + '</span>',
-            '<button type="button" class="m3d-collapse" title="Collapse">▾</button></div>',
-            '<div class="m3d-row"><label><span>' + t('exaggeration') + '</span>',
+            '<button type="button" class="m3d-collapse" title="Collapse" aria-expanded="true" aria-label="Toggle 3D controls">▾</button></div>',
+            '<div class="m3d-row"><label for="map3d-exag"><span>' + t('exaggeration') + '</span>',
             '<b class="m3d-exag-val"></b></label>',
-            '<input type="range" class="m3d-exag" min="0" max="100" step="1"></div>',
-            '<div class="m3d-row"><label><span>' + t('pitch') + '</span>',
+            '<input id="map3d-exag" type="range" class="m3d-exag" min="0" max="100" step="1"></div>',
+            '<div class="m3d-row"><label for="map3d-pitch"><span>' + t('pitch') + '</span>',
             '<b class="m3d-pitch-val"></b></label>',
-            '<input type="range" class="m3d-pitch" min="0" max="' + (CONFIG.camera.maxPitch || 80) + '" step="1"></div>',
-            '<div class="m3d-row"><label><span>' + t('bearing') + '</span>',
+            '<input id="map3d-pitch" type="range" class="m3d-pitch" min="0" max="' + (CONFIG.camera.maxPitch || 80) + '" step="1"></div>',
+            '<div class="m3d-row"><label for="map3d-bearing"><span>' + t('bearing') + '</span>',
             '<b class="m3d-bearing-val"></b></label>',
-            '<input type="range" class="m3d-bearing" min="0" max="360" step="1"></div>',
+            '<input id="map3d-bearing" type="range" class="m3d-bearing" min="0" max="360" step="1"></div>',
             '<div class="m3d-actions">',
             '<button type="button" class="m3d-reset">' + t('reset') + '</button>',
             '<button type="button" class="m3d-north">↑ N</button>',
             '<button type="button" class="m3d-flat">2D ⤓</button>',
-            '</div>',
-            '<div id="map3d-status" aria-live="polite"></div>'
+            '</div>'
         ].join('');
         host.appendChild(bar);
 
@@ -722,7 +721,9 @@
         });
         bar.querySelector('.m3d-collapse').addEventListener('click', function () {
             bar.classList.toggle('collapsed');
-            bar.querySelector('.m3d-collapse').textContent = bar.classList.contains('collapsed') ? '▸' : '▾';
+            var collapsed = bar.classList.contains('collapsed');
+            bar.querySelector('.m3d-collapse').textContent = collapsed ? '▸' : '▾';
+            bar.querySelector('.m3d-collapse').setAttribute('aria-expanded', collapsed ? 'false' : 'true');
         });
         bar.paintLabels = paintLabels;
         paintLabels();
@@ -1535,7 +1536,6 @@
         applyDeck(p);
         watchSourceHealth();
         syncAttribution();
-        renderStatus();
         state.lastSync = Date.now();
     }
 
@@ -1641,68 +1641,12 @@
                 console.warn('[Map3D] No direct tile for ' + id + ' — retrying via ' + proxyBase());
                 healHost(host, id);
             });
-            renderStatus();
         }, 7000);
         state.healthTimers.push(timer);
     }
 
-    /* ═══════════════════════════════════════════════════════════════════════
-     *  STATUS PANEL
-     * ═══════════════════════════════════════════════════════════════════════ */
-    function renderStatus() {
-        var box = document.getElementById('map3d-status');
-        if (!box) return;
-        var on = Object.keys(state.status).filter(function (id) {
-            return state.status[id] && (state.status[id].state === 'on' || state.status[id].state === 'unsupported');
-        });
-        var rows = [];
-        if (!on.length) rows.push('<div class="m3d-st">' + escapeHtml(t('noLayers')) + '</div>');
-
-        var sorted = on.sort(function (a, b) {
-            var za = state.status[a].paneZ == null ? 999 : state.status[a].paneZ;
-            var zb = state.status[b].paneZ == null ? 999 : state.status[b].paneZ;
-            return za - zb;
-        });
-        sorted.forEach(function (id) {
-            var entry = state.status[id];
-            var label = entry.label || id;
-            if (entry.state === 'unsupported') {
-                rows.push('<div class="m3d-st is-bad"><b>' + escapeHtml(label) + '</b> — ' +
-                    escapeHtml(t('unsupported')) + (entry.reason ? ': ' + escapeHtml(entry.reason) : '') + '</div>');
-                return;
-            }
-            var mode = entry.mode === 'proxy' ? t('viaProxy')
-                : (entry.perTile ? t('perTile')
-                    : (entry.mode === 'live 2D layer' ? (lang() === 'ro' ? 'strat 2D' : 'live 2D layer') : t('direct')));
-            rows.push('<div class="m3d-st' + (entry.mode === 'proxy' ? ' is-proxy' : '') + '"><b>' +
-                escapeHtml(label) + '</b> — ' + escapeHtml(mode) +
-                (entry.features ? ' · ' + entry.features + (lang() === 'ro' ? ' elemente' : ' features') : '') + '</div>');
-        });
-
-        /* A mirrored layer whose tile URL could not be built is reported with
-         * the reason instead of vanishing (the 2D map may still draw it — a
-         * canvas layer, for instance — but the 3D view must say so). */
-        var failures = MIRROR.errors ? MIRROR.errors() : {};
-        Object.keys(failures).forEach(function (key) {
-            var item = (state.mirror.items || []).filter(function (i) { return i.key === key; })[0];
-            if (item) {
-                rows.push('<div class="m3d-st is-bad"><b>' + escapeHtml(item.label || key) + '</b> — ' +
-                    escapeHtml(failures[key]) + '</div>');
-            }
-        });
-        var terrain = terrainSource();
-        rows.push('<div class="m3d-sum">' + escapeHtml(terrain.label) + ' · ' +
-            state.exaggeration.toFixed(1) + '× · ' + on.length + ' ' +
-            escapeHtml(lang() === 'ro' ? 'straturi active' : 'active layers') +
-            ' · ' + escapeHtml(t('mirrored')) + '</div>');
-        /* The device refused a full-quality GL context, so 3D is running
-         * reduced — say so rather than letting the user wonder why it looks
-         * flatter than on the desktop. */
-        if (state.safeMode) {
-            rows.push('<div class="m3d-sum is-warn">' + escapeHtml(t('safeMode')) + '</div>');
-        }
-        box.innerHTML = rows.join('');
-    }
+    // Layer/provider diagnostics remain available through status()/report().
+    // The visible controls deliberately contain only camera/terrain sliders.
 
     function escapeHtml(value) {
         return String(value == null ? '' : value)
@@ -1828,7 +1772,9 @@
             }
             map.touchZoomRotate.enableRotation();
             if (maplibre.NavigationControl) {
-                map.addControl(new maplibre.NavigationControl({ visualizePitch: true, showCompass: true }), 'bottom-right');
+                var isPwa = document.body.classList.contains('is-pwa');
+                map.addControl(new maplibre.NavigationControl({ visualizePitch: true, showCompass: !isPwa }),
+                    isPwa ? 'top-left' : 'bottom-right');
             }
             if (maplibre.TerrainControl && terrainSource().tiles.length && !terrainSource().missingKey) {
                 map.addControl(new maplibre.TerrainControl({
@@ -1915,7 +1861,6 @@
         state.open = false;
         showVeil('error', t('failed'), t('failedDetail') + ' (' + message + ')', t('retry'), t('back'));
         refreshToggle();
-        renderStatus();
         return false;
     }
 
@@ -2063,7 +2008,6 @@
         if (bar && bar.querySelector('.m3d-exag-val')) {
             bar.querySelector('.m3d-exag-val').textContent = v.toFixed(1) + '×';
         }
-        renderStatus();
         return v;
     }
 

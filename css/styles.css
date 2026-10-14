@@ -7396,6 +7396,13 @@
             display: inline;
         }
 
+        /* Web fullscreen: keep the zoom buttons comfortably inside the
+           viewport, including landscape devices with a left-hand notch.
+           Only adjust zoom, not the compass/locate controls or PWA layout. */
+        body:not(.is-pwa) .map-frame.is-fullscreen #detectlab-map .leaflet-left .leaflet-control-zoom {
+            margin-left: calc(18px + env(safe-area-inset-left, 0px));
+        }
+
         /* ── MOBILE FULLSCREEN & SEARCH FIXES ── */
         @media (max-width: 600px) {
             /* Keep Leaflet controls below the search bar on narrow screens. */

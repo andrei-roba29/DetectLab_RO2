@@ -25,14 +25,18 @@ map: a MapLibre GL JS view in which every layer that is switched on in the 2D pa
 * **Layers** – the *same* checkboxes decide what 3D draws. Switch a historical map on in
   2D, and it is draped in 3D; drag its opacity slider, and 3D follows live.
 * **Controls** – oblique pitch, bearing, terrain exaggeration (0.5–4×), reset view,
-  navigation/scale/terrain controls, and a status list that says for every layer *how* it
-  is being served (direct / via the same-origin proxy / per tile) and why.
+  navigation/scale/terrain controls. The camera sliders are separate semi-transparent
+  strips with no shared panel background. Layer/provider diagnostics are available
+  via `window.DetectLabMap3D.status()` / `.report()`, not in the visible controls.
 * **Layout while 3D is on** – the Leaflet panes stop painting and Leaflet's own controls
   (zoom, locate, measure — they move the *2D* camera) are hidden, so nobody clicks a
   button that changes a map they cannot see; MapLibre brings its own navigation, terrain
   and scale controls. The 3D bar sits bottom-left and the 2D⇄3D toggle bottom-centre,
   while the search bar, the layer panel and the opacity mirror keep their exact 2D
-  position and stay fully usable.
+  position and stay fully usable. In the installed PWA, the slider strips instead
+  sit horizontally centred in the lower half, above the bottom actions; short
+  screens can scroll them. PWA zoom buttons sit top-left (14px + top safe area),
+  mirroring the top-right help button. Web navigation remains bottom-right.
 
 Run it locally with the tile proxy (Netlify functions do not exist in `file://`):
 
@@ -249,8 +253,8 @@ registry (`diagnostics()` + `proxyReport()`), so it cannot drift from the code.
 Nothing in this list is “unsupported”, and nothing is skipped: every one of the 91
 layers is draped — directly, through the proxy, or per tile through `dl3d://`. A layer
 would only be reported as **2D only** if its module failed to load; `registry.diagnostics()`
-then names the module in `reason` instead of dropping the layer, and the 3D status list
-shows it in red. The relief you see under a historical sheet always comes from the DEM,
+then names the module in `reason` instead of dropping the layer; the viewer's
+`.status()` / `.report()` diagnostics retain the details. The relief you see under a historical sheet always comes from the DEM,
 never from the layer provider — a WMS only ever contributes flat imagery.
 
 ## 5. Known limitations (please read before reporting “misalignment”)
@@ -276,7 +280,7 @@ never from the layer provider — a WMS only ever contributes flat imagery.
    invented.
 6. **Provider 4xx/5xx**: the proxy answers a **transparent 1×1 PNG labelled
    `X-Map3D-Tile: blank`** instead of an error, so one broken provider cannot blank the
-   whole 3D view; the layer status list then shows the host as failing.
+   whole 3D view; the viewer's `.status()` diagnostics retain the failing host.
 7. **Offline/PWA**: MapLibre GL, the registry and the viewer are precached, but tiles
    obviously are not — 3D needs the network unless the layer tiles were downloaded to
    the offline cache.
