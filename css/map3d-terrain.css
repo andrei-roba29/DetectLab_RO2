@@ -304,9 +304,9 @@ body.is-3d #map3d-bar { display: flex; }
         bottom: auto;
         max-height: calc(100% - 92px);
     }
-    /* Keep MapLibre's own controls out of the way on phones. */
+    /* Hide the scale/terrain widgets on phones, not the source credits. */
     #map3d-surface .maplibregl-ctrl-top-right { display: none; }
-    #map3d-surface .maplibregl-ctrl-bottom-left { display: none; }
+    #map3d-surface .maplibregl-ctrl-bottom-left .maplibregl-ctrl-scale { display: none; }
     #map3d-surface .maplibregl-ctrl-bottom-left,
     #map3d-surface .maplibregl-ctrl-bottom-right { font-size: 0.6rem; }
 
@@ -348,11 +348,30 @@ body.is-3d #map3d-bar { display: flex; }
 #map3d-surface .maplibregl-popup.m3d-popup .m3d-popup-body b { color: rgba(245, 240, 235, 0.9); }
 
 
-/* Installed PWA: float the separate slider strips in the lower half of the
- * viewport, centred, above the 2D/3D switch and bottom floating actions.
- * Keep this after the narrow/short-screen web rules so they cannot move it
- * back underneath the search bar. On short screens the strips scroll rather
- * than covering the top controls or falling off-screen. */
+/* Keep required 3D source credits readable but out of the PWA's bottom-right
+ * action stack and above the home indicator; long lists can scroll in place. */
+body.is-pwa.is-3d #map3d-surface .maplibregl-ctrl-bottom-left {
+    bottom: env(safe-area-inset-bottom, 0px);
+    max-width: 42%;
+}
+body.is-pwa.is-3d #map3d-surface .maplibregl-ctrl-attrib {
+    max-height: 3.4em;
+    overflow: auto;
+    overflow-wrap: anywhere;
+}
+
+/* Installed PWA: only terrain exaggeration and the reset/north/flat actions.
+ * The web layout retains its camera sliders. */
+body.is-pwa.is-3d #map3d-bar .m3d-head,
+body.is-pwa.is-3d #map3d-bar .m3d-pitch-row,
+body.is-pwa.is-3d #map3d-bar .m3d-bearing-row { display: none; }
+
+/* Keep the controls visible even if the bar was collapsed before entering PWA. */
+body.is-pwa.is-3d #map3d-bar.collapsed .m3d-row:not(.m3d-pitch-row):not(.m3d-bearing-row),
+body.is-pwa.is-3d #map3d-bar.collapsed .m3d-actions { display: flex; }
+
+/* Centre the compact bar above the 2D/3D switch and bottom actions. Leave
+ * room for the top map chrome on short/landscape PWA screens. */
 body.is-pwa.is-3d #map3d-bar {
     top: auto;
     right: auto;
@@ -361,19 +380,7 @@ body.is-pwa.is-3d #map3d-bar {
     bottom: calc(108px + env(safe-area-inset-bottom, 0px));
     width: 280px;
     max-width: calc(100% - 100px);
-    max-height: max(44px, calc(50% - 108px - env(safe-area-inset-bottom, 0px)));
+    max-height: calc(100% - 168px - env(safe-area-inset-bottom, 0px));
     overflow-y: auto;
     scrollbar-width: thin;
-}
-
-/* Same 14px top/side inset and 36px width as the help button opposite.
- * The bearing slider / north action already replace the navigation compass. */
-body.is-pwa.is-3d #map3d-surface .maplibregl-ctrl-top-left {
-    top: calc(14px + env(safe-area-inset-top, 0px));
-    left: 14px;
-}
-body.is-pwa.is-3d #map3d-surface .maplibregl-ctrl-top-left .maplibregl-ctrl { margin: 0; }
-body.is-pwa.is-3d #map3d-surface .maplibregl-ctrl-top-left .maplibregl-ctrl-group button {
-    width: 36px;
-    height: 36px;
 }

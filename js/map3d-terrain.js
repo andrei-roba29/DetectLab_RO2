@@ -737,10 +737,10 @@
             '<div class="m3d-row"><label for="map3d-exag"><span>' + t('exaggeration') + '</span>',
             '<b class="m3d-exag-val"></b></label>',
             '<input id="map3d-exag" type="range" class="m3d-exag" min="0" max="100" step="1"></div>',
-            '<div class="m3d-row"><label for="map3d-pitch"><span>' + t('pitch') + '</span>',
+            '<div class="m3d-row m3d-pitch-row"><label for="map3d-pitch"><span>' + t('pitch') + '</span>',
             '<b class="m3d-pitch-val"></b></label>',
             '<input id="map3d-pitch" type="range" class="m3d-pitch" min="0" max="' + (CONFIG.camera.maxPitch || 80) + '" step="1"></div>',
-            '<div class="m3d-row"><label for="map3d-bearing"><span>' + t('bearing') + '</span>',
+            '<div class="m3d-row m3d-bearing-row"><label for="map3d-bearing"><span>' + t('bearing') + '</span>',
             '<b class="m3d-bearing-val"></b></label>',
             '<input id="map3d-bearing" type="range" class="m3d-bearing" min="0" max="360" step="1"></div>',
             '<div class="m3d-actions">',
@@ -1863,7 +1863,9 @@
             minZoom: (CONFIG.camera && CONFIG.camera.minZoom) || 2,
             maxZoom: (CONFIG.camera && CONFIG.camera.maxZoom) || 20,
             maxPitch: (CONFIG.camera && CONFIG.camera.maxPitch) || 80,
-            attributionControl: { compact: true },
+            // Add source credits explicitly below, away from the bottom-right
+            // corner and without MapLibre's extra info button in either layout.
+            attributionControl: false,
             maxTileCacheSize: safeMode ? Math.min(32, profile.maxTileCacheSize) : profile.maxTileCacheSize,
             fadeDuration: (cfg.perf && cfg.perf.fadeDuration) || 120,
             canvasContextAttributes: attrs,
@@ -1929,10 +1931,11 @@
                 return false;
             }
             map.touchZoomRotate.enableRotation();
-            if (maplibre.NavigationControl) {
-                var isPwa = document.body.classList.contains('is-pwa');
-                map.addControl(new maplibre.NavigationControl({ visualizePitch: true, showCompass: !isPwa }),
-                    isPwa ? 'top-left' : 'bottom-right');
+            // The app's controls and map gestures make MapLibre's +/- and
+            // compass redundant. Show the required source credits as text at
+            // bottom-left, not as another (i) button at bottom-right.
+            if (maplibre.AttributionControl) {
+                map.addControl(new maplibre.AttributionControl({ compact: false }), 'bottom-left');
             }
             if (maplibre.TerrainControl && terrainSource().tiles.length && !terrainSource().missingKey) {
                 map.addControl(new maplibre.TerrainControl({

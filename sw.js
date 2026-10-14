@@ -468,7 +468,10 @@
 //   which MapLibre cannot blend — so they appear instead of a white sheet.
 // v204: 3D per-feature pins/labels (OSM Places, DARE), heritage points+radii bridge, WMS proxy-first.
 // v205: long-press move/lock for every historical map (free + premium).
-const CACHE_NAME = 'detectlab-v205-hist-shift';
+// v206: simplify PWA 3D controls (terrain exaggeration + reset/north/flat).
+// v207: remove redundant 3D desktop buttons; display MapLibre credits bottom-left.
+// v208: remove the PWA's compact MapLibre info button; preserve visible credits.
+const CACHE_NAME = 'detectlab-v208-3d-clean-controls';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -506,6 +509,9 @@ const PRECACHE_URLS = [
   'js/map3d-mirror.js?v=20261013-3d-mobile',
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
+  'js/map3d-terrain.js?v=20261014-3d-clean-controls',
+  'js/map3d-terrain.js?v=20261014-3d-desktop-controls',
+  'js/map3d-terrain.js?v=20261014-3d-pwa-controls',
   'js/map3d-terrain.js?v=20261014-3d-vectors',
   'js/map3d-terrain.js?v=20261014-3d-blend',
   'js/map3d-terrain.js?v=20261014-3d-slider-layout',
@@ -515,6 +521,8 @@ const PRECACHE_URLS = [
   'js/maplibre-gl.js?v=20261013-3d-terrain',
   'js/maplibre-gl.js',
   'css/maplibre-gl.css?v=20261013-3d-terrain',
+  'css/map3d-terrain.css?v=20261014-3d-clean-controls',
+  'css/map3d-terrain.css?v=20261014-3d-pwa-controls',
   'css/map3d-terrain.css?v=20261014-3d-slider-layout',
   'css/map3d-terrain.css?v=20261014-map-control-spacing',
   'css/map3d-terrain.css?v=20261013-3d-mobile',
