@@ -25,10 +25,10 @@ const indexHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 assert(indexHtml.includes('css/country-dock.css?v=20261008'), 'index.html loads the dock css');
 assert(indexHtml.includes('js/country-dock.js?v=20261013-country-2d'), 'index.html loads the dock script');
 // The dock talks to the gate, so the gate must be parsed first.
-assert(indexHtml.indexOf('js/globe-country-picker.js?v=20261013-no-change-pill') <
+assert(indexHtml.indexOf('js/globe-country-picker.js?v=20261014-country-exit-3d') <
     indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d'), 'globe gate loads before the dock');
 assert(indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d') <
-    indexHtml.indexOf('js/map-app.js?v=20261013-fr-lidar'), 'dock loads before map-app.js');
+    indexHtml.indexOf('js/map-app.js?v=20261014-search-exit-3d'), 'dock loads before map-app.js');
 // The dock lives *inside* the search wrap so it stays glued to the search bar.
 const wrapIdx = indexHtml.indexOf('id="mapSearchWrap"');
 const dockIdx = indexHtml.indexOf('id="countryDock"');
@@ -144,6 +144,7 @@ function makeBounds(sw, ne) {
 function makeLeaflet() {
     const L = {
         created: [],
+        geoJSON: function (feature, options) { return { feature: feature, options: options }; },
         latLng: function (lat, lng) { return { lat: lat, lng: lng }; },
         latLngBounds: function (sw, ne) { return makeBounds(sw, ne); },
         tileLayer: function (url, opts) {
@@ -423,8 +424,87 @@ function makeSandbox(elMap) {
         'and still fits the new country inside the fit cap');
     console.log('  ✓ zoom floors never leak between countries (fit measured in the base range, stale floor dropped)');
 
+    // Country switches from terrain 3D must close the old camera before
+    // fitting the new country, releasing its pan/zoom lock, and replacing
+    // the outline only after the fit is complete.
+    const originalFit = map.fitBounds;
+    const originalAdd = map.addLayer;
+    let terrainOpen = false, terrainCloses = 0, stops = 0;
+    map.stop = function () { stops++; return map; };
+    map.fitBounds = function (bounds, opts) {
+        assert(!terrainOpen, 'terrain is closed before fitting the country');
+        assert.equal(map.getMaxBounds(), null, 'the previous pan lock cannot clamp the new fit');
+        assert.equal(map.getMinZoom(), T.state.baseMinZoom, 'the previous zoom floor cannot clamp the new fit');
+        return originalFit(bounds, opts);
+    };
+    map.addLayer = function (layer) {
+        if (layer.feature) {
+            assert(!terrainOpen, 'country outline is added in the visible 2D map');
+            assert.equal(layer.feature, T.G.byIso[sandbox._detectlabSelectedCountry].feature,
+                'outline geometry matches the published country');
+            assert.equal(map._fit.bounds._w.lng, sandbox._detectlabCountryBounds[0],
+                'the new country is fitted before its outline is added');
+            assert.equal(map._fit.opts.animate, false, 'dock outline is not inserted mid-zoom animation');
+        }
+        return originalAdd(layer);
+    };
+    sandbox.DetectLabMap3D = {
+        isOpen: function () { return terrainOpen; },
+        close: function () {
+            terrainCloses++;
+            terrainOpen = false;
+            // Simulate the real viewer's cameraTo2D hand-off. This old view
+            // must never be the final view after a country switch.
+            map.setView([40, 10], 10);
+            sandbox.document.body.classList.remove('is-3d');
+        }
+    };
+    for (const iso of ['IT', 'DE', 'RO', 'IT']) {
+        terrainOpen = true;
+        sandbox.document.body.classList.add('is-3d');
+        const previousCloses = terrainCloses;
+        await gate.selectCountry(iso);
+        assert.equal(terrainCloses, previousCloses + 1, 'one terrain close per switch');
+        assert(!sandbox.document.body.classList.contains('is-3d'), '2D is visible');
+        assert.equal(sandbox._detectlabSelectedCountry, iso, 'new country published');
+        assert.equal(T.state.boundsIso, iso, 'outline belongs to the selected country');
+        assert.equal(map._layers.filter(l => l.feature).length, 1, 'exactly one country outline survives');
+        assert.equal(map._fit.bounds._w.lng, sandbox._detectlabCountryBounds[0], 'new country fitted');
+        assert.equal(map.getZoom(), map._fit.opts.maxZoom, 'old terrain zoom did not overwrite the fit');
+    }
+    assert(stops >= 4, 'old animations are stopped on every dock switch');
+    // A globe transition must also release the old pan lock and remove its
+    // outline before fitting underneath the globe, not only lower minZoom.
+    terrainOpen = true;
+    map.addLayer = originalAdd;
+    const nextBox = T.G.byIso.DE.bboxEU;
+    const nextFrame = T.countryHandoffFrame('DE', nextBox);
+    // This path deliberately animates beneath the globe, so only the dock's
+    // synchronous-fit assertions are disabled here.
+    map.fitBounds = function (bounds, opts) {
+        assert(!terrainOpen, 'globe transition closes terrain first');
+        assert.equal(map.getMaxBounds(), null, 'globe transition clears the old pan lock');
+        assert.equal(T.state.boundsLayer, null, 'globe transition clears the old outline');
+        return originalFit(bounds, opts);
+    };
+    assert(T.prepareFlatMapTransition('DE', nextBox, nextFrame));
+    // Finishing this staged switch uses skipFit; it must not cancel the
+    // globe's in-flight transition by calling map.stop a second time.
+    const stopsBeforeFinish = stops;
+    await gate.selectCountry('DE');
+    assert.equal(stops, stopsBeforeFinish, 'skipFit preserves the staged globe animation');
+    map.fitBounds = originalFit;
+    map.addLayer = originalAdd;
+    // Unknown input must not dismiss a perfectly valid terrain view.
+    terrainOpen = true;
+    await assert.rejects(gate.selectCountry('ZZ'), /Unknown country/);
+    assert(terrainOpen, 'invalid country does not close terrain');
+    console.log('  ✓ repeated 3D country switches: close → release limits → fit → replace outline');
+
     // // 5f. Exit view releases everything.
     gate.exitView();
+    assert(!terrainOpen, 'exit view also closes the terrain camera before the overview');
+    delete sandbox.DetectLabMap3D;
     assert(!gate.isLocked(), 'exitView unlocks the view');
     assert(map.getMaxBounds() === null, 'maxBounds are removed');
     assert(map.getMinZoom() === 2, 'the map keeps its own minZoom again (got ' + map.getMinZoom() + ')');

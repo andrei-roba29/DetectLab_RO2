@@ -1433,6 +1433,13 @@
                 document.getElementById('searchClearBtn').classList.add('visible');
                 closeResults();
 
+                // Search destinations belong to the 2D map. Close 3D first:
+                // its camera hand-off restores the old Leaflet view, so doing
+                // this after flyTo would overwrite the searched destination.
+                var map3d = window.DetectLabMap3D;
+                if (map3d && typeof map3d.isOpen === 'function' && map3d.isOpen()) {
+                    map3d.close();
+                }
                 map.flyTo(latlng, 13);
 
                 setTimeout(function () {

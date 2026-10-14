@@ -287,9 +287,10 @@ const shellVersion = Number((swJs.match(/CACHE_NAME = 'detectlab-v(\d+)-/) || []
 assert(shellVersion >= 196,
     'sw.js cache is v196 or newer so installed PWAs get the mobile fix (found v' + shellVersion + ')');
 ['js/map3d-terrain.js', 'js/layer-registry.js', 'css/map3d-terrain.css'].forEach(function (asset) {
-    assert(indexHtml.indexOf(asset + '?v=20261013-3d-mobile') !== -1,
+    const tag = asset === 'js/layer-registry.js' ? '20261013-3d-mobile' : '20261014-3d-slider-layout';
+    assert(indexHtml.indexOf(asset + '?v=' + tag) !== -1,
         'index.html loads ' + asset + ' with the new cache-busting tag');
-    assert(swJs.indexOf("'" + asset + "?v=20261013-3d-mobile'") !== -1,
+    assert(swJs.indexOf("'" + asset + "?v=" + tag + "'") !== -1,
         'sw.js pre-caches ' + asset + ' with the new tag');
 });
 console.log('  ✓ cache bumped and the new tagged assets are pre-cached');

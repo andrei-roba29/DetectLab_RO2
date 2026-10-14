@@ -47,7 +47,7 @@ const TAG_3D = '20261013-3d-mobile';           /* registry + mirror + viewer  */
 {
     const registryTag = indexHtml.indexOf('js/layer-registry.js?v=' + TAG_3D);
     const mirrorTag = indexHtml.indexOf('js/map3d-mirror.js?v=' + TAG_3D);
-    const viewerTag = indexHtml.indexOf('js/map3d-terrain.js?v=' + TAG_3D);
+    const viewerTag = indexHtml.indexOf('js/map3d-terrain.js?v=20261014-3d-slider-layout');
     const mapAppTag = indexHtml.indexOf('js/map-app.js?v=');
     const histEuTag = indexHtml.indexOf('js/historical-eu-maps.js?v=');
     assert(registryTag !== -1, 'index.html loads the shared layer registry');
@@ -58,7 +58,7 @@ const TAG_3D = '20261013-3d-mobile';           /* registry + mirror + viewer  */
     assert(registryTag < mirrorTag && mirrorTag < viewerTag,
         'registry → mirror → viewer: the viewer reads both, and neither reads the viewer');
     assert(indexHtml.includes('css/maplibre-gl.css?v=' + TAG) &&
-           indexHtml.includes('css/map3d-terrain.css?v=' + TAG_3D),
+           indexHtml.includes('css/map3d-terrain.css?v=20261014-3d-slider-layout'),
         'index.html loads the MapLibre stylesheet and the 3D skin');
     assert(indexHtml.indexOf('css/maplibre-gl.css') < indexHtml.indexOf('css/map3d-terrain.css'),
         'the 3D skin comes after the stylesheet it re-skins');
@@ -66,8 +66,8 @@ const TAG_3D = '20261013-3d-mobile';           /* registry + mirror + viewer  */
     // Service worker: the shell must ship the new modules, and the cache must
     // be bumped so an installed PWA picks the mirrored 3D view up.
     ['js/layer-registry.js?v=' + TAG_3D, 'js/map3d-mirror.js?v=' + TAG_3D,
-     'js/map3d-terrain.js?v=' + TAG_3D, 'js/maplibre-gl.js?v=' + TAG,
-     'css/map3d-terrain.css?v=' + TAG_3D, 'css/maplibre-gl.css?v=' + TAG].forEach(function (asset) {
+     'js/map3d-terrain.js?v=20261014-3d-slider-layout', 'js/maplibre-gl.js?v=' + TAG,
+     'css/map3d-terrain.css?v=20261014-3d-slider-layout', 'css/maplibre-gl.css?v=' + TAG].forEach(function (asset) {
         assert(swJs.includes("'" + asset + "'"), 'sw.js precaches ' + asset);
     });
     const shellVersion = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
@@ -95,8 +95,11 @@ const TAG_3D = '20261013-3d-mobile';           /* registry + mirror + viewer  */
         'both read the live 2D Leaflet map (window._dlMap), not a copy of the layer list');
     assert(/url2d|wms2dOptions|tile2dOptions|cenagisCatalog/.test(mapApp) && /DetectLabLayers/.test(mapApp),
         'the 2D map keeps building its layers from the same registry');
-    assert(!/DetectLabMap3D/.test(mapApp) && !/DetectLabMirror/.test(mapApp),
-        'the 2D map does not depend on the 3D view (it keeps working with the viewer absent)');
+    const searchSelection = mapApp.match(/function selectResult\(item\) \{[\s\S]*?\n {12}\}/);
+    assert(searchSelection && /map3d && typeof map3d\.isOpen === 'function'/.test(searchSelection[0]),
+        'search only calls the optional 3D viewer when it is available');
+    assert(!/DetectLabMap3D/.test(mapApp.replace(searchSelection[0], '')) && !/DetectLabMirror/.test(mapApp),
+        'outside the optional search hand-off, the 2D map does not depend on the 3D view');
     assert(/url2d|wms2dOptions|tile2dOptions/.test(histEu), 'the historical catalogue uses the same registry');
     console.log('  ✓ one definition per layer: registry + live 2D layers, nothing duplicated in the viewer');
 }

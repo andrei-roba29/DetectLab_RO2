@@ -452,7 +452,11 @@
 //   on screen when it still fails (it used to remove body.is-3d, hiding the
 //   very surface that carried the message) and recovers from a lost context.
 //   Cache bumped so installed PWAs pick up the new viewer + skin.
-const CACHE_NAME = 'detectlab-v196-3d-mobile';
+// v197: clear the 3D terrain/help overlap and inset web fullscreen zoom.
+// v198: place/coordinate search exits 3D before flying to the 2D result.
+// v199: country switching exits terrain before fitting and replacing outlines.
+// v200: separate transparent 3D sliders and PWA lower-half/top-left controls.
+const CACHE_NAME = 'detectlab-v200-3d-slider-layout';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -484,13 +488,17 @@ const PRECACHE_URLS = [
   'js/map3d-mirror.js?v=20261013-3d-mobile',
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
+  'js/map3d-terrain.js?v=20261014-3d-slider-layout',
   'js/map3d-terrain.js?v=20261013-3d-mobile',
   'js/map3d-terrain.js?v=20261013-3d-mirror',
   'js/map3d-terrain.js',
   'js/maplibre-gl.js?v=20261013-3d-terrain',
   'js/maplibre-gl.js',
   'css/maplibre-gl.css?v=20261013-3d-terrain',
+  'css/map3d-terrain.css?v=20261014-3d-slider-layout',
+  'css/map3d-terrain.css?v=20261014-map-control-spacing',
   'css/map3d-terrain.css?v=20261013-3d-mobile',
+  'css/styles.css?v=20261014-map-control-spacing',
   'css/map3d-terrain.css?v=20261013-3d-mirror',
   // European Historical Maps (CENAGIS / IH PAN)
   'js/historical-eu-maps.js?v=20261008-country-overlap',
@@ -1075,6 +1083,7 @@ const PRECACHE_URLS = [
   // order (gate → dock → map-app).
   'css/globe-country-picker.css?v=20261013-no-change-pill',
   'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
+  'js/globe-country-picker.js?v=20261014-country-exit-3d',
   'js/globe-country-picker.js?v=20261013-no-change-pill',
   'js/wms-health.js?v=20261013-wms-guard',
   // v167: country dock glued under the search bar (country switcher +
@@ -1085,6 +1094,7 @@ const PRECACHE_URLS = [
   'js/country-dock.js?v=20261009-3d-globe',
   'js/country-dock.js?v=20261013-country-2d',
   'js/map-app.js?v=20261011-arcgis-basemap',
+  'js/map-app.js?v=20261014-search-exit-3d',
   'js/map-app.js?v=20261013-fr-lidar',
   'js/map-app.js?v=20261009-3d-globe',
   'js/map-app.js?v=20261009-lidar-globe-twin',

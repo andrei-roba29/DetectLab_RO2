@@ -39,7 +39,7 @@ assert.doesNotMatch(styles, /atlas-primary|atlas-view|legacy-map-tab|atlas-mode-
  * drapes the historical layers over a DEM; see MAP_3D_TERRAIN.md. */
 assert.doesNotMatch(index, /leaflet-maplibre-gl|globe-base-layer/,
     'the retired MapLibre globe basemap is not loaded by the shell');
-assert(index.includes('js/map3d-terrain.js?v=20261013-3d-mobile') &&
+assert(index.includes('js/map3d-terrain.js?v=20261014-3d-slider-layout') &&
        index.includes('js/layer-registry.js?v=20261013-3d-mobile') &&
        index.includes('js/map3d-mirror.js?v=20261013-3d-mobile'),
     'the 3D terrain viewer, its shared layer registry and the 2D→3D mirror are loaded');
@@ -72,9 +72,9 @@ assert.match(index, /id="mapLock"/, 'the members-only lock overlay is restored')
 const order = [
     'js/translations.js?v=20261013-no-change-pill',
     'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
-    'js/globe-country-picker.js?v=20261013-no-change-pill',
+    'js/globe-country-picker.js?v=20261014-country-exit-3d',
     'js/country-dock.js?v=20261013-country-2d',
-    'js/map-app.js?v=20261013-fr-lidar',
+    'js/map-app.js?v=20261014-search-exit-3d',
     'js/offline-maps.js?v=20261009-3d-globe'
 ];
 order.forEach((asset) => assert(index.includes(asset), 'index.html loads ' + asset));
@@ -132,20 +132,20 @@ assert(cacheVersion >= 187, 'the PWA shell version was bumped to v187 for the fl
   'css/europe-roman-atlas.css?v=20261011-arcgis-primary',
   'js/europe-roman-atlas.js?v=20261011-arcgis-primary',
   'js/atlas-shell.js?v=20261011-arcgis-primary',
-  'css/styles.css?v=20261008-roman-dare-icons',
+  'css/styles.css?v=20261014-map-control-spacing',
   'css/globe-country-picker.css?v=20261013-no-change-pill',
   'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
-  'js/globe-country-picker.js?v=20261013-no-change-pill',
+  'js/globe-country-picker.js?v=20261014-country-exit-3d',
   'css/country-dock.css?v=20261008',
   'js/country-dock.js?v=20261013-country-2d',
-  'js/map-app.js?v=20261013-fr-lidar',
+  'js/map-app.js?v=20261014-search-exit-3d',
   'js/offline-maps.js?v=20261009-3d-globe',
   'js/translations.js?v=20261013-no-change-pill',
   'data/countries-50m.json'
 ].forEach((asset) => assert(sw.includes("'" + asset + "'"), 'PWA precaches ' + asset));
 assert.doesNotMatch(sw, /'js\/(?:leaflet-maplibre-gl|globe-base-layer)\.js/, 'PWA does not precache the retired globe modules');
 assert(sw.includes("'js/maplibre-gl.js?v=20261013-3d-terrain'") &&
-       sw.includes("'js/map3d-terrain.js?v=20261013-3d-mobile'") &&
+       sw.includes("'js/map3d-terrain.js?v=20261014-3d-slider-layout'") &&
        sw.includes("'js/map3d-mirror.js?v=20261013-3d-mobile'"),
     'PWA precaches the vendored 3D SDK and the terrain viewer');
 

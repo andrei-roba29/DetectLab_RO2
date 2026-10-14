@@ -347,12 +347,23 @@
         return frame;
     }
 
+    // The terrain viewer is separate from the globe country picker. Its
+    // close() copies the old camera into Leaflet, so it must run BEFORE a
+    // country transition or publication of the new country/lock/outline.
+    function closeTerrainView() {
+        var terrain = window.DetectLabMap3D;
+        if (terrain && typeof terrain.isOpen === 'function' && terrain.isOpen()) {
+            terrain.close();
+        }
+    }
+
     /* The country gate is a temporary 3D surface. The working map underneath
        is deliberately a flat Leaflet/Web-Mercator map, using the same Esri
        World Imagery tiles. Start its camera transition while the globe is
        still visible so the two surfaces meet on the same country instead of
        revealing a second, unrelated view. */
     function prepareFlatMapTransition(iso, bbox, frame) {
+        closeTerrainView();
         var map = activeMap();
         state.mapTransition = null;
         if (!map || !window.L || !Array.isArray(bbox) || bbox.length !== 4) return false;
@@ -366,6 +377,13 @@
                 try { window.setArcgisBasemap('imagery'); } catch (e) {}
             }
             if (typeof map.stop === 'function') map.stop();
+            // Country fits/globe hand-offs are north-up. Do not carry a
+            // terrain bearing into Leaflet's axis-aligned vector viewport.
+            if (typeof map.setBearing === 'function') map.setBearing(0, { force: true, noMove: true });
+            // The old country's maxBounds would clamp this fit to its own
+            // territory. Drop both its pan lock and outline before moving.
+            map.setMaxBounds(null);
+            removeCountryBoundsLayer();
             if (typeof map.invalidateSize === 'function') map.invalidateSize({ pan: false });
             // A previous country's lock also raised the map's zoom floor; drop
             // it before the transition fit, otherwise Leaflet's setView clamps
@@ -415,16 +433,28 @@
             rememberBaseZoom(map);
             var bounds = bboxBounds(bbox);
             if (!bounds) return;
+            // A dock selection is an atomic camera/outline replacement, not
+            // a flight under the globe. Stop any old pan/zoom before fitting.
+            if (!options.skipFit) {
+                if (typeof map.stop === 'function') map.stop();
+                if (typeof map.setBearing === 'function') map.setBearing(0, { force: true, noMove: true });
+            }
+            map.setMaxBounds(null);
             var padded = typeof bounds.pad === 'function' ? bounds.pad(LOCK_PAD) : bounds;
             var fitZoom = (typeof options.fitZoom === 'number') ? options.fitZoom : countryFitZoom(map, bounds);
-            map.setMaxBounds(null);
+            if (!options.skipFit) {
+                // Fit outside the previous country's zoom floor. A synchronous
+                // fit lets Leaflet reproject vectors before the outline swap,
+                // rather than adding a new-country outline mid-old-country zoom.
+                if (state.boundsIso !== window._detectlabSelectedCountry) removeCountryBoundsLayer();
+                map.setMinZoom(state.baseMinZoom);
+                if (typeof map.setMaxZoom === 'function') map.setMaxZoom(state.baseMaxZoom);
+                map.fitBounds(bounds, { padding: [FIT_PADDING, FIT_PADDING], maxZoom: fitZoom, animate: false });
+            }
             map.options.maxBoundsViscosity = 1;
             map.setMaxBounds(padded);
             map.setMinZoom(Math.max(state.baseMinZoom, fitZoom - LOCK_ZOOM_SLACK));
             if (typeof map.setMaxZoom === 'function') map.setMaxZoom(state.baseMaxZoom);
-            if (!options.skipFit) {
-                map.fitBounds(bounds, { padding: [FIT_PADDING, FIT_PADDING], maxZoom: fitZoom, animate: true });
-            }
             state.locked = true;
             state.fitZoom = fitZoom;
             // The bounds of the selected country stay visible on the map for
@@ -490,10 +520,12 @@
 
     function removeCountryBoundsLayer() {
         var layer = state.boundsLayer;
+        var map = state.boundsMap || activeMap();
         state.boundsLayer = null;
+        state.boundsMap = null;
+        state.boundsIso = null;
         state.boundsFeature = null;
         if (!layer) return;
-        var map = activeMap();
         if (map && typeof map.removeLayer === 'function') {
             try { map.removeLayer(layer); } catch (e) {}
         }
@@ -519,7 +551,9 @@
         // Redrawing the identical geometry (re-lock on the same country, a
         // window resize, a second refresh) would flash the outline away and
         // back; only a new feature object (the 10m refinement) replaces it.
-        if (state.boundsLayer && state.boundsIso === iso && state.boundsFeature === feature) return;
+        if (state.boundsLayer && state.boundsMap === map && state.boundsIso === iso &&
+            state.boundsFeature === feature &&
+            (typeof map.hasLayer !== 'function' || map.hasLayer(state.boundsLayer))) return;
         removeCountryBoundsLayer();
         // Leaflet passes these options straight to every vector it builds
         // (bundled 1.9.4: geometryToLayer forwards the GeoJSON options), so
@@ -545,6 +579,7 @@
         try {
             map.addLayer(layer);
             state.boundsLayer = layer;
+            state.boundsMap = map;
             state.boundsIso = iso;
             state.boundsFeature = feature;
         } catch (e) {}
@@ -592,6 +627,7 @@
     }
 
     function applySelection(iso, name, bbox) {
+        closeTerrainView();
         window._detectlabSelectedCountry = iso;
         window._detectlabSelectedCountryName = name;
         window._detectlabCountryBounds = bbox;
@@ -1785,6 +1821,7 @@
     function selectCountryByIso(iso) {
         iso = String(iso || '').toUpperCase();
         if (!NAMES[iso]) return Promise.reject(new Error('Unknown country code: ' + iso));
+        closeTerrainView();
         return ensureReady().catch(function () {
             // Preserve the dock API while offline: the static names/approximate
             // bounds still provide a valid single-country lock.
@@ -1809,6 +1846,7 @@
        It releases the lock, pulls back to the European overview and reopens
        the globe, so leaving a country always means choosing another one. */
     function exitView() {
+        closeTerrainView();
         var map = activeMap();
         unlockCountryView();
         if (map && typeof map.setView === 'function') {
@@ -1924,6 +1962,7 @@
         baseMinZoom: null,      // the map's own zoom range, remembered once
         baseMaxZoom: null,
         boundsLayer: null,      // the country outline drawn on the Leaflet map
+        boundsMap: null,        // owning map, even if activeMap changes during attach
         boundsIso: null,        // ...and which country / geometry object it is
         boundsFeature: null
     };
