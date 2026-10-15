@@ -30,7 +30,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleTileRequest, proxyReport, registry } from '../netlify/lib/map3d-tile.mjs';
-import { ROUTES as DANISH_ROUTES } from '../netlify/lib/danish-layers.mjs';
+import { ROUTES as DANISH_ROUTES } from '../backend/src/lib/danish-layers.mjs';
 import { countryModuleScope } from '../netlify/lib/map3d-country-modules.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

@@ -19,7 +19,7 @@ layer's real GetMap/GetTile URL against the service's documented contract.
 
 No secret is ever written into `js/`, `index.html` or any file that is served to
 a browser. The credentialed Danish layers go through same-origin routes
-(`/api/geo/dk-*`, implemented in `netlify/lib/danish-layers.mjs`, mirrored by
+(`/api/geo/dk-*`, implemented in `backend/src/lib/danish-layers.mjs`, mirrored by
 `netlify/functions/*.mjs` and `backend/src/routes/geoProxy.js`), which add the
 secret **server-side** and strip any credential the caller tried to send.
 

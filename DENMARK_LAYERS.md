@@ -12,14 +12,35 @@ as buttons in the existing basemap control. Nothing about the existing layers,
 their controls, the projections or the default view changed.
 
 ```
-index.html                     #danishRow … #danishSubLayers  (one empty container)
-js/danish-layers.config.js     the six layers — the only file to edit for a change
-js/danish-layers.js            reads the config, builds rows, panes, tiles, WFS
-netlify/lib/danish-layers.mjs  the three same-origin routes + credential handling
-netlify/functions/dk-*.mjs     thin wrappers for Netlify
-backend/src/routes/geoProxy.js the same routes for the Express deployment
-tools/map3d-dev-server.mjs     serves the routes locally (phone testing, 375 px)
+index.html                          #danishRow … #danishSubLayers (one empty container)
+js/danish-layers.config.js          the six layers — the only file to edit for a change
+js/danish-layers.js                 reads the config, builds rows, panes, tiles, WFS
+backend/src/lib/danish-layers.mjs   the three routes: credentials, params, cache
+backend/src/lib/danish-layers.config.cjs  generated copy of the config (see below)
+backend/src/routes/geoProxy.js      the same routes for the Express deployment
+netlify/functions/dk-*.mjs          thin wrappers for Netlify
+tools/map3d-dev-server.mjs          serves the routes locally (phone testing, 375 px)
+tools/sync-danish-config.mjs        regenerates that copy; --check fails on drift
 ```
+
+The backend owns those routes and is deployed **on its own** — Railway builds this
+repository with `backend/` as the root directory, so the container only contains
+`/app/src/…`. No file under `backend/` may therefore import anything above it
+(an `../../../netlify/…` or `../../../js/…` specifier becomes `/netlify/…` in the
+container and the process dies at startup with `ERR_MODULE_NOT_FOUND`). That is
+why the library lives at `backend/src/lib/` and why the layer config is vendored
+next to it as `danish-layers.config.cjs`:
+
+```bash
+node tools/sync-danish-config.mjs          # after editing js/danish-layers.config.js
+node tools/sync-danish-config.mjs --check  # what the test suite runs
+```
+
+It is a `.cjs` file because `backend/package.json` is `"type": "module"`: a `.js`
+copy there would be parsed as ESM and `require()` would return an empty object.
+`test-danish-layers.js` enforces both rules — it scans every `backend/` source for
+a relative `import`/`require` that resolves outside `backend/`, and it runs the
+`--check` above, so neither the crash nor a stale mirror can come back unnoticed.
 
 ## The layers
 

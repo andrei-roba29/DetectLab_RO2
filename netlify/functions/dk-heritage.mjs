@@ -20,7 +20,7 @@
  * Licence: CC0 1.0, © Slots- og Kulturstyrelsen — see DATA_SOURCES.md.
  * The third-party mirror (geoserver.witx.dk) is deliberately NOT used.
  */
-import { heritageResponse, jsonProblem } from '../lib/danish-layers.mjs';
+import { heritageResponse, jsonProblem } from '../../backend/src/lib/danish-layers.mjs';
 
 export default async (request) => {
     if (request.method === 'OPTIONS') {

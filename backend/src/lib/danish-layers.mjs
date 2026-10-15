@@ -1,5 +1,5 @@
 /*
- * netlify/lib/danish-layers.mjs
+ * backend/src/lib/danish-layers.mjs
  * ───────────────────────────────────────────────────────────────────────────
  * Server-side helpers for the Danish layers in js/danish-layers.config.js.
  *
@@ -37,8 +37,15 @@ import path from 'node:path';
 const require = createRequire(import.meta.url);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-/** The layer config, shared verbatim with the browser. */
-export const config = require(path.resolve(HERE, '../../js/danish-layers.config.js'));
+/* The layer config, shared with the browser: the canonical file is
+ * js/danish-layers.config.js and this directory keeps a generated copy of it
+ * (backend/src/lib/danish-layers.config.cjs — .cjs on purpose: this package is
+ * "type": "module", so a .js copy would never export anything to require())
+ * because the backend is deployed with backend/ as its own app root and may not
+ * import anything outside it.
+ * `node tools/sync-danish-config.mjs` regenerates the copy and
+ * `--check` — run by the test suite — fails on any drift. */
+export const config = require(path.resolve(HERE, 'danish-layers.config.cjs'));
 
 /* ── KVP handling ─────────────────────────────────────────────────────────── */
 

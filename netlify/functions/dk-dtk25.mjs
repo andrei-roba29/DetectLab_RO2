@@ -24,7 +24,7 @@
  *
  * Environment variable: DATAFORSYNINGEN_TOKEN
  */
-import { dtk25Response, jsonProblem } from '../lib/danish-layers.mjs';
+import { dtk25Response, jsonProblem } from '../../backend/src/lib/danish-layers.mjs';
 
 export default async (request) => {
     if (request.method === 'OPTIONS') {

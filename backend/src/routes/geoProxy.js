@@ -47,18 +47,26 @@ import {
   dtk25Response,
   ortoResponse,
   heritageResponse,
-} from '../../../netlify/lib/danish-layers.mjs';
+} from '../lib/danish-layers.mjs';
 
 const require = createRequire(import.meta.url);
 /* The Danish layer definitions are shared verbatim with the browser and with
- * the Netlify functions — one description of every Danish layer. */
+ * the Netlify functions — one description of every Danish layer. This app is
+ * deployed with backend/ as its own root (Railway), so it reads the vendored
+ * copy that sits next to the proxy library rather than the repository file:
+ * `node tools/sync-danish-config.mjs` regenerates it from
+ * js/danish-layers.config.js and the test suite fails if it drifts. It is a
+ * .cjs file because this package is "type": "module" — a .js copy here would
+ * be parsed as ESM and export nothing to require(). */
 const danishLayers = require(path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)), '../../../js/danish-layers.config.js',
+  path.dirname(fileURLToPath(import.meta.url)), '../lib/danish-layers.config.cjs',
 ));
 
 /**
  * Express ⇄ Web Response bridge: the routing logic lives once, in
- * netlify/lib/danish-layers.mjs, and both runtimes call it. `fetch` is Node's
+ * backend/src/lib/danish-layers.mjs, and both runtimes call it — it lives
+ * inside backend/ because that directory is deployed as its own app root, so no
+ * import from here may ever point outside it. `fetch` is Node's
  * global fetch, available in the Express process too.
  */
 async function sendWebResponse(res, webResponse) {

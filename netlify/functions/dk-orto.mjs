@@ -18,7 +18,7 @@
  * Environment variables: DATAFORDELER_USER, DATAFORDELER_PASSWORD
  * Licence: CC BY 4.0, © Klimadatastyrelsen / GeoDanmark — see DATA_SOURCES.md.
  */
-import { ortoResponse, jsonProblem } from '../lib/danish-layers.mjs';
+import { ortoResponse, jsonProblem } from '../../backend/src/lib/danish-layers.mjs';
 
 export default async (request) => {
     if (request.method === 'OPTIONS') {

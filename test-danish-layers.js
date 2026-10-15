@@ -10,7 +10,7 @@
  *   2. the shared registry mirror (js/layer-registry.js) — the same layers in the
  *      catalogue the diagnostics and the offline audit read, with the same
  *      LAYERS / format / version / CRS, and a documented guard opt-out;
- *   3. the proxy library (netlify/lib/danish-layers.mjs) — the token and the
+ *   3. the proxy library (backend/src/lib/danish-layers.mjs) — the token and the
  *      service user are added server-side only, a caller can neither smuggle nor
  *      override credentials, a missing credential is a clean 501 naming the
  *      variable, and the heritage WFS is asked in EPSG:25832 and answered in
@@ -187,7 +187,7 @@ const TOKEN = 'test-token-not-a-credential';
  * 3. the proxy library
  * ══════════════════════════════════════════════════════════════════════════ */
 async function testProxies() {
-    const lib = await import('./netlify/lib/danish-layers.mjs');
+    const lib = await import('./backend/src/lib/danish-layers.mjs');
 
     /* EPSG:25832 reference values from PROJ (pyproj 3.7 / PROJ 9.5). */
     [
@@ -595,6 +595,58 @@ function testWiring() {
         'the generated rows and the basemap buttons are styled');
     assert.ok(css.indexOf('focus-visible') !== -1, 'and keyboard focus stays visible');
     ok('map-app hook, service worker, stylesheet and keyboard focus are wired');
+
+    /* ── the backend is deployed as its own app root ────────────────────────
+     * Railway builds this repository with `backend/` as the root directory, so
+     * the app lands at /app and a relative import that climbs out of it becomes
+     * /netlify/… and kills the container at startup (ERR_MODULE_NOT_FOUND).
+     * Every relative specifier under backend/ must therefore resolve to a file
+     * that still lives inside backend/. */
+    const fsMod = require('node:fs');
+    const spawnSync = require('node:child_process').spawnSync;
+    const pathMod = require('node:path');
+    const BACKEND = pathMod.resolve('backend');
+    const escapes = [];
+    const backFiles = [];
+    (function walk(dir) {
+        fsMod.readdirSync(dir, { withFileTypes: true }).forEach((entry) => {
+            const full = pathMod.join(dir, entry.name);
+            if (entry.isDirectory()) {
+                if (entry.name === 'node_modules') return;
+                walk(full);
+            } else if (/\.(m|c)?js$/.test(entry.name)) {
+                backFiles.push(full);
+            }
+        });
+    })(BACKEND);
+    assert.ok(backFiles.length > 10, 'the backend sources were scanned (' + backFiles.length + ' files)');
+    const specRe = /(?:from|import|require)\s*\(?\s*['"](\.[^'"]+)['"]/g;
+    backFiles.forEach((file) => {
+        const src = fsMod.readFileSync(file, 'utf8');
+        let m;
+        while ((m = specRe.exec(src)) !== null) {
+            const resolved = pathMod.resolve(pathMod.dirname(file), m[1]);
+            if (resolved !== BACKEND && !resolved.startsWith(BACKEND + pathMod.sep)) {
+                escapes.push(pathMod.relative(process.cwd(), file) + ' → ' + m[1]);
+            }
+        }
+    });
+    assert.deepStrictEqual(escapes, [],
+        'no backend import may leave backend/ (its own deploy root): ' + escapes.join('; '));
+    assert.ok(fsMod.existsSync('backend/src/lib/danish-layers.mjs'),
+        'the shared Danish proxy library lives inside the backend app root');
+    assert.ok(fsMod.existsSync('backend/src/lib/danish-layers.config.cjs'),
+        'the layer config is mirrored there as a .cjs file (backend/ is „type\": \"module\"“, ' +
+        'so a .js mirror would export nothing to require())');
+    assert.ok(read('backend/src/routes/geoProxy.js').includes("from '../lib/danish-layers.mjs'"),
+        'and the Express mirror imports it from there');
+    assert.ok(read('backend/src/lib/danish-layers.mjs').includes("require(path.resolve(HERE, 'danish-layers.config.cjs'))"),
+        'the library reads its own copy of the config, never the repository root');
+    const sync = spawnSync(process.execPath, ['tools/sync-danish-config.mjs', '--check'], { encoding: 'utf8' });
+    assert.strictEqual(sync.status, 0,
+        'the mirrored config is in step with js/danish-layers.config.js (run: node tools/sync-danish-config.mjs)' +
+        (sync.stdout || '') + (sync.stderr || ''));
+    ok('the backend stays self-contained (its deploy root is backend/)');
 }
 
 /* ── a stub of just enough DOM / Leaflet for the module ───────────────────── */
