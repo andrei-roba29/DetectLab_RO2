@@ -6188,143 +6188,110 @@
                 } else if (on && _romanVisible) _loadDynamicDareSites();
             };
 
-            // ── Drumuri romane: NDJSON în flux, segmente desenate pe măsură ce sosesc ──
+            // ── Drumuri romane ──────────────────────────────────────────────
+            // The network is a stream of NDJSON records (one record per route
+            // segment) and the map renders it as ONE canvas tile layer of
+            // binary geometry:
+            //   js/roman-roads-worker.js  reads + parses the stream off-thread,
+            //   js/roman-roads-parser.js  turns records into typed arrays,
+            //   js/roman-roads.js         paints the tiles the viewport shows.
+            // Nothing is parsed on the main thread any more, no road segment
+            // becomes a DOM node, nothing outside the viewport is drawn, and
+            // the item budget keeps the per-tile work flat. This is what the
+            // old per-segment `L.polyline` loop cost us: the stream stalled at
+            // a few percent, the tab froze and (mobile / installed PWA) the
+            // renderer killed the page. See ROMAN_ROADS_PERFORMANCE.md.
             var ROMAN_ROADS_URL = 'https://dacboefvooxgsngxkavx.supabase.co/storage/v1/object/public/Harti/route-segments-all-1791445468011.ndjson';
-            var _roadsLoading = false, _roadsDone = false;
+            var _roadsLoading = false, _roadsDone = false, _roadsLoad = null;
 
-            function _roadStyle() {
-                return { color: '#FF5A36', weight: 1.8, opacity: _romanOpacity, interactive: false, pane: 'pane_roman' };
+            // The canvas layer that carries the roads (created on first use).
+            function _roadsLayer() {
+                var lyr = _romanLayers.roads;
+                if (lyr && lyr.addBatch) return lyr;
+                var factory = window.DetectLabRomanRoads;
+                if (!factory) return null;
+                var cfg = ROMAN_SUB_LAYERS.roads || {};
+                lyr = factory.createLayer({
+                    pane: 'pane_roman',
+                    name: 'Roman roads',
+                    color: cfg.color || '#FF5A36',
+                    weight: cfg.weight || 1.8,
+                    opacity: _romanOpacity
+                });
+                if (!lyr) return null;
+                _romanLayers.roads = lyr;
+                /* The analysis panel measures against the same network when it
+                 * is already on the map, instead of downloading the reference
+                 * GeoJSON again (js/archeo-report.js). */
+                window._romanRoadsLayer = lyr;
+                return lyr;
             }
-            function _wktPaths(w) {
-                var out = [], re = /\(([^()]+)\)/g, m;
-                while ((m = re.exec(w))) {
-                    var pts = m[1].split(',').map(function (s) { return s.trim().split(/\s+/).map(Number); })
-                        .filter(function (a) { return a.length >= 2 && !a.some(isNaN); });
-                    if (pts.length > 1) out.push(pts);
-                }
-                return out;
+
+            function _roadsMb(bytes) {
+                var mb = bytes / 1048576;
+                return (mb < 10 ? mb.toFixed(1) : Math.round(mb)) + ' MB';
             }
-            function _toPaths(g) {
-                if (!g) return [];
-                if (typeof g === 'string') {
-                    var t = g.trim();
-                    return t[0] === '{' ? _toPaths(JSON.parse(t)) : /LINESTRING/i.test(t) ? _wktPaths(t) : [];
+
+            // Live status: bytes read / total + segments kept, so the line
+            // keeps moving while the stream arrives instead of parking at a
+            // byte percentage the user cannot interpret.
+            function _roadsStatus(ev) {
+                var parts = [ev.segments.toLocaleString() + ' segments'];
+                if (ev.total) {
+                    parts.push(_roadsMb(ev.bytes) + ' / ' + _roadsMb(ev.total) +
+                        ' · ' + Math.min(100, Math.round(ev.bytes / ev.total * 100)) + '%');
+                } else {
+                    parts.push(_roadsMb(ev.bytes) + ' read');
                 }
-                if (Array.isArray(g)) {
-                    if (g.length && typeof g[0][0] === 'number') return [g];
-                    if (g.length && Array.isArray(g[0][0]) && typeof g[0][0][0] === 'number') return g;
-                    return [];
-                }
-                switch (g.type) {
-                    case 'Feature': return _toPaths(g.geometry);
-                    case 'FeatureCollection': return g.features.reduce(function (a, f) { return a.concat(_toPaths(f)); }, []);
-                    case 'GeometryCollection': return g.geometries.reduce(function (a, x) { return a.concat(_toPaths(x)); }, []);
-                    case 'LineString': return [g.coordinates];
-                    case 'MultiLineString': return g.coordinates;
-                }
-                if (g.paths) return g.paths;
-                return [];
-            }
-            function _recordPaths(o) {
-                if (!o || typeof o !== 'object') return [];
-                var p = _toPaths(o);
-                if (p.length) return p;
-                var srcs = [o, o.properties || {}], keys = ['geometry', 'geom', 'geojson', 'the_geom', 'wkt', 'shape', 'line', 'path', 'coordinates', 'coords'];
-                for (var s = 0; s < srcs.length; s++) for (var k = 0; k < keys.length; k++) {
-                    if (srcs[s][keys[k]] == null) continue;
-                    try { p = _toPaths(srcs[s][keys[k]]); } catch (e) { p = []; }
-                    if (p.length) return p;
-                }
-                return [];
-            }
-            function _thinPath(path, tol) {
-                var out = [path[0]], l = path[0];
-                for (var i = 1; i < path.length - 1; i++) {
-                    var q = path[i];
-                    if (Math.hypot(q[0] - l[0], q[1] - l[1]) > tol) { out.push(q); l = q; }
-                }
-                out.push(path[path.length - 1]);
-                return out;
-            }
-            // Citește NDJSON din Response: linie cu linie, cu progres pe bytes.
-            function _readNdjsonStream(resp, onLine, onProgress) {
-                var total = +resp.headers.get('content-length') || 0;
-                if (!resp.body || !resp.body.getReader) {
-                    return resp.text().then(function (t) { t.split('\n').forEach(function (l) { if (l.trim()) onLine(l.trim()); }); });
-                }
-                var reader = resp.body.getReader(), dec = new TextDecoder(), buf = '', got = 0;
-                function pump() {
-                    return reader.read().then(function (res) {
-                        if (res.done) { buf += dec.decode(); if (buf.trim()) onLine(buf.trim()); return; }
-                        got += res.value.length;
-                        buf += dec.decode(res.value, {stream: true});
-                        var i, start = 0;
-                        while ((i = buf.indexOf('\n', start)) >= 0) {
-                            var line = buf.slice(start, i).trim(); start = i + 1;
-                            if (line) onLine(line);
-                        }
-                        buf = buf.slice(start);
-                        if (onProgress) onProgress(got, total);
-                        return pump();
-                    });
-                }
-                return pump();
+                if (ev.stride && ev.stride > 1) parts.push('sampled 1:' + ev.stride);
+                else if (ev.sampled) parts.push(ev.sampled.toLocaleString() + ' dropped');
+                if (ev.elapsed > 4000) parts.push(Math.round(ev.elapsed / 1000) + 's');
+                _romanStatus('roads', 'Roads: ' + parts.join(' · '));
             }
 
             function _loadRomanRoads() {
-                var group = _romanLayers.roads;
-                if (!group) { group = L.featureGroup([], { pane: 'pane_roman' }); _romanLayers.roads = group; }
-                if (_romanEnabled.roads && _romanVisible && !_romanGroup.hasLayer(group)) _romanGroup.addLayer(group);
+                var layer = _roadsLayer();
+                if (!layer) {
+                    _romanStatus('roads', 'Roads: canvas layer unavailable.');
+                    return;
+                }
+                if (_romanEnabled.roads && _romanVisible && !_romanGroup.hasLayer(layer)) _romanGroup.addLayer(layer);
                 if (_roadsDone || _roadsLoading) return;
+                if (!window.DetectLabRomanRoads) {
+                    _romanStatus('roads', 'Roads: loader not loaded (js/roman-roads.js).');
+                    return;
+                }
                 _roadsLoading = true;
                 _romanStatus('roads', 'Roads: downloading…');
+                var startedAt = (window.performance && performance.now) ? performance.now() : Date.now();
 
-                var lines = 0, segs = 0, pending = [], frame = null, merc = null;
-                function flush() {
-                    frame = null;
-                    var batch = pending; pending = [];
-                    batch.forEach(function (ll) { group.addLayer(L.polyline(ll, _roadStyle())); });
-                }
-                function queue(ll) {
-                    pending.push(ll);
-                    if (frame === null) frame = requestAnimationFrame(flush);
-                }
-
-                fetch(ROMAN_ROADS_URL)
-                    .then(function (r) {
-                        if (!r.ok) throw new Error('HTTP ' + r.status);
-                        return _readNdjsonStream(r, function (line) {
-                            lines++;
-                            var o; try { o = JSON.parse(line); } catch (e) { return; }
-                            var paths = _recordPaths(o).filter(function (p) { return p && p.length > 1; });
-                            if (!paths.length) return;
-                            if (merc === null) merc = Math.abs(paths[0][0][0]) > 360;   // coordonate Web Mercator?
-                            var tol = merc ? 1000 : 0.01;
-                            paths.forEach(function (p) {
-                                var ll = _thinPath(p, tol).map(function (c) {
-                                    if (!merc) return [c[1], c[0]];
-                                    var ll2 = L.CRS.EPSG3857.unproject(L.point(c[0], c[1]));
-                                    return [ll2.lat, ll2.lng];
-                                });
-                                queue(ll); segs++;
-                            });
-                        }, function (got, total) {
-                            _romanStatus('roads', 'Roads: ' + lines.toLocaleString() + ' lines read… ' + (total ? Math.round(got / total * 100) + '%' : ''));
-                        });
-                    })
-                    .then(function () {
-                        if (frame !== null) { cancelAnimationFrame(frame); }
-                        flush();
-                        _roadsDone = true; _roadsLoading = false;
-                        _romanStatus('roads', segs
-                            ? 'Roads: ' + segs.toLocaleString() + ' segments loaded.'
-                            : 'Roads: no geometry recognised in ' + lines + ' lines.');
-                    })
-                    .catch(function (e) {
+                _roadsLoad = window.DetectLabRomanRoads.load(ROMAN_ROADS_URL, {
+                    config: window.DetectLabRomanRoads.configForDevice(),
+                    onBatch: function (payload) {
+                        layer.addBatch(payload);
+                    },
+                    onProgress: function (ev) { _roadsStatus(ev); },
+                    onDone: function (stats) {
                         _roadsLoading = false;
-                        console.warn('[Roman] roads failed:', e && e.message);
-                        _romanStatus('roads', 'Roads: could not load (' + (e && e.message) + ').');
-                    });
+                        _roadsDone = true;
+                        var segs = (stats && stats.segments) || layer.getStats().segments;
+                        var elapsed = Math.round(((window.performance && performance.now) ? performance.now() : Date.now()) - startedAt);
+                        if (segs) {
+                            _romanStatus('roads', 'Roads: ' + segs.toLocaleString() + ' segments loaded.');
+                            console.info('[Roman] roads ready: ' + segs.toLocaleString() + ' segments, ' +
+                                (layer.getStats().vertices || 0).toLocaleString() + ' vertices, ' +
+                                _roadsMb(layer.getStats().bytes) + ' geometry in ' + (elapsed / 1000).toFixed(1) + 's' +
+                                (stats && stats.sampled ? ' (' + stats.sampled.toLocaleString() + ' segment(s) sampled out to fit the memory budget)' : ''));
+                        } else {
+                            _romanStatus('roads', 'Roads: no geometry recognised in ' + ((stats && stats.seen) || 0) + ' lines.');
+                        }
+                    },
+                    onError: function (message) {
+                        _roadsLoading = false;
+                        console.warn('[Roman] roads failed:', message);
+                        _romanStatus('roads', 'Roads: could not load (' + message + ').');
+                    }
+                });
             }
 
             // ── ROMAN: load helpers & public toggles ──

@@ -4815,7 +4815,14 @@
          views can never drift apart. Must load before map-app.js and
          historical-eu-maps.js. -->
     <script src="js/layer-registry.js?v=20261014-wms-audit"></script>
-    <script src="js/map-app.js?v=20261014-lidar-3d-focus"></script>
+    <!-- Roman roads („Drumuri romane”): the parser owns the record/geometry
+         format, the layer paints the road network on canvas tiles, and the
+         worker streams + parses the NDJSON off the main thread. map-app.js
+         only wires them to the layer switch. Load before map-app.js.
+         See ROMAN_ROADS_PERFORMANCE.md. -->
+    <script src="js/roman-roads-parser.js?v=20261015-roman-roads"></script>
+    <script src="js/roman-roads.js?v=20261015-roman-roads"></script>
+    <script src="js/map-app.js?v=20261015-roman-roads"></script>
     <script src="js/historical-eu-maps.js?v=20261013-flat-hist-maps"></script>
     <!-- 2D ⇄ 3D: MapLibre GL viewer draped over the DEM. The 3D deck is the
          mirror of the live 2D Leaflet map — raster, WMS/WMTS, image overlays,

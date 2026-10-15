@@ -71,24 +71,42 @@ assert.strictEqual(places[2].L, 1);
 assert(mapApp.includes("x.replace(/^\\uFEFF/, '').trim().toLowerCase()"), 'CSV header BOM is removed');
 console.log('  ✓ Pleiades CSV parser handles UTF-8 BOM, quotes and period filtering');
 
-// The road loader must consume one line at a time and schedule incremental
-// segment drawing/progress instead of waiting for JSON.parse of the full file.
-assert(mapApp.includes('function _readNdjsonStream(resp, onLine, onProgress)'), 'roads are read as an NDJSON stream');
-assert(mapApp.includes('return reader.read().then(function (res)'), 'stream reader pumps chunks incrementally');
-assert(mapApp.includes("'Roads: ' + lines.toLocaleString() + ' lines read… '"), 'road progress is shown while data arrives');
-assert(mapApp.includes('pending.push(ll)') && mapApp.includes('requestAnimationFrame(flush)'), 'segments are drawn progressively in animation-frame batches');
-assert(mapApp.includes("'Roads: ' + segs.toLocaleString() + ' segments loaded.'"), 'final segment count is reported');
+// Roads no longer become one L.polyline (and therefore one SVG <path>) per
+// segment on the main thread — that is what froze the tab and killed the page.
+// They are parsed off-thread into typed arrays and painted on canvas tiles, so
+// the loader contract is now: a worker-backed parser, a canvas grid layer, and
+// progress expressed in segments + bytes rather than a byte percentage alone.
 assert(mapApp.includes('var ROMAN_ROADS_URL =') && mapApp.includes('.ndjson'), 'Roman routes use the reference NDJSON asset');
 assert(mapApp.includes("if (cfg.type === 'ndjson') { _loadRomanRoads(); return; }"), 'roads are connected to the Roman layer toggle');
-console.log('  ✓ progressive NDJSON loading and visible progress preserved');
+assert(mapApp.includes('window.DetectLabRomanRoads.load(ROMAN_ROADS_URL'), 'the shared loader owns the stream');
+assert(mapApp.includes('factory.createLayer({') && mapApp.includes("pane: 'pane_roman'"), 'roads are painted by a canvas grid layer in the Roman pane');
+assert(!mapApp.includes('_readNdjsonStream') && !mapApp.includes('_roadStyle') && !mapApp.includes('_thinPath'),
+    'no per-segment Leaflet/SVG path loader is left behind');
+assert(mapApp.includes("_romanStatus('roads', 'Roads: ' + parts.join(' · '))"), 'live progress is reported while data arrives');
+assert(mapApp.includes("'Roads: ' + segs.toLocaleString() + ' segments loaded.'"), 'final segment count is reported');
+assert(mapApp.includes("onError: function (message)"), 'stream failures are surfaced instead of leaving the layer blank');
+// The parser/loader/worker must be shipped and cached, otherwise the map falls
+// back to the message above ("loader not loaded").
+const loader = read('js/roman-roads.js');
+const parser = read('js/roman-roads-parser.js');
+const worker = read('js/roman-roads-worker.js');
+assert(loader.includes('DetectLabRomanRoads') && loader.includes('mainThread'), 'loader exposes a main-thread fallback');
+assert(parser.includes('createCollector') && parser.includes('rdpMask'), 'parser turns records into simplified typed arrays');
+assert(worker.includes('importScripts') && worker.includes('roman-roads-parser.js'), 'worker loads the shared parser');
+for (const asset of ['js/roman-roads.js', 'js/roman-roads-parser.js', 'js/roman-roads-worker.js']) {
+    assert(sw.includes(asset), 'service worker precaches ' + asset);
+}
+console.log('  ✓ worker/canvas road loading and visible progress preserved');
 
 // Premium users only may activate Roman/CENAGIS layers through either the UI
 // capture guard or direct JavaScript toggles.
 assert(subscriptions.includes("'toggleRomanSub'"), 'Roman sublayer API is premium-gated');
 assert(subscriptions.includes("'toggleRomanDareCategories'"), 'DARE All/None API is premium-gated');
 assert(subscriptions.includes('euMaps.toggleCenagisLayer = function (mapKey, on)'), 'CENAGIS catalog toggle is premium-gated');
-assert(html.includes('js/map-app.js?v=20261014-3d-vectors'), 'index.html loads the 2D compatibility map-app script');
-assert(sw.includes('js/map-app.js?v=20261014-3d-vectors'), 'current map-app script is in the service-worker cache');
+assert(html.includes('js/map-app.js?v=20261015-roman-roads'), 'index.html loads the 2D compatibility map-app script');
+assert(sw.includes('js/map-app.js?v=20261015-roman-roads'), 'current map-app script is in the service-worker cache');
+assert(html.includes('js/roman-roads.js?v=20261015-roman-roads'), 'index.html loads the Roman-roads canvas layer');
+assert(sw.includes('js/roman-roads.js?v=20261015-roman-roads'), 'the Roman-roads layer is in the service-worker cache');
 assert(sw.includes('js/subscriptions.js?v=20261008-premium-roman-guard'), 'premium guard script is in the service-worker cache');
 assert(sw.includes('css/styles.css?v=20261014-map-control-spacing'), 'DARE marker CSS is in the service-worker cache');
 console.log('  ✓ Premium guards and PWA asset versions verified');
