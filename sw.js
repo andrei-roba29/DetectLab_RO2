@@ -507,7 +507,7 @@
 //   draped over the DEM from the style, and the exaggeration slider still
 //   drives setTerrain(); see MAP_3D_TERRAIN.md §3. Cache bumped so an installed
 //   PWA picks up the viewer and the skin.
-const CACHE_NAME = 'detectlab-v213-no-terrain-toggle';
+const CACHE_NAME = 'detectlab-v217-fullscreen-zoom-alignment';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -549,6 +549,7 @@ const PRECACHE_URLS = [
   'js/layer-registry.js',
   'js/hist-shift.js?v=20261014-hist-shift',
   'css/hist-shift.css?v=20261014-hist-shift',
+  'js/map3d-mirror.js?v=20261015-natural-country-fill',
   'js/map3d-mirror.js?v=20261014-lidar-3d-focus',
   'js/map3d-mirror.js?v=20261014-3d-vectors',
   'js/map-app.js?v=20261015-danish-layers',
@@ -567,6 +568,7 @@ const PRECACHE_URLS = [
   'js/map3d-mirror.js?v=20261013-3d-mobile',
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
+  'js/map3d-terrain.js?v=20261015-3d-startup-race',
   'js/map3d-terrain.js?v=20261015-3d-no-terrain-toggle',
   'js/map3d-terrain.js?v=20261014-lidar-3d-focus',
   'js/map3d-terrain.js?v=20261014-3d-clean-controls',
@@ -588,6 +590,7 @@ const PRECACHE_URLS = [
   'css/map3d-terrain.css?v=20261014-3d-slider-layout',
   'css/map3d-terrain.css?v=20261014-map-control-spacing',
   'css/map3d-terrain.css?v=20261013-3d-mobile',
+  'css/styles.css?v=20261015-fullscreen-zoom-alignment',
   'css/styles.css?v=20261015-danish-layers',
   'css/map3d-terrain.css?v=20261013-3d-mirror',
   // European Historical Maps (CENAGIS / IH PAN)
@@ -1176,6 +1179,7 @@ const PRECACHE_URLS = [
   // order (gate → dock → map-app).
   'css/globe-country-picker.css?v=20261013-no-change-pill',
   'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
+  'js/globe-country-picker.js?v=20261015-outline-zoom-anchor',
   'js/globe-country-picker.js?v=20261014-country-exit-3d',
   'js/globe-country-picker.js?v=20261013-no-change-pill',
   'js/wms-health.js?v=20261014-provider-guard',

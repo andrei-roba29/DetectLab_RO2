@@ -30,12 +30,12 @@ assert(/style\.terrain = \{ source: ts\.id/.test(viewer),
 assert(/maplibre\.ScaleControl/.test(viewer) && /maplibre\.AttributionControl/.test(viewer),
     'the bottom-left credits and scale survive the removal');
 assert(/body:not\(\.is-pwa\) \.map-frame\.is-fullscreen #detectlab-map \.leaflet-left \.leaflet-control-zoom\s*\{\s*margin-left: calc\(18px \+ env\(safe-area-inset-left, 0px\)\)/.test(styles),
-    'extra zoom inset is web fullscreen only and respects the left safe area');
+    'mobile web fullscreen notch inset respects the left safe area');
 for (const file of ['css/styles.css', 'css/map3d-terrain.css']) {
     /* Each asset carries the tag of whatever last changed it: the sheet by the
      * Danish layers block at its end, the terrain skin by the terrain-toggle
      * removal. */
-    const tag = file === 'css/styles.css' ? '20261015-danish-layers' : '20261015-3d-no-terrain-toggle';
+    const tag = file === 'css/styles.css' ? '20261015-fullscreen-zoom-alignment' : '20261015-3d-no-terrain-toggle';
     const url = file + '?v=' + tag;
     assert(html.includes(url) && sw.includes("'" + url + "'"), 'cache-busted and precached: ' + file);
 }
@@ -71,7 +71,11 @@ async function browserChecks() {
                 <div id="detectlab-map"><div class="leaflet-control-container">
                   <div class="leaflet-top leaflet-left"><div class="leaflet-control leaflet-control-zoom leaflet-bar">
                     <a id="zoom-in">+</a><a>−</a>
-                  </div></div>
+                  </div><div class="leaflet-control leaflet-bar" id="measure-control"><a id="measure-button">M</a></div></div>
+                  <div class="leaflet-bottom leaflet-left"><div class="leaflet-control detectlab-compass"><div class="detectlab-compass-col">
+                    <button class="detectlab-compass-btn" id="compass-button">N</button>
+                    <button class="detectlab-compass-lock" id="lock-button">L</button>
+                  </div></div></div>
                 </div></div>
                 <div id="map3d-surface"><div class="maplibregl-control-container">
                   <div class="maplibregl-ctrl-bottom-left"><div class="maplibregl-ctrl maplibregl-ctrl-attrib"
@@ -90,7 +94,7 @@ async function browserChecks() {
                             return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width };
                         };
                         return { help: box('mapHelpBtn'), zoom: box('zoom-in'), map: box('detectlab-map'),
-                            credits: box('credits'),
+                            credits: box('credits'), measure: box('measure-button'), compass: box('compass-button'), lock: box('lock-button'),
                             topRight: !!document.querySelector('.maplibregl-ctrl-top-right') };
                     });
                     if (threeD) {
@@ -108,8 +112,14 @@ async function browserChecks() {
                         assert(geometry.credits.left >= geometry.map.left,
                             'the source credits stay inside the surface in 3D');
                     } else {
-                        assert.strictEqual(geometry.zoom.left - geometry.map.left, fullscreen ? 18 : 10,
+                        assert.strictEqual(geometry.zoom.left - geometry.map.left, fullscreen && width <= 600 ? 18 : 10,
                             `zoom inset: width=${width}, fullscreen=${fullscreen}`);
+                        if (width > 600) {
+                            for (const control of ['measure', 'compass', 'lock']) {
+                                assert.strictEqual(geometry.zoom.left, geometry[control].left,
+                                    `desktop zoom aligns with ${control}: width=${width}, fullscreen=${fullscreen}`);
+                            }
+                        }
                     }
                 }
             }

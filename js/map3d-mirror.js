@@ -54,7 +54,7 @@
      * importing the module must never be fatal. */
     if (!root) return;
 
-    var VERSION = '2026-10-14-lidar-3d-focus-v1';
+    var VERSION = '2026-10-15-natural-country-fill-v1';
 
     /* Leaflet's own pane z-index defaults — used when a layer has no pane. */
     var PANE_Z = {
@@ -652,6 +652,12 @@
         var lineOpacity = o.opacity == null ? 1 : Number(o.opacity);
         var fillColor = o.fillColor || color;
         var fillOpacity = o.fillOpacity == null ? 0.2 : Number(o.fillOpacity);
+        /* The country selection wash is 2D navigation chrome, not imagery.
+         * Draping its translucent green polygon over terrain tints the whole
+         * landscape. Keep the geographic border in 3D, but no interior wash.
+         * Work on the mirrored paint only: never mutate the live 2D style,
+         * and do not suppress genuine heritage/LiDAR polygon fills. */
+        if (o.pane === 'pane_country_bounds') fillOpacity = 0;
         var dash = dashArray(o.dashArray);
         var line = {
             'line-color': color,

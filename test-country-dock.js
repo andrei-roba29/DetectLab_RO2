@@ -25,7 +25,7 @@ const indexHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 assert(indexHtml.includes('css/country-dock.css?v=20261008'), 'index.html loads the dock css');
 assert(indexHtml.includes('js/country-dock.js?v=20261013-country-2d'), 'index.html loads the dock script');
 // The dock talks to the gate, so the gate must be parsed first.
-assert(indexHtml.indexOf('js/globe-country-picker.js?v=20261014-country-exit-3d') <
+assert(indexHtml.indexOf('js/globe-country-picker.js?v=20261015-outline-zoom-anchor') <
     indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d'), 'globe gate loads before the dock');
 assert(indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d') <
     indexHtml.indexOf('js/map-app.js?v=20261015-danish-layers'), 'dock loads before map-app.js');

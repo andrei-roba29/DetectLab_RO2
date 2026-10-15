@@ -70,6 +70,7 @@
     var CONFIG = REGISTRY.config();
     var MAPLIBRE = null;                 /* resolved constructor namespace */
     var sdkPromise = null;
+    var openGeneration = 0;
     var map = null;
     var surface = null;
     var veil = null;
@@ -364,45 +365,59 @@
          * tight there, and a timeout is indistinguishable from a crash. */
         var timeoutMs = isMobile() ? (cfg.timeoutMsMobile || cfg.timeoutMs || 15000)
             : (cfg.timeoutMs || 15000);
-        sdkPromise = new Promise(function (resolve, reject) {
-            var timer = root.setTimeout(function () {
-                sdkPromise = null;
-                reject(new Error('Timed out loading MapLibre GL after ' + timeoutMs + 'ms'));
-            }, timeoutMs);
-
-            function finish() {
-                root.clearTimeout(timer);
-                var ns = root[cfg.namespace || 'maplibregl'];
-                if (!ns || typeof ns.Map !== 'function') {
-                    sdkPromise = null;
-                    reject(new Error('MapLibre GL did not expose maplibregl.Map'));
+        /* Keep one shared download, including its bounded retry. Failed script
+         * nodes must not survive to execute alongside the next attempt. */
+        function attempt(number) {
+            return new Promise(function (resolve, reject) {
+                var script = null;
+                var settled = false;
+                var timer = root.setTimeout(function () {
+                    finish(new Error('Timed out loading MapLibre GL after ' + timeoutMs + 'ms'));
+                }, timeoutMs);
+                function finish(error) {
+                    if (settled) return;
+                    settled = true;
+                    root.clearTimeout(timer);
+                    if (script) {
+                        script.onload = script.onerror = null;
+                        if (script.parentNode) script.parentNode.removeChild(script);
+                    }
+                    var ns = root[cfg.namespace || 'maplibregl'];
+                    if (ns && typeof ns.Map === 'function') {
+                        MAPLIBRE = ns;
+                        resolve(ns);
+                    } else {
+                        reject(error || new Error('MapLibre GL did not expose maplibregl.Map'));
+                    }
+                }
+                if (root[cfg.namespace || 'maplibregl'] && typeof root[cfg.namespace || 'maplibregl'].Map === 'function') {
+                    finish();
                     return;
                 }
-                MAPLIBRE = ns;
-                resolve(ns);
-            }
-
-            if (root[cfg.namespace || 'maplibregl'] && typeof root[cfg.namespace || 'maplibregl'].Map === 'function') {
-                finish();
-                return;
-            }
-
-            if (cfg.css) {
-                var link = document.createElement('link');
-                link.rel = 'stylesheet';
-                link.href = cfg.css;
-                (document.head || document.documentElement).appendChild(link);
-            }
-            var script = document.createElement('script');
-            script.src = cfg.js;
-            script.async = true;
-            script.onload = finish;
-            script.onerror = function () {
-                root.clearTimeout(timer);
-                sdkPromise = null;
-                reject(new Error('MapLibre GL could not be loaded from ' + cfg.js));
-            };
-            (document.head || document.documentElement).appendChild(script);
+                if (cfg.css && !document.getElementById('map3d-sdk-css')) {
+                    var link = document.createElement('link');
+                    link.id = 'map3d-sdk-css';
+                    link.rel = 'stylesheet';
+                    link.href = cfg.css;
+                    (document.head || document.documentElement).appendChild(link);
+                }
+                script = document.createElement('script');
+                script.src = cfg.js;
+                script.async = true;
+                script.onload = function () { finish(); };
+                script.onerror = function () {
+                    finish(new Error('MapLibre GL could not be loaded from ' + cfg.js));
+                };
+                (document.head || document.documentElement).appendChild(script);
+            }).catch(function (error) {
+                if (number >= 2) throw error;
+                return new Promise(function (resolve) { root.setTimeout(resolve, 500); })
+                    .then(function () { return attempt(number + 1); });
+            });
+        }
+        sdkPromise = attempt(1).catch(function (error) {
+            sdkPromise = null;
+            throw error;
         });
         return sdkPromise;
     }
@@ -2650,6 +2665,8 @@
             console.warn('[Map3D] #detectlab-map is not in the DOM yet');
             return Promise.resolve(false);
         }
+        if (state.failed || map) close();
+        var generation = ++openGeneration;
         ensureSurface();
         ensureBar();
         ensureToggle();
@@ -2668,7 +2685,7 @@
         }
 
         return loadMapLibre().then(function (maplibre) {
-            if (!state.open) return true;
+            if (!state.open || generation !== openGeneration) return false;
             registerProtocols(maplibre);
             var cfg = REGISTRY.config();
             var cam = focusCamera(cameraFrom2D());
@@ -2731,6 +2748,7 @@
              * styledata fires as soon as the style is up, `loaded()` polling
              * covers the rest. */
             function firstSync() {
+                if (!state.open || generation !== openGeneration) return;
                 hideVeil();
                 if (terrainSource().missingKey) {
                     console.warn('[Map3D] Terrain provider needs an API key — running without terrain.');
@@ -2741,7 +2759,7 @@
             }
             map.on('styledata', function () { if (!state.firstSyncDone) { state.firstSyncDone = true; firstSync(); } });
             map.on('load', firstSync);
-            map.on('idle', function () { hideVeil(); });
+            map.on('idle', function () { if (generation === openGeneration) hideVeil(); });
             map.on('moveend', function () {
                 if (bar && bar.paintLabels) bar.paintLabels();
                 scheduleSync();
@@ -2757,10 +2775,11 @@
                 pushError(message);
             });
             /* Safety: whatever happens to the DEM, the layers appear. */
-            root.setTimeout(function () { if (state.open && map && !state.firstSyncDone) firstSync(); }, 2500);
+            state.healthTimers.push(root.setTimeout(function () { if (state.open && map && !state.firstSyncDone) firstSync(); }, 2500));
             document.addEventListener('detectlab:langchange', refreshBarCopy);
             return true;
         }).catch(function (error) {
+            if (generation !== openGeneration) return false;
             return fail3D(error);
         });
     }
@@ -2822,6 +2841,7 @@
     }
 
     function close() {
+        ++openGeneration;
         if (!state.open && !map && !state.failed) return false;
         state.open = false;
         state.firstSyncDone = false;
