@@ -2302,13 +2302,17 @@
                 var html = props.popup;
                 if (!html && props.icon && props.icon.html) html = props.icon.html;
                 if (!html) {
+                    if (props.kind === 'radius') return;
                     var keys = Object.keys(props).filter(function (k) { return k !== 'popup' && k !== 'icon'; });
                     if (!keys.length) return;
                     html = '<div class="m3d-popup-body">' + keys.slice(0, 12).map(function (k) {
                         return '<div><b>' + escapeHtml(k) + ':</b> ' + escapeHtml(String(props[k])).slice(0, 200) + '</div>';
                     }).join('') + '</div>';
                 }
-                showPopup(html, feature.geometry.coordinates.slice ? feature.geometry.coordinates : event.lngLat);
+                var popupPos = (feature.geometry && feature.geometry.type === 'Point' && Array.isArray(feature.geometry.coordinates))
+                    ? feature.geometry.coordinates
+                    : event.lngLat;
+                showPopup(html, popupPos);
             });
             map.on('mouseenter', layerId, function () { map.getCanvas().style.cursor = 'pointer'; });
             map.on('mouseleave', layerId, function () { map.getCanvas().style.cursor = ''; });

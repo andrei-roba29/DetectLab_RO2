@@ -174,4 +174,30 @@ function bind(m, popup, tooltip) {
     assert.ok(app.includes('_heritagePointRecords.forEach'), 'heritage bridge emits the point records (pins)');
     console.log('  ✓ viewer + heritage bridge contracts present');
 }
+
+// 6. Heritage point popup tag carries site title and CIMEC / RAN redirect button
+{
+    const app = read('js/map-app.js');
+    assert.ok(app.includes('_buildHeritagePopupContent'), 'map-app defines shared heritage popup builder');
+    assert.ok(app.includes('Vezi pe CIMEC / RAN'), 'popup content includes the CIMEC / RAN redirect button');
+    assert.ok(app.includes('https://ran.cimec.ro/sel.asp?codran='), 'redirect button links to CIMEC by COD_RAN');
+    assert.ok(app.includes('https://ran.cimec.ro/sel.asp?descript='), 'redirect button links to CIMEC by description');
+
+    // Run the popup content builder directly in VM
+    const fnMatch = app.match(/function _buildHeritagePopupContent\([^)]*\)\s*\{[\s\S]*?\n            \}/);
+    assert.ok(fnMatch, '_buildHeritagePopupContent function body found');
+    const sandboxPopup = { encodeURIComponent, String };
+    vm.runInContext(fnMatch[0], vm.createContext(sandboxPopup));
+    const htmlWithRan = sandboxPopup._buildHeritagePopupContent('54984.77', 'Castrul Gilău');
+    assert.ok(htmlWithRan.includes('Castrul Gilău'), 'popup contains the archaeological site title');
+    assert.ok(htmlWithRan.includes('54984.77'), 'popup contains the RAN code');
+    assert.ok(htmlWithRan.includes('href="https://ran.cimec.ro/sel.asp?codran=54984.77"'), 'redirect button has codran link');
+    assert.ok(htmlWithRan.includes('Vezi pe CIMEC / RAN'), 'redirect button label present');
+
+    const htmlDescript = sandboxPopup._buildHeritagePopupContent(null, 'Necropolă tumulară');
+    assert.ok(htmlDescript.includes('Necropolă tumulară'), 'popup contains title without ran');
+    assert.ok(htmlDescript.includes('href="https://ran.cimec.ro/sel.asp?descript=Necropol%C4%83%20tumular%C4%83"'), 'redirect button has descript link');
+
+    console.log('  ✓ heritage point popups include title and redirect button to their links');
+}
 console.log('✅ test-map3d-vectors-heritage-wms.js passed');
