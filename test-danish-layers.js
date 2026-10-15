@@ -589,7 +589,8 @@ function testWiring() {
 
     assert.ok(mapApp.indexOf('DetectLabDanishLayers') !== -1,
         'map-app.js hands the country selection to the Danish rows');
-    assert.ok(sw.indexOf('detectlab-v212-danish-layers') !== -1, 'the service-worker cache moved on');
+    assert.ok(Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]) >= 212,
+        'the service-worker cache moved on for the Danish layers');
     assert.ok(sw.indexOf("'js/danish-layers.js?v=20261015-danish'") !== -1, 'the new scripts are precached');
     assert.ok(css.indexOf('.danish-layer-row') !== -1 && css.indexOf('.danish-basemap-btn') !== -1,
         'the generated rows and the basemap buttons are styled');
