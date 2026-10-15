@@ -29,13 +29,18 @@ map: a MapLibre GL JS view in which every layer that is switched on in the 2D pa
 * **Layers** – the *same* checkboxes decide what 3D draws. Switch a historical map on in
   2D, and it is draped in 3D; drag its opacity slider, and 3D follows live.
 * **Controls** – oblique pitch, bearing, terrain exaggeration (0.5–4×), reset view,
-  navigation/scale/terrain controls. The camera sliders are separate semi-transparent
-  strips with no shared panel background. Layer/provider diagnostics are available
-  via `window.DetectLabMap3D.status()` / `.report()`, not in the visible controls.
+  plus MapLibre's source credits and scale at bottom-left. There is **no terrain
+  on/off button** (MapLibre's `TerrainControl`, titled “Disable terrain”): 3D is
+  draped over the DEM by the style itself, and the only terrain knob the app
+  offers is the exaggeration slider. The camera sliders are separate
+  semi-transparent strips with no shared panel background. Layer/provider
+  diagnostics are available via `window.DetectLabMap3D.status()` / `.report()`,
+  not in the visible controls.
 * **Layout while 3D is on** – the Leaflet panes stop painting and Leaflet's own controls
   (zoom, locate, measure — they move the *2D* camera) are hidden, so nobody clicks a
-  button that changes a map they cannot see; MapLibre brings its own navigation, terrain
-  and scale controls. The 3D bar sits bottom-left and the 2D⇄3D toggle bottom-centre,
+  button that changes a map they cannot see; MapLibre contributes only the source
+  credits and the scale, both bottom-left, so the top-right corner stays the app's own
+  “?” help button. The 3D bar sits bottom-left and the 2D⇄3D toggle bottom-centre,
   while the search bar, the layer panel and the opacity mirror keep their exact 2D
   position and stay fully usable. In the installed PWA, the slider strips instead
   sit horizontally centred in the lower half, above the bottom actions; short
@@ -531,7 +536,7 @@ cache).
   never asked to rasterise two full maps at once.
 * Only the layers that are **switched on** get a 3D source; each layer is one
   `raster` source with `raster-fade-duration` set from the registry config.
-* On narrow viewports the MapLibre navigation/terrain controls are hidden
+* On narrow viewports the MapLibre scale widget is hidden
   (`@media (max-width: 720px)`), the control bar moves under the search bar and keeps its
   own scroll, the device pixel ratio is capped *in the constructor* and the DEM zoom
   ceiling is lowered; the 3D button stays reachable bottom-centre. Terrain + hillshade at

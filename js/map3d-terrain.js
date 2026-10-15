@@ -2701,12 +2701,14 @@
             if (maplibre.AttributionControl) {
                 map.addControl(new maplibre.AttributionControl({ compact: false }), 'bottom-left');
             }
-            if (maplibre.TerrainControl && terrainSource().tiles.length && !terrainSource().missingKey) {
-                map.addControl(new maplibre.TerrainControl({
-                    source: terrainSource().id,
-                    exaggeration: state.exaggeration
-                }), 'top-right');
-            }
+            /* No MapLibre TerrainControl here. It was the only widget in the
+             * top-right corner (the web layout reserved that row for it, phones
+             * hid it), and its single button — the one titled “Disable
+             * terrain” — switched off the very thing the 3D view exists for.
+             * The deck is draped over the DEM by the style itself
+             * (`style.terrain` in buildStyle), the exaggeration slider keeps
+             * calling setTerrain(), and a DEM that cannot load already falls
+             * back to the flat view with a console warning. Nothing to toggle. */
             if (maplibre.ScaleControl) {
                 map.addControl(new maplibre.ScaleControl({ maxWidth: 80, unit: 'metric' }), 'bottom-left');
             }

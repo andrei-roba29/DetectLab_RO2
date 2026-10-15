@@ -10,17 +10,32 @@ const skin = read('css/map3d-terrain.css');
 const styles = read('css/styles.css');
 const html = read('index.html');
 const sw = read('sw.js');
+const viewer = read('js/map3d-terrain.js');
 
-assert(/#map3d-surface \.maplibregl-ctrl-top-right\s*\{\s*top: calc\(60px \+ env\(safe-area-inset-top, 0px\)\)/.test(skin),
-    'terrain corner reserves the help/exit row and respects the top safe area');
-assert(skin.includes('#map3d-surface .maplibregl-ctrl-top-right { display: none; }'),
-    'mobile terrain corner remains hidden as before');
+/* The top-right corner belongs to the app's own help button. MapLibre's
+ * TerrainControl — the “Disable terrain” button — was the only widget ever
+ * parked there; with it gone from the viewer, neither the desktop row
+ * reservation nor the mobile `display: none` that used to hide it has
+ * anything left to act on, so both rules are gone. */
+assert(!/\.maplibregl-ctrl-top-right/.test(skin),
+    'no rule reserves or hides a MapLibre control in the top-right corner');
+assert(!/#map3d-surface \.maplibregl-ctrl-group[^{]*\{/.test(skin),
+    'the MapLibre button-group skin went with the button that needed it');
+assert(!/new maplibre\.TerrainControl/.test(viewer),
+    'the 3D viewer does not build MapLibre’s TerrainControl (the “Disable terrain” button)');
+assert.strictEqual((viewer.match(/map\.addControl\(/g) || []).length, 2,
+    'the surface adds exactly two MapLibre controls: the credits and the scale, both bottom-left');
+assert(/style\.terrain = \{ source: ts\.id/.test(viewer),
+    'the deck is still draped over the DEM by the style, with no toggle to switch it off');
+assert(/maplibre\.ScaleControl/.test(viewer) && /maplibre\.AttributionControl/.test(viewer),
+    'the bottom-left credits and scale survive the removal');
 assert(/body:not\(\.is-pwa\) \.map-frame\.is-fullscreen #detectlab-map \.leaflet-left \.leaflet-control-zoom\s*\{\s*margin-left: calc\(18px \+ env\(safe-area-inset-left, 0px\)\)/.test(styles),
     'extra zoom inset is web fullscreen only and respects the left safe area');
 for (const file of ['css/styles.css', 'css/map3d-terrain.css']) {
     /* Each asset carries the tag of whatever last changed it: the sheet by the
-     * Danish layers block at its end, the terrain skin by the 3D focus work. */
-    const tag = file === 'css/styles.css' ? '20261015-danish-layers' : '20261014-lidar-3d-focus';
+     * Danish layers block at its end, the terrain skin by the terrain-toggle
+     * removal. */
+    const tag = file === 'css/styles.css' ? '20261015-danish-layers' : '20261015-3d-no-terrain-toggle';
     const url = file + '?v=' + tag;
     assert(html.includes(url) && sw.includes("'" + url + "'"), 'cache-busted and precached: ' + file);
 }
@@ -59,9 +74,8 @@ async function browserChecks() {
                   </div></div>
                 </div></div>
                 <div id="map3d-surface"><div class="maplibregl-control-container">
-                  <div class="maplibregl-ctrl-top-right"><div class="maplibregl-ctrl maplibregl-ctrl-group">
-                    <button id="terrain" title="Disable terrain"></button>
-                  </div></div>
+                  <div class="maplibregl-ctrl-bottom-left"><div class="maplibregl-ctrl maplibregl-ctrl-attrib"
+                    id="credits">Sources</div></div>
                 </div></div></div><button class="map-help-btn" id="mapHelpBtn">?</button></div>`);
             for (const fullscreen of [false, true]) {
                 for (const threeD of [false, true]) {
@@ -75,16 +89,25 @@ async function browserChecks() {
                             const r = document.getElementById(id).getBoundingClientRect();
                             return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width };
                         };
-                        return { terrain: box('terrain'), help: box('mapHelpBtn'), zoom: box('zoom-in'), map: box('detectlab-map') };
+                        return { help: box('mapHelpBtn'), zoom: box('zoom-in'), map: box('detectlab-map'),
+                            credits: box('credits'),
+                            topRight: !!document.querySelector('.maplibregl-ctrl-top-right') };
                     });
-                    if (threeD && width > 720) {
-                        assert(geometry.terrain.top >= geometry.help.bottom + 8,
-                            `terrain clears help: width=${width}, fullscreen=${fullscreen}`);
-                        assert(await page.evaluate(() => document.elementFromPoint(
-                            document.getElementById('terrain').getBoundingClientRect().left + 14,
-                            document.getElementById('terrain').getBoundingClientRect().top + 14
-                        ).closest('#terrain') !== null), 'terrain is clickable, not covered');
-                    } else if (!threeD) {
+                    if (threeD) {
+                        /* Nothing may sit over the app's own “?”: the corner no
+                         * longer carries a second widget to clear. */
+                        assert(!geometry.topRight, 'no MapLibre control container in the top-right corner');
+                        if (width > 720) {
+                            assert(await page.evaluate(() => {
+                                const btn = document.getElementById('mapHelpBtn');
+                                const r = btn.getBoundingClientRect();
+                                const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+                                return !!hit && (hit === btn || (hit.closest && hit.closest('#mapHelpBtn') !== null));
+                            }), `the help button owns the top-right corner: width=${width}, fullscreen=${fullscreen}`);
+                        }
+                        assert(geometry.credits.left >= geometry.map.left,
+                            'the source credits stay inside the surface in 3D');
+                    } else {
                         assert.strictEqual(geometry.zoom.left - geometry.map.left, fullscreen ? 18 : 10,
                             `zoom inset: width=${width}, fullscreen=${fullscreen}`);
                     }

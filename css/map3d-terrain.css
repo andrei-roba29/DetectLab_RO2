@@ -32,9 +32,10 @@ body.is-3d #detectlab-map .leaflet-pane { visibility: hidden; }
 /* Leaflet's own controls (zoom, locate, measure) drive the *2D* map, and
  * Leaflet pins them at z-index 1000 — above this canvas. Hidden while 3D is
  * on, so nobody clicks a button that moves a map they cannot see; MapLibre
- * brings its own navigation, pitch/terrain and scale controls. The live
- * location control that the PWA appends to its own stack is hidden for the
- * same reason (it moves the 2D camera). */
+ * contributes only the source credits and the scale, both bottom-left (no
+ * navigation, no terrain toggle — the app's own bar drives the 3D camera and
+ * the exaggeration). The live location control that the PWA appends to its own
+ * stack is hidden for the same reason (it moves the 2D camera). */
 body.is-3d #detectlab-map .leaflet-control-container,
 body.is-3d #pwa-br-stack .leaflet-control { visibility: hidden; }
 
@@ -261,16 +262,12 @@ body.is-3d #map3d-bar { display: flex; }
 .m3d-actions button:hover { background: rgba(184, 216, 240, 0.18); }
 
 /* MapLibre's own controls inside the surface */
-/* The help button occupies top:14px / height:36px (16px in desktop
- * fullscreen). Reserve that row for it and the fullscreen exit button;
- * z-index alone cannot make two controls in the same spot usable. */
-#map3d-surface .maplibregl-ctrl-top-right {
-    top: calc(60px + env(safe-area-inset-top, 0px));
-}
+/* Everything MapLibre adds is at bottom-left: the source credits and the scale.
+ * The top-right corner belongs to the app's own help button alone — the terrain
+ * toggle that used to be parked under it (a `.maplibregl-ctrl-group` button
+ * group) is gone from the viewer, and with it the row reservation, the phone
+ * `display: none` and the group/icon skin that only that button needed. */
 
-#map3d-surface .maplibregl-ctrl-group { background: rgba(6, 14, 30, 0.82); }
-#map3d-surface .maplibregl-ctrl-group button + button { border-top-color: rgba(184, 216, 240, 0.18); }
-#map3d-surface .maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(0.92) hue-rotate(180deg); }
 #map3d-surface .maplibregl-ctrl-attrib {
     background: rgba(6, 14, 30, 0.72);
     color: rgba(245, 240, 235, 0.8);
@@ -304,8 +301,7 @@ body.is-3d #map3d-bar { display: flex; }
         bottom: auto;
         max-height: calc(100% - 92px);
     }
-    /* Hide the scale/terrain widgets on phones, not the source credits. */
-    #map3d-surface .maplibregl-ctrl-top-right { display: none; }
+    /* Hide the scale widget on phones, not the source credits. */
     #map3d-surface .maplibregl-ctrl-bottom-left .maplibregl-ctrl-scale { display: none; }
     #map3d-surface .maplibregl-ctrl-bottom-left,
     #map3d-surface .maplibregl-ctrl-bottom-right { font-size: 0.6rem; }

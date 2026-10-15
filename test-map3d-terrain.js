@@ -80,7 +80,7 @@ const skin = read('css/map3d-terrain.css');
 
 const TAG = '20261013-3d-terrain';             /* MapLibre itself (unchanged) */
 const TAG_3D = '20261014-lidar-3d-focus';        /* mirror                        */
-const TAG_VIEWER = '20261014-lidar-3d-focus';    /* viewer                        */
+const TAG_VIEWER = '20261015-3d-no-terrain-toggle';    /* viewer                        */
 const TAG_FOCUS = '20261014-lidar-3d-focus';     /* LiDAR focus (3D, one disc)    */
 const TAG_REGISTRY = '20261015-danish-layers';     /* shared registry (WMS audit)  */
 

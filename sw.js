@@ -500,7 +500,14 @@
 //   basemap control and the new /api/geo/dk-* routes are in the shell; see
 //   DATA_SOURCES.md and DANISH_LAYERS.md. Cache bumped so an installed PWA
 //   picks up the new modules, the translations and the skin.
-const CACHE_NAME = 'detectlab-v212-danish-layers';
+// v213: the 3D view no longer ships MapLibre's TerrainControl — the button in
+//   the top-right corner titled „Disable terrain” (the only MapLibre widget in
+//   that corner) is gone from the web desktop layout, together with the CSS
+//   that reserved the corner for it and the phone rule that hid it. 3D stays
+//   draped over the DEM from the style, and the exaggeration slider still
+//   drives setTerrain(); see MAP_3D_TERRAIN.md §3. Cache bumped so an installed
+//   PWA picks up the viewer and the skin.
+const CACHE_NAME = 'detectlab-v213-no-terrain-toggle';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -560,6 +567,7 @@ const PRECACHE_URLS = [
   'js/map3d-mirror.js?v=20261013-3d-mobile',
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
+  'js/map3d-terrain.js?v=20261015-3d-no-terrain-toggle',
   'js/map3d-terrain.js?v=20261014-lidar-3d-focus',
   'js/map3d-terrain.js?v=20261014-3d-clean-controls',
   'js/map3d-terrain.js?v=20261014-3d-desktop-controls',
@@ -573,6 +581,7 @@ const PRECACHE_URLS = [
   'js/maplibre-gl.js?v=20261013-3d-terrain',
   'js/maplibre-gl.js',
   'css/maplibre-gl.css?v=20261013-3d-terrain',
+  'css/map3d-terrain.css?v=20261015-3d-no-terrain-toggle',
   'css/map3d-terrain.css?v=20261014-lidar-3d-focus',
   'css/map3d-terrain.css?v=20261014-3d-clean-controls',
   'css/map3d-terrain.css?v=20261014-3d-pwa-controls',

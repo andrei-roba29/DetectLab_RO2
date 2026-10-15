@@ -48,6 +48,8 @@ const viewerSource = read('js/map3d-terrain.js');
 const focusSource = read('js/lidar-3d-focus.js');
 
 const TAG = '20261014-lidar-3d-focus';
+/* The viewer and its skin moved on without the terrain toggle (v213). */
+const TAG_VIEWER = '20261015-3d-no-terrain-toggle';
 
 /* One real event-loop turn: the viewer runs its entry gate through a promise,
  * so the dialog is not in the DOM in the same tick as open(). */
@@ -317,13 +319,13 @@ const fakeCanvas = function () {
  * 1. Static wiring
  * ══════════════════════════════════════════════════════════════════════════ */
 {
-    const viewerTag = indexHtml.indexOf('js/map3d-terrain.js?v=' + TAG);
+    const viewerTag = indexHtml.indexOf('js/map3d-terrain.js?v=' + TAG_VIEWER);
     const mirrorTag = indexHtml.indexOf('js/map3d-mirror.js?v=' + TAG);
     const focusTag = indexHtml.indexOf('js/lidar-3d-focus.js?v=' + TAG);
     assert(viewerTag !== -1 && mirrorTag !== -1, 'index.html loads the tagged mirror and viewer');
     assert(focusTag !== -1, 'index.html loads the LiDAR focus module');
     assert(focusTag > viewerTag, 'the focus module loads after the viewer it installs its gate on');
-    assert(indexHtml.includes('css/map3d-terrain.css?v=' + TAG), 'index.html loads the tagged 3D skin');
+    assert(indexHtml.includes('css/map3d-terrain.css?v=' + TAG_VIEWER), 'index.html loads the tagged 3D skin');
 
     assert(/#map3d-focus \{[\s\S]*?z-index: 1400/.test(skin),
         'the dialog sits above the layer panel and the search bar (it decides what 3D may load)');
@@ -336,8 +338,8 @@ const fakeCanvas = function () {
 
     assert(swJs.includes("'js/lidar-3d-focus.js?v=" + TAG + "'") && swJs.includes("'js/lidar-3d-focus.js'"),
         'the service worker pre-caches the focus module (a cold PWA keeps the feature)');
-    ['js/map3d-terrain.js?v=' + TAG, 'js/map3d-mirror.js?v=' + TAG, 'js/map-app.js?v=' + TAG,
-     'css/map3d-terrain.css?v=' + TAG].forEach(function (asset) {
+    ['js/map3d-terrain.js?v=' + TAG_VIEWER, 'js/map3d-mirror.js?v=' + TAG, 'js/map-app.js?v=' + TAG,
+     'css/map3d-terrain.css?v=' + TAG_VIEWER].forEach(function (asset) {
         assert(swJs.includes("'" + asset + "'"), 'sw.js pre-caches ' + asset);
     });
     const shellVersion = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
