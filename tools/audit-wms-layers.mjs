@@ -104,13 +104,17 @@ function isGuardedUrl(url) {
  *   watch — the guard adopts it from the live map (`layeradd`) and trips on a
  *           run of failed tiles (module-built WMTS/GridLayer layers);
  *   none  — nothing watches it. */
-function guardPath(kind, url) {
+function guardPath(kind, url, def) {
   /* Same-origin routes (/api/geo/dk-dhm, /api/geo/se-hojdmodell, the 3D tile
      proxy) are the site's own functions: they answer a JSON error the module
      can read, so they have their own error path instead of needing the guard. */
   if (!url) return 'runtime';
   if (String(url).indexOf('/') === 0) return 'same-origin';
-  if (!isGuardedUrl(url)) return 'none';
+  if (!isGuardedUrl(url)) {
+    /* A layer whose definition opts out of the guard on purpose and says who
+       handles its failures instead (config-driven rows: the Danish layers). */
+    return def && def.guard === false && def.selfGuarded ? 'self' : 'none';
+  }
   return kind === 'wms' ? 'probe' : 'watch';
 }
 function guardLabel(url) {
@@ -276,7 +280,13 @@ function wmsSampleUrl(def, z, x, y) {
   params.height = size;
   const query = Object.keys(params).map((k) => encodeURIComponent(k) + '=' + encodeURIComponent(params[k]));
   query.push('bbox=' + [minX, minY, maxX, maxY].join(','));
-  return def.url + (String(def.url).indexOf('?') === -1 ? '?' : '&') + query.join('&');
+  /* The sample must be a request the reader can rerun. A same-origin route
+     (/api/geo/…) only exists on the deployed site, so its sample is aimed at
+     the provider endpoint the route forwards to (`upstream`); the route itself
+     stays in the report's endpoint column. */
+  const sameOrigin = String(def.url).charAt(0) === '/';
+  const target = sameOrigin && def.upstream ? String(def.upstream) : String(def.url);
+  return target + (target.indexOf('?') === -1 ? '?' : '&') + query.join('&');
 }
 
 /** WMTS KVP GetTile URL for one tile (registry template). */
@@ -351,8 +361,26 @@ function auditWms(def) {
   if (cors === 'yes' && def.proxy === 'always') {
     warn('P_CORS_EXTRA', 'host is CORS-enabled yet every 3D tile goes through the proxy');
   }
-  if (isGuardedUrl(def.url)) {
+  if (def.guard === false && !def.selfGuarded) {
+    err('GUARD_OPTOUT_UNDOCUMENTED', 'guard:false without selfGuarded:selfGuardedReason — an opt-out must ' +
+      'say who handles the failures instead');
+  } else if (def.guard === false && def.selfGuarded) {
+    /* Ordering matters: the module that owns the row opts out explicitly, even
+     * when its host is watched for other layers. */
+    info('GUARD_SELF', 'guard opted out on purpose (guard:false): ' + (def.selfGuardedReason || '') +
+      (isGuardedUrl(def.url) ? ' — the host itself is watched (' + guardLabel(def.url) + ')' : ''));
+  } else if (isGuardedUrl(def.url)) {
     info('GUARDED', 'availability guard active (' + guardLabel(def.url) + ')');
+  } else if (guardPath(def.kind, def.url) === 'same-origin') {
+    /* A same-origin route (/api/geo/…) is the site's own function: it answers a
+     * JSON error the calling module can read, so it needs its own error path
+     * rather than the third-party guard — which must be declared, not assumed. */
+    if (def.selfGuarded) {
+      info('GUARD_SELF', 'same-origin route with its own error path: ' + (def.selfGuardedReason || ''));
+    } else {
+      err('GUARD_SELF_UNDECLARED', 'same-origin route without a declared error path — set ' +
+        'selfGuarded:true + selfGuardedReason on the definition, or add its host to HOSTS in js/wms-health.js');
+    }
   } else {
     err('GUARD_MISSING', 'no availability guard: a broken server would leave a blank layer with no explanation — ' +
       'add the host to HOSTS in js/wms-health.js');
@@ -387,7 +415,13 @@ function auditWmts(def) {
   if (def.timeAware && def.time && !def.time.value) err('M_TIME_MISSING', 'time-aware layer without a default TIME value');
   if (def.bounds && def.bounds.length === 2) info('M_BOUNDS', 'clipped to the published footprint');
   if (isGuardedUrl(def.url)) info('GUARDED', 'availability guard active (' + guardLabel(def.url) + ')');
-  else {
+  else if (guardPath(def.kind, def.url) === 'same-origin' && def.selfGuarded) {
+    info('GUARD_SELF', 'same-origin cache with its own error path: ' + (def.selfGuardedReason || ''));
+  } else if (def.guard === false && def.selfGuarded) {
+    info('GUARD_SELF', 'guard opted out on purpose (guard:false): ' + (def.selfGuardedReason || ''));
+  } else if (def.guard === false) {
+    err('GUARD_OPTOUT_UNDOCUMENTED', 'guard:false without selfGuarded:selfGuardedReason');
+  } else {
     err('GUARD_MISSING', 'WMTS host is not watched: a cache answering an XML ServiceException would leave a blank ' +
       'layer — add the host to HOSTS in js/wms-health.js');
   }
@@ -435,6 +469,9 @@ function auditDynamic(def) {
     warn('P_ORIGIN', 'proxy:"never" on a cross-origin endpoint — the browser talks to it directly');
   }
   if (isGuardedUrl(def.url)) info('GUARDED', 'host watched by the guard (' + guardLabel(def.url) + ')');
+  else if (def.guard === false && def.selfGuarded) {
+    info('GUARD_SELF', 'guard opted out on purpose (guard:false): ' + (def.selfGuardedReason || ''));
+  }
   else if (String(def.url).indexOf('/api/') === 0) {
     info('SAME_ORIGIN', 'same-origin proxy route — its own error path applies');
   } else if (path2dHasOwnErrorPath(def)) {
@@ -549,8 +586,8 @@ for (const def of DL.ordered()) {
     cors: def.cors || 'unknown',
     proxy: def.proxy || 'auto',
     runtime: def.kind === 'dynamic' && !def.builder,
-    guardPath: guardPath(def.kind, def.url),
-    guarded: guardPath(def.kind, def.url) !== 'none',
+    guardPath: guardPath(def.kind, def.url, def),
+    guarded: guardPath(def.kind, def.url, def) !== 'none',
     provider: guardLabel(def.url),
     sample2d: url,
     sample3d: url3d,
@@ -601,6 +638,18 @@ const SIGNATURES = [
     what: '200 + an ArcGIS JSON error, or a blank JPEG where the LAEA-native mosaic has no data',
     owner: 'external',
     app: 'probe; 3D through the proxy for the same reason'
+  },
+  {
+    host: 'arealeditering-dist-geo.miljoeportal.dk',
+    provider: 'Danmarks Miljøportal',
+    request: 'WMS 1.3.0 GetMap (CRS=EPSG:3857, uppercase KVP), dai:bes_naturtyper, PNG + transparent',
+    what: '200 + ServiceExceptionReport XML (GeoServer answers exceptions with 200), ' +
+      'or an all-alpha tile where the layer has no polygons. The capabilities advertise only ' +
+      'EPSG:25832/CRS:84 while GetMap serves 3857 normally — judge by the tile, not by the capabilities',
+    owner: 'external (the agency GeoServer)',
+    app: 'no guard row: js/danish-layers.js owns the switch and prints its own status line ' +
+      '(the layer opts out with _detectlabNoGuard); the host is still named in js/wms-health.js HOSTS ' +
+      'so a tile-error burst can be attributed'
   },
   {
     host: 'data.geopf.fr',
@@ -885,14 +934,17 @@ function markdownReport() {
       (r.guardPath === 'none' ? '❌ none'
         : r.guardPath === 'same-origin' ? '— same-origin'
           : r.guardPath === 'runtime' ? '— runtime'
-            : r.guardPath + ' · ' + r.provider) + ' |');
+            : r.guardPath === 'self' ? '— self-handled'
+              : r.guardPath + ' · ' + r.provider) + ' |');
   }
   out.push('');
   const probes = rows.filter((r) => r.guardPath === 'probe').length;
   const watches = rows.filter((r) => r.guardPath === 'watch').length;
-  const remote = rows.filter((r) => r.guardPath !== 'same-origin' && r.guardPath !== 'runtime').length;
+  const remote = rows.filter((r) => !['same-origin', 'runtime', 'self'].includes(r.guardPath)).length;
   out.push('**' + (probes + watches) + '/' + remote + ' third-party layers guarded** (' + probes + ' probed, ' +
-    watches + ' watched); ' + (rows.length - remote) + ' same-origin/runtime. ' +
+    watches + ' watched); ' + rows.filter((r) => r.guardPath === 'self').length + ' self-handled + ' +
+    rows.filter((r) => r.guardPath === 'same-origin').length + ' same-origin, ' +
+    rows.filter((r) => r.guardPath === 'runtime').length + ' runtime. ' +
     errors.length + ' error(s), ' + warnings.length + ' warning(s).');
   out.push('');
   out.push('### Small print');
@@ -1060,7 +1112,8 @@ if (asJson) {
       (r.guardPath === 'none' ? '❌ none'
         : r.guardPath === 'same-origin' ? '— same-origin'
           : r.guardPath === 'runtime' ? '— runtime'
-            : r.guardPath + ' · ' + r.provider) + ' |');
+            : r.guardPath === 'self' ? '— self-handled'
+              : r.guardPath + ' · ' + r.provider) + ' |');
   }
   if (errors.length) {
     console.log('\n## Errors (' + errors.length + ')\n');
@@ -1076,9 +1129,11 @@ if (asJson) {
 if (!asJson && !urlsOnly && !writeDoc) {
   const probes = rows.filter((r) => r.guardPath === 'probe').length;
   const watches = rows.filter((r) => r.guardPath === 'watch').length;
-  const remote = rows.filter((r) => r.guardPath !== 'same-origin' && r.guardPath !== 'runtime').length;
+  const remote = rows.filter((r) => !['same-origin', 'runtime', 'self'].includes(r.guardPath)).length;
   console.log('\n' + (errors.length ? '❌ ' : '✅ ') + errors.length + ' error(s), ' + warnings.length + ' warning(s), ' +
     (probes + watches) + '/' + remote + ' third-party layers under the availability guard (' + probes + ' probed, ' +
-    watches + ' watched); ' + (rows.length - remote) + ' same-origin/runtime.');
+    watches + ' watched); ' + rows.filter((r) => r.guardPath === 'self').length + ' self-handled, ' +
+    rows.filter((r) => r.guardPath === 'same-origin').length + ' same-origin, ' +
+    rows.filter((r) => r.guardPath === 'runtime').length + ' runtime.');
 }
 process.exit(errors.length ? 1 : 0);

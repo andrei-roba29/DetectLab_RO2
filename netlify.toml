@@ -78,3 +78,26 @@
   from = "/api/geo/dk-dhm"
   to = "/.netlify/functions/dk-dhm"
   status = 200
+
+# ── DENMARK · Danish base maps, nature overlay and heritage WFS ────────────
+# js/danish-layers.config.js defines these layers; js/danish-layers.js draws
+# them. /api/geo/dk-dtk25 adds the Dataforsyningen token as a header and
+# /api/geo/dk-orto adds the Datafordeler service-user credentials, so no secret
+# ever reaches a browser; /api/geo/dk-heritage asks the official
+# Fund og Fortidsminder WFS in EPSG:25832 and returns GeoJSON in EPSG:4326.
+# Environment: DATAFORSYNINGEN_TOKEN (DTK25), DATAFORDELER_USER +
+# DATAFORDELER_PASSWORD (orthophoto). See DATA_SOURCES.md and DANISH_LAYERS.md.
+[[redirects]]
+  from = "/api/geo/dk-dtk25"
+  to = "/.netlify/functions/dk-dtk25"
+  status = 200
+
+[[redirects]]
+  from = "/api/geo/dk-orto"
+  to = "/.netlify/functions/dk-orto"
+  status = 200
+
+[[redirects]]
+  from = "/api/geo/dk-heritage"
+  to = "/.netlify/functions/dk-heritage"
+  status = 200

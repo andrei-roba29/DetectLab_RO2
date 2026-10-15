@@ -13719,6 +13719,15 @@
                         row.setAttribute('aria-hidden', available ? 'false' : 'true');
                     });
 
+                    // The Danish rows (js/danish-layers.js) are generated from
+                    // js/danish-layers.config.js, so they are not in `layerDefs`
+                    // above; the module applies the same country rule to its own
+                    // group row and sub-rows.
+                    var danishLayers = window.DetectLabDanishLayers;
+                    if (danishLayers && typeof danishLayers.filterForCountry === 'function') {
+                        try { danishLayers.filterForCountry(iso); } catch (e) {}
+                    }
+
                     var euCatalog = window.DetectLabEuMaps;
                     if (euCatalog && typeof euCatalog.filterForCountry === 'function') {
                         var countryExtent = null;
@@ -13765,6 +13774,10 @@
                 window.unfilterLayersForCountry = function () {
                     if (window.DetectLabEuMaps && typeof window.DetectLabEuMaps.filterForCountry === 'function') {
                         window.DetectLabEuMaps.filterForCountry(null, null);
+                    }
+                    if (window.DetectLabDanishLayers &&
+                        typeof window.DetectLabDanishLayers.filterForCountry === 'function') {
+                        try { window.DetectLabDanishLayers.filterForCountry(null); } catch (e) {}
                     }
                     layerDefs.concat(internationalLayerDefs).forEach(function (def) {
                         var row = null;

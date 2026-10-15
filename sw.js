@@ -493,7 +493,14 @@
 //   Web-Mercator one the provider's GeoServer cannot read (js/layer-registry.js
 //   + tools/audit-wms-layers.mjs §CENAGIS repoint; see CENAGIS_WMS_HEALTH.md).
 //   Cache bumped so an installed PWA picks up the repointed registry.
-const CACHE_NAME = 'detectlab-v211-cenagis-repoint';
+// v212: the Danish layers (Denmark) — js/danish-layers.config.js describes six
+//   layers and js/danish-layers.js draws the enabled ones (DTK25, GeoDanmark
+//   ortofoto, protected nature types, OpenStreetMap, Fund og Fortidsminder);
+//   two third-party placeholders stay disabled. The map, the panel row, the
+//   basemap control and the new /api/geo/dk-* routes are in the shell; see
+//   DATA_SOURCES.md and DANISH_LAYERS.md. Cache bumped so an installed PWA
+//   picks up the new modules, the translations and the skin.
+const CACHE_NAME = 'detectlab-v212-danish-layers';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -526,7 +533,9 @@ const PRECACHE_URLS = [
   // 3D terrain view (2D ⇄ 3D) — shared layer registry + MapLibre GL viewer.
   // js/maplibre-gl.js is precached as well: opening 3D on a cold PWA offline
   // must not depend on the network.
-  'js/layer-registry.js?v=20261015-cenagis-repoint',
+  'js/layer-registry.js?v=20261015-danish-layers',
+  'js/danish-layers.config.js?v=20261015-danish',
+  'js/danish-layers.js?v=20261015-danish',
   'js/layer-registry.js?v=20261014-wms-audit',
   'js/layer-registry.js?v=20261013-3d-mobile',
   'js/layer-registry.js?v=20261013-3d-mirror',
@@ -535,7 +544,7 @@ const PRECACHE_URLS = [
   'css/hist-shift.css?v=20261014-hist-shift',
   'js/map3d-mirror.js?v=20261014-lidar-3d-focus',
   'js/map3d-mirror.js?v=20261014-3d-vectors',
-  'js/map-app.js?v=20261015-roman-roads',
+  'js/map-app.js?v=20261015-danish-layers',
   /* Older tags stay listed on purpose: an installed PWA that is still running
    * an older index.html keeps working offline through its own URL. */
   'js/map-app.js?v=20261014-lidar-3d-focus',
@@ -570,7 +579,7 @@ const PRECACHE_URLS = [
   'css/map3d-terrain.css?v=20261014-3d-slider-layout',
   'css/map3d-terrain.css?v=20261014-map-control-spacing',
   'css/map3d-terrain.css?v=20261013-3d-mobile',
-  'css/styles.css?v=20261014-map-control-spacing',
+  'css/styles.css?v=20261015-danish-layers',
   'css/map3d-terrain.css?v=20261013-3d-mirror',
   // European Historical Maps (CENAGIS / IH PAN)
   'js/historical-eu-maps.js?v=20261008-country-overlap',
@@ -1178,7 +1187,7 @@ const PRECACHE_URLS = [
   'js/map-app.js?v=20261010-lidar-zoom-gate',
   'js/offline-maps.js?v=20261009-3d-globe',
   'js/translations.js?v=20261009-3d-globe',
-  'js/translations.js?v=20261013-no-change-pill',
+  'js/translations.js?v=20261015-danish-layers',
   'js/d3.min.js?v=7.9.0',
   'js/topojson-client.min.js?v=3.1.0',
   'data/countries-50m.json?v=20261008',

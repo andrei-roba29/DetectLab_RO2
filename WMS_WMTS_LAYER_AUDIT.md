@@ -89,9 +89,12 @@ until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one
 
 | layer | kind | endpoint host | LAYERS | ver | format | CORS | proxy | availability guard |
 |---|---|---|---|---|---|---|---|---|
+| `danish.dtk25` | wms | same-origin | dtk25_2023 | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.orto` | wms | same-origin | geodanmark_2025_12_5cm | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `sat.vhr-2012` | wms | copernicus.discomap.eea.europa.eu | Image | 1.1.1 | image/jpeg | no | always | probe · Copernicus Land / EEA discomap |
 | `sat.vhr-2018` | wms | image.discomap.eea.europa.eu | VHR_2018_WM | 1.1.1 | image/jpeg | no | always | probe · Copernicus Land / EEA discomap |
 | `sat.vhr-2021` | wms | image.discomap.eea.europa.eu | VHR_2021_LAEA | 1.1.1 | image/jpeg | no | always | probe · Copernicus Land / EEA discomap |
+| `danish.naturtyper` | wms | arealeditering-dist-geo.miljoeportal.dk | dai:bes_naturtyper | 1.3.0 | image/png | unknown | auto | probe · Danmarks Miljøportal |
 | `lidar.nl-ahn` | dynamic | ahn.arcgisonline.nl | exportImage |  | image/png | yes | auto | watch · AHN / Esri Nederland |
 | `lidar.no-hoydedata` | dynamic | hoydedata.no | exportImage |  | image/png | yes | auto | watch · Kartverket (høydedata.no) |
 | `lidar.pl-nmt` | dynamic | mapy.geoportal.gov.pl | Raster | 1.3.0 | image/png | unknown | auto | watch · GUGiK / geoportal.gov.pl |
@@ -162,7 +165,7 @@ until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one
 | `premium.kdr-gb` | wms | pastmaps.cenagis.edu.pl | ihpan:kdr_gb_3857 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `premium.wig-100k` | wms | pastmaps.cenagis.edu.pl | ihpan:wig100k_3857 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 
-**69/69 third-party layers guarded** (58 probed, 11 watched); 3 same-origin/runtime. 0 error(s), 0 warning(s).
+**70/70 third-party layers guarded** (59 probed, 11 watched); 0 self-handled + 4 same-origin, 1 runtime. 0 error(s), 0 warning(s).
 
 ### Small print
 
@@ -197,6 +200,7 @@ None — every checked invariant holds.
 | **geo-spatial.org (eHarta)** (`services.geo-spatial.org`) | WMS GetMap, version 1.1.0 (SRS=) | 200 + ServiceExceptionReport XML, or an empty tile where the mosaic has no coverage | external | probe before the layer is added, same notice path |
 | **Copernicus Land / EEA discomap** (`copernicus.discomap.eea.europa.eu`) | ArcGIS MapServer/WMSServer GetMap, WMS 1.1.1, JPEG (transparent=false) | 200 + an ArcGIS JSON error, or a blank JPEG outside the VHR footprint of that year | external | probe; the 3D view always goes through the same-origin proxy because the host sends no CORS headers |
 | **Copernicus Land / EEA discomap** (`image.discomap.eea.europa.eu`) | ArcGIS ImageServer/WMSServer GetMap, WMS 1.1.1, JPEG | 200 + an ArcGIS JSON error, or a blank JPEG where the LAEA-native mosaic has no data | external | probe; 3D through the proxy for the same reason |
+| **Danmarks Miljøportal** (`arealeditering-dist-geo.miljoeportal.dk`) | WMS 1.3.0 GetMap (CRS=EPSG:3857, uppercase KVP), dai:bes_naturtyper, PNG + transparent | 200 + ServiceExceptionReport XML (GeoServer answers exceptions with 200), or an all-alpha tile where the layer has no polygons. The capabilities advertise only EPSG:25832/CRS:84 while GetMap serves 3857 normally — judge by the tile, not by the capabilities | external (the agency GeoServer) | no guard row: js/danish-layers.js owns the switch and prints its own status line (the layer opts out with _detectlabNoGuard); the host is still named in js/wms-health.js HOSTS so a tile-error burst can be attributed |
 | **IGN France / Géoplateforme** (`data.geopf.fr`) | WMS 1.3.0 GetMap (CRS=EPSG:3857), IGNF_LIDAR-HD_* | 200 + ServiceExceptionReport XML, or 400 for an unknown LAYERS/CRS pair | external | probe before the layer is added |
 | **swisstopo** (`wmts.geo.admin.ch`) | WMTS KVP GetTile (ch.swisstopo.swisssurface3d-relief) | 200 + WMTS ServiceException XML, or swisstopo's standard no-data tile beyond the modelled area | external | adopted by the guard when it goes on the map, then watched: three failed tiles in a row remove the layer and explain the provider (no probe — the host publishes dozens of products) |
 | **Environment Agency (England)** (`environment.data.gov.uk`) | WMTS KVP GetTile, TILEMATRIXSET=WebMercatorQuad | 200 + XML ServiceException for a tile outside the published limits | external | adopted and watched for tile errors; the module itself clips its bounds and asks for transparent tiles past maxNativeZoom |
@@ -226,6 +230,16 @@ Every one of these arrives as **HTTP 200**: the failure is in the body, which is
 One concrete tile per layer, built by the same code the map runs (sample tile 12/2345/1480 — Bucharest). Paste one into `curl -I` to test a service live.
 
 ```
+# danish.dtk25 — Denmark · DTK25 topographic map (1:25,000)
+2D https://api.dataforsyningen.dk/dtk_25_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dtk25_2023&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?service=WMS&request=GetMap&version=1.3.0&layers=dtk25_2023&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.orto — Denmark · GeoDanmark orthophoto (spring)
+2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2025_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-orto?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2025_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
 # sat.vhr-2012 — Satellite 2012 (Copernicus VHR)
 2D https://copernicus.discomap.eea.europa.eu/arcgis/services/GioLand/VeryHighResolution2012/MapServer/WMSServer?service=WMS&request=GetMap&version=1.1.1&layers=Image&styles=&format=image%2Fjpeg&transparent=false&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/map3d/tile?layer=sat.vhr-2012&z={z}&x={x}&y={y}
@@ -239,6 +253,11 @@ One concrete tile per layer, built by the same code the map runs (sample tile 12
 # sat.vhr-2021 — Satellite 2021 (Copernicus VHR)
 2D https://image.discomap.eea.europa.eu/arcgis/services/GioLand/VHR_2021_LAEA/ImageServer/WMSServer?service=WMS&request=GetMap&version=1.1.1&layers=VHR_2021_LAEA&styles=&format=image%2Fjpeg&transparent=false&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/map3d/tile?layer=sat.vhr-2021&z={z}&x={x}&y={y}
+```
+```
+# danish.naturtyper — Denmark · Protected nature types (NBL § 3)
+2D https://arealeditering-dist-geo.miljoeportal.dk/geoserver/wms?service=WMS&request=GetMap&version=1.3.0&layers=dai%3Abes_naturtyper&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://arealeditering-dist-geo.miljoeportal.dk/geoserver/wms?service=WMS&request=GetMap&version=1.3.0&layers=dai%3Abes_naturtyper&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # lidar.nl-ahn — Netherlands · AHN (DTM/DSM)

@@ -8210,6 +8210,157 @@
     display: none !important;
 }
 
+/* ── Danish layers (js/danish-layers.config.js + js/danish-layers.js) ───────
+   The rows are generated, so they carry their own small set of classes. They
+   inherit the panel's colours and type scale and stay inside the existing
+   .transp-layer-row, which is what keeps 375 px unchanged. */
+.danish-sublayers {
+    padding-left: 6px;
+    border-left: 2px solid rgba(214, 69, 80, 0.3);
+}
+
+.danish-layer-section {
+    font-size: 0.66rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    opacity: 0.5;
+    margin-top: 2px;
+}
+
+.danish-layer-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.danish-layer-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.danish-layer-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+    cursor: pointer;
+    font-size: 0.78rem;
+    color: rgba(245, 240, 235, 0.78);
+}
+
+.danish-layer-label input {
+    flex-shrink: 0;
+    accent-color: #d64550;
+    width: 13px;
+    height: 13px;
+    cursor: pointer;
+}
+
+.danish-layer-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.danish-layer-info {
+    flex-shrink: 0;
+    width: 15px;
+    height: 15px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(245, 240, 235, 0.35);
+    background: none;
+    color: rgba(245, 240, 235, 0.7);
+    font-size: 0.6rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.danish-layer-info:hover,
+.danish-layer-info:focus-visible {
+    border-color: #d64550;
+    color: #fff;
+}
+
+.danish-layer-opacity {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.72rem;
+    opacity: 0.6;
+    padding-left: 19px;
+}
+
+.danish-layer-slider {
+    margin-left: 19px;
+}
+
+.danish-layer-status {
+    font-size: 0.66rem;
+    line-height: 1.3;
+    padding-left: 19px;
+    opacity: 0.7;
+}
+
+.danish-layer-status.is-error {
+    color: #ffb4a2;
+    opacity: 1;
+}
+
+.danish-layer-status.is-warn {
+    color: #ffd166;
+    opacity: 1;
+}
+
+.danish-group-notice {
+    font-size: 0.68rem;
+    line-height: 1.35;
+    color: #ffd166;
+    border-left: 2px solid rgba(255, 209, 102, 0.5);
+    padding: 3px 0 3px 7px;
+    margin: 0 0 6px;
+}
+
+.danish-layer-row.is-active .danish-layer-title {
+    color: rgba(245, 240, 235, 0.98);
+}
+
+/* The Danish bases mirrored into the existing basemap control. */
+.danish-basemap-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.danish-basemap-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(214, 69, 80, 0.45);
+    flex-shrink: 0;
+}
+
+.danish-basemap-btn.active .danish-basemap-dot {
+    background: #d64550;
+}
+
+.danish-basemap-name {
+    white-space: nowrap;
+}
+
+/* Everything the module creates must stay reachable by keyboard: the panel
+   rows use real inputs, and this keeps the focus ring visible on the dark
+   glass. */
+.danish-layer-label input:focus-visible,
+.danish-layer-info:focus-visible,
+.danish-layer-slider:focus-visible,
+.danish-basemap-btn:focus-visible {
+    outline: 2px solid #d64550;
+    outline-offset: 1px;
+}
+
 @media (prefers-reduced-motion: reduce) {
     #transpPanel .transp-layer-row,
     #histSubLayers > div,

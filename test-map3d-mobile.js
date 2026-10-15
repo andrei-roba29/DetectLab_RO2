@@ -290,11 +290,14 @@ assert(shellVersion >= 196,
  * WMS/WMTS audit, the viewer and sheet by the compact PWA
  * 3D controls. */
 const TAGS = {
-    'js/layer-registry.js': '20261015-cenagis-repoint',
+    'js/layer-registry.js': '20261015-danish-layers',
     'js/map3d-terrain.js': '20261014-lidar-3d-focus',
-    'css/map3d-terrain.css': '20261014-lidar-3d-focus'
+    'css/map3d-terrain.css': '20261014-lidar-3d-focus',
+    'js/danish-layers.config.js': '20261015-danish',
+    'js/danish-layers.js': '20261015-danish'
 };
-['js/map3d-terrain.js', 'js/layer-registry.js', 'css/map3d-terrain.css'].forEach(function (asset) {
+['js/map3d-terrain.js', 'js/layer-registry.js', 'css/map3d-terrain.css',
+    'js/danish-layers.config.js', 'js/danish-layers.js'].forEach(function (asset) {
     const tag = TAGS[asset];
     assert(indexHtml.indexOf(asset + '?v=' + tag) !== -1,
         'index.html loads ' + asset + ' with the new cache-busting tag');

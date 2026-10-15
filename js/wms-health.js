@@ -78,7 +78,15 @@
         'environment.data.gov.uk': 'Environment Agency (England)',
         'hoydedata.no': 'Kartverket (høydedata.no)',
         'ahn.arcgisonline.nl': 'AHN / Esri Nederland',
-        'phenology.hrvpp2.vgt.vito.be': 'VITO / Copernicus HR-VPP'
+        'phenology.hrvpp2.vgt.vito.be': 'VITO / Copernicus HR-VPP',
+        /* The Danish protected-nature overlay (js/danish-layers.config.js) reads
+         * this GeoServer directly: it is public, tokenless and its raster tiles
+         * need no CORS. Listed here so the provider is named if it stops
+         * answering, per the rule that every third-party endpoint of the
+         * registry appears in this map. The layer itself opts out of the guard
+         * with _detectlabNoGuard (js/danish-layers.js owns its row: a status
+         * line under the switch instead of a flipped switch). */
+        'arealeditering-dist-geo.miljoeportal.dk': 'Danmarks Miljøportal'
     };
 
     /* A re-pointed CENAGIS catalogue (window.DETECTLAB_CENAGIS_WMS, read by

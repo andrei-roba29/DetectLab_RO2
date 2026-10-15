@@ -214,7 +214,14 @@
         'apm': { label: { ro: 'APM (analiză)', en: 'APM (analysis)' }, z: 645 },
         'hist-sat': { label: { ro: 'Satelit 60s (CORONA)', en: 'Satellite 60s (CORONA)' }, z: 648 },
         'hist-premium': { label: { ro: 'Hărți istorice premium', en: 'Premium historical maps' }, z: 654 },
-        'image-overlay': { label: { ro: 'Suprapuneri imagine', en: 'Image overlays' }, z: 630 }
+        'image-overlay': { label: { ro: 'Suprapuneri imagine', en: 'Image overlays' }, z: 630 },
+        /* The Danish layers (Denmark) — described in js/danish-layers.config.js
+         * and drawn by js/danish-layers.js. The panes themselves are created by
+         * that module (base 399, raster overlay 406, vectors 408), just above
+         * the app's own basemap stack on pane_satellite (398), so every existing
+         * data pane keeps painting over the Danish ones. */
+        'danish-base': { label: { ro: 'Danemarca · hărți de bază', en: 'Denmark · base maps' }, z: 399, base: true },
+        'danish-overlay': { label: { ro: 'Danemarca · tematice', en: 'Denmark · overlays' }, z: 406 }
     };
 
     /* ═══════════════════════════════════════════════════════════════════════
@@ -2147,5 +2154,78 @@
         diagnostics: diagnostics,
         verify2d: verify2d
     };
+    /* ═══════════════════════════════════════════════════════════════════════
+     *  DANISH LAYERS (Denmark) — mirrored from js/danish-layers.config.js
+     * ───────────────────────────────────────────────────────────────────────
+     * The config is the single description of every Danish layer; this block
+     * only copies the enabled ones into the shared catalogue, so the 2D map's
+     * diagnostics, the 3D status report and the offline audit
+     * (tools/audit-wms-layers.mjs) treat them like any other layer. It runs in
+     * the browser (the config is a plain script loaded first) and in Node (the
+     * proxies and the tools require() the config), and it does nothing when the
+     * config is not there — every other page keeps working unchanged.
+     *
+     * `url` is what the browser calls (a same-origin /api/geo/… route for the
+     * credentialed layers, the provider itself for the public ones) and
+     * `upstream` is the provider endpoint behind the proxy, for the docs.
+     * `guard:false` + `selfGuarded` is deliberate: js/danish-layers.js owns
+     * those rows (it probes the proxy, reports the missing credential, watches
+     * the tiles and falls back to a public alternative), and the availability
+     * guard must not switch a basemap off behind the visitor's back.          */
+    (function registerDanishLayers() {
+        var cfg = null;
+        try {
+            cfg = root && root.DANISH_LAYERS_CONFIG;
+            if (!cfg && typeof require === 'function') cfg = require('./danish-layers.config.js');
+        } catch (e) { cfg = null; }
+        if (!cfg || typeof cfg.enabledLayers !== 'function') return;
+        var SELF_GUARD = 'js/danish-layers.js owns this row: it probes the same-origin route once ' +
+            '(a missing credential is reported in the row), watches the tiles and falls back to a ' +
+            'public alternative — the switch must stay under the visitor\u2019s control.';
+        try {
+            cfg.enabledLayers().forEach(function (layer) {
+                var id = 'danish.' + layer.id;
+                if (BY_ID[id]) return;
+                var isBase = layer.group === 'base';
+                API.register({
+                    id: id,
+                    group: isBase ? 'danish-base' : 'danish-overlay',
+                    z: isBase ? 399 : 406,
+                    kind: layer.type === 'wms' ? 'wms' : (layer.type === 'wfs' ? 'wfs' : 'tile'),
+                    title: { da: layer.title.da, en: layer.title.en, ro: layer.title.en },
+                    url: layer.url,
+                    upstream: layer.upstream,
+                    layer: layer.layers,
+                    format: layer.format,
+                    transparent: !!layer.transparent,
+                    version: layer.version,
+                    crs: layer.crs,
+                    tileSize: layer.tileSize,
+                    minZoom: layer.minZoom,
+                    maxZoom: layer.maxZoom,
+                    maxNativeZoom: layer.maxNativeZoom,
+                    opacity: layer.opacity,
+                    attribution: layer.attribution,
+                    provider: layer.provider,
+                    licence: layer.licence,
+                    requiresCredentials: layer.requiresCredentials || [],
+                    cors: 'unknown',
+                    proxy: 'auto',
+                    guard: false,
+                    selfGuarded: true,
+                    selfGuardedReason: SELF_GUARD,
+                    notes: layer.notes,
+                    ui: {
+                        toggle: 'danishToggle_' + layer.id,
+                        slider: isBase ? undefined : 'danishOpacity_' + layer.id,
+                        select: isBase ? 'danishBaseMap' : undefined,
+                        selfGuarded: true,
+                        configId: layer.id
+                    }
+                });
+            });
+        } catch (e) { /* a broken config must not take the catalogue down */ }
+    }());
+
     return API;
 }));

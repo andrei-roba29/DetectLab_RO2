@@ -39,7 +39,10 @@ const parserSrc = read('js/roman-roads-parser.js');
 const layerSrc = read('js/roman-roads.js');
 const workerSrc = read('js/roman-roads-worker.js');
 
+/* The roads' own assets were last touched by the roads work; map-app.js was
+ * re-tagged by the Danish layers that came after it. */
 const VERSION_TAG = '20261015-roman-roads';
+const MAP_APP_TAG = '20261015-danish-layers';
 console.log('[Test] Roman roads — worker parser, canvas layer, no per-segment DOM...');
 
 /* ── 1. wiring ─────────────────────────────────────────────────────────────
@@ -59,7 +62,7 @@ console.log('  ✓ map-app.js loads roads through the worker + canvas layer');
 
 const iParser = indexHtml.indexOf('js/roman-roads-parser.js?v=' + VERSION_TAG);
 const iLayer = indexHtml.indexOf('js/roman-roads.js?v=' + VERSION_TAG);
-const iMapApp = indexHtml.indexOf('js/map-app.js?v=' + VERSION_TAG);
+const iMapApp = indexHtml.indexOf('js/map-app.js?v=' + MAP_APP_TAG);
 assert(iParser > 0 && iLayer > 0 && iMapApp > 0, 'index.html loads both new modules and the versioned map app');
 assert(iParser < iMapApp && iLayer < iMapApp, 'the modules are loaded before map-app.js');
 ['js/roman-roads-parser.js?v=' + VERSION_TAG, 'js/roman-roads.js?v=' + VERSION_TAG,
@@ -68,7 +71,7 @@ assert(iParser < iMapApp && iLayer < iMapApp, 'the modules are loaded before map
     });
 /* The worker is what a PWA must be able to fetch offline — and it has to be
  * the same version as the page that created it. */
-assert(indexHtml.includes('js/map-app.js?v=' + VERSION_TAG) && sw.includes('js/map-app.js?v=' + VERSION_TAG),
+assert(indexHtml.includes('js/map-app.js?v=' + MAP_APP_TAG) && sw.includes('js/map-app.js?v=' + MAP_APP_TAG),
     'index.html and sw.js agree on the map-app version');
 console.log('  ✓ parser, layer and worker are shipped and precached');
 
