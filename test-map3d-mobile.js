@@ -290,7 +290,7 @@ assert(shellVersion >= 196,
  * WMS/WMTS audit, the viewer and sheet by the compact PWA
  * 3D controls. */
 const TAGS = {
-    'js/layer-registry.js': '20261014-wms-audit',
+    'js/layer-registry.js': '20261015-cenagis-repoint',
     'js/map3d-terrain.js': '20261014-lidar-3d-focus',
     'css/map3d-terrain.css': '20261014-lidar-3d-focus'
 };

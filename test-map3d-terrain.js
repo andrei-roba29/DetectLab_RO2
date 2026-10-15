@@ -82,7 +82,7 @@ const TAG = '20261013-3d-terrain';             /* MapLibre itself (unchanged) */
 const TAG_3D = '20261014-lidar-3d-focus';        /* mirror                        */
 const TAG_VIEWER = '20261014-lidar-3d-focus';    /* viewer                        */
 const TAG_FOCUS = '20261014-lidar-3d-focus';     /* LiDAR focus (3D, one disc)    */
-const TAG_REGISTRY = '20261014-wms-audit';     /* shared registry (WMS audit)  */
+const TAG_REGISTRY = '20261015-cenagis-repoint';     /* shared registry (WMS audit)  */
 
 // ══════════════════════════════════════════════════════════════
 // 1. Static wiring — the viewer must be reachable in the app

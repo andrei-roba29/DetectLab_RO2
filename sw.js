@@ -487,7 +487,13 @@
 //   route-segment NDJSON is now also kept in its own runtime cache
 //   (detectlab-roman-roads-v1) so a second visit paints from disk. Cache
 //   bumped so an installed PWA picks up the new modules and map-app.
-const CACHE_NAME = 'detectlab-v210-roman-roads';
+// v211: the two CENAGIS historical rows that kept showing „This map cannot be
+//   loaded” — Central Europe 1:300k (ukvme) and German Empire 1:100k (kdr) —
+//   now ask for the readable EPSG:2180 mosaic of the same sheet instead of the
+//   Web-Mercator one the provider's GeoServer cannot read (js/layer-registry.js
+//   + tools/audit-wms-layers.mjs §CENAGIS repoint; see CENAGIS_WMS_HEALTH.md).
+//   Cache bumped so an installed PWA picks up the repointed registry.
+const CACHE_NAME = 'detectlab-v211-cenagis-repoint';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -520,6 +526,7 @@ const PRECACHE_URLS = [
   // 3D terrain view (2D ⇄ 3D) — shared layer registry + MapLibre GL viewer.
   // js/maplibre-gl.js is precached as well: opening 3D on a cold PWA offline
   // must not depend on the network.
+  'js/layer-registry.js?v=20261015-cenagis-repoint',
   'js/layer-registry.js?v=20261014-wms-audit',
   'js/layer-registry.js?v=20261013-3d-mobile',
   'js/layer-registry.js?v=20261013-3d-mirror',

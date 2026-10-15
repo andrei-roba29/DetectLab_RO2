@@ -40,7 +40,7 @@ assert.doesNotMatch(styles, /atlas-primary|atlas-view|legacy-map-tab|atlas-mode-
 assert.doesNotMatch(index, /leaflet-maplibre-gl|globe-base-layer/,
     'the retired MapLibre globe basemap is not loaded by the shell');
 assert(index.includes('js/map3d-terrain.js?v=20261014-lidar-3d-focus') &&
-       index.includes('js/layer-registry.js?v=20261014-wms-audit') &&
+       index.includes('js/layer-registry.js?v=20261015-cenagis-repoint') &&
        index.includes('js/map3d-mirror.js?v=20261014-lidar-3d-focus'),
     'the 3D terrain viewer, its shared layer registry and the 2D→3D mirror are loaded');
 
