@@ -16,9 +16,13 @@ java.lang.RuntimeException: Unable to create a valid ImageInputStream for the
 provided input: /opt/geoserver/data_dir/cartomatic/UKvME/mosaick/ukvme_3857_transparent.ecw
 ```
 
-(`kdr`, `chrzanowski`, `reymann`, `m25k`, `gdansk`, `ahp_*` — the whole raster
-catalogue; only the server operator can fix it.) A browser cannot decode that
-body as an image, so:
+(`kdr`, `chrzanowski`, `reymann`, `m25k`, `gdansk`, `ahp_*` — on that day the
+whole raster catalogue answered like this; only the server operator can fix it.)
+By 2026-10-15 the operator had brought everything back **except the
+Web-Mercator (`…_3857`) mosaics of two sheets — `ukvme` and `kdr`** — which
+still answer with the same `…_3857_transparent.ecw` exception. Those two rows no
+longer produce it: see *When the sheet's `_3857` mosaic is dead* below. A
+browser cannot decode such a body as an image, so:
 
 - **DevTools** showed a wall of `200 OK` image requests whose Preview pane said
   **“Nothing to preview”** — that is the symptom users report;
@@ -29,6 +33,56 @@ body as an image, so:
 The same class of failure exists on every provider: a service outage, a
 maintenance page, a `ServiceException` body, an ArcGIS JSON error, a 401 from a
 misconfigured token.
+
+## When the sheet's `_3857` mosaic is dead — the 2026-10-15 repoint
+
+Reported twice by the user as *“This map cannot be loaded”* on the **Central
+Europe Map 1:300k (1893–1945)** and **German Empire Map 1:100k (1878–1945)**
+rows. The guard was right: the provider really does answer those two rows with
+an error instead of an image.
+
+What the browser-free check (`GetMap` + `GetFeatureInfo`, request CRSes
+`1.1.1`/`SRS=EPSG:3857` and `1.3.0`/`CRS=EPSG:2180`) showed on 2026-10-15:
+
+| layer asked for | answer |
+|---|---|
+| `ihpan:ukvme_3857` | 200 + `Unable to create a valid ImageInputStream … UKvME/mosaick/ukvme_3857_transparent.ecw` |
+| `ihpan:ukvme_3857_transparent` | `Could not find layer` — that name does not exist |
+| `ihpan:ukvme_2180` | PNG, opaque pixels (Warsaw `38/7/22/255`, Berlin `179/163/182/255`) |
+| `ihpan:kdr_3857` | 200 + the same exception for `kdr/mosaick/kdr_3857_transparent.ecw` |
+| `ihpan:kdr_2180` | PNG, opaque pixels (Poznań `33/32/21/255`, Berlin `199/203/182/253`) |
+| every other `…_3857` the app uses (`chrzanowski`, `reymann`, `kdr_gb`, `wig100k`, `wig25k`, `wig300k`, `m25k`, `TKKP_126k`, `ahp_*`, …) | PNG — the rest of the catalogue recovered |
+
+**The fix is a name, not a workaround.** CENAGIS publishes the same sheets once
+per CRS, and the `…_2180` twin of each is readable, so the two catalogue entries
+in `js/layer-registry.js` now name the readable twin (`kdr_2180`, `ukvme_2180`)
+and both views stay correct:
+
+* **2D** asks the WMS for `EPSG:3857` tiles as always — the GeoServer
+  re-projects the PL-1992 mosaic onto the Web-Mercator grid server-side;
+* **3D** goes through the same-origin tile proxy, which asks in `EPSG:2180`
+  with the tile bbox transformed into PL-1992 (exactly like the two Warsaw
+  city-plan sheets that have always been 2180-only).
+
+The premium panel rows (`premium.mitteleuropa`, `premium.kdr-100k`) take their
+`LAYERS` value **from the catalogue entry** instead of repeating it, because
+they are separate registry entries for the same sheet and had drifted: one row
+asking for the readable twin while the other still asked for the dead mosaic
+would have kept the notice on screen.
+
+The audit keeps this from silently reverting:
+
+* `DEAD_MOSAICS` in `tools/audit-wms-layers.mjs` records the two unreadable
+  mosaics, what they answer and since when; `W_DEAD_MOSAIC` **fails the audit**
+  if any row asks for one of them again, and a `REPOINTED` info finding records
+  the rows that ask for the twin;
+* `SAME_SHEET_PAIRS` fails with `PAIR_DRIFT` when a premium row and its
+  catalogue row name different mosaics.
+
+If CENAGIS ever repairs the `…_3857` ECWs, flipping the rows back is a two-line
+change (`wms_layer` in the catalogue) — check first with
+`node tools/audit-wms-layers.mjs --layer=cenagis.kdr --tile=12/2345/1480`, then
+remove the entry from `DEAD_MOSAICS`.
 
 ## What the guard does (`js/wms-health.js`)
 
@@ -183,13 +237,20 @@ guarded (58 probed, 11 watched), 3 same-origin/runtime**.
   and re-toggling after going back online works without waiting for a cooldown.
 - Unset `DATAFORSYNINGEN_TOKEN` → the Denmark row shows the “not configured on
   this deployment” message, not the provider-outage one.
+- The two repointed rows (Central Europe 1:300k, German Empire 1:100k) switch
+  on **without** a notice in both the 2D map and the 3D view: they are served
+  by the sheets' EPSG:2180 mosaics, so a notice here means the provider has
+  broken something else — check with
+  `node tools/audit-wms-layers.mjs --layer=cenagis.kdr --tile=12/2345/1480`
+  and the `GetFeatureInfo` probes in the table above.
 
 ## Service worker
 
-`CACHE_NAME` is `detectlab-v202-tile-watch`; the precache list carries
+`CACHE_NAME` is `detectlab-v211-cenagis-repoint`; the precache list carries
 `js/wms-health.js?v=20261014-guard-watch`,
 `js/ahn-layer.js?v=20261014-tile-failure-hook`,
 `js/hoydedata-layer.js?v=20261014-tile-failure-hook`,
+`js/layer-registry.js?v=20261015-cenagis-repoint`,
 `js/layer-registry.js?v=20261014-wms-audit` and
 `js/dataforsyningen-dhm-layer.js?v=20261014-dk-token-message`, matching the
 `?v=` pins in `index.html`. Old tags stay in the list (the established pattern)

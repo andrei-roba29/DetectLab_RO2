@@ -104,13 +104,17 @@ function isGuardedUrl(url) {
  *   watch — the guard adopts it from the live map (`layeradd`) and trips on a
  *           run of failed tiles (module-built WMTS/GridLayer layers);
  *   none  — nothing watches it. */
-function guardPath(kind, url) {
+function guardPath(kind, url, def) {
   /* Same-origin routes (/api/geo/dk-dhm, /api/geo/se-hojdmodell, the 3D tile
      proxy) are the site's own functions: they answer a JSON error the module
      can read, so they have their own error path instead of needing the guard. */
   if (!url) return 'runtime';
   if (String(url).indexOf('/') === 0) return 'same-origin';
-  if (!isGuardedUrl(url)) return 'none';
+  if (!isGuardedUrl(url)) {
+    /* A layer whose definition opts out of the guard on purpose and says who
+       handles its failures instead (config-driven rows: the Danish layers). */
+    return def && def.guard === false && def.selfGuarded ? 'self' : 'none';
+  }
   return kind === 'wms' ? 'probe' : 'watch';
 }
 function guardLabel(url) {
@@ -276,7 +280,13 @@ function wmsSampleUrl(def, z, x, y) {
   params.height = size;
   const query = Object.keys(params).map((k) => encodeURIComponent(k) + '=' + encodeURIComponent(params[k]));
   query.push('bbox=' + [minX, minY, maxX, maxY].join(','));
-  return def.url + (String(def.url).indexOf('?') === -1 ? '?' : '&') + query.join('&');
+  /* The sample must be a request the reader can rerun. A same-origin route
+     (/api/geo/…) only exists on the deployed site, so its sample is aimed at
+     the provider endpoint the route forwards to (`upstream`); the route itself
+     stays in the report's endpoint column. */
+  const sameOrigin = String(def.url).charAt(0) === '/';
+  const target = sameOrigin && def.upstream ? String(def.upstream) : String(def.url);
+  return target + (target.indexOf('?') === -1 ? '?' : '&') + query.join('&');
 }
 
 /** WMTS KVP GetTile URL for one tile (registry template). */
@@ -351,8 +361,26 @@ function auditWms(def) {
   if (cors === 'yes' && def.proxy === 'always') {
     warn('P_CORS_EXTRA', 'host is CORS-enabled yet every 3D tile goes through the proxy');
   }
-  if (isGuardedUrl(def.url)) {
+  if (def.guard === false && !def.selfGuarded) {
+    err('GUARD_OPTOUT_UNDOCUMENTED', 'guard:false without selfGuarded:selfGuardedReason — an opt-out must ' +
+      'say who handles the failures instead');
+  } else if (def.guard === false && def.selfGuarded) {
+    /* Ordering matters: the module that owns the row opts out explicitly, even
+     * when its host is watched for other layers. */
+    info('GUARD_SELF', 'guard opted out on purpose (guard:false): ' + (def.selfGuardedReason || '') +
+      (isGuardedUrl(def.url) ? ' — the host itself is watched (' + guardLabel(def.url) + ')' : ''));
+  } else if (isGuardedUrl(def.url)) {
     info('GUARDED', 'availability guard active (' + guardLabel(def.url) + ')');
+  } else if (guardPath(def.kind, def.url) === 'same-origin') {
+    /* A same-origin route (/api/geo/…) is the site's own function: it answers a
+     * JSON error the calling module can read, so it needs its own error path
+     * rather than the third-party guard — which must be declared, not assumed. */
+    if (def.selfGuarded) {
+      info('GUARD_SELF', 'same-origin route with its own error path: ' + (def.selfGuardedReason || ''));
+    } else {
+      err('GUARD_SELF_UNDECLARED', 'same-origin route without a declared error path — set ' +
+        'selfGuarded:true + selfGuardedReason on the definition, or add its host to HOSTS in js/wms-health.js');
+    }
   } else {
     err('GUARD_MISSING', 'no availability guard: a broken server would leave a blank layer with no explanation — ' +
       'add the host to HOSTS in js/wms-health.js');
@@ -387,7 +415,13 @@ function auditWmts(def) {
   if (def.timeAware && def.time && !def.time.value) err('M_TIME_MISSING', 'time-aware layer without a default TIME value');
   if (def.bounds && def.bounds.length === 2) info('M_BOUNDS', 'clipped to the published footprint');
   if (isGuardedUrl(def.url)) info('GUARDED', 'availability guard active (' + guardLabel(def.url) + ')');
-  else {
+  else if (guardPath(def.kind, def.url) === 'same-origin' && def.selfGuarded) {
+    info('GUARD_SELF', 'same-origin cache with its own error path: ' + (def.selfGuardedReason || ''));
+  } else if (def.guard === false && def.selfGuarded) {
+    info('GUARD_SELF', 'guard opted out on purpose (guard:false): ' + (def.selfGuardedReason || ''));
+  } else if (def.guard === false) {
+    err('GUARD_OPTOUT_UNDOCUMENTED', 'guard:false without selfGuarded:selfGuardedReason');
+  } else {
     err('GUARD_MISSING', 'WMTS host is not watched: a cache answering an XML ServiceException would leave a blank ' +
       'layer — add the host to HOSTS in js/wms-health.js');
   }
@@ -435,6 +469,9 @@ function auditDynamic(def) {
     warn('P_ORIGIN', 'proxy:"never" on a cross-origin endpoint — the browser talks to it directly');
   }
   if (isGuardedUrl(def.url)) info('GUARDED', 'host watched by the guard (' + guardLabel(def.url) + ')');
+  else if (def.guard === false && def.selfGuarded) {
+    info('GUARD_SELF', 'guard opted out on purpose (guard:false): ' + (def.selfGuardedReason || ''));
+  }
   else if (String(def.url).indexOf('/api/') === 0) {
     info('SAME_ORIGIN', 'same-origin proxy route — its own error path applies');
   } else if (path2dHasOwnErrorPath(def)) {
@@ -454,6 +491,55 @@ const OWN_ERROR_PATHS = [
 function path2dHasOwnErrorPath(def) {
   const st = moduleStatus[def.builder && def.builder.module];
   return !!(st && OWN_ERROR_PATHS.indexOf(st.file) !== -1);
+}
+
+/* ── Mosaics the source server cannot read ────────────────────────────────
+ * CENAGIS publishes most sheets once per CRS. The Web-Mercator (…_3857) twins
+ * of two of them died inside the operator's GeoServer on 2026-10-13 and were
+ * still unreadable on 2026-10-15, while the matching …_2180 mosaics of the
+ * same sheets rendered normally (GetMap + GetFeatureInfo at Warsaw, Poznań and
+ * Berlin). A registry row must therefore never ask for the dead twin: the
+ * readable twin is the same sheet, and both views stay correct — the 2D map
+ * asks it in EPSG:3857 and the GeoServer re-projects on the fly, the 3D view
+ * asks it in EPSG:2180 through the same-origin proxy.
+ *
+ * key = the unreadable LAYERS name, value = the readable twin + the evidence. */
+const DEAD_MOSAICS = {
+  'ihpan:ukvme_3857': {
+    twin: 'ihpan:ukvme_2180',
+    since: '2026-10-13', checked: '2026-10-15',
+    reason: 'java.lang.RuntimeException: Unable to create a valid ImageInputStream for ' +
+      '/opt/geoserver/data_dir/cartomatic/UKvME/mosaick/ukvme_3857_transparent.ecw'
+  },
+  'ihpan:kdr_3857': {
+    twin: 'ihpan:kdr_2180',
+    since: '2026-10-13', checked: '2026-10-15',
+    reason: 'java.lang.RuntimeException: Unable to create a valid ImageInputStream for ' +
+      '/opt/geoserver/data_dir/cartomatic/kdr/mosaick/kdr_3857_transparent.ecw'
+  }
+};
+
+function auditDeadMosaics(def) {
+  const findings = [];
+  const name = String(DL.layerOf(def) || '').toLowerCase();
+  if (!name) return findings;
+  if (DEAD_MOSAICS[name]) {
+    const dead = DEAD_MOSAICS[name];
+    findings.push({ level: 'error', code: 'W_DEAD_MOSAIC',
+      message: name + ' is unreadable at the source (since ' + dead.since + ', re-checked ' + dead.checked +
+        '): ' + dead.reason + ' — ask for ' + dead.twin + ' instead' });
+    return findings;
+  }
+  Object.keys(DEAD_MOSAICS).forEach((deadName) => {
+    const dead = DEAD_MOSAICS[deadName];
+    if (name === dead.twin.toLowerCase()) {
+      findings.push({ level: 'info', code: 'REPOINTED',
+        message: 'asks ' + dead.twin + ' — repointed off ' + deadName + ', which the source server cannot ' +
+          'read (since ' + dead.since + ', re-checked ' + dead.checked + '); 2D asks EPSG:3857, 3D asks ' +
+          'EPSG:2180 through the proxy' });
+    }
+  });
+  return findings;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -477,6 +563,7 @@ for (const def of DL.ordered()) {
       findings = auditDynamic(def);
       url = dynamicSampleUrl(def, sampleZ, sampleX, sampleY);
     }
+    findings = findings.concat(auditDeadMosaics(def));
     try { url3d = (DL.map3dTiles(def, { modules: moduleSandbox })[0]) || ''; } catch (e) { url3d = ''; }
     if (def.reproject && url3d && url3d.indexOf('{bbox-epsg-3857}') !== -1) {
       findings.push({ level: 'error', code: 'W_REPROJECT_DIRECT',
@@ -499,8 +586,8 @@ for (const def of DL.ordered()) {
     cors: def.cors || 'unknown',
     proxy: def.proxy || 'auto',
     runtime: def.kind === 'dynamic' && !def.builder,
-    guardPath: guardPath(def.kind, def.url),
-    guarded: guardPath(def.kind, def.url) !== 'none',
+    guardPath: guardPath(def.kind, def.url, def),
+    guarded: guardPath(def.kind, def.url, def) !== 'none',
     provider: guardLabel(def.url),
     sample2d: url,
     sample3d: url3d,
@@ -522,7 +609,8 @@ const SIGNATURES = [
     provider: 'CENAGIS / IH PAN',
     request: 'WMS GetMap (1.3.0 for the catalogue, 1.1.1 for the premium rows)',
     what: '200 + a Java exception body: java.lang.RuntimeException: Unable to create a valid ImageInputStream ' +
-      '(...ukvme_3857_transparent.ecw); occasionally 502/504 from the host',
+      '(cartomatic/*/mosaick/*_3857_transparent.ecw — ukvme, kdr, …); occasionally 502/504 from the host. ' +
+      'The *…_2180* twin of the same sheet still renders — see §CENAGIS repoint',
     owner: 'external (the operator\'s GeoServer / raster store)',
     app: 'probe runs before the layer is added; on failure the row is switched off, marked and the notice names ' +
       'the provider, with Retry'
@@ -550,6 +638,18 @@ const SIGNATURES = [
     what: '200 + an ArcGIS JSON error, or a blank JPEG where the LAEA-native mosaic has no data',
     owner: 'external',
     app: 'probe; 3D through the proxy for the same reason'
+  },
+  {
+    host: 'arealeditering-dist-geo.miljoeportal.dk',
+    provider: 'Danmarks Miljøportal',
+    request: 'WMS 1.3.0 GetMap (CRS=EPSG:3857, uppercase KVP), dai:bes_naturtyper, PNG + transparent',
+    what: '200 + ServiceExceptionReport XML (GeoServer answers exceptions with 200), ' +
+      'or an all-alpha tile where the layer has no polygons. The capabilities advertise only ' +
+      'EPSG:25832/CRS:84 while GetMap serves 3857 normally — judge by the tile, not by the capabilities',
+    owner: 'external (the agency GeoServer)',
+    app: 'no guard row: js/danish-layers.js owns the switch and prints its own status line ' +
+      '(the layer opts out with _detectlabNoGuard); the host is still named in js/wms-health.js HOSTS ' +
+      'so a tile-error burst can be attributed'
   },
   {
     host: 'data.geopf.fr',
@@ -685,6 +785,37 @@ for (const sig of SIGNATURES) {
   }
 }
 
+/* Two registry rows can describe the SAME sheet: the premium row the panel
+ * shows first and the catalogue row the country lists use. They are separate
+ * entries, so nothing stops them from drifting onto different mosaics — which
+ * is exactly how one sheet kept asking for a dead twin after the other had
+ * been repointed. Each pair must name one LAYERS value. */
+const SAME_SHEET_PAIRS = [
+  ['premium.mitteleuropa', 'cenagis.ukvme'],
+  ['premium.kdr-100k', 'cenagis.kdr'],
+  ['premium.chrzanowski', 'cenagis.chrzanowski'],
+  ['premium.reymann', 'cenagis.reymann'],
+  ['premium.kdr-gb', 'cenagis.kdr_gb'],
+  ['premium.wig-100k', 'cenagis.wig100k']
+];
+for (const [premiumId, catalogueId] of SAME_SHEET_PAIRS) {
+  const premium = DL.get(premiumId);
+  const catalogue = DL.get(catalogueId);
+  if (!premium || !catalogue) {
+    errors.push({ id: premiumId, code: 'PAIR_MISSING',
+      message: 'documented pair ' + premiumId + ' ↔ ' + catalogueId + ' is no longer complete — fix the ' +
+        'pair list in tools/audit-wms-layers.mjs or the registry' });
+    continue;
+  }
+  const a = String(DL.layerOf(premium) || '').toLowerCase();
+  const b = String(DL.layerOf(catalogue) || '').toLowerCase();
+  if (a !== b) {
+    errors.push({ id: premiumId, code: 'PAIR_DRIFT',
+      message: premiumId + ' asks for ' + a + ' while ' + catalogueId + ' asks for ' + b +
+        ' — both rows are the same sheet and must name one mosaic (see §CENAGIS repoint)' });
+  }
+}
+
 
 
 
@@ -736,9 +867,44 @@ function markdownReport() {
     'rejected); the proxy answers 401 `{\"error\":\"dataforsyningen_token_missing\"}` | deployment config ' +
     '(this repo) + the token holder |');
   out.push('');
-  out.push('The first two are **not fixable here**: the endpoint is correct, the service answers 200 and its own ' +
-    'body is broken. What this repo can do — and now does — is say so, name the provider, switch off the rows ' +
-    'and keep everything else working. The third one is a configuration gap and is reported as such.');
+  out.push('The first two shared one root cause: **the sheet\'s Web-Mercator mosaic is unreadable inside the');
+  out.push('operator\'s GeoServer** — the endpoint is correct, the service answers 200, its own body is broken.');
+  out.push('They are no longer broken for the user because the rows were **repointed** to the readable twin of');
+  out.push('the same sheet (§CENAGIS repoint below, 2026-10-15); the guard stays in place for the next');
+  out.push('outage. The third one is a configuration gap and is reported as such.');
+  out.push('');
+  out.push('## The CENAGIS repoint (2026-10-15)');
+  out.push('');
+  out.push('CENAGIS publishes most sheets once per CRS (`…_3857`, `…_2180`, `…_4326`). Two of the');
+  out.push('Web-Mercator mosaics cannot be read by the operator\'s GeoServer at all — not a network, CORS or');
+  out.push('naming problem, and nothing this repo can fix: every `GetMap` for them is answered with');
+  out.push('**HTTP 200 and a Java exception body**, so the browser gets no pixel and the guard reports the');
+  out.push('row. The **same sheets are readable in the `…_2180` twin**, so the two rows now ask for that one:');
+  out.push('');
+  out.push('| row | was (unreadable) | now (readable) | 2D request | 3D request |');
+  out.push('|---|---|---|---|---|');
+  Object.keys(DEAD_MOSAICS).forEach((deadName) => {
+    const dead = DEAD_MOSAICS[deadName];
+    const users = rows.filter((r) => String(r.layer).toLowerCase() === dead.twin.toLowerCase());
+    const twice = users.map((r) => '`' + r.id + '`' +
+      (/^cenagis\./.test(r.id) ? ' (3D)' : ' (2D)')).join(' + ');
+    out.push('| ' + twice + ' | `' + deadName + '` | `' + dead.twin + '` | EPSG:3857 GetMap, ' +
+      're-projected by the GeoServer | EPSG:2180 GetMap through the tile proxy |');
+  });
+  out.push('');
+  out.push('How the twins were verified (browser-free, 2026-10-15) — `GetMap` **and** `GetFeatureInfo` at');
+  out.push('Warsaw, Poznań and Berlin, for both request CRSes:');
+  out.push('');
+  out.push('* `ihpan:ukvme_3857` → `Unable to create a valid ImageInputStream … ukvme_3857_transparent.ecw`;');
+  out.push('  `ihpan:ukvme_2180_transparent` does not exist; `ihpan:ukvme_2180` → PNG + opaque pixels');
+  out.push('  (`RED 38 / GREEN 7 / BLUE 22 / ALPHA 255` at Warsaw, `179/163/182/255` at Berlin).');
+  out.push('* `ihpan:kdr_3857` → the same exception for `kdr_3857_transparent.ecw`; `ihpan:kdr_2180` → PNG +');
+  out.push('  opaque pixels (`33/32/21/255` at Poznań, `199/203/182/253` at Berlin).');
+  out.push('* Both twins answer correctly to a `1.1.1`/`SRS=EPSG:3857` request (the 2D path) *and* to a');
+  out.push('  `1.3.0`/`CRS=EPSG:2180` request with a PL-1992 bbox (the 3D proxy path).');
+  out.push('');
+  out.push('If the operator ever repairs the Web-Mercator ECWs, the rows may go back to the `…_3857` twins —');
+  out.push('until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one of them does.');
   out.push('');
   out.push('## What is checked');
   out.push('');
@@ -768,14 +934,17 @@ function markdownReport() {
       (r.guardPath === 'none' ? '❌ none'
         : r.guardPath === 'same-origin' ? '— same-origin'
           : r.guardPath === 'runtime' ? '— runtime'
-            : r.guardPath + ' · ' + r.provider) + ' |');
+            : r.guardPath === 'self' ? '— self-handled'
+              : r.guardPath + ' · ' + r.provider) + ' |');
   }
   out.push('');
   const probes = rows.filter((r) => r.guardPath === 'probe').length;
   const watches = rows.filter((r) => r.guardPath === 'watch').length;
-  const remote = rows.filter((r) => r.guardPath !== 'same-origin' && r.guardPath !== 'runtime').length;
+  const remote = rows.filter((r) => !['same-origin', 'runtime', 'self'].includes(r.guardPath)).length;
   out.push('**' + (probes + watches) + '/' + remote + ' third-party layers guarded** (' + probes + ' probed, ' +
-    watches + ' watched); ' + (rows.length - remote) + ' same-origin/runtime. ' +
+    watches + ' watched); ' + rows.filter((r) => r.guardPath === 'self').length + ' self-handled + ' +
+    rows.filter((r) => r.guardPath === 'same-origin').length + ' same-origin, ' +
+    rows.filter((r) => r.guardPath === 'runtime').length + ' runtime. ' +
     errors.length + ' error(s), ' + warnings.length + ' warning(s).');
   out.push('');
   out.push('### Small print');
@@ -796,8 +965,14 @@ function markdownReport() {
     }
     const reprojected = DL.ordered().filter((d) => d.reproject).map((d) => d.id);
     if (reprojected.length) {
+      const repointed = rows.filter((r) =>
+        Object.keys(DEAD_MOSAICS).some((k) => DEAD_MOSAICS[k].twin.toLowerCase() === String(r.layer).toLowerCase()));
+      const repointedNote = repointed.length
+        ? ' — `cenagis.kdr`/`premium.kdr-100k` and `cenagis.ukvme`/`premium.mitteleuropa` because their ' +
+          '`_3857` twin is unreadable (§CENAGIS repoint)'
+        : '';
       out.push('* **Native-CRS sheets.** ' + reprojected.map((id) => '`' + id + '`').join(', ') +
-        ' are EPSG:2180 natively: the 2D map');
+        ' are served in EPSG:2180' + repointedNote + ': the 2D map');
       out.push('  always asks EPSG:3857 (GeoServer reprojects on the fly) and the 3D view goes through');
       out.push('  the same-origin proxy, which asks the server in the sheet\'s own CRS.');
     }
@@ -937,7 +1112,8 @@ if (asJson) {
       (r.guardPath === 'none' ? '❌ none'
         : r.guardPath === 'same-origin' ? '— same-origin'
           : r.guardPath === 'runtime' ? '— runtime'
-            : r.guardPath + ' · ' + r.provider) + ' |');
+            : r.guardPath === 'self' ? '— self-handled'
+              : r.guardPath + ' · ' + r.provider) + ' |');
   }
   if (errors.length) {
     console.log('\n## Errors (' + errors.length + ')\n');
@@ -953,9 +1129,11 @@ if (asJson) {
 if (!asJson && !urlsOnly && !writeDoc) {
   const probes = rows.filter((r) => r.guardPath === 'probe').length;
   const watches = rows.filter((r) => r.guardPath === 'watch').length;
-  const remote = rows.filter((r) => r.guardPath !== 'same-origin' && r.guardPath !== 'runtime').length;
+  const remote = rows.filter((r) => !['same-origin', 'runtime', 'self'].includes(r.guardPath)).length;
   console.log('\n' + (errors.length ? '❌ ' : '✅ ') + errors.length + ' error(s), ' + warnings.length + ' warning(s), ' +
     (probes + watches) + '/' + remote + ' third-party layers under the availability guard (' + probes + ' probed, ' +
-    watches + ' watched); ' + (rows.length - remote) + ' same-origin/runtime.');
+    watches + ' watched); ' + rows.filter((r) => r.guardPath === 'self').length + ' self-handled, ' +
+    rows.filter((r) => r.guardPath === 'same-origin').length + ' same-origin, ' +
+    rows.filter((r) => r.guardPath === 'runtime').length + ' runtime.');
 }
 process.exit(errors.length ? 1 : 0);

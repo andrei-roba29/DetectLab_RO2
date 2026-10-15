@@ -1,6 +1,8 @@
         // ── TRANSLATIONS ──
                                                         const translations = {
             en: {
+                danish_group_title: 'Denmark · Danish maps',
+                danish_group_info: 'Danish layers: DTK25 topographic map and GeoDanmark orthophoto as base maps, protected nature types (NBL § 3) and scheduled ancient monuments as overlays. DTK25 and the orthophoto need a token/service user set on the server — see DATA_SOURCES.md.',
                 nav_apm: 'What is APM',
                 nav_map: 'Explore Map',
                 nav_how: 'How it Works',
@@ -588,6 +590,8 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             ro: {
+                danish_group_title: 'Danemarca · hărți daneze',
+                danish_group_info: 'Straturi daneze: harta topografică DTK25 și ortofotografia GeoDanmark ca hărți de bază, tipuri de natură protejate (NBL § 3) și monumente antice protejate ca tematice. DTK25 și ortofotografia au nevoie de un token/utilizator de serviciu configurat pe server — vezi DATA_SOURCES.md.',
                 nav_apm: 'Ce este APM',
                 nav_map: 'Explorează Harta',
                 nav_how: 'Cum Funcționează',
@@ -10661,6 +10665,8 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             da: {
+                danish_group_title: 'Danmark · danske kort',
+                danish_group_info: 'Danske lag: DTK25 topografisk kort og GeoDanmark ortofoto som baggrundskort, beskyttede naturtyper (NBL § 3) og fredede fortidsminder som temaer. DTK25 og ortofoto kræver en token/tjenestebruger på serveren — se DATA_SOURCES.md.',
                 nav_apm: 'Hvad er APM',
                 nav_map: 'Udforsk kort',
                 nav_how: 'Sådan fungerer det',

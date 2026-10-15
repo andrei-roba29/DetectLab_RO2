@@ -18,7 +18,9 @@ assert(skin.includes('#map3d-surface .maplibregl-ctrl-top-right { display: none;
 assert(/body:not\(\.is-pwa\) \.map-frame\.is-fullscreen #detectlab-map \.leaflet-left \.leaflet-control-zoom\s*\{\s*margin-left: calc\(18px \+ env\(safe-area-inset-left, 0px\)\)/.test(styles),
     'extra zoom inset is web fullscreen only and respects the left safe area');
 for (const file of ['css/styles.css', 'css/map3d-terrain.css']) {
-    const tag = file === 'css/styles.css' ? '20261014-map-control-spacing' : '20261014-3d-clean-controls';
+    /* Each asset carries the tag of whatever last changed it: the sheet by the
+     * Danish layers block at its end, the terrain skin by the 3D focus work. */
+    const tag = file === 'css/styles.css' ? '20261015-danish-layers' : '20261014-lidar-3d-focus';
     const url = file + '?v=' + tag;
     assert(html.includes(url) && sw.includes("'" + url + "'"), 'cache-busted and precached: ' + file);
 }

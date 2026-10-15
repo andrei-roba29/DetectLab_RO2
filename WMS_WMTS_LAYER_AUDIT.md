@@ -35,7 +35,38 @@ failure is what this audit is about: **a third-party raster server that answers
 | the German Empire row (“German Empire Map 1:100k”) reported as not loadable — same notice | `premium.kdr-100k` (2D) / `cenagis.kdr` (3D) | same server, `ihpan:kdr_3857` | the same failure class: a 200 response that is not an image | CENAGIS / IH PAN (external) |
 | *“Invalid or missing Dataforsyningen token”* | `lidar.dk-dhm` | `/api/geo/dk-dhm` → Dataforsyningen DHM | the deployment has no `DATAFORSYNINGEN_TOKEN` (or a visitor-supplied token was rejected); the proxy answers 401 `{"error":"dataforsyningen_token_missing"}` | deployment config (this repo) + the token holder |
 
-The first two are **not fixable here**: the endpoint is correct, the service answers 200 and its own body is broken. What this repo can do — and now does — is say so, name the provider, switch off the rows and keep everything else working. The third one is a configuration gap and is reported as such.
+The first two shared one root cause: **the sheet's Web-Mercator mosaic is unreadable inside the
+operator's GeoServer** — the endpoint is correct, the service answers 200, its own body is broken.
+They are no longer broken for the user because the rows were **repointed** to the readable twin of
+the same sheet (§CENAGIS repoint below, 2026-10-15); the guard stays in place for the next
+outage. The third one is a configuration gap and is reported as such.
+
+## The CENAGIS repoint (2026-10-15)
+
+CENAGIS publishes most sheets once per CRS (`…_3857`, `…_2180`, `…_4326`). Two of the
+Web-Mercator mosaics cannot be read by the operator's GeoServer at all — not a network, CORS or
+naming problem, and nothing this repo can fix: every `GetMap` for them is answered with
+**HTTP 200 and a Java exception body**, so the browser gets no pixel and the guard reports the
+row. The **same sheets are readable in the `…_2180` twin**, so the two rows now ask for that one:
+
+| row | was (unreadable) | now (readable) | 2D request | 3D request |
+|---|---|---|---|---|
+| `cenagis.ukvme` (3D) + `premium.mitteleuropa` (2D) | `ihpan:ukvme_3857` | `ihpan:ukvme_2180` | EPSG:3857 GetMap, re-projected by the GeoServer | EPSG:2180 GetMap through the tile proxy |
+| `cenagis.kdr` (3D) + `premium.kdr-100k` (2D) | `ihpan:kdr_3857` | `ihpan:kdr_2180` | EPSG:3857 GetMap, re-projected by the GeoServer | EPSG:2180 GetMap through the tile proxy |
+
+How the twins were verified (browser-free, 2026-10-15) — `GetMap` **and** `GetFeatureInfo` at
+Warsaw, Poznań and Berlin, for both request CRSes:
+
+* `ihpan:ukvme_3857` → `Unable to create a valid ImageInputStream … ukvme_3857_transparent.ecw`;
+  `ihpan:ukvme_2180_transparent` does not exist; `ihpan:ukvme_2180` → PNG + opaque pixels
+  (`RED 38 / GREEN 7 / BLUE 22 / ALPHA 255` at Warsaw, `179/163/182/255` at Berlin).
+* `ihpan:kdr_3857` → the same exception for `kdr_3857_transparent.ecw`; `ihpan:kdr_2180` → PNG +
+  opaque pixels (`33/32/21/255` at Poznań, `199/203/182/253` at Berlin).
+* Both twins answer correctly to a `1.1.1`/`SRS=EPSG:3857` request (the 2D path) *and* to a
+  `1.3.0`/`CRS=EPSG:2180` request with a PL-1992 bbox (the 3D proxy path).
+
+If the operator ever repairs the Web-Mercator ECWs, the rows may go back to the `…_3857` twins —
+until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one of them does.
 
 ## What is checked
 
@@ -58,9 +89,12 @@ The first two are **not fixable here**: the endpoint is correct, the service ans
 
 | layer | kind | endpoint host | LAYERS | ver | format | CORS | proxy | availability guard |
 |---|---|---|---|---|---|---|---|---|
+| `danish.dtk25` | wms | same-origin | dtk25_2023 | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.orto` | wms | same-origin | geodanmark_2025_12_5cm | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `sat.vhr-2012` | wms | copernicus.discomap.eea.europa.eu | Image | 1.1.1 | image/jpeg | no | always | probe · Copernicus Land / EEA discomap |
 | `sat.vhr-2018` | wms | image.discomap.eea.europa.eu | VHR_2018_WM | 1.1.1 | image/jpeg | no | always | probe · Copernicus Land / EEA discomap |
 | `sat.vhr-2021` | wms | image.discomap.eea.europa.eu | VHR_2021_LAEA | 1.1.1 | image/jpeg | no | always | probe · Copernicus Land / EEA discomap |
+| `danish.naturtyper` | wms | arealeditering-dist-geo.miljoeportal.dk | dai:bes_naturtyper | 1.3.0 | image/png | unknown | auto | probe · Danmarks Miljøportal |
 | `lidar.nl-ahn` | dynamic | ahn.arcgisonline.nl | exportImage |  | image/png | yes | auto | watch · AHN / Esri Nederland |
 | `lidar.no-hoydedata` | dynamic | hoydedata.no | exportImage |  | image/png | yes | auto | watch · Kartverket (høydedata.no) |
 | `lidar.pl-nmt` | dynamic | mapy.geoportal.gov.pl | Raster | 1.3.0 | image/png | unknown | auto | watch · GUGiK / geoportal.gov.pl |
@@ -87,10 +121,10 @@ The first two are **not fixable here**: the endpoint is correct, the service ans
 | `cenagis.gilly` | wms | pastmaps.cenagis.edu.pl | ihpan:gilly_3857 | 1.3.0 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `cenagis.textor` | wms | pastmaps.cenagis.edu.pl | ihpan:textor_3857 | 1.3.0 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `cenagis.m25k` | wms | pastmaps.cenagis.edu.pl | ihpan:m25k_3857 | 1.3.0 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
-| `cenagis.kdr` | wms | pastmaps.cenagis.edu.pl | ihpan:kdr_3857 | 1.3.0 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
+| `cenagis.kdr` | wms | pastmaps.cenagis.edu.pl | ihpan:kdr_2180 | 1.3.0 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `cenagis.kdr_gb` | wms | pastmaps.cenagis.edu.pl | ihpan:kdr_gb_3857 | 1.3.0 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `cenagis.kdwr` | wms | pastmaps.cenagis.edu.pl | ihpan:kdwr_3857 | 1.3.0 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
-| `cenagis.ukvme` | wms | pastmaps.cenagis.edu.pl | ihpan:ukvme_3857 | 1.3.0 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
+| `cenagis.ukvme` | wms | pastmaps.cenagis.edu.pl | ihpan:ukvme_2180 | 1.3.0 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `cenagis.reymann` | wms | pastmaps.cenagis.edu.pl | ihpan:reymann_3857 | 1.3.0 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `cenagis.dwuwiorstowka` | wms | pastmaps.cenagis.edu.pl | ihpan:dwuwiorstowka_3857 | 1.3.0 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `cenagis.ahp_ziemie_polskie` | wms | pastmaps.cenagis.edu.pl | ihpan:ahp_ziemie_polskie_3857 | 1.3.0 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
@@ -124,14 +158,14 @@ The first two are **not fixable here**: the endpoint is correct, the service ans
 | `hist.firing-plans` | wms | services.geo-spatial.org | eharta:mozaic_planuri_tragere_20k | 1.1.0 | image/png | unknown | auto | probe · geo-spatial.org (eHarta) |
 | `hist.soviet-1970` | wms | services.geo-spatial.org | eharta:mozaic_soviet100k | 1.1.0 | image/png | unknown | auto | probe · geo-spatial.org (eHarta) |
 | `sat.corona-60s` | dynamic | geoserve.cast.uark.edu | corona:<product> | 1.1.1 | image/png | no | always | watch · CAST / University of Arkansas (CORONA) |
-| `premium.mitteleuropa` | wms | pastmaps.cenagis.edu.pl | ihpan:ukvme_3857 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
+| `premium.mitteleuropa` | wms | pastmaps.cenagis.edu.pl | ihpan:ukvme_2180 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `premium.chrzanowski` | wms | pastmaps.cenagis.edu.pl | ihpan:chrzanowski_3857 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `premium.reymann` | wms | pastmaps.cenagis.edu.pl | ihpan:reymann_3857 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
-| `premium.kdr-100k` | wms | pastmaps.cenagis.edu.pl | ihpan:kdr_3857 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
+| `premium.kdr-100k` | wms | pastmaps.cenagis.edu.pl | ihpan:kdr_2180 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `premium.kdr-gb` | wms | pastmaps.cenagis.edu.pl | ihpan:kdr_gb_3857 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `premium.wig-100k` | wms | pastmaps.cenagis.edu.pl | ihpan:wig100k_3857 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 
-**69/69 third-party layers guarded** (58 probed, 11 watched); 3 same-origin/runtime. 0 error(s), 0 warning(s).
+**70/70 third-party layers guarded** (59 probed, 11 watched); 0 self-handled + 4 same-origin, 1 runtime. 0 error(s), 0 warning(s).
 
 ### Small print
 
@@ -143,7 +177,7 @@ Things the tables above cannot show, verified in the code:
   module-built). If a layer is ever moved onto it, the tile-matrix set must become
   `EPSG:3857` with `EPSG:3857:{z}` matrix names (exactly what the `vegfp` builders
   send), or the service answers a `ServiceException` about an unknown TileMatrixSet.
-* **Native-CRS sheets.** `cenagis.city_warszawa_1822`, `cenagis.city_praga_1796` are EPSG:2180 natively: the 2D map
+* **Native-CRS sheets.** `cenagis.kdr`, `cenagis.ukvme`, `cenagis.city_warszawa_1822`, `cenagis.city_praga_1796` are served in EPSG:2180 — `cenagis.kdr`/`premium.kdr-100k` and `cenagis.ukvme`/`premium.mitteleuropa` because their `_3857` twin is unreadable (§CENAGIS repoint): the 2D map
   always asks EPSG:3857 (GeoServer reprojects on the fly) and the 3D view goes through
   the same-origin proxy, which asks the server in the sheet's own CRS.
 * **Coverage vs `bounds`.** `vegfp.ppi` declares Romanian `bounds` while the WMTS
@@ -162,10 +196,11 @@ None — every checked invariant holds.
 
 | provider (host) | the request the app sends | typical failure (`curl -I` will show it) | owner | what the app does |
 |---|---|---|---|---|
-| **CENAGIS / IH PAN** (`pastmaps.cenagis.edu.pl`) | WMS GetMap (1.3.0 for the catalogue, 1.1.1 for the premium rows) | 200 + a Java exception body: java.lang.RuntimeException: Unable to create a valid ImageInputStream (...ukvme_3857_transparent.ecw); occasionally 502/504 from the host | external (the operator's GeoServer / raster store) | probe runs before the layer is added; on failure the row is switched off, marked and the notice names the provider, with Retry |
+| **CENAGIS / IH PAN** (`pastmaps.cenagis.edu.pl`) | WMS GetMap (1.3.0 for the catalogue, 1.1.1 for the premium rows) | 200 + a Java exception body: java.lang.RuntimeException: Unable to create a valid ImageInputStream (cartomatic/*/mosaick/*_3857_transparent.ecw — ukvme, kdr, …); occasionally 502/504 from the host. The *…_2180* twin of the same sheet still renders — see §CENAGIS repoint | external (the operator's GeoServer / raster store) | probe runs before the layer is added; on failure the row is switched off, marked and the notice names the provider, with Retry |
 | **geo-spatial.org (eHarta)** (`services.geo-spatial.org`) | WMS GetMap, version 1.1.0 (SRS=) | 200 + ServiceExceptionReport XML, or an empty tile where the mosaic has no coverage | external | probe before the layer is added, same notice path |
 | **Copernicus Land / EEA discomap** (`copernicus.discomap.eea.europa.eu`) | ArcGIS MapServer/WMSServer GetMap, WMS 1.1.1, JPEG (transparent=false) | 200 + an ArcGIS JSON error, or a blank JPEG outside the VHR footprint of that year | external | probe; the 3D view always goes through the same-origin proxy because the host sends no CORS headers |
 | **Copernicus Land / EEA discomap** (`image.discomap.eea.europa.eu`) | ArcGIS ImageServer/WMSServer GetMap, WMS 1.1.1, JPEG | 200 + an ArcGIS JSON error, or a blank JPEG where the LAEA-native mosaic has no data | external | probe; 3D through the proxy for the same reason |
+| **Danmarks Miljøportal** (`arealeditering-dist-geo.miljoeportal.dk`) | WMS 1.3.0 GetMap (CRS=EPSG:3857, uppercase KVP), dai:bes_naturtyper, PNG + transparent | 200 + ServiceExceptionReport XML (GeoServer answers exceptions with 200), or an all-alpha tile where the layer has no polygons. The capabilities advertise only EPSG:25832/CRS:84 while GetMap serves 3857 normally — judge by the tile, not by the capabilities | external (the agency GeoServer) | no guard row: js/danish-layers.js owns the switch and prints its own status line (the layer opts out with _detectlabNoGuard); the host is still named in js/wms-health.js HOSTS so a tile-error burst can be attributed |
 | **IGN France / Géoplateforme** (`data.geopf.fr`) | WMS 1.3.0 GetMap (CRS=EPSG:3857), IGNF_LIDAR-HD_* | 200 + ServiceExceptionReport XML, or 400 for an unknown LAYERS/CRS pair | external | probe before the layer is added |
 | **swisstopo** (`wmts.geo.admin.ch`) | WMTS KVP GetTile (ch.swisstopo.swisssurface3d-relief) | 200 + WMTS ServiceException XML, or swisstopo's standard no-data tile beyond the modelled area | external | adopted by the guard when it goes on the map, then watched: three failed tiles in a row remove the layer and explain the provider (no probe — the host publishes dozens of products) |
 | **Environment Agency (England)** (`environment.data.gov.uk`) | WMTS KVP GetTile, TILEMATRIXSET=WebMercatorQuad | 200 + XML ServiceException for a tile outside the published limits | external | adopted and watched for tile errors; the module itself clips its bounds and asks for transparent tiles past maxNativeZoom |
@@ -195,6 +230,16 @@ Every one of these arrives as **HTTP 200**: the failure is in the body, which is
 One concrete tile per layer, built by the same code the map runs (sample tile 12/2345/1480 — Bucharest). Paste one into `curl -I` to test a service live.
 
 ```
+# danish.dtk25 — Denmark · DTK25 topographic map (1:25,000)
+2D https://api.dataforsyningen.dk/dtk_25_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dtk25_2023&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?service=WMS&request=GetMap&version=1.3.0&layers=dtk25_2023&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.orto — Denmark · GeoDanmark orthophoto (spring)
+2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2025_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-orto?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2025_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
 # sat.vhr-2012 — Satellite 2012 (Copernicus VHR)
 2D https://copernicus.discomap.eea.europa.eu/arcgis/services/GioLand/VeryHighResolution2012/MapServer/WMSServer?service=WMS&request=GetMap&version=1.1.1&layers=Image&styles=&format=image%2Fjpeg&transparent=false&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/map3d/tile?layer=sat.vhr-2012&z={z}&x={x}&y={y}
@@ -208,6 +253,11 @@ One concrete tile per layer, built by the same code the map runs (sample tile 12
 # sat.vhr-2021 — Satellite 2021 (Copernicus VHR)
 2D https://image.discomap.eea.europa.eu/arcgis/services/GioLand/VHR_2021_LAEA/ImageServer/WMSServer?service=WMS&request=GetMap&version=1.1.1&layers=VHR_2021_LAEA&styles=&format=image%2Fjpeg&transparent=false&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/map3d/tile?layer=sat.vhr-2021&z={z}&x={x}&y={y}
+```
+```
+# danish.naturtyper — Denmark · Protected nature types (NBL § 3)
+2D https://arealeditering-dist-geo.miljoeportal.dk/geoserver/wms?service=WMS&request=GetMap&version=1.3.0&layers=dai%3Abes_naturtyper&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://arealeditering-dist-geo.miljoeportal.dk/geoserver/wms?service=WMS&request=GetMap&version=1.3.0&layers=dai%3Abes_naturtyper&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # lidar.nl-ahn — Netherlands · AHN (DTM/DSM)
@@ -340,8 +390,8 @@ One concrete tile per layer, built by the same code the map runs (sample tile 12
 ```
 ```
 # cenagis.kdr — German Empire Map (Karte des Deutschen Reiches) 1:100,000
-2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Akdr_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Akdr_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Akdr_2180&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/map3d/tile?layer=cenagis.kdr&z={z}&x={x}&y={y}
 ```
 ```
 # cenagis.kdr_gb — German Grossblätter WWII 1:100,000
@@ -355,8 +405,8 @@ One concrete tile per layer, built by the same code the map runs (sample tile 12
 ```
 ```
 # cenagis.ukvme — Central Europe Map (Übersichtskarte von Mitteleuropa) 1:300,000
-2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Aukvme_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Aukvme_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Aukvme_2180&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/map3d/tile?layer=cenagis.ukvme&z={z}&x={x}&y={y}
 ```
 ```
 # cenagis.reymann — Reymann's Special Map of Central Europe 1:200,000
@@ -525,8 +575,8 @@ One concrete tile per layer, built by the same code the map runs (sample tile 12
 ```
 ```
 # premium.mitteleuropa — Central Europe (Übersichtskarte 1:300,000)
-2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.1.1&layers=ihpan%3Aukvme_3857&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.1.1&layers=ihpan%3Aukvme_3857&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.1.1&layers=ihpan%3Aukvme_2180&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.1.1&layers=ihpan%3Aukvme_2180&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # premium.chrzanowski — Charter of Old Poland (Chrzanowski 1859)
@@ -540,8 +590,8 @@ One concrete tile per layer, built by the same code the map runs (sample tile 12
 ```
 ```
 # premium.kdr-100k — Karte des Deutschen Reiches 1:100,000
-2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.1.1&layers=ihpan%3Akdr_3857&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.1.1&layers=ihpan%3Akdr_3857&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.1.1&layers=ihpan%3Akdr_2180&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.1.1&layers=ihpan%3Akdr_2180&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # premium.kdr-gb — German Grossblätter 1:100,000

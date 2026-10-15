@@ -204,4 +204,50 @@ assert(/noteFailure: noteFailure/.test(guardSrc),
 });
 console.log('  ✓ modules that hide tile failures still report them to the guard');
 
+// ══════════════════════════════════════════════════════════════
+// 9. The CENAGIS repoint stays put (2026-10-15)
+// ══════════════════════════════════════════════════════════════
+// The Web-Mercator mosaic of two IH PAN sheets cannot be read by the
+// provider's GeoServer at all (a 200 with a Java ECW exception as the body),
+// which is what put “This map cannot be loaded” on two panel rows. Both rows
+// — and the premium row that shows the same sheet — must ask for the readable
+// EPSG:2180 twin instead, and this test fails if a refactor sends them back.
+const REPOINTED = {
+    'cenagis.ukvme': { layer: 'ihpan:ukvme_2180', dead: 'ihpan:ukvme_3857', twin: 'premium.mitteleuropa' },
+    'cenagis.kdr': { layer: 'ihpan:kdr_2180', dead: 'ihpan:kdr_3857', twin: 'premium.kdr-100k' }
+};
+Object.keys(REPOINTED).forEach(function (id) {
+    const spec = REPOINTED[id];
+    const row = byId.get(id);
+    assert(row, id + ' is still in the registry');
+    assert(row.layer === spec.layer,
+        id + ' must ask for ' + spec.layer + ' (the readable mosaic), not ' + row.layer);
+    assert(row.layer !== spec.dead, id + ' must not ask for the unreadable ' + spec.dead);
+    assert(row.findings.some(function (f) { return f.code === 'REPOINTED'; }),
+        id + ' carries a REPOINTED finding so the audit shows why it is not on the _3857 twin');
+    assert(row.findings.every(function (f) { return f.code !== 'W_DEAD_MOSAIC'; }),
+        id + ' must not trip W_DEAD_MOSAIC');
+    // 3D: the proxy asks the sheet in its own CRS (the catalogued 2180-only path)
+    assert(row.sample3d.indexOf('/api/map3d/tile?layer=' + id) === 0,
+        id + ' goes through the same-origin 3D proxy');
+    // 2D: the map asks the service for EPSG:3857 tiles, which the GeoServer
+    // re-projects on the fly for these twins.
+    const twin = byId.get(spec.twin);
+    assert(twin, spec.twin + ' (the panel row users see) is still in the registry');
+    assert(twin.layer === spec.layer,
+        spec.twin + ' must name the same mosaic as ' + id + ' — they had drifted apart');
+    assert(/srs=EPSG%3A3857/.test(twin.sample2d) && /layers=ihpan%3A/.test(twin.sample2d),
+        spec.twin + ' asks the WMS for EPSG:3857 tiles');
+});
+assert(!report.layers.some(function (l) { return l.layer === 'ihpan:ukvme_3857'; }),
+    'no registry row asks for the unreadable ihpan:ukvme_3857 mosaic');
+assert(!report.layers.some(function (l) { return l.layer === 'ihpan:kdr_3857'; }),
+    'no registry row asks for the unreadable ihpan:kdr_3857 mosaic');
+const healthDoc = read('CENAGIS_WMS_HEALTH.md');
+assert(healthDoc.indexOf('## When the sheet') !== -1 && /_2180/.test(healthDoc),
+    'CENAGIS_WMS_HEALTH.md documents the repoint and how to revert it');
+assert(doc.indexOf('## The CENAGIS repoint (2026-10-15)') !== -1,
+    'the generated audit has a §CENAGIS repoint section');
+console.log('  ✓ the two IH PAN sheets stay on their readable 2180 mosaic (2D 3857 · 3D proxy 2180)');
+
 console.log('\n✅ test-wms-layer-audit.js passed all checks successfully.');

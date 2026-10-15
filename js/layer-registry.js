@@ -214,7 +214,14 @@
         'apm': { label: { ro: 'APM (analiză)', en: 'APM (analysis)' }, z: 645 },
         'hist-sat': { label: { ro: 'Satelit 60s (CORONA)', en: 'Satellite 60s (CORONA)' }, z: 648 },
         'hist-premium': { label: { ro: 'Hărți istorice premium', en: 'Premium historical maps' }, z: 654 },
-        'image-overlay': { label: { ro: 'Suprapuneri imagine', en: 'Image overlays' }, z: 630 }
+        'image-overlay': { label: { ro: 'Suprapuneri imagine', en: 'Image overlays' }, z: 630 },
+        /* The Danish layers (Denmark) — described in js/danish-layers.config.js
+         * and drawn by js/danish-layers.js. The panes themselves are created by
+         * that module (base 399, raster overlay 406, vectors 408), just above
+         * the app's own basemap stack on pane_satellite (398), so every existing
+         * data pane keeps painting over the Danish ones. */
+        'danish-base': { label: { ro: 'Danemarca · hărți de bază', en: 'Denmark · base maps' }, z: 399, base: true },
+        'danish-overlay': { label: { ro: 'Danemarca · tematice', en: 'Denmark · overlays' }, z: 406 }
     };
 
     /* ═══════════════════════════════════════════════════════════════════════
@@ -335,11 +342,25 @@
                 bounds: [[49.39, 13.99], [55.89, 24.66]]
             },
             "kdr": {
-                id: "kdr", wms_layer: "kdr_3857",
+                /* `kdr_2180`, NOT `kdr_3857`: the Web-Mercator mosaic of this
+                 * sheet is unreadable on the source server — every GetMap for
+                 * it answers 200 with
+                 *   java.lang.RuntimeException: Unable to create a valid
+                 *   ImageInputStream … cartomatic/kdr/mosaick/
+                 *   kdr_3857_transparent.ecw
+                 * (the 2026-10-13 outage in CENAGIS_WMS_HEALTH.md; re-checked
+                 * 2026-10-15 — still broken, and not fixable from a browser).
+                 * The same sheet IS readable as `kdr_2180`: the 2D map asks it
+                 * for EPSG:3857 tiles and the GeoServer re-projects them on the
+                 * fly, the 3D view asks it in EPSG:2180 through the tile proxy.
+                 * Verified with GetMap + GetFeatureInfo at Poznań/Berlin/Warsaw
+                 * on 2026-10-15 (see WMS_WMTS_LAYER_AUDIT.md §CENAGIS repoint). */
+                id: "kdr", wms_layer: "kdr_2180",
                 title: { "ro": "Harta Imperiului German (Karte des Deutschen Reiches) 1:100 000", "en": "German Empire Map (Karte des Deutschen Reiches) 1:100,000", "pl": "Karte des Deutschen Reiches 1:100 000" },
                 scale: "1:100 000", years: "1870–1914 (~1900)",
                 provider: "Reichsamt für Landesaufnahme / CENAGIS IH PAN",
-                bounds: [[47.25, 5.83], [56, 23.33]]
+                bounds: [[47.25, 5.83], [56, 23.33]],
+                notes: 'Repointed from the unreadable kdr_3857 mosaic to kdr_2180 on 2026-10-15.'
             },
             "kdr_gb": {
                 id: "kdr_gb", wms_layer: "kdr_gb_3857",
@@ -356,11 +377,21 @@
                 bounds: [[49.99, 17.33], [57.75, 27.33]]
             },
             "ukvme": {
-                id: "ukvme", wms_layer: "ukvme_3857",
+                /* `ukvme_2180`, NOT `ukvme_3857` — same story as `kdr` above:
+                 * the 3857 mosaic's ECW
+                 * (cartomatic/UKvME/mosaick/ukvme_3857_transparent.ecw) cannot
+                 * be read by the GeoServer, so every GetMap for it answers 200
+                 * with a Java exception body, while `ukvme_2180` renders (the
+                 * 2D map gets EPSG:3857 tiles re-projected server-side, the 3D
+                 * view asks in EPSG:2180 through the proxy). Verified
+                 * 2026-10-15 at Warsaw/Berlin; also verified that the old
+                 * `ukvme_3857_transparent` name does not exist at all. */
+                id: "ukvme", wms_layer: "ukvme_2180",
                 title: { "ro": "Harta Europei Centrale (Übersichtskarte von Mitteleuropa) 1:300 000", "en": "Central Europe Map (Übersichtskarte von Mitteleuropa) 1:300,000", "pl": "Übersichtskarte von Mitteleuropa 1:300 000" },
                 scale: "1:300 000", years: "1890–1915 (~1900)",
                 provider: "Königlich Preussische Landesaufnahme / CENAGIS IH PAN",
-                bounds: [[45.99, 12.33], [58.99, 34.33]]
+                bounds: [[45.99, 12.33], [58.99, 34.33]],
+                notes: 'Repointed from the unreadable ukvme_3857 mosaic to ukvme_2180 on 2026-10-15.'
             },
             "reymann": {
                 id: "reymann", wms_layer: "reymann_3857",
@@ -801,13 +832,16 @@
         {
             id: 'premium.mitteleuropa', group: 'hist-premium', z: 654, kind: 'wms',
             title: { ro: 'Harta Europei Centrale (Übersichtskarte 1:300 000)', en: 'Central Europe (Übersichtskarte 1:300,000)' },
-            url: CENAGIS.url, layer: 'ihpan:ukvme_3857',
+            /* The layer name comes from the catalogue entry, not from a copy of
+             * it: this row and `cenagis.ukvme` must never point at different
+             * mosaics (they did — see WMS_WMTS_LAYER_AUDIT.md §CENAGIS repoint). */
+            url: CENAGIS.url, layer: CENAGIS.workspace + ':' + CENAGIS.maps.ukvme.wms_layer,
             format: 'image/png', transparent: true, version: '1.1.1', crs: 'EPSG:3857',
             tileSize: 256, minZoom: 0, maxZoom: 18, opacity: 0.80,
             attribution: '© Übersichtskarte von Mitteleuropa 1:300 000 (1893–1945) · CENAGIS / IH PAN',
             cors: 'unknown', proxy: 'auto',
             ui: { toggle: 'mitteleuropaMapToggle', slider: 'mitteleuropaMapOpacitySlider', pct: 'mitteleuropaMapPct', fn: 'toggleMitteleuropaMap', var2d: '_mitteleuropaMapLayer', parent: 'histPremiumToggle', wmsHealthKeys: ['mitteleuropa'] },
-            notes: 'Premium wrapper around the CENAGIS catalogue sheet ukvme_3857 (the panel row Romanian users see first).'
+            notes: 'Premium wrapper around the CENAGIS catalogue sheet cenagis.ukvme (' + CENAGIS.maps.ukvme.wms_layer + '; the 3857 twin is unreadable at the source — 2026-10-15).'
         },
         {
             id: 'premium.chrzanowski', group: 'hist-premium', z: 655, kind: 'wms',
@@ -834,13 +868,14 @@
         {
             id: 'premium.kdr-100k', group: 'hist-premium', z: 657, kind: 'wms',
             title: { ro: 'Harta Imperiului German 1:100 000 (KDR)', en: 'Karte des Deutschen Reiches 1:100,000' },
-            url: CENAGIS.url, layer: 'ihpan:kdr_3857',
+            /* Same catalogue-backed name as `cenagis.kdr` (see above). */
+            url: CENAGIS.url, layer: CENAGIS.workspace + ':' + CENAGIS.maps.kdr.wms_layer,
             format: 'image/png', transparent: true, version: '1.1.1', crs: 'EPSG:3857',
             tileSize: 256, minZoom: 0, maxZoom: 18, opacity: 0.80,
             attribution: '© Karte des Deutschen Reiches 1:100 000 (1878–1945) · CENAGIS / IH PAN',
             cors: 'unknown', proxy: 'auto',
             ui: { toggle: 'kdr100kMapToggle', slider: 'kdr100kMapOpacitySlider', pct: 'kdr100kMapPct', fn: 'toggleKdr100kMap', var2d: '_kdr100kMapLayer', parent: 'histPremiumToggle', wmsHealthKeys: ['kdr100k'] },
-            notes: 'Premium wrapper around CENAGIS kdr_3857.'
+            notes: 'Premium wrapper around the CENAGIS catalogue sheet cenagis.kdr (' + CENAGIS.maps.kdr.wms_layer + '; the 3857 twin is unreadable at the source — 2026-10-15).'
         },
         {
             id: 'premium.kdr-gb', group: 'hist-premium', z: 658, kind: 'wms',
@@ -1230,8 +1265,10 @@
                 proxy: 'auto',
                 ui: { selector: '.cenagis-toggle[data-map-key="' + key + '"]', sliderSelector: '.cenagis-opacity-slider[data-map-key="' + key + '"]', pctSelector: '.cenagis-pct[data-map-key="' + key + '"]', fn: 'DetectLabEuMaps.toggleCenagisLayer', fnKey: key, parent: 'histPremiumToggle', wmsHealthKeys: [key] },
                 notes: nativeIs2180
-                    ? 'EPSG:2180 ONLY — the proxy transforms the Web-Mercator tile bbox into PL-1992 ' +
-                      'before calling GetMap (see MAP_3D_TERRAIN.md §Problem layers).'
+                    ? 'EPSG:2180 sheet — the 3D tile proxy transforms the Web-Mercator tile bbox into PL-1992 ' +
+                      'before calling GetMap, and the 2D map lets the GeoServer re-project its EPSG:3857 ' +
+                      'GetMap instead (see MAP_3D_TERRAIN.md §Problem layers).' +
+                      (meta.notes ? ' ' + meta.notes : '')
                     : 'CENAGIS/IH PAN sheet, EPSG:3857.'
             });
         });
@@ -2117,5 +2154,78 @@
         diagnostics: diagnostics,
         verify2d: verify2d
     };
+    /* ═══════════════════════════════════════════════════════════════════════
+     *  DANISH LAYERS (Denmark) — mirrored from js/danish-layers.config.js
+     * ───────────────────────────────────────────────────────────────────────
+     * The config is the single description of every Danish layer; this block
+     * only copies the enabled ones into the shared catalogue, so the 2D map's
+     * diagnostics, the 3D status report and the offline audit
+     * (tools/audit-wms-layers.mjs) treat them like any other layer. It runs in
+     * the browser (the config is a plain script loaded first) and in Node (the
+     * proxies and the tools require() the config), and it does nothing when the
+     * config is not there — every other page keeps working unchanged.
+     *
+     * `url` is what the browser calls (a same-origin /api/geo/… route for the
+     * credentialed layers, the provider itself for the public ones) and
+     * `upstream` is the provider endpoint behind the proxy, for the docs.
+     * `guard:false` + `selfGuarded` is deliberate: js/danish-layers.js owns
+     * those rows (it probes the proxy, reports the missing credential, watches
+     * the tiles and falls back to a public alternative), and the availability
+     * guard must not switch a basemap off behind the visitor's back.          */
+    (function registerDanishLayers() {
+        var cfg = null;
+        try {
+            cfg = root && root.DANISH_LAYERS_CONFIG;
+            if (!cfg && typeof require === 'function') cfg = require('./danish-layers.config.js');
+        } catch (e) { cfg = null; }
+        if (!cfg || typeof cfg.enabledLayers !== 'function') return;
+        var SELF_GUARD = 'js/danish-layers.js owns this row: it probes the same-origin route once ' +
+            '(a missing credential is reported in the row), watches the tiles and falls back to a ' +
+            'public alternative — the switch must stay under the visitor\u2019s control.';
+        try {
+            cfg.enabledLayers().forEach(function (layer) {
+                var id = 'danish.' + layer.id;
+                if (BY_ID[id]) return;
+                var isBase = layer.group === 'base';
+                API.register({
+                    id: id,
+                    group: isBase ? 'danish-base' : 'danish-overlay',
+                    z: isBase ? 399 : 406,
+                    kind: layer.type === 'wms' ? 'wms' : (layer.type === 'wfs' ? 'wfs' : 'tile'),
+                    title: { da: layer.title.da, en: layer.title.en, ro: layer.title.en },
+                    url: layer.url,
+                    upstream: layer.upstream,
+                    layer: layer.layers,
+                    format: layer.format,
+                    transparent: !!layer.transparent,
+                    version: layer.version,
+                    crs: layer.crs,
+                    tileSize: layer.tileSize,
+                    minZoom: layer.minZoom,
+                    maxZoom: layer.maxZoom,
+                    maxNativeZoom: layer.maxNativeZoom,
+                    opacity: layer.opacity,
+                    attribution: layer.attribution,
+                    provider: layer.provider,
+                    licence: layer.licence,
+                    requiresCredentials: layer.requiresCredentials || [],
+                    cors: 'unknown',
+                    proxy: 'auto',
+                    guard: false,
+                    selfGuarded: true,
+                    selfGuardedReason: SELF_GUARD,
+                    notes: layer.notes,
+                    ui: {
+                        toggle: 'danishToggle_' + layer.id,
+                        slider: isBase ? undefined : 'danishOpacity_' + layer.id,
+                        select: isBase ? 'danishBaseMap' : undefined,
+                        selfGuarded: true,
+                        configId: layer.id
+                    }
+                });
+            });
+        } catch (e) { /* a broken config must not take the catalogue down */ }
+    }());
+
     return API;
 }));

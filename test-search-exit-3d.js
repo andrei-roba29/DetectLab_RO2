@@ -116,7 +116,7 @@ for (const coordinateItem of [null, { valid: false }]) {
     assert(pending.context.state.open && !pending.events.includes('fly'),
         'pending place lookup and invalid coordinates do not exit 3D');
 }
-const url = 'js/map-app.js?v=20261014-3d-vectors';
+const url = 'js/map-app.js?v=20261015-danish-layers';
 assert(read('index.html').includes(url) && read('sw.js').includes("'" + url + "'"));
 assert(Number(read('sw.js').match(/CACHE_NAME = 'detectlab-v(\d+)-/)[1]) >= 198);
 console.log('✓ lookup stays in 3D; updated app is cache-busted and precached');

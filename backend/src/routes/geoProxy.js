@@ -39,7 +39,48 @@
  * DENMARK_LIDAR_DATAFORSYNINGEN.md) in front of this route.
  */
 import express from 'express';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import { logger } from '../logger.js';
+import {
+  dtk25Response,
+  ortoResponse,
+  heritageResponse,
+} from '../lib/danish-layers.mjs';
+
+const require = createRequire(import.meta.url);
+/* The Danish layer definitions are shared verbatim with the browser and with
+ * the Netlify functions — one description of every Danish layer. This app is
+ * deployed with backend/ as its own root (Railway), so it reads the vendored
+ * copy that sits next to the proxy library rather than the repository file:
+ * `node tools/sync-danish-config.mjs` regenerates it from
+ * js/danish-layers.config.js and the test suite fails if it drifts. It is a
+ * .cjs file because this package is "type": "module" — a .js copy here would
+ * be parsed as ESM and export nothing to require(). */
+const danishLayers = require(path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)), '../lib/danish-layers.config.cjs',
+));
+
+/**
+ * Express ⇄ Web Response bridge: the routing logic lives once, in
+ * backend/src/lib/danish-layers.mjs, and both runtimes call it — it lives
+ * inside backend/ because that directory is deployed as its own app root, so no
+ * import from here may ever point outside it. `fetch` is Node's
+ * global fetch, available in the Express process too.
+ */
+async function sendWebResponse(res, webResponse) {
+  res.status(webResponse.status);
+  webResponse.headers.forEach((value, key) => res.set(key, value));
+  const body = Buffer.from(await webResponse.arrayBuffer());
+  return res.send(body);
+}
+
+/** Minimal Request for the shared handlers, from an Express request. */
+function webRequest(req, basePath) {
+  const query = new URLSearchParams(req.query).toString();
+  return new Request(`http://localhost${basePath}${query ? `?${query}` : ''}`, { method: 'GET' });
+}
 
 const router = express.Router();
 
@@ -328,4 +369,55 @@ router.get('/geo/se-hojdmodell', async (req, res) => {
   }
 });
 
+/* ── Danish layers (js/danish-layers.config.js) ─────────────────────────────
+ * Same three routes the Netlify functions expose, same shared implementation,
+ * so a self-hosted backend behaves exactly like the Netlify deployment:
+ *   /api/geo/dk-dtk25      DTK25 topographic WMS       (DATAFORSYNINGEN_TOKEN)
+ *   /api/geo/dk-orto       GeoDanmark Ortofoto WMS     (DATAFORDELER_USER/PASSWORD)
+ *   /api/geo/dk-heritage   Fund og Fortidsminder WFS   (no credential; bbox → GeoJSON)
+ * Listed in js/danish-layers.config.js; documented in DATA_SOURCES.md.
+ */
+
+router.get('/geo/dk-dtk25', async (req, res) => {
+  try {
+    return await sendWebResponse(res, await dtk25Response(webRequest(req, '/api/geo/dk-dtk25')));
+  } catch (err) {
+    logger.error({ err: err?.message }, 'DTK25 proxy request failed');
+    return res.status(502).json({ error: 'upstream_unreachable' });
+  }
+});
+
+router.get('/geo/dk-orto', async (req, res) => {
+  try {
+    return await sendWebResponse(res, await ortoResponse(webRequest(req, '/api/geo/dk-orto')));
+  } catch (err) {
+    logger.error({ err: err?.message }, 'GeoDanmark Ortofoto proxy request failed');
+    return res.status(502).json({ error: 'upstream_unreachable' });
+  }
+});
+
+router.get('/geo/dk-heritage', async (req, res) => {
+  try {
+    return await sendWebResponse(res, await heritageResponse(webRequest(req, '/api/geo/dk-heritage')));
+  } catch (err) {
+    logger.error({ err: err?.message }, 'Fund og Fortidsminder proxy request failed');
+    return res.status(502).json({ error: 'upstream_unreachable' });
+  }
+});
+
+/* The configuration the browser needs to decide whether a Danish layer can be
+ * drawn — names of the variables only, never values. */
+router.get('/geo/dk-status', (req, res) => {
+  const credentials = {};
+  danishLayers.layers.forEach((layer) => {
+    if (!layer.requiresCredentials || !layer.requiresCredentials.length) return;
+    credentials[layer.id] = {
+      variables: layer.requiresCredentials,
+      configured: layer.requiresCredentials.every((name) => Boolean(process.env[name])),
+    };
+  });
+  return res.json({ version: danishLayers.version, credentials });
+});
+
 export default router;
+

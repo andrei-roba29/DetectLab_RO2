@@ -397,6 +397,20 @@
         return _romanRoadsPromise;
     }
 
+    /* The map's own Roman-roads layer (js/roman-roads.js), when „Drumuri
+     * romane” is on and its geometry has arrived: measuring in it replaces the
+     * download + parse + flatten of the reference GeoJSON below. js/map-app.js
+     * exposes the layer as window._romanRoadsLayer. */
+    function mapRomanRoadsLayer() {
+        try {
+            var host = (typeof window !== 'undefined') ? window : null;
+            var layer = host && host._romanRoadsLayer;
+            if (!layer || typeof layer.nearestRoadMeters !== 'function') return null;
+            if (typeof layer.getStats === 'function' && !layer.getStats().segments) return null;
+            return layer;
+        } catch (e) { return null; }
+    }
+
     function romanRoadSegmentsInSquare(geojson, square, lat0, padM) {
         var segs = [];
         var pad = padM == null ? CONFIG.ROMAN_ROADS.PROXIMITY_M : padM;
@@ -1101,7 +1115,16 @@
 
         // Roman-road proximity is a bonus only: applied when a road is near,
         // otherwise the score is left unchanged (no penalty / no renormalise).
-        var roadDistM = nearestRomanRoadM(x, y, ctx.romanRoadSegs);
+        var roadDistM;
+        if (ctx.romanRoadLayer) {
+            /* The map's own roads layer is loaded: measure in it (the geometry
+             * is already in memory as typed arrays) instead of re-parsing the
+             * 25 MB reference GeoJSON for every analysis. */
+            var roadLl = localMetersToLatLng(x, y, ctx.lat0);
+            roadDistM = ctx.romanRoadLayer.nearestRoadMeters(roadLl.lat, roadLl.lng, CONFIG.ROMAN_ROADS.PROXIMITY_M);
+        } else {
+            roadDistM = nearestRomanRoadM(x, y, ctx.romanRoadSegs);
+        }
         var roadNearby = roadDistM !== null && roadDistM <= CONFIG.ROMAN_ROADS.PROXIMITY_M;
         var roadComp = null;
         if (roadNearby) {
@@ -1631,10 +1654,21 @@
                 });
 
                 setStatus('arch_report_step_roads');
-                var roadsGj = await loadRomanRoadsGeojson();
-                if (myVersion !== _state.version) return null;
-                ctx.romanRoadSegs = romanRoadSegmentsInSquare(roadsGj, ctx.square, ctx.lat0, CONFIG.ROMAN_ROADS.PROXIMITY_M);
-                ctx.romanRoadsInArea = ctx.romanRoadSegs.length;
+                ctx.romanRoadLayer = mapRomanRoadsLayer();
+                if (ctx.romanRoadLayer) {
+                    /* „Drumuri romane” is on: its canvas layer already holds
+                     * the network, so nothing is downloaded or parsed here. */
+                    var swRoad = localMetersToLatLng(ctx.square.minX, ctx.square.minY, ctx.lat0);
+                    var neRoad = localMetersToLatLng(ctx.square.maxX, ctx.square.maxY, ctx.lat0);
+                    ctx.romanRoadSegs = [];
+                    ctx.romanRoadsInArea = ctx.romanRoadLayer.roadSegmentsInBounds(
+                        swRoad.lat, swRoad.lng, neRoad.lat, neRoad.lng);
+                } else {
+                    var roadsGj = await loadRomanRoadsGeojson();
+                    if (myVersion !== _state.version) return null;
+                    ctx.romanRoadSegs = romanRoadSegmentsInSquare(roadsGj, ctx.square, ctx.lat0, CONFIG.ROMAN_ROADS.PROXIMITY_M);
+                    ctx.romanRoadsInArea = ctx.romanRoadSegs.length;
+                }
 
                 // ── rasters (UAT red zone + APM 2.0 colours) ──
                 setStatus('arch_report_step_uat');
@@ -1694,7 +1728,9 @@
                         ignoreLidar: ctx.ignoreLidar,
                         lidarCount: ctx.lidarPoints.length,
                         lidarInArea: ctx.lidarInArea.length,
-                        romanRoadSegments: ctx.romanRoadSegs ? ctx.romanRoadSegs.length : 0,
+                        /* Filled from the reference GeoJSON or, when the map
+                         * layer is on, from the loaded canvas layer. */
+                        romanRoadSegments: ctx.romanRoadsInArea || 0,
                         seeds: seeds.length,
                         candidates: candidates.length,
                         rejected: rejected,
@@ -2698,6 +2734,7 @@
         nearestRomanRoadM: nearestRomanRoadM,
         distPointToSegment: distPointToSegment,
         romanRoadSegmentsInSquare: romanRoadSegmentsInSquare,
+        mapRomanRoadsLayer: mapRomanRoadsLayer,
         evaluateSeed: evaluateSeed,
         classifyScore: classifyScore,
         selectResults: selectResults,

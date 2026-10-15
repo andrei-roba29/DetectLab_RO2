@@ -479,10 +479,38 @@
 //   The viewer keeps them (state.primed), clips every tile to the disc and
 //   refuses to drape a second LiDAR layer at the same time. Cache bumped so an
 //   installed PWA picks up the new module, viewer, mirror, map-app and skin.
-const CACHE_NAME = 'detectlab-v209-lidar-3d-focus';
+// v210: Roman roads („Drumuri romane”) are drawn on canvas tiles from binary
+//   geometry instead of one SVG path per road segment, and the NDJSON stream
+//   is read and parsed in js/roman-roads-worker.js, off the main thread. The
+//   layer used to stall the download at a few percent and take the tab down
+//   on phones / in the installed PWA; see ROMAN_ROADS_PERFORMANCE.md. The
+//   route-segment NDJSON is now also kept in its own runtime cache
+//   (detectlab-roman-roads-v1) so a second visit paints from disk. Cache
+//   bumped so an installed PWA picks up the new modules and map-app.
+// v211: the two CENAGIS historical rows that kept showing „This map cannot be
+//   loaded” — Central Europe 1:300k (ukvme) and German Empire 1:100k (kdr) —
+//   now ask for the readable EPSG:2180 mosaic of the same sheet instead of the
+//   Web-Mercator one the provider's GeoServer cannot read (js/layer-registry.js
+//   + tools/audit-wms-layers.mjs §CENAGIS repoint; see CENAGIS_WMS_HEALTH.md).
+//   Cache bumped so an installed PWA picks up the repointed registry.
+// v212: the Danish layers (Denmark) — js/danish-layers.config.js describes six
+//   layers and js/danish-layers.js draws the enabled ones (DTK25, GeoDanmark
+//   ortofoto, protected nature types, OpenStreetMap, Fund og Fortidsminder);
+//   two third-party placeholders stay disabled. The map, the panel row, the
+//   basemap control and the new /api/geo/dk-* routes are in the shell; see
+//   DATA_SOURCES.md and DANISH_LAYERS.md. Cache bumped so an installed PWA
+//   picks up the new modules, the translations and the skin.
+const CACHE_NAME = 'detectlab-v212-danish-layers';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
+// The Roman-road network (immutable route-segment NDJSON, tens of MB). Kept
+// apart from the shell cache: losing it only costs one re-download.
+const ROMAN_ROADS_CACHE_NAME = 'detectlab-roman-roads-v1';
+const ROMAN_ROADS_RE = /\/route-segments[^/]*\.ndjson(\?|$)/i;
+/* The stored road network is treated as immutable (its name carries the upload
+ * id); a month-old copy is the only case that triggers a background refresh. */
+const ROMAN_ROADS_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 // ── Detection settings ──
 let detectionEnabled = false;
@@ -505,6 +533,9 @@ const PRECACHE_URLS = [
   // 3D terrain view (2D ⇄ 3D) — shared layer registry + MapLibre GL viewer.
   // js/maplibre-gl.js is precached as well: opening 3D on a cold PWA offline
   // must not depend on the network.
+  'js/layer-registry.js?v=20261015-danish-layers',
+  'js/danish-layers.config.js?v=20261015-danish',
+  'js/danish-layers.js?v=20261015-danish',
   'js/layer-registry.js?v=20261014-wms-audit',
   'js/layer-registry.js?v=20261013-3d-mobile',
   'js/layer-registry.js?v=20261013-3d-mirror',
@@ -513,8 +544,14 @@ const PRECACHE_URLS = [
   'css/hist-shift.css?v=20261014-hist-shift',
   'js/map3d-mirror.js?v=20261014-lidar-3d-focus',
   'js/map3d-mirror.js?v=20261014-3d-vectors',
+  'js/map-app.js?v=20261015-danish-layers',
+  /* Older tags stay listed on purpose: an installed PWA that is still running
+   * an older index.html keeps working offline through its own URL. */
   'js/map-app.js?v=20261014-lidar-3d-focus',
   'js/map-app.js?v=20261014-3d-vectors',
+  'js/roman-roads-parser.js?v=20261015-roman-roads',
+  'js/roman-roads.js?v=20261015-roman-roads',
+  'js/roman-roads-worker.js?v=20261015-roman-roads',
   /* LiDAR in the 3D view: the focus dialog, the prefetch and the entry gate. */
   'js/lidar-3d-focus.js?v=20261014-lidar-3d-focus',
   'js/lidar-3d-focus.js',
@@ -542,7 +579,7 @@ const PRECACHE_URLS = [
   'css/map3d-terrain.css?v=20261014-3d-slider-layout',
   'css/map3d-terrain.css?v=20261014-map-control-spacing',
   'css/map3d-terrain.css?v=20261013-3d-mobile',
-  'css/styles.css?v=20261014-map-control-spacing',
+  'css/styles.css?v=20261015-danish-layers',
   'css/map3d-terrain.css?v=20261013-3d-mirror',
   // European Historical Maps (CENAGIS / IH PAN)
   'js/historical-eu-maps.js?v=20261008-country-overlap',
@@ -1150,7 +1187,7 @@ const PRECACHE_URLS = [
   'js/map-app.js?v=20261010-lidar-zoom-gate',
   'js/offline-maps.js?v=20261009-3d-globe',
   'js/translations.js?v=20261009-3d-globe',
-  'js/translations.js?v=20261013-no-change-pill',
+  'js/translations.js?v=20261015-danish-layers',
   'js/d3.min.js?v=7.9.0',
   'js/topojson-client.min.js?v=3.1.0',
   'data/countries-50m.json?v=20261008',
@@ -1224,7 +1261,8 @@ self.addEventListener('activate', function (event) {
     caches.keys().then(function (cacheNames) {
       return Promise.all(
         cacheNames.map(function (name) {
-          if (name !== CACHE_NAME && name !== OFFLINE_TILE_CACHE_NAME) {
+          if (name !== CACHE_NAME && name !== OFFLINE_TILE_CACHE_NAME &&
+              name !== ROMAN_ROADS_CACHE_NAME) {
             console.log('[SW] Removing old cache:', name);
             return caches.delete(name);
           }
@@ -1284,6 +1322,43 @@ self.addEventListener('fetch', function (event) {
   // the user previously downloaded this exact tile URL. If it is not cached,
   // the original network request proceeds unchanged.
   if (requestURL.origin !== location.origin) {
+    // ── Roman roads („Drumuri romane”) ──
+    // The route-segment NDJSON is the one supabase.co request worth keeping:
+    // it is immutable (the object name carries its id) and it is tens of MB,
+    // which is exactly what made the layer feel slow on every visit. Serve
+    // the cached copy at once; a copy older than a month is refreshed in the
+    // background, and a storage-quota failure or a first offline visit falls
+    // straight back to the network.
+    if (ROMAN_ROADS_RE.test(requestURL.pathname)) {
+      /* The object name carries its upload id, so the body is immutable: serve
+       * what we have and do NOT re-download tens of MB in the background on
+       * every visit. A copy older than ROMAN_ROADS_MAX_AGE_MS is refreshed
+       * behind the scenes at most once per session. */
+      event.respondWith(
+        caches.open(ROMAN_ROADS_CACHE_NAME).then(function (cache) {
+          return cache.match(request).then(function (cached) {
+            var age = 0;
+            if (cached) {
+              try { age = Date.now() - Date.parse(cached.headers.get('date') || 0); } catch (e) { age = 0; }
+              if (!(age > ROMAN_ROADS_MAX_AGE_MS)) return cached;
+            }
+            return fetch(request).then(function (response) {
+              try {
+                var len = +response.headers.get('content-length') || 0;
+                if (response && response.ok && (!len || len < 64 * 1024 * 1024)) {
+                  cache.put(request, response.clone()).catch(function () {});
+                }
+              } catch (e) { /* caching is best-effort */ }
+              return response;
+            }).catch(function (err) {
+              if (cached) return cached;          /* offline: the old copy wins */
+              throw err;
+            });
+          });
+        }).catch(function () { return fetch(request); })
+      );
+      return;
+    }
     if (!isOfflineTileRequest(requestURL)) return;
     event.respondWith(
       caches.open(OFFLINE_TILE_CACHE_NAME).then(function (cache) {
