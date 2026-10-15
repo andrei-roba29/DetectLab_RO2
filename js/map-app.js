@@ -3943,18 +3943,60 @@
                 }
             }
 
-            function showLocalPopup(layerId, props, latlng) {
+            function _buildHeritagePopupContent(ran, name) {
+                var cimecUrl = ran
+                    ? 'https://ran.cimec.ro/sel.asp?codran=' + encodeURIComponent(ran)
+                    : (name ? 'https://ran.cimec.ro/sel.asp?descript=' + encodeURIComponent(name) : 'https://ran.cimec.ro');
+
+                var label = name || ran || 'Sit Arheologic';
+                var safeLabel = String(label).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                var safeRan = ran ? String(ran).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;') : '';
+
+                return '<div style="font-family:Outfit,sans-serif;min-width:210px;max-width:300px;padding:4px 2px">' +
+                    '<div style="font-family:Cinzel,serif;font-size:0.9rem;color:#B8D8F0;font-weight:700;' +
+                    'margin-bottom:10px;line-height:1.35">🏛 ' + safeLabel + '</div>' +
+                    (safeRan
+                        ? '<div style="font-size:0.75rem;color:rgba(196,160,240,0.85);margin-bottom:2px">' +
+                        '📍 Cod RAN: <strong style="color:#c4a0f0">' + safeRan + '</strong></div>'
+                        : '') +
+                    '<a href="' + cimecUrl + '" target="_blank" rel="noopener" ' +
+                    'style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;' +
+                    'background:linear-gradient(135deg,#6B3FA0,#4a2880);' +
+                    'color:#fff !important;border-radius:6px;padding:9px 16px;font-size:0.82rem;font-weight:600;' +
+                    'text-decoration:none;letter-spacing:0.04em;box-shadow:0 3px 14px rgba(107,63,160,0.5);cursor:pointer;">' +
+                    '<svg width="13" height="13" viewBox="0 0 13 13" fill="none" style="flex-shrink:0">' +
+                    '<path d="M2 6.5h9M7.5 3l3.5 3.5L7.5 10" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '</svg>Vezi pe CIMEC / RAN</a>' +
+                    '</div>';
+            }
+            window._buildHeritagePopupContent = _buildHeritagePopupContent;
+
+            function _resolveHeritageInfo(props, layerId) {
+                var p = props || {};
                 var name = null, ran = null;
                 if (layerId === 0) {
-                    name = props.NUMESIT || null;
-                    ran = props.CODSIT || null;
+                    name = p.NUMESIT || p.DENUMIRE || p.DenumireSit || p.Denumire || p.NUME || null;
+                    ran = p.CODSIT || p.COD_RAN || p.CodRAN || p.CODRAN || p.ran || null;
                 } else if (layerId === 5) {
-                    name = props.Eticheta || props.Tip || null;
+                    name = p.Eticheta || p.Tip || p.DENUMIRE || p.NUMESIT || null;
+                    ran = p.CODSIT || p.CodRAN || p.COD_RAN || p.CODRAN || p.ran || null;
                 } else if (layerId === 6) {
-                    name = props.Nume || props.Toponim || props.Localitate || null;
-                    ran = props.CodRAN || null;
+                    name = p.Nume || p.Toponim || p.Localitate || p.DENUMIRE || p.Denumire || null;
+                    ran = p.CodRAN || p.CODSIT || p.COD_RAN || p.CODRAN || p.ran || null;
                 }
-                _openHeritagePopup(ran, name, latlng);
+                if (!name) {
+                    name = p.NUMESIT || p.DENUMIRE || p.DenumireSit || p.Denumire || p.Eticheta || p.Nume || p.Toponim || p.Localitate || p.Tip || null;
+                }
+                if (!ran) {
+                    ran = p.CODSIT || p.CodRAN || p.COD_RAN || p.CODRAN || p.ran || null;
+                }
+                return { name: name, ran: ran };
+            }
+            window._resolveHeritageInfo = _resolveHeritageInfo;
+
+            function showLocalPopup(layerId, props, latlng) {
+                var info = _resolveHeritageInfo(props, layerId);
+                _openHeritagePopup(info.ran, info.name, latlng);
             }
 
             // Return the projected extent of a GeoJSON geometry.  Polygon
@@ -4031,6 +4073,8 @@
                         extent.maxY < minY || extent.minY > maxY) continue;
 
                     var feature = record.feature;
+                    var info6 = _resolveHeritageInfo(feature.properties, 6);
+                    var html6 = _buildHeritagePopupContent(info6.ran, info6.name);
                     var gj = L.geoJSON(feature, {
                         renderer: _patrimoniuCanvasRenderer,
                         style: { color: '#E60000', weight: 2, fillOpacity: 0, opacity: 0.85 }
@@ -4039,6 +4083,9 @@
                         layer._dlHeritageHit = function (latlng) {
                             showLocalPopup(6, feature.properties || {}, latlng);
                         };
+                        if (typeof layer.bindPopup === 'function') {
+                            layer.bindPopup(html6, { className: 'patrimoniu-popup', maxWidth: 320 });
+                        }
                         patrimoniuLayer.addLayer(layer);
                     });
                 }
@@ -5114,32 +5161,9 @@
             // Render and open the heritage popup. Called directly when we have all data,
             // or after an async REST enrichment call fills in the name.
             function _openHeritagePopup(ran, name, latlng) {
-                var cimecUrl = ran
-                    ? 'https://ran.cimec.ro/sel.asp?codran=' + encodeURIComponent(ran)
-                    : 'https://ran.cimec.ro/sel.asp?descript=' + encodeURIComponent(name);
-
-                var label = name || ran || 'Sit Arheologic';
-
                 L.popup({ className: 'patrimoniu-popup', maxWidth: 320 })
                     .setLatLng(latlng)
-                    .setContent(
-                        '<div style="font-family:Outfit,sans-serif;min-width:210px;max-width:300px;padding:4px 2px">' +
-                        '<div style="font-family:Cinzel,serif;font-size:0.9rem;color:#B8D8F0;font-weight:700;' +
-                        'margin-bottom:10px;line-height:1.35">🏛 ' + label + '</div>' +
-                        (ran
-                            ? '<div style="font-size:0.75rem;color:rgba(196,160,240,0.85);margin-bottom:2px">' +
-                            '📍 Cod RAN: <strong style="color:#c4a0f0">' + ran + '</strong></div>'
-                            : '') +
-                        '<a href="' + cimecUrl + '" target="_blank" rel="noopener" ' +
-                        'style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;' +
-                        'background:linear-gradient(135deg,#6B3FA0,#4a2880);' +
-                        'color:#fff;border-radius:6px;padding:9px 16px;font-size:0.82rem;font-weight:600;' +
-                        'text-decoration:none;letter-spacing:0.04em;box-shadow:0 3px 14px rgba(107,63,160,0.5)">' +
-                        '<svg width="13" height="13" viewBox="0 0 13 13" fill="none" style="flex-shrink:0">' +
-                        '<path d="M2 6.5h9M7.5 3l3.5 3.5L7.5 10" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>' +
-                        '</svg>Vezi pe CIMEC / RAN</a>' +
-                        '</div>'
-                    )
+                    .setContent(_buildHeritagePopupContent(ran, name))
                     .openOn(map);
             }
 
@@ -5512,14 +5536,14 @@
                 }
                 _heritagePointRecords.forEach(function (record) {
                     if (!record.latlng) return;
-                    var props = record.properties || {};
-                    var name = props.NUMESIT || props.Eticheta || props.Nume || props.Toponim || '';
+                    var info = _resolveHeritageInfo(record.properties, record.layerId);
+                    var popupHtml = _buildHeritagePopupContent(info.ran, info.name);
                     features.push({
                         type: 'Feature',
                         properties: {
                             color: record.color || '#C42B2B', fillColor: record.color || '#C42B2B',
                             radius: record.radius || 5, fillOpacity: 0.9, kind: 'site',
-                            popup: name ? '<div class="m3d-popup-body"><b>' + String(name).replace(/</g, '&lt;') + '</b></div>' : ''
+                            popup: popupHtml
                         },
                         geometry: { type: 'Point', coordinates: [record.latlng.lng, record.latlng.lat] }
                     });
@@ -5531,6 +5555,7 @@
             var Heritage3dBridge = L.Layer.extend({ onAdd: function () {}, onRemove: function () {} });
             var _heritage3dBridge = new Heritage3dBridge({ pane: 'pane_patrimoniu' });
             _heritage3dBridge._dl3dFeatures = _heritage3dFeatures;
+            _heritage3dBridge._buildHeritagePopupContent = _buildHeritagePopupContent;
             window._heritage3dBridge = _heritage3dBridge;
 
             // Single unified togglePatrimoniuLayer — handles WMS layer AND radius circles
