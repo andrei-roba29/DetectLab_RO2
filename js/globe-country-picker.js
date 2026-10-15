@@ -518,6 +518,56 @@
         } catch (e) { return null; }
     }
 
+    /* A country is often drawn at z4–6 before a LiDAR jump to z14+.
+       Leaflet rounds path vertices and derives its renderer transform from
+       the unrounded view centre. Both errors are multiplied by the animated
+       zoom scale (our map allows jumps of ten levels). Keep the outline in
+       exact projected pixels and scale from the SVG's actual pixel anchor,
+       just as tiles scale from their level origin. Do not patch other paths. */
+    function projectBoundsLatlngs(latlngs, result, projectedBounds) {
+        if (!latlngs.length) return;
+        if (latlngs[0] && typeof latlngs[0].lat === 'number') {
+            var map = this._map;
+            var origin = map.getPixelOrigin();
+            var zoom = map.getZoom();
+            var ring = latlngs.map(function (latlng) {
+                var point = map.project(latlng, zoom).subtract(origin);
+                projectedBounds.extend(point);
+                return point;
+            });
+            result.push(ring);
+        } else {
+            for (var i = 0; i < latlngs.length; i++) {
+                projectBoundsLatlngs.call(this, latlngs[i], result, projectedBounds);
+            }
+        }
+    }
+
+    var BoundsSVG = null;
+    function boundsRenderer(pane) {
+        var L = window.L;
+        if (!L || !L.SVG || typeof L.SVG.extend !== 'function') return null;
+        if (!BoundsSVG) BoundsSVG = L.SVG.extend({
+            _update: function () {
+                L.SVG.prototype._update.call(this);
+                if (this._map && !this._map._animatingZoom) {
+                    this._outlinePixelOrigin = this._map.getPixelOrigin().clone();
+                }
+            },
+            _updateTransform: function (center, zoom) {
+                if (!this._outlinePixelOrigin || !this._bounds) {
+                    return L.SVG.prototype._updateTransform.call(this, center, zoom);
+                }
+                var scale = this._map.getZoomScale(zoom, this._zoom);
+                var offset = this._outlinePixelOrigin.add(this._bounds.min)
+                    .multiplyBy(scale).subtract(this._map._getNewPixelOrigin(center, zoom));
+                if (L.Browser.any3d) L.DomUtil.setTransform(this._container, offset, scale);
+                else L.DomUtil.setPosition(this._container, offset);
+            }
+        });
+        return new BoundsSVG({ pane: pane, padding: 0.1 });
+    }
+
     function removeCountryBoundsLayer() {
         var layer = state.boundsLayer;
         var map = state.boundsMap || activeMap();
@@ -565,16 +615,29 @@
             fillColor: '#39ff14',
             fillOpacity: 0.05,
             interactive: false,
-            bubblingMouseEvents: false
+            bubblingMouseEvents: false,
+            smoothFactor: 0   // do not magnify low-zoom simplification during a LiDAR zoom
         };
         var paneName = ensureBoundsPane(map);
         if (paneName) styleOpts.pane = paneName;
+        var renderer = boundsRenderer(paneName);
+        if (renderer) styleOpts.renderer = renderer;
         var layer = null;
         // The working map is intentionally flat 2D, so Leaflet's own
         // Web-Mercator placement keeps the outline aligned with the same
         // raster tiles used during the hand-off.
         try { layer = window.L.geoJSON(feature, styleOpts); } catch (e) { layer = null; }
         if (!layer || typeof map.addLayer !== 'function') return;
+        if (renderer && typeof layer.eachLayer === 'function') {
+            layer.eachLayer(function (path) {
+                if (typeof path._projectLatlngs === 'function') path._projectLatlngs = projectBoundsLatlngs;
+            });
+            // The renderer is dedicated to this selection. Remove it with the
+            // outline so country switching cannot accumulate empty SVGs/listeners.
+            layer.on('remove', function () {
+                if (map.hasLayer(renderer)) map.removeLayer(renderer);
+            });
+        }
         layer._detectlabBoundsKind = 'country outline';
         try {
             map.addLayer(layer);

@@ -7396,15 +7396,16 @@
             display: inline;
         }
 
-        /* Web fullscreen: keep the zoom buttons comfortably inside the
-           viewport, including landscape devices with a left-hand notch.
-           Only adjust zoom, not the compass/locate controls or PWA layout. */
-        body:not(.is-pwa) .map-frame.is-fullscreen #detectlab-map .leaflet-left .leaflet-control-zoom {
-            margin-left: calc(18px + env(safe-area-inset-left, 0px));
-        }
+        /* Desktop fullscreen uses Leaflet's normal 10px left control inset,
+           matching measure/offline/compass below zoom, just like the embedded
+           map. Reserve the extra notch clearance for mobile web only. */
 
         /* ── MOBILE FULLSCREEN & SEARCH FIXES ── */
         @media (max-width: 600px) {
+            body:not(.is-pwa) .map-frame.is-fullscreen #detectlab-map .leaflet-left .leaflet-control-zoom {
+                margin-left: calc(18px + env(safe-area-inset-left, 0px));
+            }
+
             /* Keep Leaflet controls below the search bar on narrow screens. */
             #detectlab-map .leaflet-top.leaflet-left,
             #detectlab-map .leaflet-top.leaflet-right {

@@ -127,6 +127,37 @@ function bind(m, popup, tooltip) {
     console.log('  ✓ heritage points + radius polygons mirror (not only GeoJSON polygons)');
 }
 
+// Country selection is border-only in 3D; its green wash belongs to 2D.
+{
+    const options = { pane: 'pane_country_bounds', color: '#39ff14', weight: 2.5,
+        opacity: 0.9, fillColor: '#39ff14', fillOpacity: 0.05, interactive: false };
+    const country = new GeoJSON(options);
+    country._leaflet_id = 'country-ro';
+    const path = new Path(Object.assign({}, options));
+    path._leaflet_id = 'country-path';
+    path.toGeoJSON = () => ({ type: 'Feature', properties: {}, geometry: {
+        type: 'Polygon', coordinates: [[[26,44],[27,44],[27,45],[26,44]]]
+    } });
+    country._layers = [path];
+    const original = JSON.stringify(path.options);
+    const d = mirror.describe(country, map, {});
+    assert.strictEqual(d.paints.fill['fill-opacity'], 0, 'no green wash in 3D');
+    assert.strictEqual(d.paints.line['line-color'], '#39ff14', 'border preserved');
+    assert.strictEqual(d.paints.line['line-opacity'], 0.9);
+    const collected = mirror.collect({ getPane: map.getPane, eachLayer: fn => { fn(country); fn(path); } });
+    assert.ok(collected.items.length > 0);
+    collected.items.forEach(item => assert.strictEqual(item.paints.fill['fill-opacity'], 0,
+        'group and directly visited child both remain untinted'));
+    assert.strictEqual(JSON.stringify(path.options), original, '2D highlight unchanged');
+    assert.strictEqual(country.options.fillOpacity, 0.05);
+    const ordinary = new Path(Object.assign({}, options, { pane: 'pane_patrimoniu' }));
+    ordinary._leaflet_id = 'green-data-polygon';
+    ordinary.toGeoJSON = path.toGeoJSON;
+    assert.strictEqual(mirror.describe(ordinary, map, {}).paints.fill['fill-opacity'], 0.05,
+        'real data polygons retain their fill even if they share the same green');
+    console.log('  ✓ country border retained without a green terrain wash; 2D and data fills unchanged');
+}
+
 // 5. Static contracts in viewer / app
 {
     const viewer = read('js/map3d-terrain.js');
