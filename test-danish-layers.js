@@ -573,8 +573,8 @@ function testWiring() {
     assert.ok(html.indexOf('js/danish-layers.config.js?v=20261015-danish') <
         html.indexOf('js/layer-registry.js?v=20261015-danish-layers'),
         'the config loads before the registry that mirrors it');
-    assert.ok(html.indexOf('js/danish-layers.js?v=20261015-danish') >
-        html.indexOf('js/map-app.js?v=20261015-danish-layers'),
+    assert.ok(html.indexOf('js/danish-layers.js?v=20261015-basemap-collapse') >
+        html.indexOf('js/map-app.js?v=20261015-basemap-collapse'),
         'the module loads after the map module');
     ok('index.html: group row, container and both scripts in the right order');
 
@@ -591,7 +591,7 @@ function testWiring() {
         'map-app.js hands the country selection to the Danish rows');
     assert.ok(Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]) >= 212,
         'the service-worker cache moved on for the Danish layers');
-    assert.ok(sw.indexOf("'js/danish-layers.js?v=20261015-danish'") !== -1, 'the new scripts are precached');
+    assert.ok(sw.indexOf("'js/danish-layers.js?v=20261015-basemap-collapse'") !== -1, 'the new scripts are precached');
     assert.ok(css.indexOf('.danish-layer-row') !== -1 && css.indexOf('.danish-basemap-btn') !== -1,
         'the generated rows and the basemap buttons are styled');
     assert.ok(css.indexOf('focus-visible') !== -1, 'and keyboard focus stays visible');

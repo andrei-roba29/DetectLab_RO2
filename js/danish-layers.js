@@ -846,7 +846,10 @@
         });
 
         /* Mirror the bases into the existing basemap control, so a Danish base
-         * map is switched where every other basemap is switched. */
+         * map is switched where every other basemap is switched. The control's
+         * options live in a retractable list, so the buttons are inserted
+         * next to the hillshade row — wherever that row sits — and inherit
+         * the folding of the list. */
         var control = document.getElementById('arcgisBasemapCtrl');
         if (control) {
             var anchor = control.querySelector('.arcgis-basemap-hs');
@@ -855,7 +858,7 @@
                 var existing = control.querySelector('[data-danish-basemap="' + layer.id + '"]');
                 if (existing) existing.parentNode.removeChild(existing);
                 var button = controlButton(layer);
-                if (anchor && anchor.parentNode === control) control.insertBefore(button, anchor);
+                if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(button, anchor);
                 else control.appendChild(button);
             });
         }

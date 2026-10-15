@@ -1,4 +1,38 @@
-# ArcGIS basemap integration (PR #283 fix — v184, gate layout v185, flat hand-off v186)
+# ArcGIS basemap integration (PR #283 fix — v184, gate layout v185, flat hand-off v186, retractable list v218)
+
+## v218 — the base-map options are a retractable list
+
+The three base maps (**Imagery / Topographic / Terrain**) used to be a
+permanent block of three buttons plus a hillshade row in the bottom-left glass
+control — four lines of map chrome that are needed only while the base map is
+being chosen. They now live in a **retractable list**:
+
+- the control shows **one header row**: the layers icon, the **name of the
+  active base map**, and a chevron. Folded — the default state — the control is
+  a single line tall, on desktop and on a phone alike;
+- **clicking the header unfolds the list** (Imagery / Topographic / Terrain,
+  the World Hillshade checkbox, and the Danish base maps mirrored by
+  `js/danish-layers.js` — they are inserted next to the hillshade row, so they
+  fold with it);
+- **choosing a base map applies it and folds the list again**, so the control
+  never stays open over the map; a **click elsewhere on the page** or the
+  **Escape key** also folds it;
+- the header caption is re-painted by `_syncArcgisBasemapControl()` whenever the
+  base map changes, so the retracted row always names the base map actually on
+  screen — and it follows the RO/EN language switch like everything else.
+
+Implementation: `js/map-app.js` (`addArcgisBasemapControl()`), styles in
+`index.html` (`.arcgis-basemap-ctrl.is-open .arcgis-basemap-list`). The list is
+scriptable through `window.setArcgisBasemapListOpen(open)` /
+`window.toggleArcgisBasemapList()`. The control still sits bottom-left, clear of
+the search bar, the layer panel and the PWA action dock.
+
+Regression checks: `node test-arcgis-basemap-collapse.js` runs the real control
+in jsdom (folded by default, the header caption names the active base map,
+unfold / refold, a choice applies *and* folds, outside click and Escape fold,
+the Danish anchor lands inside the list, and the CSS contract).
+`tools/basemap-control-preview.html` renders the control standalone over a real
+Esri tile for manual inspection.
 
 ## v185 — country gate "black screen" fix
 
@@ -123,6 +157,9 @@ and continues on the ordinary 2D working-map path.
 
 - `node test-arcgis-primary-atlas.js` — integration checks for this fix
   (primary UI, no iframe, ArcGIS basemap stack, SceneView preserved).
+- `node test-arcgis-basemap-collapse.js` — v218: the base-map options are a
+  retractable list (folded by default, header names the active base map,
+  unfolds/refolds, a choice applies and folds, outside click and Escape fold).
 - `node test-globe-arcgis-gate.js` — v185: the gate keeps the SceneView's
   `display: flex` contract, the adapter refuses a collapsed (undrawable)
   surface and repairs the layout once before falling back to the canvas globe.

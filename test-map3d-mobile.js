@@ -294,7 +294,7 @@ const TAGS = {
     'js/map3d-terrain.js': '20261015-3d-startup-race',
     'css/map3d-terrain.css': '20261015-3d-no-terrain-toggle',
     'js/danish-layers.config.js': '20261015-danish',
-    'js/danish-layers.js': '20261015-danish'
+    'js/danish-layers.js': '20261015-basemap-collapse'
 };
 ['js/map3d-terrain.js', 'js/layer-registry.js', 'css/map3d-terrain.css',
     'js/danish-layers.config.js', 'js/danish-layers.js'].forEach(function (asset) {

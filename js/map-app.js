@@ -3200,14 +3200,48 @@
                 if (_storedBasemap && ARCGIS_BASEMAPS[_storedBasemap]) _arcgisCurrentBasemap = _storedBasemap;
             } catch (e) {}
 
+            // One source of truth for the base-map names: the buttons of the
+            // retractable list AND the caption of the retracted header.
+            var ARCGIS_BASEMAP_LABELS = {
+                imagery: { ro: 'Imagery (ArcGIS)', en: 'Imagery (ArcGIS)' },
+                topographic: { ro: 'Topographic (ArcGIS)', en: 'Topographic (ArcGIS)' },
+                terrain: { ro: 'Teren (ArcGIS)', en: 'Terrain (ArcGIS)' },
+                hillshade: { ro: 'Hillshade (relief)', en: 'Hillshade (terrain)' },
+                hint: { ro: 'Hartă de bază — click pentru a extinde', en: 'Base map — click to expand' }
+            };
+
+            function _arcgisBasemapUseRo() {
+                var lang = (typeof window._currentLang === 'function') ? window._currentLang() : 'en';
+                return String(lang).toLowerCase().indexOf('ro') === 0;
+            }
+
             function _syncArcgisBasemapControl(key) {
                 var ctrl = document.getElementById('arcgisBasemapCtrl');
                 if (!ctrl) return;
+                var useRo = _arcgisBasemapUseRo();
                 Array.prototype.forEach.call(ctrl.querySelectorAll('[data-arcgis-basemap]'), function (btn) {
-                    var isCurrent = btn.getAttribute('data-arcgis-basemap') === key;
+                    var btnKey = btn.getAttribute('data-arcgis-basemap');
+                    var isCurrent = btnKey === key;
                     btn.classList.toggle('active', isCurrent);
                     btn.setAttribute('aria-pressed', isCurrent ? 'true' : 'false');
+                    var lbl = ARCGIS_BASEMAP_LABELS[btnKey];
+                    if (lbl) {
+                        btn.textContent = lbl[useRo ? 'ro' : 'en'];
+                        btn.title = btn.textContent;
+                    }
                 });
+                // The retracted header always names the ACTIVE base map, so the
+                // map can be read without unfolding the list.
+                var headLabel = ctrl.querySelector('.arcgis-basemap-header-label');
+                if (headLabel) {
+                    var cur = ARCGIS_BASEMAP_LABELS[key] || ARCGIS_BASEMAP_LABELS.imagery;
+                    headLabel.textContent = cur[useRo ? 'ro' : 'en'];
+                }
+                var head = ctrl.querySelector('.arcgis-basemap-header');
+                if (head) head.title = ARCGIS_BASEMAP_LABELS.hint[useRo ? 'ro' : 'en'];
+                var hsText = ctrl.querySelector('.arcgis-basemap-hs-text');
+                if (hsText) hsText.textContent = ARCGIS_BASEMAP_LABELS.hillshade[useRo ? 'ro' : 'en'];
+                ctrl.setAttribute('aria-label', useRo ? 'Hartă de bază ArcGIS' : 'ArcGIS basemap');
                 var hsBox = document.getElementById('arcgisBasemapHillshade');
                 if (hsBox && window.DetectLabCountryDock) {
                     try { hsBox.checked = !!window.DetectLabCountryDock.isHillshadeOn(); } catch (e) {}
@@ -3230,40 +3264,70 @@
             window.getArcgisBasemap = function () { return _arcgisCurrentBasemap; };
 
             // ── ArcGIS basemap switcher (bottom-left glass control) ──
-            // Imagery / Topographic / Terrain buttons + a World Hillshade
-            // checkbox. The checkbox drives the same overlay the country dock
-            // owns (window.toggleWorldHillshade) and stays in sync with the
-            // dock's checkbox. The control sits bottom-left, clear of the
+            // The three base maps (Imagery / Topographic / Terrain) live in a
+            // RETRACTABLE list: the control shows a single header row — the
+            // layers icon plus the name of the active base map — and the
+            // options unfold from it when the header is clicked. The list is
+            // folded by default, so the control occupies one line on the map
+            // (and on a phone) instead of a permanent block of buttons.
+            // Picking a base map folds the list again; so does a click
+            // elsewhere on the page or the Escape key.
+            // The World Hillshade checkbox drives the same overlay the country
+            // dock owns (window.toggleWorldHillshade) and stays in sync with
+            // the dock's checkbox. The control sits bottom-left, clear of the
             // search bar (top-centre), the layer panel (right) and the PWA
             // action dock (bottom-right), so it never covers the interface.
             (function addArcgisBasemapControl() {
-                var labels = {
-                    imagery: { ro: 'Imagery (ArcGIS)', en: 'Imagery (ArcGIS)' },
-                    topographic: { ro: 'Topographic (ArcGIS)', en: 'Topographic (ArcGIS)' },
-                    terrain: { ro: 'Teren (ArcGIS)', en: 'Terrain (ArcGIS)' },
-                    hillshade: { ro: 'Hillshade (relief)', en: 'Hillshade (terrain)' }
-                };
                 var container = L.DomUtil.create('div', 'arcgis-basemap-ctrl');
                 container.id = 'arcgisBasemapCtrl';
                 container.setAttribute('role', 'group');
                 container.setAttribute('aria-label', 'ArcGIS basemap');
+
+                /* ── the header: the only always-visible part ───────────── */
+                var header = L.DomUtil.create('button', 'arcgis-basemap-header', container);
+                header.type = 'button';
+                header.id = 'arcgisBasemapToggle';
+                header.setAttribute('aria-expanded', 'false');
+                header.setAttribute('aria-controls', 'arcgisBasemapList');
+                var headerIcon = L.DomUtil.create('span', 'arcgis-basemap-header-icon', header);
+                headerIcon.setAttribute('aria-hidden', 'true');
+                headerIcon.innerHTML = '<svg viewBox="0 0 16 16" width="13" height="13" focusable="false">' +
+                    '<path d="M8 1.7 14.3 5 8 8.3 1.7 5 8 1.7Z" fill="none" stroke="currentColor" ' +
+                    'stroke-width="1.1" stroke-linejoin="round"/>' +
+                    '<path d="M1.7 8 8 11.3 14.3 8" fill="none" stroke="currentColor" stroke-width="1.1" ' +
+                    'stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '<path d="M1.7 11 8 14.3 14.3 11" fill="none" stroke="currentColor" stroke-width="1.1" ' +
+                    'stroke-linecap="round" stroke-linejoin="round"/></svg>';
+                var headerLabel = L.DomUtil.create('span', 'arcgis-basemap-header-label', header);
+                var headerChevron = L.DomUtil.create('span', 'arcgis-basemap-chevron', header);
+                headerChevron.setAttribute('aria-hidden', 'true');
+                headerChevron.textContent = '▾';
+
+                /* ── the list of base maps (folded by default) ───────────── */
+                var list = L.DomUtil.create('div', 'arcgis-basemap-list', container);
+                list.id = 'arcgisBasemapList';
+                list.setAttribute('aria-hidden', 'true');
                 ['imagery', 'topographic', 'terrain'].forEach(function (key) {
-                    var btn = L.DomUtil.create('button', 'arcgis-basemap-btn', container);
+                    var btn = L.DomUtil.create('button', 'arcgis-basemap-btn', list);
                     btn.type = 'button';
                     btn.setAttribute('data-arcgis-basemap', key);
-                    btn.title = labels[key].en;
-                    btn.textContent = labels[key].en;
+                    btn.title = ARCGIS_BASEMAP_LABELS[key].en;
+                    btn.textContent = ARCGIS_BASEMAP_LABELS[key].en;
                     btn.addEventListener('click', function () {
                         if (typeof window.setArcgisBasemap === 'function') window.setArcgisBasemap(key);
+                        /* A chosen base map folds the list again — the control
+                         * goes back to its one-line state. */
+                        setListOpen(false);
                     });
                 });
-                var hsLabel = L.DomUtil.create('label', 'arcgis-basemap-hs', container);
+                var hsLabel = L.DomUtil.create('label', 'arcgis-basemap-hs', list);
                 var hsBox = document.createElement('input');
                 hsBox.type = 'checkbox';
                 hsBox.id = 'arcgisBasemapHillshade';
                 hsLabel.appendChild(hsBox);
                 var hsText = document.createElement('span');
-                hsText.textContent = labels.hillshade.en;
+                hsText.className = 'arcgis-basemap-hs-text';
+                hsText.textContent = ARCGIS_BASEMAP_LABELS.hillshade.en;
                 hsLabel.appendChild(hsText);
                 hsBox.addEventListener('change', function () {
                     if (typeof window.toggleWorldHillshade === 'function') {
@@ -3277,21 +3341,50 @@
                         try { hsBox.checked = !!window.DetectLabCountryDock.isHillshadeOn(); } catch (e) {}
                     }
                 });
-                document.addEventListener('detectlab:langchange', function () {
-                    var lang = (typeof window._currentLang === 'function') ? window._currentLang() : 'en';
-                    var useRo = String(lang).toLowerCase().indexOf('ro') === 0;
-                    Array.prototype.forEach.call(container.querySelectorAll('[data-arcgis-basemap]'), function (btn) {
-                        var key = btn.getAttribute('data-arcgis-basemap');
-                        btn.textContent = labels[key][useRo ? 'ro' : 'en'];
-                        btn.title = btn.textContent;
-                    });
-                    hsText.textContent = labels.hillshade[useRo ? 'ro' : 'en'];
-                    container.setAttribute('aria-label', useRo ? 'Hartă de bază ArcGIS' : 'ArcGIS basemap');
+
+                /* ── folding / unfolding ─────────────────────────────────── */
+                function setListOpen(open) {
+                    var isOpen = !!open;
+                    container.classList.toggle('is-open', isOpen);
+                    header.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                    list.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+                    return isOpen;
+                }
+                /* Scriptable, so the list can be opened from anywhere (tests,
+                 * a future “change the base map” action) and folded again. */
+                window.setArcgisBasemapListOpen = setListOpen;
+                window.toggleArcgisBasemapList = function () {
+                    return setListOpen(!container.classList.contains('is-open'));
+                };
+                header.addEventListener('click', function () {
+                    setListOpen(!container.classList.contains('is-open'));
                 });
-                _syncArcgisBasemapControl(window.getArcgisBasemap());
+                // A click anywhere else on the page folds the list again.
+                document.addEventListener('click', function (e) {
+                    if (!container.classList.contains('is-open')) return;
+                    var node = e && e.target;
+                    if (node && container.contains(node)) return;
+                    setListOpen(false);
+                }, true);
+                // …and so does Escape.
+                document.addEventListener('keydown', function (e) {
+                    if (!container.classList.contains('is-open')) return;
+                    if (e.key === 'Escape' || e.keyCode === 27) setListOpen(false);
+                });
+
+                document.addEventListener('detectlab:langchange', function () {
+                    // Re-labels the buttons, the hillshade row and the header
+                    // caption (the active base map) in the new language.
+                    _syncArcgisBasemapControl(window.getArcgisBasemap());
+                });
                 var control = L.control({ position: 'bottomleft' });
                 control.onAdd = function () { return container; };
                 control.addTo(map);
+                /* The control must be IN the document before it is synced —
+                 * the sync paints the header caption and the active state by
+                 * id, and a control that is not mounted yet is not found. */
+                _syncArcgisBasemapControl(window.getArcgisBasemap());
+                setListOpen(false);
             })();
 
             // ── SATELIT / ISTORIC — mozaicurile Copernicus VHR (EEA discomap) ──

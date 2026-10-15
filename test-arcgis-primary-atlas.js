@@ -74,7 +74,7 @@ const order = [
     'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
     'js/globe-country-picker.js?v=20261014-country-exit-3d',
     'js/country-dock.js?v=20261013-country-2d',
-    'js/map-app.js?v=20261015-danish-layers',
+    'js/map-app.js?v=20261015-basemap-collapse',
     'js/offline-maps.js?v=20261009-3d-globe'
 ];
 order.forEach((asset) => assert(index.includes(asset), 'index.html loads ' + asset));
@@ -138,7 +138,7 @@ assert(cacheVersion >= 187, 'the PWA shell version was bumped to v187 for the fl
   'js/globe-country-picker.js?v=20261014-country-exit-3d',
   'css/country-dock.css?v=20261008',
   'js/country-dock.js?v=20261013-country-2d',
-  'js/map-app.js?v=20261015-danish-layers',
+  'js/map-app.js?v=20261015-basemap-collapse',
   'js/offline-maps.js?v=20261009-3d-globe',
   'js/translations.js?v=20261015-danish-layers',
   'data/countries-50m.json'

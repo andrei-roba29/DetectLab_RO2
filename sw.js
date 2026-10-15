@@ -507,7 +507,15 @@
 //   draped over the DEM from the style, and the exaggeration slider still
 //   drives setTerrain(); see MAP_3D_TERRAIN.md §3. Cache bumped so an installed
 //   PWA picks up the viewer and the skin.
-const CACHE_NAME = 'detectlab-v217-fullscreen-zoom-alignment';
+// v218: the ArcGIS base maps (Imagery / Topographic / Terrain) live in a
+//   RETRACTABLE list instead of a permanent block of buttons. The bottom-left
+//   control now shows one header row — the layers icon plus the name of the
+//   ACTIVE base map — and the options (plus the World Hillshade checkbox, and
+//   the Danish base maps mirrored by js/danish-layers.js) unfold from it on a
+//   click and fold again on a choice, a click elsewhere or Escape. The list is
+//   folded by default, so the control is a single line tall. Cache bumped so an
+//   installed PWA picks up the new control (js/map-app.js) and its styles.
+const CACHE_NAME = 'detectlab-v218-basemap-collapse';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -542,6 +550,7 @@ const PRECACHE_URLS = [
   // must not depend on the network.
   'js/layer-registry.js?v=20261015-danish-layers',
   'js/danish-layers.config.js?v=20261015-danish',
+  'js/danish-layers.js?v=20261015-basemap-collapse',
   'js/danish-layers.js?v=20261015-danish',
   'js/layer-registry.js?v=20261014-wms-audit',
   'js/layer-registry.js?v=20261013-3d-mobile',
@@ -552,10 +561,10 @@ const PRECACHE_URLS = [
   'js/map3d-mirror.js?v=20261015-natural-country-fill',
   'js/map3d-mirror.js?v=20261014-lidar-3d-focus',
   'js/map3d-mirror.js?v=20261014-3d-vectors',
-  'js/map-app.js?v=20261015-danish-layers',
+  'js/map-app.js?v=20261015-basemap-collapse',
   /* Older tags stay listed on purpose: an installed PWA that is still running
    * an older index.html keeps working offline through its own URL. */
-  'js/map-app.js?v=20261014-lidar-3d-focus',
+  'js/map-app.js?v=20261015-danish-layers',
   'js/map-app.js?v=20261014-3d-vectors',
   'js/roman-roads-parser.js?v=20261015-roman-roads',
   'js/roman-roads.js?v=20261015-roman-roads',
