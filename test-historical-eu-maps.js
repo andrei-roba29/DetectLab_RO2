@@ -32,7 +32,7 @@ assert(!source.includes('cenagis-catalog-title'), 'the catalog renderer builds n
     assert(!indexHtml.includes('id="' + id + '"'), 'obsolete separate group #' + id + ' is removed');
 });
 assert(indexHtml.includes('js/historical-eu-maps.js?v=20261013-flat-hist-maps'), 'versioned catalog is loaded');
-assert(indexHtml.includes('js/map-app.js?v=20261015-danish-layers'), 'versioned fallback map app is loaded');
+assert(indexHtml.includes('js/map-app.js?v=20261015-basemap-collapse'), 'versioned fallback map app is loaded');
 assert(indexHtml.includes('js/subscriptions.js?v=20261008-premium-roman-guard'), 'premium guard is versioned');
 assert(subscriptions.includes('toggleCenagisLayer'), 'dynamic CENAGIS toggle is Premium-guarded');
 assert(subscriptions.includes("'toggleRomanDareCategories'"), 'DARE All/None is Premium-guarded');
@@ -40,7 +40,7 @@ assert(subscriptions.includes("'toggleRomanSub'"), 'Roman sublayers are Premium-
 console.log('  ✓ one premium parent group, versioned scripts and entitlement guards verified');
 
 assert(swJs.includes('js/historical-eu-maps.js?v=20261013-flat-hist-maps'), 'service worker precaches the versioned catalog');
-assert(swJs.includes('js/map-app.js?v=20261015-danish-layers'), 'service worker precaches the current versioned map app');
+assert(swJs.includes('js/map-app.js?v=20261015-basemap-collapse'), 'service worker precaches the current versioned map app');
 assert(swJs.includes('js/subscriptions.js?v=20261008-premium-roman-guard'), 'service worker precaches the versioned subscription guard');
 const shellVersion = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
 assert(shellVersion >= 171, 'service-worker cache bumped for the merged catalog (got v' + shellVersion + ')');

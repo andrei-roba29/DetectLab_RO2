@@ -2715,7 +2715,16 @@
         if (!field || !field.results.length) return;
         var raster = buildHeatRaster(field);
         if (!raster) return;
-        var layer = makeHeatLayer(raster, { opacity: CONFIG.HEAT.OPACITY });
+        // gradient: aceeași rampă în 3D ca în 2D. Oportul o citește din
+        // options (contractul leaflet.heat: {stop: culoare CSS}), iar MapLibre
+        // îl traduce în rampă heatmap-color — fără ea, heatmap-ul 3D ar
+        // desena albastru→roșu în locul albastru→verde→galben→violet.
+        var layer = makeHeatLayer(raster, {
+            opacity: CONFIG.HEAT.OPACITY,
+            gradient: HEAT_GRADIENT,
+            radius: Math.max(6, (raster.cellM || 180) / 2),
+            max: 1
+        });
         if (!layer) return;
         _heatLayer = layer;
         _heatRaster = raster;

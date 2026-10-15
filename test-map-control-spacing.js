@@ -35,7 +35,7 @@ for (const file of ['css/styles.css', 'css/map3d-terrain.css']) {
     /* Each asset carries the tag of whatever last changed it: the sheet by the
      * Danish layers block at its end, the terrain skin by the terrain-toggle
      * removal. */
-    const tag = file === 'css/styles.css' ? '20261015-fullscreen-zoom-alignment' : '20261015-3d-no-terrain-toggle';
+    const tag = file === 'css/styles.css' ? '20261015-fullscreen-zoom-alignment' : '20261015-3d-dock-clearance';
     const url = file + '?v=' + tag;
     assert(html.includes(url) && sw.includes("'" + url + "'"), 'cache-busted and precached: ' + file);
 }

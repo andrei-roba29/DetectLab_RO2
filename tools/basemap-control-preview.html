@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<!-- Dev-only harness: opens the ArcGIS base-map switcher on its own, so the
+     retractable list (folded one-line header ⇄ unfolded options) can be
+     clicked through and measured at desktop and phone widths without auth,
+     the layer panel or the rest of the app.
+     Serve the repository root and open /tools/basemap-control-preview.html. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<base href="../">
+<title>DetectLab — ArcGIS base-map list preview</title>
+<style>
+  /* ── the real control's skin, copied from index.html so the preview shows
+     exactly what ships ─────────────────────────────────────────────────── */
+  .arcgis-basemap-ctrl {
+    background: rgba(8, 14, 28, 0.9);
+    border: 1px solid rgba(184, 216, 240, 0.28);
+    border-radius: 10px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+    min-width: 164px;
+    font-family: 'Outfit', system-ui, sans-serif;
+  }
+  .arcgis-basemap-header {
+    display: flex; align-items: center; gap: 7px; width: 100%;
+    padding: 6px 10px; border: 0; background: transparent;
+    color: rgba(245, 240, 235, 0.9); font-family: inherit; font-size: 0.72rem;
+    font-weight: 600; line-height: 1.3; text-align: left; cursor: pointer;
+    white-space: nowrap;
+  }
+  .arcgis-basemap-header:hover { background: rgba(184, 216, 240, 0.1); color: #fff; }
+  .arcgis-basemap-header:focus-visible { outline: 2px solid #b9ff14; outline-offset: -2px; }
+  .arcgis-basemap-header-icon { display: inline-flex; align-items: center; color: #b9ff14; }
+  .arcgis-basemap-header-label { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
+  .arcgis-basemap-chevron { font-size: 0.6rem; line-height: 1; transition: transform 0.18s ease; }
+  .arcgis-basemap-ctrl.is-open .arcgis-basemap-chevron { transform: rotate(180deg); }
+  .arcgis-basemap-list { display: none; border-top: 1px solid rgba(184, 216, 240, 0.14); }
+  .arcgis-basemap-ctrl.is-open .arcgis-basemap-list {
+    display: block; animation: arcgis-basemap-list-in 0.16s ease-out;
+  }
+  @keyframes arcgis-basemap-list-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .arcgis-basemap-btn {
+    display: block; width: 100%; padding: 6px 10px; border: 0;
+    border-bottom: 1px solid rgba(184, 216, 240, 0.12); background: transparent;
+    color: rgba(245, 240, 235, 0.85); font-family: inherit; font-size: 0.72rem;
+    font-weight: 500; line-height: 1.3; text-align: left; cursor: pointer;
+    white-space: nowrap;
+  }
+  .arcgis-basemap-btn:hover { background: rgba(184, 216, 240, 0.1); color: #fff; }
+  .arcgis-basemap-btn:focus-visible { outline: 2px solid #b9ff14; outline-offset: -2px; }
+  .arcgis-basemap-btn.active {
+    background: rgba(107, 63, 160, 0.35); color: #fff;
+    box-shadow: inset 2px 0 0 rgba(185, 255, 0, 0.65);
+  }
+  .arcgis-basemap-hs {
+    display: flex; align-items: center; gap: 6px; padding: 6px 10px;
+    color: rgba(245, 240, 235, 0.85); font-family: inherit; font-size: 0.72rem;
+    font-weight: 500; cursor: pointer; white-space: nowrap;
+  }
+  .arcgis-basemap-hs input { margin: 0; accent-color: #b9ff14; }
+  @media (max-width: 700px) { .arcgis-basemap-ctrl { min-width: 148px; max-width: 62vw; } }
+  @media (prefers-reduced-motion: reduce) {
+    .arcgis-basemap-ctrl.is-open .arcgis-basemap-list { animation: none; }
+    .arcgis-basemap-chevron { transition: none; }
+  }
+
+  /* ── the harness itself ──────────────────────────────────────────────── */
+  html, body { height: 100%; margin: 0; background: #0d1a2b; color: #eee;
+               font-family: system-ui, sans-serif; }
+  /* A stand-in for the map surface: a scaled Esri World Imagery tile, so the
+     glass control is judged against real imagery rather than flat colour. */
+  #stage { position: relative; width: 100%; height: 100%; overflow: hidden;
+           background-image: url('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/3/3/2');
+           background-size: cover; }
+  #stage::after { content: ''; position: absolute; inset: 0;
+                  background: rgba(6, 14, 30, 0.35); }
+  /* The control is a Leaflet bottom-left control; this puts it there. */
+  .leaflet-bottom { position: absolute; left: 10px; bottom: 10px; z-index: 800; }
+  #log { position: fixed; right: 12px; top: 12px; z-index: 20000;
+         background: rgba(8, 14, 28, 0.92); border: 1px solid rgba(185, 255, 0, 0.45);
+         border-radius: 10px; padding: 10px 14px; font-size: 12px; line-height: 1.5;
+         max-width: 34ch; }
+  #log b { color: #ddffb0; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="leaflet-bottom">
+    <div class="arcgis-basemap-ctrl" id="arcgisBasemapCtrl" role="group" aria-label="ArcGIS basemap">
+      <button class="arcgis-basemap-header" type="button" id="arcgisBasemapToggle"
+              aria-expanded="false" aria-controls="arcgisBasemapList"
+              title="Base map — click to expand">
+        <span class="arcgis-basemap-header-icon" aria-hidden="true">
+          <svg viewBox="0 0 16 16" width="13" height="13" focusable="false">
+            <path d="M8 1.7 14.3 5 8 8.3 1.7 5 8 1.7Z" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>
+            <path d="M1.7 8 8 11.3 14.3 8" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M1.7 11 8 14.3 14.3 11" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="arcgis-basemap-header-label">Imagery (ArcGIS)</span>
+        <span class="arcgis-basemap-chevron" aria-hidden="true">&#9662;</span>
+      </button>
+      <div class="arcgis-basemap-list" id="arcgisBasemapList" aria-hidden="true">
+        <button class="arcgis-basemap-btn active" type="button" data-arcgis-basemap="imagery" title="Imagery (ArcGIS)" aria-pressed="true">Imagery (ArcGIS)</button>
+        <button class="arcgis-basemap-btn" type="button" data-arcgis-basemap="topographic" title="Topographic (ArcGIS)" aria-pressed="false">Topographic (ArcGIS)</button>
+        <button class="arcgis-basemap-btn" type="button" data-arcgis-basemap="terrain" title="Terrain (ArcGIS)" aria-pressed="false">Terrain (ArcGIS)</button>
+        <!-- The Danish base maps are mirrored here by js/danish-layers.js. -->
+        <button class="arcgis-basemap-btn danish-basemap-btn" type="button" data-danish-basemap="dtk25" title="Denmark · DTK25 topographic map (1:25,000)" aria-pressed="false">
+          <span class="danish-basemap-dot"></span><span class="danish-basemap-name">DTK25 topografisk kort</span>
+        </button>
+        <label class="arcgis-basemap-hs">
+          <input type="checkbox" id="arcgisBasemapHillshade"><span class="arcgis-basemap-hs-text">Hillshade (terrain)</span>
+        </label>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="log">
+  <b>Base-map list</b><br>
+  Folded by default — click the header to unfold, click an option to choose it
+  (the list folds again), click outside or press <b>Esc</b> to fold.
+</div>
+<style>
+  .danish-basemap-btn { display: inline-flex; align-items: center; gap: 5px; }
+  .danish-basemap-dot { width: 6px; height: 6px; border-radius: 50%;
+                        background: rgba(214, 69, 80, 0.45); flex-shrink: 0; }
+  .danish-basemap-btn.active .danish-basemap-dot { background: #d64550; }
+</style>
+<script>
+  (function () {
+    var ctrl = document.getElementById('arcgisBasemapCtrl');
+    var header = document.getElementById('arcgisBasemapToggle');
+    var list = document.getElementById('arcgisBasemapList');
+    var caption = ctrl.querySelector('.arcgis-basemap-header-label');
+
+    function setOpen(open) {
+      ctrl.classList.toggle('is-open', !!open);
+      header.setAttribute('aria-expanded', open ? 'true' : 'false');
+      list.setAttribute('aria-hidden', open ? 'false' : 'true');
+    }
+    header.addEventListener('click', function () {
+      setOpen(!ctrl.classList.contains('is-open'));
+    });
+    Array.prototype.forEach.call(
+        ctrl.querySelectorAll('.arcgis-basemap-btn'), function (btn) {
+      btn.addEventListener('click', function () {
+        Array.prototype.forEach.call(
+            ctrl.querySelectorAll('.arcgis-basemap-btn'), function (other) {
+          other.classList.remove('active');
+          other.setAttribute('aria-pressed', 'false');
+        });
+        btn.classList.add('active');
+        btn.setAttribute('aria-pressed', 'true');
+        caption.textContent = btn.querySelector('.danish-basemap-name')
+            ? btn.querySelector('.danish-basemap-name').textContent
+            : btn.textContent;
+        setOpen(false);
+      });
+    });
+    document.addEventListener('click', function (e) {
+      if (ctrl.classList.contains('is-open') && !ctrl.contains(e.target)) setOpen(false);
+    }, true);
+    document.addEventListener('keydown', function (e) {
+      if (ctrl.classList.contains('is-open') && (e.key === 'Escape' || e.keyCode === 27)) setOpen(false);
+    });
+  }());
+</script>
+</body>
+</html>

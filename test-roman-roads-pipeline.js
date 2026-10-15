@@ -40,9 +40,9 @@ const layerSrc = read('js/roman-roads.js');
 const workerSrc = read('js/roman-roads-worker.js');
 
 /* The roads' own assets were last touched by the roads work; map-app.js was
- * re-tagged by the Danish layers that came after it. */
+ * re-tagged since — most recently by the collapsible ArcGIS base-map list. */
 const VERSION_TAG = '20261015-roman-roads';
-const MAP_APP_TAG = '20261015-danish-layers';
+const MAP_APP_TAG = '20261015-basemap-collapse';
 console.log('[Test] Roman roads — worker parser, canvas layer, no per-segment DOM...');
 
 /* ── 1. wiring ─────────────────────────────────────────────────────────────

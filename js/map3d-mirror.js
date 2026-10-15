@@ -92,7 +92,7 @@
        the result is cached on the group, and the deck has a hard item budget so
        no 2D layer can ever blow the 3D view up again. */
     var MAX_BUNDLE_FEATURES = 20000;   /* features in one merged 3D source    */
-    var MAX_BUNDLES_PER_GROUP = 24;    /* merged sources taken from one group */
+    var MAX_BUNDLES_PER_GROUP = 256;   /* merged sources taken from one group */
     var MAX_ITEMS = 400;               /* mirrored items in the whole deck    */
 
     /* ── CSS-blended rasters ────────────────────────────────────────────────
@@ -444,7 +444,14 @@
         if (!layer) return false;
         if (layer._heat && typeof layer._heat.draw === 'function') return true;
         if (layer._latlngs && /heat/i.test((layer.constructor && layer.constructor.name) || '')) return true;
-        return /heat/i.test((layer.options && layer.options._kind) || '');
+        if (/heat/i.test((layer.options && layer.options._kind) || '')) return true;
+        /* The Archaeological Potential heatmap is a hand-rolled L.Layer (see
+         * heatLayerProto in js/archeo-potential.js): a score raster stretched
+         * over the grid's bbox, with no leaflet.heat contract at all. Without
+         * this branch classify() falls through to the L.Layer default and the
+         * whole layer is reported as having no 3D equivalent. */
+        if (layer._raster && typeof layer.setRaster === 'function') return true;
+        return false;
     }
     function isRotatedOverlay(layer) {
         return layer && layer._rotation != null && layer._img && layer._canvas;
@@ -644,6 +651,72 @@
         return null;
     }
 
+    /* ── paint quantisation (merge signature only) ──────────────────────────
+       A 2D layer that paints its siblings from a continuous ramp — the
+       Archaeological Potential bubbles are coloured by score and sized by the
+       packing radius, so no two of them carry the same stroke, fill or radius —
+       gives every sibling a different paint. paintSignature() then splits the
+       group into one bundle per sibling and the per-group merge budget silently
+       throws almost all of them away, which is exactly what "these layers do
+       not appear in 3D" looked like.
+
+       The fix quantises the SIGNATURE, never the paint: rounding the mirrored
+       colour to 4 levels per channel and the circle radius to a ⅓-octave band
+       puts those siblings back into one bundle. Measured on the real ramp
+       (js/archeo-potential.js): 100 bubbles → 52 sources, 200 → 103,
+       400 → 153, all of them carried, where one source per sibling hit the
+       budget at 24 and silently dropped the rest. Battles keeps its six epoch
+       colours and its context/zone split (12 sources for 40 events) because
+       those are 4 levels apart, not 1-in-255. The bundle still carries the
+       exact paint of its first sibling, so an app colour like the LIDAR
+       Scanner's #39ff14 is mirrored as #39ff14, not as whatever a rounding
+       step produced. */
+    var PAINT_STEP = 64;      /* 255 / 4: 4 levels per colour channel  */
+    var RADIUS_BAND = 1.4;    /* ~⅓-octave radius bands               */
+
+    function quantiseHex(color) {
+        var m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(color || ''));
+        if (!m) return color;
+        var hex = m[1];
+        if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+        var out = '#';
+        for (var i = 0; i < 3; i += 1) {
+            var c = parseInt(hex.substr(i * 2, 2), 16);
+            c = Math.round(c / PAINT_STEP) * PAINT_STEP;
+            if (c > 255) c = 255;
+            out += (c < 16 ? '0' : '') + c.toString(16);
+        }
+        return out;
+    }
+
+    /* A copy of the paints with the continuous values banded, used only to
+     * decide which siblings may share one 3D source. The nested paint sets
+     * (line / fill / circle) are copied too: mutating the live ones would
+     * change what MapLibre draws. */
+    function quantisePaints(paints) {
+        if (!paints) return paints;
+        var out = {};
+        Object.keys(paints).forEach(function (k) {
+            var v = paints[k];
+            out[k] = (v && typeof v === 'object') ? Object.assign({}, v) : v;
+        });
+        ['line', 'fill', 'circle'].forEach(function (set) {
+            var paint = out[set];
+            if (!paint) return;
+            ['line-color', 'fill-color', 'circle-color', 'circle-stroke-color'].forEach(function (key) {
+                if (typeof paint[key] === 'string') paint[key] = quantiseHex(paint[key]);
+            });
+            if (paint['circle-radius'] != null) {
+                var r = Number(paint['circle-radius']);
+                if (r > 0) {
+                    var band = Math.round(Math.log(r) / Math.log(RADIUS_BAND));
+                    paint['circle-radius'] = Math.round(Math.pow(RADIUS_BAND, band));
+                }
+            }
+        });
+        return out;
+    }
+
     /* Leaflet path options → MapLibre paint properties (pixel units match). */
     function pathPaints(layer) {
         var o = layer.options || {};
@@ -681,7 +754,16 @@
             'circle-stroke-opacity': lineOpacity,
             'circle-opacity': fillOpacity
         };
-        return { line: line, fill: fill, circle: circle, layout: layout, dashed: !!dash };
+        /* The mirrored paint is exact: the quantised copy below is only ever
+         * used to decide what may be merged, so the app's own colours survive
+         * the trip into MapLibre unchanged. */
+        return {
+            line: line,
+            fill: fill,
+            circle: circle,
+            layout: layout,
+            dashed: !!dash
+        };
     }
 
     function geometryTypes(geojson) {
@@ -727,6 +809,57 @@
     }
 
     /* ── heat layers ──────────────────────────────────────────────────────── */
+
+    /* The points a heat layer feeds to MapLibre. leaflet.heat keeps its own
+     * {lat, lng, alt} list in _latlngs; the app's own raster heatmaps (the
+     * Archaeological Potential score raster) keep the grid they were built
+     * from instead — rebuild the weighted points from that, one per scored
+     * cell, so the 3D heatmap reads the same field the 2D canvas paints. */
+    function rasterHeatPoints(raster) {
+        var points = [];
+        if (!raster || !raster.cols || !raster.rows) return points;
+        var cols = Number(raster.cols), rows = Number(raster.rows);
+        var bbox = raster.bbox;
+        if (!Array.isArray(bbox) || bbox.length !== 4) return points;
+        var west = Math.min(Number(bbox[0]), Number(bbox[2]));
+        var east = Math.max(Number(bbox[0]), Number(bbox[2]));
+        var south = Math.min(Number(bbox[1]), Number(bbox[3]));
+        var north = Math.max(Number(bbox[1]), Number(bbox[3]));
+        if (!(east > west) || !(north > south)) return points;
+        var base = raster.base, values = raster.values, valid = raster.valid;
+        var peak = 0;
+        if (values && values.length === rows * cols) {
+            for (var i = 0; i < values.length; i += 1) {
+                if (valid && !valid[i]) continue;
+                if (values[i] > peak) peak = values[i];
+            }
+        }
+        if (!(peak > 0)) peak = 1;
+        var cellLng = (east - west) / cols, cellLat = (north - south) / rows;
+        for (var row = 0; row < rows; row += 1) {
+            for (var col = 0; col < cols; col += 1) {
+                var idx = row * cols + col;
+                if (valid && !valid[idx]) continue;
+                var w = values ? (values[idx] / peak) : (base ? base[idx] : 0);
+                if (!(w > 0)) continue;
+                points.push({
+                    type: 'Feature',
+                    properties: { w: w },
+                    geometry: {
+                        type: 'Point',
+                        /* row 0 is the top of the grid, exactly as the 2D
+                         * raster draws it, so the heat lands on the same cells. */
+                        coordinates: [
+                            west + cellLng * (col + 0.5),
+                            north - cellLat * (row + 0.5)
+                        ]
+                    }
+                });
+            }
+        }
+        return points;
+    }
+
     function heatDescriptor(layer) {
         var points = [];
         var lls = layer._latlngs || [];
@@ -739,11 +872,13 @@
             if (lat == null || lng == null) continue;
             points.push({ type: 'Feature', properties: { w: w == null ? 1 : Number(w) }, geometry: { type: 'Point', coordinates: [lng, lat] } });
         }
+        if (!points.length && layer._raster) points = rasterHeatPoints(layer._raster);
         var o = layer.options || {};
+        var gridStep = (layer._raster && layer._raster.cellM) ? Number(layer._raster.cellM) : 0;
         return {
             geojson: featureCollection(points),
             heat: {
-                radius: o.radius == null ? 25 : Number(o.radius),
+                radius: o.radius == null ? (gridStep > 0 ? Math.max(6, gridStep / 2) : 25) : Number(o.radius),
                 blur: o.blur == null ? 15 : Number(o.blur),
                 max: o.max == null ? 1 : Number(o.max),
                 gradient: o.gradient || null,
@@ -1336,7 +1471,7 @@
             z: item.z,
             pane: item.pane,
             opacity: item.opacity,
-            paints: item.paints || null,
+            paints: quantisePaints(item.paints),
             types: item.types || null,
             perFeature: !!item.perFeature,
             popup: item.popup || '',
@@ -1356,34 +1491,36 @@
         var out = [];
         var bundles = 0;
         var dropped = 0;
-        var current = null;
+        var bySig = {};      /* signature -> the bundle that carries it */
         items.forEach(function (item) {
             var mergeable = item.kind === 'vector' || item.kind === 'markers' || item.kind === 'heat';
             if (!mergeable || !item.geojson) {
-                current = null;
                 out.push(item);
                 return;
             }
-            if (current && canMerge(current, item)) {
+            var sig = paintSignature(item);
+            var open = bySig[sig];
+            if (open && canMerge(open, item)) {
                 var features = item.geojson.type === 'FeatureCollection' ? item.geojson.features : [item.geojson];
-                (features || []).forEach(function (f) { current.geojson.features.push(f); });
-                if (item.icons) { current.icons = current.icons || {}; Object.keys(item.icons).forEach(function (k) { current.icons[k] = item.icons[k]; }); }
-                current.count += (features || []).length;
+                (features || []).forEach(function (f) { open.geojson.features.push(f); });
+                if (item.icons) { open.icons = open.icons || {}; Object.keys(item.icons).forEach(function (k) { open.icons[k] = item.icons[k]; }); }
+                open.count += (features || []).length;
                 return;
             }
             if (bundles >= MAX_BUNDLES_PER_GROUP) { dropped += 1; return; }
             bundles += 1;
             var first = item.geojson.type === 'FeatureCollection' ? item.geojson.features : [item.geojson];
-            current = Object.assign({}, item, {
+            var fresh = Object.assign({}, item, {
                 key: (key || keyOf(parent)) + '/b' + bundles,
                 layer: parent || item.layer || null,
                 geojson: featureCollection((first || []).slice()),
                 icons: item.icons ? Object.assign({}, item.icons) : {},
                 count: (first || []).length,
-                sig: paintSignature(item),
+                sig: sig,
                 bundled: true
             });
-            out.push(current);
+            bySig[sig] = fresh;
+            out.push(fresh);
         });
         /* The label of a bundle says how much of the group it carries, so the
            3D status panel is honest about what was merged. */

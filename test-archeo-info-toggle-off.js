@@ -259,7 +259,7 @@ console.log('\n[Cache busting]');
        ?v=20260922-vo-actions-both-slots), so read the live tag instead of a
        frozen one; the check below still requires sw.js to pre-cache it. */
     const stylesV = ((html.match(/href="css\/styles\.css\?v=([^"]+)"/) || [])[1]) || '';
-    const archeoV = '20260923-archeo-clickthrough';
+    const archeoV = '20261015-archeo-heat-3d';
     check('index.html requests the bumped styles.css', !!stylesV);
     const translationUrl = (html.match(/src="(js\/translations\.js\?v=[^"]+)"/) || [])[1];
     check('index.html requests versioned translations.js', !!translationUrl);
