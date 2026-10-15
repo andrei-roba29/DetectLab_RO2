@@ -134,9 +134,18 @@ body.is-pwa.is-3d #map3d-surface {
      * on the right edge, and the country “Exit view” pill occupies the very
      * bottom centre in the locked-country view (66px clears it, and stays under
      * the “zoom in” hint at 96px). 960 keeps it clickable above that pill (950)
-     * while everything the user must keep reaching stays at 1000+. */
+     * while everything the user must keep reaching stays at 1000+.
+     *
+     * var(--layer-dock-clearance) is the same hook the APM20 / zoom-hint pills
+     * use (css/styles.css, `body.layer-dock-open`): when an analysis layer is
+     * selected its action button is docked at bottom-centre — LIDAR Scanner
+     * Scan, Archeological Detect, Report Generate — and that dock is ~54px tall
+     * sitting on an 18px offset, i.e. it reaches up to y≈72px and, at
+     * z-index 1000 over this button's 960, it covered the top of the 3D
+     * switch and swallowed taps on it. Adding the clearance lifts this pill
+     * above the dock instead of under it. */
     position: absolute;
-    bottom: 66px;
+    bottom: calc(66px + var(--layer-dock-clearance, 0px));
     left: 50%;
     transform: translateX(-50%);
     z-index: 960;               /* above the 3D surface, below the app chrome */

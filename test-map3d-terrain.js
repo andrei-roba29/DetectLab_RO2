@@ -79,7 +79,7 @@ const mirrorSource = read('js/map3d-mirror.js');
 const skin = read('css/map3d-terrain.css');
 
 const TAG = '20261013-3d-terrain';             /* MapLibre itself (unchanged) */
-const TAG_3D = '20261015-natural-country-fill';        /* mirror                        */
+const TAG_3D = '20261015-3d-ramp-merge';        /* mirror                        */
 const TAG_VIEWER = '20261015-3d-startup-race';    /* viewer                        */
 const TAG_FOCUS = '20261014-lidar-3d-focus';     /* LiDAR focus (3D, one disc)    */
 const TAG_REGISTRY = '20261015-danish-layers';     /* shared registry (WMS audit)  */
@@ -101,7 +101,7 @@ const TAG_REGISTRY = '20261015-danish-layers';     /* shared registry (WMS audit
     assert(registryTag < mirrorTag && mirrorTag < viewerTag,
         'registry → mirror → viewer: the viewer reads both, and neither reads the viewer');
     assert(indexHtml.includes('css/maplibre-gl.css?v=' + TAG) &&
-           indexHtml.includes('css/map3d-terrain.css?v=20261015-3d-no-terrain-toggle'),
+           indexHtml.includes('css/map3d-terrain.css?v=20261015-3d-dock-clearance'),
         'index.html loads the MapLibre stylesheet and the 3D skin');
     assert(indexHtml.indexOf('css/maplibre-gl.css') < indexHtml.indexOf('css/map3d-terrain.css'),
         'the 3D skin comes after the stylesheet it re-skins');
@@ -110,7 +110,7 @@ const TAG_REGISTRY = '20261015-danish-layers';     /* shared registry (WMS audit
     // be bumped so an installed PWA picks the mirrored 3D view up.
     ['js/layer-registry.js?v=' + TAG_REGISTRY, 'js/map3d-mirror.js?v=' + TAG_3D,
      'js/map3d-terrain.js?v=' + TAG_VIEWER, 'js/maplibre-gl.js?v=' + TAG,
-     'css/map3d-terrain.css?v=20261015-3d-no-terrain-toggle', 'css/maplibre-gl.css?v=' + TAG,
+     'css/map3d-terrain.css?v=20261015-3d-dock-clearance', 'css/maplibre-gl.css?v=' + TAG,
      'js/lidar-3d-focus.js?v=' + TAG_FOCUS].forEach(function (asset) {
         assert(swJs.includes("'" + asset + "'"), 'sw.js precaches ' + asset);
     });
@@ -387,10 +387,15 @@ const TAG_REGISTRY = '20261015-danish-layers';     /* shared registry (WMS audit
            restyled.items[0].paints.line['line-opacity'] === 0.4,
         'the opacity slider is noticed even though the child count did not change');
     /* Distinct paints cannot be merged — but the deck has a ceiling, and what it
-     * had to leave out is reported instead of silently dropped. */
+     * had to leave out is reported instead of silently dropped.
+     *
+     * The group is deliberately bigger than the per-group budget (MIXED children
+     * with a distinct weight each, so no two of them share a paint) so the
+     * ceiling is actually reached and the "capped" note is produced. */
+    const MIXED = 300;
     const mixedKids = [];
-    for (let i = 0; i < 30; i += 1) {
-        const road = new Path({ color: '#0000' + (10 + i), weight: 1 + i, opacity: 0.9 });
+    for (let i = 0; i < MIXED; i += 1) {
+        const road = new Path({ color: '#0000' + (10 + (i % 30)), weight: 1 + i, opacity: 0.9 });
         road._leaflet_id = 'm' + i;
         road._coords = [[26, 44 + i * 1e-3], [26.1, 44.1 + i * 1e-3]];
         mixedKids.push(road);
@@ -402,10 +407,44 @@ const TAG_REGISTRY = '20261015-danish-layers';     /* shared registry (WMS audit
         eachLayer: function (fn) { fn(mixed); },
         hasLayer: function () { return true; }
     });
-    assert(mixedRes.items.length === 24,
-        'a group whose children all paint differently stops at the per-group bundle budget');
+    assert(mixedRes.items.length === mirror.BUDGET.maxBundlesPerGroup,
+        'a group whose children all paint differently stops at the per-group bundle budget (' +
+        mixedRes.items.length + ')');
     assert(mixedRes.capped.length === 1 && /six|6|budget/i.test(mixedRes.capped[0]),
-        'what the budget left out is reported (capped) so the 3D panel can say so — got: ' + mixedRes.capped.join('; '));
+        'what the budget left out is reported (capped) so the 3D panel can say so — got: ' +
+        mixedRes.capped.join('; '));
+
+    /* But a group that merely LOOKS like it has a distinct paint per child —
+     * every sibling drawn from a continuous ramp, which is what Battles, the
+     * Archeological Potential bubbles and the analysis results all do — must
+     * NOT be truncated by that ceiling. The mirror quantises the paint it builds
+     * (colour channels and circle radius), so those siblings merge and the whole
+     * group survives. Regression guard for "these layers cannot be visualised
+     * in 3D". */
+    const rampKids = [];
+    for (let i = 0; i < 60; i += 1) {
+        const bubble = new Path({
+            color: '#285ac8', weight: 1.2, opacity: 0.9,
+            fillColor: '#285ac8', fillOpacity: 0.3 + (i % 3) * 0.1,
+            radius: 60 + i * 7
+        });
+        bubble._leaflet_id = 'r' + i;
+        bubble._coords = [[26, 44 + i * 1e-3], [26.1, 44.1 + i * 1e-3]];
+        rampKids.push(bubble);
+    }
+    const rampGroup = new FeatureGroup(rampKids, {});
+    rampGroup._leaflet_id = 'G3';
+    const rampRes = mirror.collect({
+        getPane: function () { return { style: { zIndex: '600' }, ownerDocument: null }; },
+        eachLayer: function (fn) { fn(rampGroup); },
+        hasLayer: function () { return true; }
+    });
+    assert(rampRes.capped.length === 0,
+        'a group drawn from a continuous ramp is never truncated by the merge budget (' +
+        rampRes.capped.join('; ') + ')');
+    assert(rampRes.items.length < rampKids.length,
+        'and its ramp-coloured siblings do merge (' + rampRes.items.length + ' bundles for ' +
+        rampKids.length + ' children)');
 
     /* The deck has a hard ceiling, and the mirror stops *walking* once it is
      * reached: 4 000 loose sibling-less layers must not be described (and their

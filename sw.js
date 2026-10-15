@@ -515,7 +515,7 @@
 //   click and fold again on a choice, a click elsewhere or Escape. The list is
 //   folded by default, so the control is a single line tall. Cache bumped so an
 //   installed PWA picks up the new control (js/map-app.js) and its styles.
-const CACHE_NAME = 'detectlab-v218-basemap-collapse';
+const CACHE_NAME = 'detectlab-v219-3d-ramp-merge';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -558,7 +558,7 @@ const PRECACHE_URLS = [
   'js/layer-registry.js',
   'js/hist-shift.js?v=20261014-hist-shift',
   'css/hist-shift.css?v=20261014-hist-shift',
-  'js/map3d-mirror.js?v=20261015-natural-country-fill',
+  'js/map3d-mirror.js?v=20261015-3d-ramp-merge',
   'js/map3d-mirror.js?v=20261014-lidar-3d-focus',
   'js/map3d-mirror.js?v=20261014-3d-vectors',
   'js/map-app.js?v=20261015-basemap-collapse',
@@ -592,7 +592,7 @@ const PRECACHE_URLS = [
   'js/maplibre-gl.js?v=20261013-3d-terrain',
   'js/maplibre-gl.js',
   'css/maplibre-gl.css?v=20261013-3d-terrain',
-  'css/map3d-terrain.css?v=20261015-3d-no-terrain-toggle',
+  'css/map3d-terrain.css?v=20261015-3d-dock-clearance',
   'css/map3d-terrain.css?v=20261014-lidar-3d-focus',
   'css/map3d-terrain.css?v=20261014-3d-clean-controls',
   'css/map3d-terrain.css?v=20261014-3d-pwa-controls',
@@ -1131,7 +1131,7 @@ const PRECACHE_URLS = [
   'js/archeo-potential.js?v=20260922-distance-mirror-close',
   // v138: archeo potential canvas must not swallow detectorist pin taps after
   // the layer is switched off (click-through pane + renderer detach).
-  'js/archeo-potential.js?v=20260923-archeo-clickthrough',
+  'js/archeo-potential.js?v=20261015-archeo-heat-3d',
   'js/lidar-scanner.js?v=20260922-distance-mirror-close',
   'js/archeo-report.js?v=20260922-distance-mirror-close',
   // v130: caption chip (DISTANȚĂ / RAZĂ / ISTORIC) anchored to the card
