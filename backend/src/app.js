@@ -71,7 +71,7 @@ async function ensureDatabaseSchema() {
 }
 
 ensureDatabaseSchema().finally(() => {
-  app.listen(env.port, () => {
+  app.listen(env.port, '0.0.0.0', () => {
     logger.info({ port: env.port }, 'DetectLab API listening');
     startScheduler();
     if (env.evidenceWorkerEnabled) startEvidenceWorker();

@@ -8228,6 +8228,32 @@
     margin-top: 2px;
 }
 
+.danish-year-control {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    max-width: 100%;
+    color: rgba(245, 240, 235, 0.82);
+    font-size: 0.76rem;
+}
+
+.danish-year-select {
+    min-width: 82px;
+    max-width: 45%;
+    padding: 5px 8px;
+    border: 1px solid rgba(214, 69, 80, 0.45);
+    border-radius: 4px;
+    color: #f5f0eb;
+    background: #252327;
+    font: inherit;
+}
+
+.danish-year-select:focus-visible {
+    outline: 2px solid #d64550;
+    outline-offset: 2px;
+}
+
 .danish-layer-row {
     display: flex;
     flex-direction: column;
@@ -8357,6 +8383,7 @@
 .danish-layer-label input:focus-visible,
 .danish-layer-info:focus-visible,
 .danish-layer-slider:focus-visible,
+.danish-year-select:focus-visible,
 .danish-basemap-btn:focus-visible {
     outline: 2px solid #d64550;
     outline-offset: 1px;

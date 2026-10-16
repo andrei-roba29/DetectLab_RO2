@@ -1,6 +1,6 @@
 # Data sources, licences and credentials
 
-<!-- Danish layers added 2026-10-15. Keep this file in step with
+<!-- Danish layers expanded 2026-10-16. Keep this file in step with
      js/danish-layers.config.js: one row per layer, in the order the panel shows
      them. Never enable a layer whose licence reads “unclear” or “non-commercial”
      — flag it here first, ship it disabled, and say why in §Per-layer checklist. -->
@@ -12,7 +12,7 @@ attribution must be shown, and whether it needs a credential or a permission
 before it may be enabled at all.**
 
 The machine-readable check of the same catalogue is `WMS_WMTS_LAYER_AUDIT.md`
-(`node tools/audit-wms-layers.mjs`, 75 layers, 0 errors): it rebuilds each
+(`node tools/audit-wms-layers.mjs`, 97 layers, 0 errors): it rebuilds each
 layer's real GetMap/GetTile URL against the service's documented contract.
 
 ## Credentials — environment variables only
@@ -25,17 +25,15 @@ secret **server-side** and strip any credential the caller tried to send.
 
 | variable | used by | what it is | where to get it |
 |---|---|---|---|
-| `DATAFORSYNINGEN_TOKEN` | 1 · DTK25 (`/api/geo/dk-dtk25`) | a personal Dataforsyningen token, sent to the provider as the `token` **header** (never in a URL, never logged) | [dataforsyningen.dk](https://dataforsyningen.dk/) → *Min profil* → token |
-| `DATAFORDELER_USER` + `DATAFORDELER_PASSWORD` | 2 · GeoDanmark ortho (`/api/geo/dk-orto`) | a **service user** (tjenestebruger) on Datafordeleren — a normal web login cannot read the WMS | [selfservice.datafordeler.dk](https://selfservice.datafordeler.dk/) → create a service user for *GeoDanmarkOrto* |
+| `DATAFORSYNINGEN_TOKEN` | Dataforsyningen WMS/DTK25 and LiDAR (`/api/geo/dk-dtk25`) | personal Dataforsyningen token, attached as `token=` server-side per requested provider KVP; never sent to browser | [dataforsyningen.dk](https://dataforsyningen.dk/) → manage web-service/API tokens |
+| `DATAFORDELER_USERNAME` + `DATAFORDELER_PASSWORD` | GeoDanmark orthophotos (`/api/geo/dk-orto`) | a **service user** (tjenestebruger) on Datafordeleren — a normal web login cannot read the WMS | [selfservice.datafordeler.dk](https://selfservice.datafordeler.dk/) → create a service user for *GeoDanmarkOrto* |
+| `DANISH_PROXY_ALLOWED_ORIGINS` | Express proxy origin validation | exact comma-separated browser origins permitted to use the Railway proxy; no wildcards | Set to the exact frontend origins, plus each deploy-preview origin that needs testing |
 
-Both are documented in `backend/.env.example` (search for *Denmark*). A missing
-variable is not an error the visitor sees as a blank map: the route answers
-**501 `layer_not_configured`** naming the variable, and the row writes that name
-under the switch. For layer 1 only, a workstation with no backend can export
-`DATAFORSYNINGEN_TOKEN` for
-`node tools/map3d-dev-server.mjs`, which injects it as
-`window.DETECTLAB_DK_TOKEN` — a documented, **local-preview-only** fallback; no
-deployment ever serves it.
+These are documented in `backend/.env.example` (search for *Denmark*). Missing
+provider credentials produce a generic HTTP 503 response; their variable names
+are logged server-side only. The map shows a generic configuration notice. No
+credential is injected into HTML or browser JavaScript; local previews use the
+same server-side proxy as deployments.
 
 Requests to the token-guarded service go through our own origin, so the provider
 sees one origin, and the responses are cacheable (`public, max-age=604800,
@@ -47,7 +45,7 @@ repeated panning costs the providers nothing new.
 | # | id | what it is | provider endpoint | LAYERS | licence | attribution as shown | credential / permission |
 |---|---|---|---|---|---|---|---|
 | 1 | `danish.dtk25` | **Base** — DTK25 / Kort25 topographic map, 1:25,000 (508 dpi) | `api.dataforsyningen.dk/dtk_25_DAF` (`/api/geo/dk-dtk25`) | `dtk25_2023` | **CC BY 4.0** | `Kort25 / DTK25 © Klimadatastyrelsen` | `DATAFORSYNINGEN_TOKEN` — token required by the provider; yes |
-| 2 | `danish.orto` | **Base** — GeoDanmark Ortofoto, spring imagery, 12.5 cm | `services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS` (`/api/geo/dk-orto`) | `geodanmark_2025_12_5cm` | **CC BY 4.0** | `Ortofoto © Klimadatastyrelsen / GeoDanmark` | `DATAFORDELER_USER` + `DATAFORDELER_PASSWORD` (service user); yes |
+| 2 | `danish.orto` | **Base** — GeoDanmark Ortofoto, spring imagery, 12.5 cm | `services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS` (`/api/geo/dk-orto`) | `geodanmark_2025_12_5cm` | **CC BY 4.0** | `Ortofoto © Klimadatastyrelsen / GeoDanmark` | `DATAFORDELER_USERNAME` + `DATAFORDELER_PASSWORD` (service user); yes |
 | 3 | `danish.naturtyper` | **Overlay** — protected nature types (2013), polygons | `arealeditering-dist-geo.miljoeportal.dk/geoserver/wms` — called **directly** | `dai:bes_naturtyper` | **CC0 1.0** | `Beskyttede naturtyper © Danmarks Miljøportal` | none |
 | 4 | `danish.osm` | **Base** — OpenStreetMap standard tiles | `tile.openstreetmap.org/{z}/{x}/{y}.png` | — (XYZ) | **ODbL 1.0** (data) / tile usage policy | `© OpenStreetMap contributors` | none; **tile usage policy applies** |
 | 5 | `danish.historic-witx` | **Base** — historic tiles, third party | `witx.dk/tiles/videnskaberne/{z}/{x}/{y}.png` | — (XYZ) | **Unknown — no permission on file** | not shown (never enabled) | **written permission required** — layer ships `enabled: false` |
@@ -79,7 +77,7 @@ repeated panning costs the providers nothing new.
 * Verified 2026-10-15: `…/orto_foraar/1.0.0/WMS?…GetCapabilities` answers
   `ServiceExceptionReport: Unauthorized access` without a **service user** —
   Datafordeler rejects every anonymous request, so this layer *cannot* be
-  switched on until `DATAFORDELER_USER`/`DATAFORDELER_PASSWORD` are set. The row
+  switched on until `DATAFORDELER_USERNAME`/`DATAFORDELER_PASSWORD` are set. The row
   stays visible and says exactly that instead of failing silently.
 * **Reported, not added**: layers `geodanmark_<year>_10cm` / `_12_5cm` per year
   (2012 → 2025) in the same service, and a faster WMTS twin
@@ -201,7 +199,7 @@ repeated panning costs the providers nothing new.
 | # | layer | status | why / what is left |
 |---|---|---|---|
 | 1 | DTK25 (base) | ✅ **working** | Public endpoint verified (token authenticates, PNG returned); needs `DATAFORSYNINGEN_TOKEN` in the deployment. Without it the row explains itself and OSM takes over. |
-| 2 | GeoDanmark Ortofoto (base) | ⛔ **blocked — needs the user's credentials** | Datafordeler answers `Unauthorized access` to every anonymous request; cannot be verified or enabled until `DATAFORDELER_USER`/`DATAFORDELER_PASSWORD` are set. Code path is complete and covered by tests against a stubbed upstream. |
+| 2 | GeoDanmark Ortofoto (base) | ⛔ **blocked — needs the user's credentials** | Datafordeler answers `Unauthorized access` to every anonymous request; cannot be verified or enabled until `DATAFORDELER_USERNAME`/`DATAFORDELER_PASSWORD` are set. Code path is complete and covered by tests against a stubbed upstream. |
 | 3 | Protected nature types (overlay) | ✅ **working** | CC0, tokenless, verified live in EPSG:3857 with the uppercase KVP form. |
 | 4 | OpenStreetMap (base) | ✅ **working** | Public tiles; used as the fallback base and kept inside the tile-usage policy. |
 | 5 | WITX historic tiles (base) | ⏸ **disabled placeholder** | Licence unknown, no written permission — must not be hotlinked. Ships `enabled: false`; nothing requests `witx.dk`. |
@@ -213,3 +211,63 @@ default view are untouched: the extra layers append to the country catalogue as
 `danish.*` and appear in their own “Denmark · Danish maps” group in the existing
 layer panel, with the three bases also offered as buttons in the existing
 basemap control.
+
+## Requested Danish LiDAR and historic map expansion (2026-10-16)
+
+The list below is in `js/danish-layers.config.js` (mirrored to the backend with
+`node tools/sync-danish-config.mjs`). Credentialed WMS requests are lazy: no
+provider request is made until the layer is selected. The browser calls the
+same-origin `/api/geo/dk-dtk25` or `/api/geo/dk-orto` proxy; only the proxy adds
+credentials to the fixed upstream URL. The proxy accepts only layer IDs in the
+config, rejects cross-origin `Origin` headers, strips supplied credentials,
+and sets 7-day tile cache headers (Netlify CDN honors its CDN cache directive).
+The provider token is attached as a query parameter on the server-to-provider
+request, per the requested Dataforsyningen KVP convention; it is never in the
+browser request or client bundle. The Datafordeler service username/password
+are likewise added server-side as `username` and `password` query parameters.
+
+| id(s) | title | group | provider URL / `LAYERS` | auth | licence / attribution | live status |
+|---|---|---|---|---|---|---|
+| `lidar_hillshade_historik` | LiDAR hillshade 1.6 m (DHM historik) | overlay, default off, opacity 1 | `https://api.dataforsyningen.dk/dhm_historik_DAF` / `hillshade_1_6m` | token | Klimadatastyrelsen / CC BY 4.0 expected; attribution on map | blocked: this workspace has no token; no provider tile HTTP 200 verified |
+| `lidar_quickdhm_exaggerated` | quickDHM exaggerated terrain hillshade | overlay, default off, opacity 1 | `https://api.dataforsyningen.dk/wms/dhm_temp` / `quickDHM_skyggekort_terraen_overdrevet` | token | CC BY 4.0 expected; exact product terms need provider confirmation | blocked: no token; no tile HTTP 200 verified |
+| `lidar_dhm_terrain_hillshade` | DHM terrain hillshade | overlay, default off, opacity 1 | `https://api.dataforsyningen.dk/dhm_DAF` / `dhm_terraen_skyggekort` | token | CC BY 4.0 (DHM, see `DENMARK_LIDAR_DATAFORSYNINGEN.md`) | blocked: no token; no tile HTTP 200 verified |
+| `hist_hoeje`, `hist_lave`, `hist_preussen` | Høje / Lave / Preussiske målebordsblade | mutually-exclusive base layers | Dataforsyningen `topo20_hoeje_maalebordsblade_DAF`, `topo20_lave_maalebordsblade_DAF`, `topo25_preussen_maalebordsblade_DAF` / respective `dtk_*_maalebordsblade` | token | expected CC BY 4.0; confirm source-page terms for each product | blocked: no token; layer identifiers not capability-verified |
+| `topo4cm_1953_1976`, `topo4cm_1980_2001` | 4 cm map, 1953–1976 / 1980–2001 | mutually-exclusive base layers | Dataforsyningen `topo4cm_1953_1976_DAF`, `topo4cm_1980_2001_DAF` / respective same-name layer | token | expected CC BY 4.0; exact product terms not live-verified | blocked: no token; identifiers not capability-verified |
+| `dtk25` | DTK25 topographic map (existing) | base | `dtk_25_DAF` / `dtk25_2023` | token | CC BY 4.0, © Klimadatastyrelsen | existing proxy; live imagery not verified in this workspace |
+| `orto_sommer_1999`, `_2002`, `_2005`, `_2008` | Summer orthophoto for named year | mutually-exclusive base layers | `https://api.dataforsyningen.dk/wms/orto_sommer_<year>` / same-name layer | token | expected CC BY 4.0; confirm exact historical product terms | blocked: no token; names not capability-verified |
+| `orto_foraar_2016` … `orto_foraar_2025` | Spring orthophoto, one option per year | mutually-exclusive base layers; one year dropdown | `https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS` / `geodanmark_<year>_12_5cm` | Datafordeler username + password | CC BY 4.0 expected; © Klimadatastyrelsen / GeoDanmark | blocked: no Datafordeler service-user credentials; names not capability-verified |
+| `bes_naturtyper` (existing `naturtyper`) | Protected nature types | overlay, default off | `https://arealeditering-dist-geo.miljoeportal.dk/geoserver/wms` / existing configured `dai:bes_naturtyper` | none | CC0 1.0 per existing source record; attribution shown | active configuration; live test not run here |
+| OSM (existing `osm`) | OpenStreetMap | base | `https://tile.openstreetmap.org/{z}/{x}/{y}.png` | none | ODbL; OSM tile usage policy | active configuration; development/small traffic only |
+| `witx_fundogfortidsminder_areal`, `witx_fundogfortidsminder` and `historic-witx` | third-party WFS and historic tiles | disabled placeholders | `https://geoserver.witx.dk/geoserver/witx/ows` (`witx:FundOgFortidsminderAreal`, `witx:FundOgFortidsminder`) and `https://witx.dk/tiles/...` | none | licence/permission unknown | disabled; do not enable without written permission or official replacement |
+
+### Provider setup and limits
+
+* **Dataforsyningen:** set `DATAFORSYNINGEN_TOKEN` on the server deployment
+  (Netlify environment settings or backend environment). The token is not a
+  browser variable. The repository's provider notes say tokens are account-wide
+  and do not document a domain/referrer restriction; no published quota was
+  found in those notes. The proxy keeps it out of browser Network URLs and
+  applies cache headers. Confirm current token terms and any service-specific
+  entitlement with Klimadatastyrelsen before production use.
+* **Datafordeler:** set `DATAFORDELER_USERNAME` and `DATAFORDELER_PASSWORD` on
+  the server. Create a **service user** (not an ordinary web login) and obtain
+  access/approval for the GeoDanmarkOrto service through Datafordeler
+  self-service. The legacy `DATAFORDELER_USER` alias remains accepted by the
+  server, but the new variable name is `DATAFORDELER_USERNAME`. This workspace
+  has no service-user credentials; a generic 503 state is shown rather than a
+  silent blank layer.
+* **Browser/network verification:** from the browser the protected WMS request
+  is same-origin (`/api/geo/...`), by design, not a direct call to the provider.
+  The server's upstream request uses the specified provider URL, credentials,
+  WMS 1.3.0, EPSG:3857, 256×256 PNG and transparent overlays. Do not expose
+  secrets to make a browser's Network panel show provider URLs; inspect proxy
+  logs/server-side diagnostics instead. No upstream status 200 or rendered
+  pixels are claimed until a credentialed deployment test is performed.
+* **Licences/capabilities:** product-specific licence and `GetCapabilities`
+  claims above are flagged as *expected/unconfirmed* wherever this repository
+  does not contain an authoritative product record. The sandbox cannot reach
+  `api.dataforsyningen.dk` (TLS connection fails), so the requested capability
+  documents and listed WMS layer names could not be checked live here. Run
+  `node tools/verify-danish-capabilities.mjs` from a network that can reach the
+  providers after setting credentials; it reports each layer match without
+  printing secret values.

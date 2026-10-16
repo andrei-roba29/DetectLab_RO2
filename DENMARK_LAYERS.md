@@ -13,7 +13,7 @@ their controls, the projections or the default view changed.
 
 ```
 index.html                          #danishRow … #danishSubLayers (one empty container)
-js/danish-layers.config.js          the six layers — the only file to edit for a change
+js/danish-layers.config.js          the Danish layer catalogue — the only file to edit for a change
 js/danish-layers.js                 reads the config, builds rows, panes, tiles, WFS
 backend/src/lib/danish-layers.mjs   the three routes: credentials, params, cache
 backend/src/lib/danish-layers.config.cjs  generated copy of the config (see below)
@@ -47,32 +47,32 @@ a relative `import`/`require` that resolves outside `backend/`, and it runs the
 | id | group | type | on by default | needs |
 |---|---|---|---|---|
 | `danish.dtk25` | base | WMS 1.3.0 | **yes** | `DATAFORSYNINGEN_TOKEN` |
-| `danish.orto` | base | WMS 1.3.0 | no | `DATAFORDELER_USER` + `DATAFORDELER_PASSWORD` |
+| `danish.orto` | base | WMS 1.3.0 | no | `DATAFORDELER_USERNAME` + `DATAFORDELER_PASSWORD` |
 | `danish.osm` | base | XYZ | no | — (fallback base) |
 | `danish.naturtyper` | overlay | WMS 1.3.0 (direct) | no | — |
 | `danish.fortidsminder` | overlay | WFS 2.0.0 → GeoJSON | no | — |
 | `danish.historic-witx` | base | XYZ | **disabled** | written permission from witx.dk |
+| `danish.witx_fundogfortidsminder_areal`, `danish.witx_fundogfortidsminder` | overlay | WFS | **disabled placeholders** | written permission from witx.dk |
 
 Details, licences and attribution text: `DATA_SOURCES.md`.
 
 ## Environment variables
 
 Set these on the deployment (Netlify / Express / local shell) — never in the
-repository, never in the browser:
+repository or browser:
 
 ```bash
 DATAFORSYNINGEN_TOKEN=…   # Dataforsyningen personal token → DTK25
-DATAFORDELER_USER=…       # Datafordeler service user (tjenestebruger) → orthophoto
+DATAFORDELER_USERNAME=…   # Datafordeler service user (tjenestebruger) → orthophoto
 DATAFORDELER_PASSWORD=…
 ```
 
-A missing variable is a first-class state, not a crash: the route answers
-`501 {"error":"layer_not_configured","env":[…]}` naming what is missing, and the
-row shows that name under its switch. Layer 1 also has a **local-preview-only**
-path: export `DATAFORSYNINGEN_TOKEN` before
-`node tools/map3d-dev-server.mjs`, and the dev server injects it into `index.html`
-as `window.DETECTLAB_DK_TOKEN` so a workstation without the proxy can still see
-DTK25. That token is never written to disk and no deployment serves it.
+A missing variable is a first-class state, not a crash: the route logs the
+missing variable name server-side and returns a generic HTTP 503. The row shows
+a generic configuration notice without variable names or secret values. For a
+Netlify-to-Railway proxy, configure `DANISH_PROXY_ALLOWED_ORIGINS` with exact
+frontend origins; do not use wildcards. The local preview uses the same
+server-side proxy; no secret is injected into served HTML.
 
 ## Adding or changing a layer
 
@@ -91,8 +91,9 @@ Everything is data. Edit `js/danish-layers.config.js` — no map code changes:
     version: '1.3.0', tiled: true, tileSize: 256,
     minZoom: 6, maxZoom: 22, maxNativeZoom: 19,
     attribution: 'Ortofoto © <a href="…">Klimadatastyrelsen</a> / GeoDanmark',
-    opacity: 1, defaultOn: false, enabled: true,
-    requiresCredentials: ['DATAFORDELER_USER', 'DATAFORDELER_PASSWORD'],
+    opacity: 1, defaultOn: false, enabled: true, auth: 'token' | 'basic' | 'none',
+    requiresCredentials: ['DATAFORDELER_USERNAME', 'DATAFORDELER_PASSWORD'],
+    auth: 'basic',
     provider: 'GeoDanmark / Klimadatastyrelsen, distributed by Datafordeleren',
     licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
     sourcePage: 'https://dataforsyningen.dk/data/981',

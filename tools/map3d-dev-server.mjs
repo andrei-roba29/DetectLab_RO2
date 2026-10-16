@@ -185,24 +185,8 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'Method not allowed');
 
-    /* A local-only convenience: when DATAFORSYNINGEN_TOKEN is exported for this
-     * server, index.html is served with a one-line bootstrap that hands the
-     * token to the page as window.DETECTLAB_DK_TOKEN. That is the documented
-     * INSECURE local fallback (DENMARK_LIDAR_DATAFORSYNINGEN.md §5.3) — it lets
-     * a workstation with no /api proxy see DTK25 from the source directly. The
-     * token lives only in this process and in the HTML this dev server writes;
-     * nothing is written to disk and no deployment ever serves it. */
-    if ((url.pathname === '/' || url.pathname === '/index.html') && process.env.DATAFORSYNINGEN_TOKEN) {
-        const file = path.join(ROOT, 'index.html');
-        const html = fs.readFileSync(file, 'utf8').replace(
-            '<head>',
-            '<head>\n    <script>window.DETECTLAB_DK_TOKEN=' +
-                JSON.stringify(process.env.DATAFORSYNINGEN_TOKEN) + ';' +
-                'window.DETECTLAB_DK_LOCAL_PREVIEW=true;</script>'
-        );
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-        return res.end(html);
-    }
+    /* Never inject credentials into served HTML. Local previews use the same
+     * server-side proxy routes as deployments. */
 
     serveStatic(req, res, url.pathname);
 });
@@ -217,6 +201,6 @@ server.listen(PORT, HOST, () => {
     console.log('[map3d-dev-server] diagnostics: /api/map3d/status');
     console.log('[map3d-dev-server] Danish layers: /api/geo/dk-dtk25 (token: ' +
         (process.env.DATAFORSYNINGEN_TOKEN ? 'set' : 'MISSING') + '), /api/geo/dk-orto (credentials: ' +
-        (process.env.DATAFORDELER_USER && process.env.DATAFORDELER_PASSWORD ? 'set' : 'MISSING') +
+        ((process.env.DATAFORDELER_USERNAME || process.env.DATAFORDELER_USER) && process.env.DATAFORDELER_PASSWORD ? 'set' : 'MISSING') +
         '), /api/geo/dk-heritage (public)');
 });

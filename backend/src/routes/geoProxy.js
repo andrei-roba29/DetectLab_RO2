@@ -79,7 +79,15 @@ async function sendWebResponse(res, webResponse) {
 /** Minimal Request for the shared handlers, from an Express request. */
 function webRequest(req, basePath) {
   const query = new URLSearchParams(req.query).toString();
-  return new Request(`http://localhost${basePath}${query ? `?${query}` : ''}`, { method: 'GET' });
+  const forwardedProto = req.get('x-forwarded-proto');
+  const protocol = String(forwardedProto || req.protocol || 'http').split(',')[0].trim();
+  const host = req.get('host') || 'localhost';
+  const origin = req.get('origin');
+  const fetchSite = req.get('sec-fetch-site');
+  const headers = {};
+  if (origin) headers.origin = origin;
+  if (fetchSite) headers['sec-fetch-site'] = fetchSite;
+  return new Request(`${protocol}://${host}${basePath}${query ? `?${query}` : ''}`, { method: 'GET', headers });
 }
 
 const router = express.Router();
@@ -372,8 +380,8 @@ router.get('/geo/se-hojdmodell', async (req, res) => {
 /* ── Danish layers (js/danish-layers.config.js) ─────────────────────────────
  * Same three routes the Netlify functions expose, same shared implementation,
  * so a self-hosted backend behaves exactly like the Netlify deployment:
- *   /api/geo/dk-dtk25      DTK25 topographic WMS       (DATAFORSYNINGEN_TOKEN)
- *   /api/geo/dk-orto       GeoDanmark Ortofoto WMS     (DATAFORDELER_USER/PASSWORD)
+ *   /api/geo/dk-dtk25      Dataforsyningen WMS allow-list (token)
+ *   /api/geo/dk-orto       GeoDanmark spring WMS years (Datafordeler user)
  *   /api/geo/dk-heritage   Fund og Fortidsminder WFS   (no credential; bbox → GeoJSON)
  * Listed in js/danish-layers.config.js; documented in DATA_SOURCES.md.
  */
@@ -412,7 +420,6 @@ router.get('/geo/dk-status', (req, res) => {
   danishLayers.layers.forEach((layer) => {
     if (!layer.requiresCredentials || !layer.requiresCredentials.length) return;
     credentials[layer.id] = {
-      variables: layer.requiresCredentials,
       configured: layer.requiresCredentials.every((name) => Boolean(process.env[name])),
     };
   });

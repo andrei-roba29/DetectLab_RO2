@@ -515,7 +515,10 @@
 //   click and fold again on a choice, a click elsewhere or Escape. The list is
 //   folded by default, so the control is a single line tall. Cache bumped so an
 //   installed PWA picks up the new control (js/map-app.js) and its styles.
-const CACHE_NAME = 'detectlab-v219-3d-ramp-merge';
+// v220: Danish WMS expansion (three LiDAR overlays, historical sheets and
+//   orthophoto years) in the existing panel. Credentials stay server-side;
+//   WITX WFS/tile entries are disabled placeholders. See DATA_SOURCES.md.
+const CACHE_NAME = 'detectlab-v220-danish-wms-layers';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -549,9 +552,8 @@ const PRECACHE_URLS = [
   // js/maplibre-gl.js is precached as well: opening 3D on a cold PWA offline
   // must not depend on the network.
   'js/layer-registry.js?v=20261015-danish-layers',
-  'js/danish-layers.config.js?v=20261015-danish',
-  'js/danish-layers.js?v=20261015-basemap-collapse',
-  'js/danish-layers.js?v=20261015-danish',
+  'js/danish-layers.config.js?v=20261016-danish-wms-layers',
+  'js/danish-layers.js?v=20261016-danish-wms-layers',
   'js/layer-registry.js?v=20261014-wms-audit',
   'js/layer-registry.js?v=20261013-3d-mobile',
   'js/layer-registry.js?v=20261013-3d-mirror',
@@ -600,7 +602,7 @@ const PRECACHE_URLS = [
   'css/map3d-terrain.css?v=20261014-map-control-spacing',
   'css/map3d-terrain.css?v=20261013-3d-mobile',
   'css/styles.css?v=20261015-fullscreen-zoom-alignment',
-  'css/styles.css?v=20261015-danish-layers',
+  'css/styles.css?v=20261016-danish-layer-panel',
   'css/map3d-terrain.css?v=20261013-3d-mirror',
   // European Historical Maps (CENAGIS / IH PAN)
   'js/historical-eu-maps.js?v=20261008-country-overlap',
