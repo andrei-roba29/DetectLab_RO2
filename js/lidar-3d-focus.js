@@ -100,8 +100,6 @@
             point: 'Centrul zonei',
             pick: 'Alege pe hartă',
             move: 'Mută punctul',
-            picking: 'Atinge harta pentru a alege centrul zonei LiDAR',
-            pickingCancel: 'Renunță',
             cancel: 'Renunță',
             go: 'Descarcă și deschide 3D',
             goLive: 'Descarcă și aplică',
@@ -132,8 +130,6 @@
             point: 'Centre of the area',
             pick: 'Choose on the map',
             move: 'Move the point',
-            picking: 'Tap the map to choose the centre of the LiDAR area',
-            pickingCancel: 'Cancel',
             cancel: 'Cancel',
             go: 'Fetch and open 3D',
             goLive: 'Fetch and apply',
@@ -618,16 +614,11 @@
             '<div class="m3d-focus-progress-text" aria-live="polite"></div>',
             '<button type="button" class="m3d-focus-stop"></button>',
             '</div>',
-            '</div>',
-            '<div class="m3d-focus-hint" role="status" hidden>',
-            '<span class="m3d-focus-hint-text"></span>',
-            '<button type="button" class="m3d-focus-hint-cancel"></button>',
             '</div>'
         ].join('');
         host.appendChild(node);
         dialog.host = node;
         dialog.card = node.querySelector('.m3d-focus-card');
-        dialog.hint = node.querySelector('.m3d-focus-hint');
         if (!dialog.card) return null;          /* the markup above did not parse: no dialog */
 
         var el = dialog.el;
@@ -651,8 +642,6 @@
         el.bar = node.querySelector('.m3d-focus-bar i');
         el.progressText = node.querySelector('.m3d-focus-progress-text');
         el.stop = node.querySelector('.m3d-focus-stop');
-        el.hintText = node.querySelector('.m3d-focus-hint-text');
-        el.hintCancel = node.querySelector('.m3d-focus-hint-cancel');
 
         el.radius.addEventListener('input', function () {
             var value = Math.max(MIN_RADIUS_KM, Math.min(MAX_RADIUS_KM, Number(el.radius.value) || DEFAULT_RADIUS_KM));
@@ -681,7 +670,6 @@
         el['x'] = node.querySelector('.m3d-focus-x');
         if (el['x']) el['x'].addEventListener('click', function () { cancelDialog(); });
         el.stop.addEventListener('click', function () { dialog.stop = true; });
-        if (el.hintCancel) el.hintCancel.addEventListener('click', function () { cancelPick(); });
         /* The card is the description target of its own lead paragraph. */
         el.card = dialog.card;
         if (el.card.setAttribute) el.card.setAttribute('aria-describedby', 'm3d-focus-lead');
@@ -699,8 +687,6 @@
         el.hintline.textContent = t('layerHint');
         el.distanceLabel.textContent = t('distance');
         el.pointLabel.textContent = t('point');
-        el.hintText.textContent = t('picking');
-        el.hintCancel.textContent = t('pickingCancel');
         el.cancel.textContent = t('cancel');
         el.stop.textContent = t('stopNow');
         el.radiusValue.textContent = dialog.radiusKm + ' ' + t('km');
@@ -841,16 +827,14 @@
     function pickFromDialog() {
         var map = leafletMap();
         if (!map) return;
-        /* The card steps aside so the whole map is clickable; the hint banner
-         * says what the next tap does and how to back out of it. */
+        /* The card steps aside so the whole map is clickable: the crosshair
+         * cursor says what the next tap does, and Escape backs out of it. */
         if (dialog.card) dialog.card.hidden = true;
-        if (dialog.hint) dialog.hint.hidden = false;
         beginPick({
             radiusKm: dialog.radiusKm,
             onPick: function (point) {
                 dialog.point = { lat: point.lat, lng: point.lng, picked: true };
                 if (dialog.card) dialog.card.hidden = false;
-                if (dialog.hint) dialog.hint.hidden = true;
                 refreshPlan({ restart: true });
                 paintDialog();
                 if (dialog.el.go && dialog.el.go.focus) { try { dialog.el.go.focus(); } catch (e) { /* ignore */ } }
@@ -862,7 +846,6 @@
     function cancelPick() {
         endPick({});
         if (dialog.card) dialog.card.hidden = false;
-        if (dialog.hint) dialog.hint.hidden = true;
     }
 
     /* ── the plan behind the dialog ─────────────────────────────────────── */

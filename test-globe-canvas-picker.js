@@ -29,7 +29,7 @@ assert(indexHtml.indexOf('js/globe-country-picker.js?v=20261015-outline-zoom-anc
  * registry js/layer-registry.js — see MAP_3D_TERRAIN.md). */
 assert(!indexHtml.includes('globe-base-layer') && !indexHtml.includes('leaflet-maplibre-gl'),
     'the retired MapLibre globe basemap is not loaded by the shell');
-assert(indexHtml.includes('js/map3d-terrain.js?v=20261015-3d-startup-race'),
+assert(indexHtml.includes('js/map3d-terrain.js?v=20261016-lidar-3d-tiles-fix'),
     'the 3D terrain viewer is loaded instead');
 console.log('  ✓ index.html keeps the canvas fallback and the gate/dock load order');
 
