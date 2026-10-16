@@ -54,6 +54,7 @@
  *   opacity             initial opacity (0–1)
  *   defaultOn           switched on when the map starts
  *   enabled             false → the row is not rendered at all (placeholders)
+ *   auth                'token' | 'basic' | 'none'; proxy auth helper uses it
  *   requiresCredentials names of the environment variables the deployment needs
  *   credentialsNote     what a visitor/admins sees if they are missing
  *   provider,licence,licenceUrl,sourcePage   DATA_SOURCES.md facts
@@ -66,10 +67,33 @@
  *   directFallback      { url, version, typeName } — a provider that can be
  *                       called straight from the browser when no proxy is
  *                       deployed (local previews). Never used first.
- *   clientTokenVariable name of the window variable a LOCAL preview may set to
- *                       hold a provider token (see §5.3 of the Dataforsyningen
- *                       primer). Deployments must not set it.
  * ══════════════════════════════════════════════════════════════════════════ */
+/** @typedef {'base'|'overlay'} DanishLayerGroup */
+/** @typedef {'wms'|'xyz'|'wfs'} DanishLayerType */
+/** @typedef {'token'|'basic'|'none'} DanishLayerAuth */
+/**
+ * @typedef {Object} DanishLayer
+ * @property {string} id
+ * @property {{da:string,en:string}} title
+ * @property {DanishLayerGroup} group
+ * @property {DanishLayerType} type
+ * @property {string} url
+ * @property {string|null} layers
+ * @property {string} crs
+ * @property {string} format
+ * @property {number} minZoom
+ * @property {number} maxZoom
+ * @property {string} attribution
+ * @property {number} opacity
+ * @property {boolean} defaultOn
+ * @property {boolean} enabled
+ * @property {DanishLayerAuth} auth
+ * @property {string[]} requiresCredentials
+ * @property {string} provider
+ * @property {string} licence
+ * @property {Array<Array<number>>} bounds
+ * @property {string=} selectorGroup
+ */
 (function (root, factory) {
     'use strict';
     var api = factory(root);
@@ -103,14 +127,15 @@
         /* Panel group row. */
         groupLabel: { da: 'Danmark · danske kort', en: 'Denmark · Danish maps' },
         groupInfo: {
-            da: 'Danske kort og data: DTK25 topografisk kort og GeoDanmarks ortofoto som baggrundskort, ' +
+            da: 'Danske kort og data: historiske kort, ortofoto og topografiske kort som baggrundskort; LiDAR-terræn, ' +
                 'beskyttede naturtyper (NBL § 3) og fredede fortidsminder som temaer. Kildeangivelse vises ' +
                 'på kortet, når laget er tændt.',
-            en: 'Danish maps and data: the DTK25 topographic map and the GeoDanmark orthophoto as base ' +
-                'maps, protected nature types (NBL § 3) and scheduled ancient monuments as overlays. ' +
+            en: 'Danish maps and data: historic maps, orthophotos and topographic maps as base maps; LiDAR terrain, ' +
+                'protected nature types (NBL § 3) and scheduled ancient monuments as overlays. ' +
                 'The required attribution appears on the map while a layer is on.'
         },
 
+        /** @type {DanishLayer[]} */
         layers: [
             /* ── 1. DTK25 topographic base map ─────────────────────────────── */
             {
@@ -121,9 +146,8 @@
                 },
                 group: 'base',
                 type: 'wms',
-                /* Same-origin: the proxy attaches the token as a header, so the
-                 * account-wide Dataforsyningen token never reaches the browser
-                 * (api.dataforsyningen.dk cannot restrict one to a domain). */
+                /* Same-origin: the proxy adds the account-wide token server-side; it
+                 * never reaches the browser. */
                 url: '/api/geo/dk-dtk25',
                 upstream: 'https://api.dataforsyningen.dk/dtk_25_DAF',
                 layers: 'dtk25_2023',
@@ -142,12 +166,7 @@
                 defaultOn: true,          /* the one Danish base map that starts on */
                 enabled: true,
                 requiresCredentials: ['DATAFORSYNINGEN_TOKEN'],
-                /* Local preview only: with no proxy deployed (a plain static
-                 * server) the page may hand the token over as
-                 * window.DETECTLAB_DK_TOKEN — the same insecure escape hatch
-                 * js/dataforsyningen-dhm-layer.js documents. A deployment must
-                 * never define it; the proxy is always tried first. */
-                clientTokenVariable: 'DETECTLAB_DK_TOKEN',
+                auth: 'token',
                 credentialsNote: {
                     da: 'DTK25 kræver en Dataforsyningen-token, som sættes i miljøvariablen ' +
                         'DATAFORSYNINGEN_TOKEN på serveren.',
@@ -191,12 +210,13 @@
                 opacity: 1,
                 defaultOn: false,
                 enabled: true,
-                requiresCredentials: ['DATAFORDELER_USER', 'DATAFORDELER_PASSWORD'],
+                requiresCredentials: ['DATAFORDELER_USERNAME', 'DATAFORDELER_PASSWORD'],
+                auth: 'basic',
                 credentialsNote: {
                     da: 'Ortofoto fra Datafordeleren kræver en tjenestebruger (brugernavn og adgangskode), ' +
-                        'som sættes i DATAFORDELER_USER og DATAFORDELER_PASSWORD på serveren.',
+                        'som sættes i DATAFORDELER_USERNAME og DATAFORDELER_PASSWORD på serveren.',
                     en: 'The Datafordeler orthophoto needs a service user (username + password), set as ' +
-                        'DATAFORDELER_USER and DATAFORDELER_PASSWORD on the server.'
+                        'DATAFORDELER_USERNAME and DATAFORDELER_PASSWORD on the server.'
                 },
                 provider: 'GeoDanmark / Klimadatastyrelsen, distributed by Datafordeleren',
                 licence: 'CC BY 4.0',
@@ -240,6 +260,7 @@
                 defaultOn: false,
                 enabled: true,
                 requiresCredentials: [],
+                auth: 'none',
                 credentialsNote: { da: '', en: '' },
                 provider: 'Danmarks Miljøportal (kommunerne / Miljøstyrelsen)',
                 licence: 'CC0 1.0',
@@ -280,6 +301,7 @@
                 defaultOn: false,
                 enabled: true,
                 requiresCredentials: [],
+                auth: 'none',
                 credentialsNote: { da: '', en: '' },
                 provider: 'OpenStreetMap Foundation (community tile servers)',
                 licence: 'ODbL 1.0 (data) · tile server usage policy applies',
@@ -319,6 +341,7 @@
                  * after the owner has confirmed in writing. */
                 enabled: false,
                 requiresCredentials: [],
+                auth: 'none',
                 credentialsNote: { da: '', en: '' },
                 provider: 'witx.dk (third party — NOT an official Danish authority service)',
                 licence: 'Unknown / no permission on file — must not be used',
@@ -364,6 +387,7 @@
                 defaultOn: false,
                 enabled: true,
                 requiresCredentials: [],
+                auth: 'none',
                 credentialsNote: { da: '', en: '' },
                 provider: 'Slots- og Kulturstyrelsen (Danish Agency for Culture and Palaces)',
                 licence: 'CC0 1.0',
@@ -406,7 +430,469 @@
                     }
                 },
                 permission: { required: false, note: '' }
-            }
+            },
+            /* ── LiDAR (terrain model / hillshade) overlays ─────────────── */
+            {
+                id: 'lidar_hillshade_historik',
+                title: { da: 'LiDAR skyggekort 1.6 m (DHM historik)', en: 'LiDAR hillshade 1.6 m (DHM historik)' },
+                group: 'overlay',
+                type: 'wms',
+                url: '/api/geo/dk-dtk25?layer=lidar_hillshade_historik',
+                upstream: 'https://api.dataforsyningen.dk/dhm_historik_DAF',
+                layers: 'hillshade_1_6m',
+                crs: 'EPSG:3857', format: 'image/png', transparent: true, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 0, maxZoom: 20, maxNativeZoom: 19,
+                attribution: 'Danmarks Højdemodel © <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORSYNINGEN_TOKEN'],
+                auth: 'token',
+                credentialsNote: { da: 'Kræver DATAFORSYNINGEN_TOKEN.', en: 'Requires DATAFORSYNINGEN_TOKEN.' },
+                provider: 'Klimadatastyrelsen, via Dataforsyningen',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'LiDAR hillshade 1.6 m (DHM historik).',
+                wfs: null, permission: { required: false, note: '' }
+            },
+            {
+                id: 'lidar_quickdhm_exaggerated',
+                title: { da: 'LiDAR skyggekort, overdrevet terræn (quickDHM)', en: 'LiDAR hillshade, exaggerated terrain (quickDHM)' },
+                group: 'overlay',
+                type: 'wms',
+                url: '/api/geo/dk-dtk25?layer=lidar_quickdhm_exaggerated',
+                upstream: 'https://api.dataforsyningen.dk/wms/dhm_temp',
+                layers: 'quickDHM_skyggekort_terraen_overdrevet',
+                crs: 'EPSG:3857', format: 'image/png', transparent: true, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 0, maxZoom: 20, maxNativeZoom: 19,
+                attribution: 'Danmarks Højdemodel © <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORSYNINGEN_TOKEN'],
+                auth: 'token',
+                credentialsNote: { da: 'Kræver DATAFORSYNINGEN_TOKEN.', en: 'Requires DATAFORSYNINGEN_TOKEN.' },
+                provider: 'Klimadatastyrelsen, via Dataforsyningen',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'LiDAR hillshade, exaggerated terrain (quickDHM).',
+                wfs: null, permission: { required: false, note: '' }
+            },
+            {
+                id: 'lidar_dhm_terrain_hillshade',
+                title: { da: 'LiDAR terræn skyggekort (DHM)', en: 'LiDAR terrain hillshade (DHM)' },
+                group: 'overlay',
+                type: 'wms',
+                url: '/api/geo/dk-dtk25?layer=lidar_dhm_terrain_hillshade',
+                upstream: 'https://api.dataforsyningen.dk/dhm_DAF',
+                layers: 'dhm_terraen_skyggekort',
+                crs: 'EPSG:3857', format: 'image/png', transparent: true, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 0, maxZoom: 20, maxNativeZoom: 19,
+                attribution: 'Danmarks Højdemodel © <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORSYNINGEN_TOKEN'],
+                auth: 'token',
+                credentialsNote: { da: 'Kræver DATAFORSYNINGEN_TOKEN.', en: 'Requires DATAFORSYNINGEN_TOKEN.' },
+                provider: 'Klimadatastyrelsen, via Dataforsyningen',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'LiDAR terrain hillshade (DHM).',
+                wfs: null, permission: { required: false, note: '' }
+            },
+            /* ── Historical maps (base) ──────────────────────────────────── */
+            {
+                id: 'hist_hoeje',
+                title: { da: 'Høje målebordsblade', en: 'High measurement table sheets' },
+                group: 'base', type: 'wms',
+                url: '/api/geo/dk-dtk25?layer=hist_hoeje',
+                upstream: 'https://api.dataforsyningen.dk/topo20_hoeje_maalebordsblade_DAF',
+                layers: 'dtk_hoeje_maalebordsblade',
+                crs: 'EPSG:3857', format: 'image/png', transparent: false, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 6, maxZoom: 20, maxNativeZoom: 17,
+                attribution: '© <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORSYNINGEN_TOKEN'], auth: 'token',
+                credentialsNote: { da: 'Kræver DATAFORSYNINGEN_TOKEN.', en: 'Requires DATAFORSYNINGEN_TOKEN.' },
+                provider: 'Klimadatastyrelsen, via Dataforsyningen',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'Høje målebordsblade.', wfs: null, permission: { required: false, note: '' }
+            },
+            {
+                id: 'hist_lave',
+                title: { da: 'Lave målebordsblade', en: 'Low measurement table sheets' },
+                group: 'base', type: 'wms',
+                url: '/api/geo/dk-dtk25?layer=hist_lave',
+                upstream: 'https://api.dataforsyningen.dk/topo20_lave_maalebordsblade_DAF',
+                layers: 'dtk_lave_maalebordsblade',
+                crs: 'EPSG:3857', format: 'image/png', transparent: false, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 6, maxZoom: 20, maxNativeZoom: 17,
+                attribution: '© <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORSYNINGEN_TOKEN'], auth: 'token',
+                credentialsNote: { da: 'Kræver DATAFORSYNINGEN_TOKEN.', en: 'Requires DATAFORSYNINGEN_TOKEN.' },
+                provider: 'Klimadatastyrelsen, via Dataforsyningen',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'Lave målebordsblade.', wfs: null, permission: { required: false, note: '' }
+            },
+            {
+                id: 'hist_preussen',
+                title: { da: 'Preussiske målebordsblade', en: 'Prussian measurement table sheets' },
+                group: 'base', type: 'wms',
+                url: '/api/geo/dk-dtk25?layer=hist_preussen',
+                upstream: 'https://api.dataforsyningen.dk/topo25_preussen_maalebordsblade_DAF',
+                layers: 'dtk_preussen_maalebordsblade',
+                crs: 'EPSG:3857', format: 'image/png', transparent: false, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 6, maxZoom: 20, maxNativeZoom: 17,
+                attribution: '© <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORSYNINGEN_TOKEN'], auth: 'token',
+                credentialsNote: { da: 'Kræver DATAFORSYNINGEN_TOKEN.', en: 'Requires DATAFORSYNINGEN_TOKEN.' },
+                provider: 'Klimadatastyrelsen, via Dataforsyningen',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'Preussiske målebordsblade.', wfs: null, permission: { required: false, note: '' }
+            },
+            {
+                id: 'topo4cm_1953_1976',
+                title: { da: '4 cm kort 1953-1976', en: '4 cm map 1953-1976' },
+                group: 'base', type: 'wms',
+                url: '/api/geo/dk-dtk25?layer=topo4cm_1953_1976',
+                upstream: 'https://api.dataforsyningen.dk/topo4cm_1953_1976_DAF',
+                layers: 'topo4cm_1953_1976',
+                crs: 'EPSG:3857', format: 'image/png', transparent: false, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 6, maxZoom: 20, maxNativeZoom: 17,
+                attribution: '© <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORSYNINGEN_TOKEN'], auth: 'token',
+                credentialsNote: { da: 'Kræver DATAFORSYNINGEN_TOKEN.', en: 'Requires DATAFORSYNINGEN_TOKEN.' },
+                provider: 'Klimadatastyrelsen, via Dataforsyningen',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: '4 cm map 1953-1976.', wfs: null, permission: { required: false, note: '' }
+            },
+            {
+                id: 'topo4cm_1980_2001',
+                title: { da: '4 cm kort 1980-2001', en: '4 cm map 1980-2001' },
+                group: 'base', type: 'wms',
+                url: '/api/geo/dk-dtk25?layer=topo4cm_1980_2001',
+                upstream: 'https://api.dataforsyningen.dk/topo4cm_1980_2001_DAF',
+                layers: 'topo4cm_1980_2001',
+                crs: 'EPSG:3857', format: 'image/png', transparent: false, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 6, maxZoom: 20, maxNativeZoom: 17,
+                attribution: '© <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORSYNINGEN_TOKEN'], auth: 'token',
+                credentialsNote: { da: 'Kræver DATAFORSYNINGEN_TOKEN.', en: 'Requires DATAFORSYNINGEN_TOKEN.' },
+                provider: 'Klimadatastyrelsen, via Dataforsyningen',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: '4 cm map 1980-2001.', wfs: null, permission: { required: false, note: '' }
+            },
+            {
+                id: 'orto_sommer_1999',
+                title: { da: 'Sommerortofoto 1999', en: 'Summer orthophoto 1999' },
+                group: 'base', type: 'wms',
+                url: '/api/geo/dk-dtk25?layer=orto_sommer_1999',
+                upstream: 'https://api.dataforsyningen.dk/wms/orto_sommer_1999',
+                layers: 'orto_sommer_1999',
+                crs: 'EPSG:3857', format: 'image/png', transparent: false, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 6, maxZoom: 22, maxNativeZoom: 19,
+                attribution: '© <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORSYNINGEN_TOKEN'], auth: 'token',
+                credentialsNote: { da: 'Kræver DATAFORSYNINGEN_TOKEN.', en: 'Requires DATAFORSYNINGEN_TOKEN.' },
+                provider: 'Klimadatastyrelsen, via Dataforsyningen',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'Summer orthophoto 1999.', wfs: null, permission: { required: false, note: '' }
+            },
+            {
+                id: 'orto_sommer_2002',
+                title: { da: 'Sommerortofoto 2002', en: 'Summer orthophoto 2002' },
+                group: 'base', type: 'wms',
+                url: '/api/geo/dk-dtk25?layer=orto_sommer_2002',
+                upstream: 'https://api.dataforsyningen.dk/wms/orto_sommer_2002',
+                layers: 'orto_sommer_2002',
+                crs: 'EPSG:3857', format: 'image/png', transparent: false, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 6, maxZoom: 22, maxNativeZoom: 19,
+                attribution: '© <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORSYNINGEN_TOKEN'], auth: 'token',
+                credentialsNote: { da: 'Kræver DATAFORSYNINGEN_TOKEN.', en: 'Requires DATAFORSYNINGEN_TOKEN.' },
+                provider: 'Klimadatastyrelsen, via Dataforsyningen',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'Summer orthophoto 2002.', wfs: null, permission: { required: false, note: '' }
+            },
+            {
+                id: 'orto_sommer_2005',
+                title: { da: 'Sommerortofoto 2005', en: 'Summer orthophoto 2005' },
+                group: 'base', type: 'wms',
+                url: '/api/geo/dk-dtk25?layer=orto_sommer_2005',
+                upstream: 'https://api.dataforsyningen.dk/wms/orto_sommer_2005',
+                layers: 'orto_sommer_2005',
+                crs: 'EPSG:3857', format: 'image/png', transparent: false, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 6, maxZoom: 22, maxNativeZoom: 19,
+                attribution: '© <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORSYNINGEN_TOKEN'], auth: 'token',
+                credentialsNote: { da: 'Kræver DATAFORSYNINGEN_TOKEN.', en: 'Requires DATAFORSYNINGEN_TOKEN.' },
+                provider: 'Klimadatastyrelsen, via Dataforsyningen',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'Summer orthophoto 2005.', wfs: null, permission: { required: false, note: '' }
+            },
+            {
+                id: 'orto_sommer_2008',
+                title: { da: 'Sommerortofoto 2008', en: 'Summer orthophoto 2008' },
+                group: 'base', type: 'wms',
+                url: '/api/geo/dk-dtk25?layer=orto_sommer_2008',
+                upstream: 'https://api.dataforsyningen.dk/wms/orto_sommer_2008',
+                layers: 'orto_sommer_2008',
+                crs: 'EPSG:3857', format: 'image/png', transparent: false, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 6, maxZoom: 22, maxNativeZoom: 19,
+                attribution: '© <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORSYNINGEN_TOKEN'], auth: 'token',
+                credentialsNote: { da: 'Kræver DATAFORSYNINGEN_TOKEN.', en: 'Requires DATAFORSYNINGEN_TOKEN.' },
+                provider: 'Klimadatastyrelsen, via Dataforsyningen',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'Summer orthophoto 2008.', wfs: null, permission: { required: false, note: '' }
+            },
+            {
+                id: 'orto_foraar_2016',
+                title: { da: 'Forårsortofoto 2016', en: 'Spring orthophoto 2016' },
+                group: 'base', type: 'wms', selectorGroup: 'spring-orthophoto',
+                url: '/api/geo/dk-orto?layer=orto_foraar_2016',
+                upstream: 'https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS',
+                layers: 'geodanmark_2016_12_5cm',
+                crs: 'EPSG:3857', format: 'image/png', transparent: false, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 6, maxZoom: 22, maxNativeZoom: 19,
+                attribution: 'Ortofoto © <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> / GeoDanmark (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORDELER_USERNAME', 'DATAFORDELER_PASSWORD'], auth: 'basic',
+                credentialsNote: { da: 'Kræver DATAFORDELER_USERNAME/PASSWORD.', en: 'Requires DATAFORDELER_USERNAME/PASSWORD.' },
+                provider: 'GeoDanmark / Klimadatastyrelsen, via Datafordeleren',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/data/981',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'Spring orthophoto 2016.', wfs: null, permission: { required: false, note: '' }
+            },
+            {
+                id: 'orto_foraar_2017',
+                title: { da: 'Forårsortofoto 2017', en: 'Spring orthophoto 2017' },
+                group: 'base', type: 'wms', selectorGroup: 'spring-orthophoto',
+                url: '/api/geo/dk-orto?layer=orto_foraar_2017',
+                upstream: 'https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS',
+                layers: 'geodanmark_2017_12_5cm',
+                crs: 'EPSG:3857', format: 'image/png', transparent: false, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 6, maxZoom: 22, maxNativeZoom: 19,
+                attribution: 'Ortofoto © <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> / GeoDanmark (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORDELER_USERNAME', 'DATAFORDELER_PASSWORD'], auth: 'basic',
+                credentialsNote: { da: 'Kræver DATAFORDELER_USERNAME/PASSWORD.', en: 'Requires DATAFORDELER_USERNAME/PASSWORD.' },
+                provider: 'GeoDanmark / Klimadatastyrelsen, via Datafordeleren',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/data/981',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'Spring orthophoto 2017.', wfs: null, permission: { required: false, note: '' }
+            },
+            {
+                id: 'orto_foraar_2018',
+                title: { da: 'Forårsortofoto 2018', en: 'Spring orthophoto 2018' },
+                group: 'base', type: 'wms', selectorGroup: 'spring-orthophoto',
+                url: '/api/geo/dk-orto?layer=orto_foraar_2018',
+                upstream: 'https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS',
+                layers: 'geodanmark_2018_12_5cm',
+                crs: 'EPSG:3857', format: 'image/png', transparent: false, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 6, maxZoom: 22, maxNativeZoom: 19,
+                attribution: 'Ortofoto © <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> / GeoDanmark (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORDELER_USERNAME', 'DATAFORDELER_PASSWORD'], auth: 'basic',
+                credentialsNote: { da: 'Kræver DATAFORDELER_USERNAME/PASSWORD.', en: 'Requires DATAFORDELER_USERNAME/PASSWORD.' },
+                provider: 'GeoDanmark / Klimadatastyrelsen, via Datafordeleren',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/data/981',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'Spring orthophoto 2018.', wfs: null, permission: { required: false, note: '' }
+            },
+            {
+                id: 'orto_foraar_2019',
+                title: { da: 'Forårsortofoto 2019', en: 'Spring orthophoto 2019' },
+                group: 'base', type: 'wms', selectorGroup: 'spring-orthophoto',
+                url: '/api/geo/dk-orto?layer=orto_foraar_2019',
+                upstream: 'https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS',
+                layers: 'geodanmark_2019_12_5cm',
+                crs: 'EPSG:3857', format: 'image/png', transparent: false, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 6, maxZoom: 22, maxNativeZoom: 19,
+                attribution: 'Ortofoto © <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> / GeoDanmark (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORDELER_USERNAME', 'DATAFORDELER_PASSWORD'], auth: 'basic',
+                credentialsNote: { da: 'Kræver DATAFORDELER_USERNAME/PASSWORD.', en: 'Requires DATAFORDELER_USERNAME/PASSWORD.' },
+                provider: 'GeoDanmark / Klimadatastyrelsen, via Datafordeleren',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/data/981',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'Spring orthophoto 2019.', wfs: null, permission: { required: false, note: '' }
+            },
+            {
+                id: 'orto_foraar_2020',
+                title: { da: 'Forårsortofoto 2020', en: 'Spring orthophoto 2020' },
+                group: 'base', type: 'wms', selectorGroup: 'spring-orthophoto',
+                url: '/api/geo/dk-orto?layer=orto_foraar_2020',
+                upstream: 'https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS',
+                layers: 'geodanmark_2020_12_5cm',
+                crs: 'EPSG:3857', format: 'image/png', transparent: false, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 6, maxZoom: 22, maxNativeZoom: 19,
+                attribution: 'Ortofoto © <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> / GeoDanmark (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORDELER_USERNAME', 'DATAFORDELER_PASSWORD'], auth: 'basic',
+                credentialsNote: { da: 'Kræver DATAFORDELER_USERNAME/PASSWORD.', en: 'Requires DATAFORDELER_USERNAME/PASSWORD.' },
+                provider: 'GeoDanmark / Klimadatastyrelsen, via Datafordeleren',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/data/981',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'Spring orthophoto 2020.', wfs: null, permission: { required: false, note: '' }
+            },
+            {
+                id: 'orto_foraar_2021',
+                title: { da: 'Forårsortofoto 2021', en: 'Spring orthophoto 2021' },
+                group: 'base', type: 'wms', selectorGroup: 'spring-orthophoto',
+                url: '/api/geo/dk-orto?layer=orto_foraar_2021',
+                upstream: 'https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS',
+                layers: 'geodanmark_2021_12_5cm',
+                crs: 'EPSG:3857', format: 'image/png', transparent: false, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 6, maxZoom: 22, maxNativeZoom: 19,
+                attribution: 'Ortofoto © <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> / GeoDanmark (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORDELER_USERNAME', 'DATAFORDELER_PASSWORD'], auth: 'basic',
+                credentialsNote: { da: 'Kræver DATAFORDELER_USERNAME/PASSWORD.', en: 'Requires DATAFORDELER_USERNAME/PASSWORD.' },
+                provider: 'GeoDanmark / Klimadatastyrelsen, via Datafordeleren',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/data/981',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'Spring orthophoto 2021.', wfs: null, permission: { required: false, note: '' }
+            },
+            {
+                id: 'orto_foraar_2022',
+                title: { da: 'Forårsortofoto 2022', en: 'Spring orthophoto 2022' },
+                group: 'base', type: 'wms', selectorGroup: 'spring-orthophoto',
+                url: '/api/geo/dk-orto?layer=orto_foraar_2022',
+                upstream: 'https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS',
+                layers: 'geodanmark_2022_12_5cm',
+                crs: 'EPSG:3857', format: 'image/png', transparent: false, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 6, maxZoom: 22, maxNativeZoom: 19,
+                attribution: 'Ortofoto © <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> / GeoDanmark (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORDELER_USERNAME', 'DATAFORDELER_PASSWORD'], auth: 'basic',
+                credentialsNote: { da: 'Kræver DATAFORDELER_USERNAME/PASSWORD.', en: 'Requires DATAFORDELER_USERNAME/PASSWORD.' },
+                provider: 'GeoDanmark / Klimadatastyrelsen, via Datafordeleren',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/data/981',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'Spring orthophoto 2022.', wfs: null, permission: { required: false, note: '' }
+            },
+            {
+                id: 'orto_foraar_2023',
+                title: { da: 'Forårsortofoto 2023', en: 'Spring orthophoto 2023' },
+                group: 'base', type: 'wms', selectorGroup: 'spring-orthophoto',
+                url: '/api/geo/dk-orto?layer=orto_foraar_2023',
+                upstream: 'https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS',
+                layers: 'geodanmark_2023_12_5cm',
+                crs: 'EPSG:3857', format: 'image/png', transparent: false, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 6, maxZoom: 22, maxNativeZoom: 19,
+                attribution: 'Ortofoto © <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> / GeoDanmark (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORDELER_USERNAME', 'DATAFORDELER_PASSWORD'], auth: 'basic',
+                credentialsNote: { da: 'Kræver DATAFORDELER_USERNAME/PASSWORD.', en: 'Requires DATAFORDELER_USERNAME/PASSWORD.' },
+                provider: 'GeoDanmark / Klimadatastyrelsen, via Datafordeleren',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/data/981',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'Spring orthophoto 2023.', wfs: null, permission: { required: false, note: '' }
+            },
+            {
+                id: 'orto_foraar_2024',
+                title: { da: 'Forårsortofoto 2024', en: 'Spring orthophoto 2024' },
+                group: 'base', type: 'wms', selectorGroup: 'spring-orthophoto',
+                url: '/api/geo/dk-orto?layer=orto_foraar_2024',
+                upstream: 'https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS',
+                layers: 'geodanmark_2024_12_5cm',
+                crs: 'EPSG:3857', format: 'image/png', transparent: false, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 6, maxZoom: 22, maxNativeZoom: 19,
+                attribution: 'Ortofoto © <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> / GeoDanmark (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORDELER_USERNAME', 'DATAFORDELER_PASSWORD'], auth: 'basic',
+                credentialsNote: { da: 'Kræver DATAFORDELER_USERNAME/PASSWORD.', en: 'Requires DATAFORDELER_USERNAME/PASSWORD.' },
+                provider: 'GeoDanmark / Klimadatastyrelsen, via Datafordeleren',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/data/981',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'Spring orthophoto 2024.', wfs: null, permission: { required: false, note: '' }
+            },
+            {
+                id: 'orto_foraar_2025',
+                title: { da: 'Forårsortofoto 2025', en: 'Spring orthophoto 2025' },
+                group: 'base', type: 'wms', selectorGroup: 'spring-orthophoto',
+                url: '/api/geo/dk-orto?layer=orto_foraar_2025',
+                upstream: 'https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS',
+                layers: 'geodanmark_2025_12_5cm',
+                crs: 'EPSG:3857', format: 'image/png', transparent: false, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 6, maxZoom: 22, maxNativeZoom: 19,
+                attribution: 'Ortofoto © <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> / GeoDanmark (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORDELER_USERNAME', 'DATAFORDELER_PASSWORD'], auth: 'basic',
+                credentialsNote: { da: 'Kræver DATAFORDELER_USERNAME/PASSWORD.', en: 'Requires DATAFORDELER_USERNAME/PASSWORD.' },
+                provider: 'GeoDanmark / Klimadatastyrelsen, via Datafordeleren',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/data/981',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'Spring orthophoto 2025.', wfs: null, permission: { required: false, note: '' }
+            },
+            /* WITX WFS endpoints are third-party and explicitly disabled until permission. */
+            {
+                id: 'witx_fundogfortidsminder_areal',
+                title: { da: 'WITX · Fund og Fortidsminder (arealer, deaktiveret)', en: 'WITX · Finds and ancient monuments (areas, disabled)' },
+                group: 'overlay', type: 'wfs',
+                url: 'https://geoserver.witx.dk/geoserver/witx/ows', upstream: 'https://geoserver.witx.dk/geoserver/witx/ows',
+                layers: 'witx:FundOgFortidsminderAreal', crs: 'EPSG:4326', format: 'application/json',
+                transparent: true, tiled: false, tileSize: 256, version: '2.0.0', minZoom: 0, maxZoom: 20,
+                attribution: 'Third-party WITX data — disabled pending written permission', opacity: 1,
+                defaultOn: false, enabled: false, requiresCredentials: [], auth: 'none',
+                credentialsNote: { da: '', en: '' }, provider: 'witx.dk (third party)',
+                licence: 'Unknown — written permission required', licenceUrl: '', sourcePage: 'https://witx.dk/',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'Disabled placeholder only; never contact without permission.',
+                wfs: { typeName: 'witx:FundOgFortidsminderAreal' },
+                permission: { required: true, note: 'Do not enable without written permission from witx.dk or official upstream authorization.' }
+            },
+            {
+                id: 'witx_fundogfortidsminder',
+                title: { da: 'WITX · Fund og Fortidsminder (deaktiveret)', en: 'WITX · Finds and ancient monuments (disabled)' },
+                group: 'overlay', type: 'wfs',
+                url: 'https://geoserver.witx.dk/geoserver/witx/ows', upstream: 'https://geoserver.witx.dk/geoserver/witx/ows',
+                layers: 'witx:FundOgFortidsminder', crs: 'EPSG:4326', format: 'application/json',
+                transparent: true, tiled: false, tileSize: 256, version: '2.0.0', minZoom: 0, maxZoom: 20,
+                attribution: 'Third-party WITX data — disabled pending written permission', opacity: 1,
+                defaultOn: false, enabled: false, requiresCredentials: [], auth: 'none',
+                credentialsNote: { da: '', en: '' }, provider: 'witx.dk (third party)',
+                licence: 'Unknown — written permission required', licenceUrl: '', sourcePage: 'https://witx.dk/',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'Disabled placeholder only; never contact without permission.',
+                wfs: { typeName: 'witx:FundOgFortidsminder' },
+                permission: { required: true, note: 'Do not enable without written permission from witx.dk or official upstream authorization.' }
+            },
         ]
     };
 

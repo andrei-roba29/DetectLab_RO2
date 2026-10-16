@@ -91,10 +91,32 @@ until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one
 |---|---|---|---|---|---|---|---|---|
 | `danish.dtk25` | wms | same-origin | dtk25_2023 | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `danish.orto` | wms | same-origin | geodanmark_2025_12_5cm | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.hist_hoeje` | wms | same-origin | dtk_hoeje_maalebordsblade | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.hist_lave` | wms | same-origin | dtk_lave_maalebordsblade | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.hist_preussen` | wms | same-origin | dtk_preussen_maalebordsblade | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.topo4cm_1953_1976` | wms | same-origin | topo4cm_1953_1976 | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.topo4cm_1980_2001` | wms | same-origin | topo4cm_1980_2001 | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.orto_sommer_1999` | wms | same-origin | orto_sommer_1999 | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.orto_sommer_2002` | wms | same-origin | orto_sommer_2002 | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.orto_sommer_2005` | wms | same-origin | orto_sommer_2005 | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.orto_sommer_2008` | wms | same-origin | orto_sommer_2008 | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.orto_foraar_2016` | wms | same-origin | geodanmark_2016_12_5cm | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.orto_foraar_2017` | wms | same-origin | geodanmark_2017_12_5cm | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.orto_foraar_2018` | wms | same-origin | geodanmark_2018_12_5cm | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.orto_foraar_2019` | wms | same-origin | geodanmark_2019_12_5cm | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.orto_foraar_2020` | wms | same-origin | geodanmark_2020_12_5cm | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.orto_foraar_2021` | wms | same-origin | geodanmark_2021_12_5cm | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.orto_foraar_2022` | wms | same-origin | geodanmark_2022_12_5cm | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.orto_foraar_2023` | wms | same-origin | geodanmark_2023_12_5cm | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.orto_foraar_2024` | wms | same-origin | geodanmark_2024_12_5cm | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.orto_foraar_2025` | wms | same-origin | geodanmark_2025_12_5cm | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `sat.vhr-2012` | wms | copernicus.discomap.eea.europa.eu | Image | 1.1.1 | image/jpeg | no | always | probe · Copernicus Land / EEA discomap |
 | `sat.vhr-2018` | wms | image.discomap.eea.europa.eu | VHR_2018_WM | 1.1.1 | image/jpeg | no | always | probe · Copernicus Land / EEA discomap |
 | `sat.vhr-2021` | wms | image.discomap.eea.europa.eu | VHR_2021_LAEA | 1.1.1 | image/jpeg | no | always | probe · Copernicus Land / EEA discomap |
 | `danish.naturtyper` | wms | arealeditering-dist-geo.miljoeportal.dk | dai:bes_naturtyper | 1.3.0 | image/png | unknown | auto | probe · Danmarks Miljøportal |
+| `danish.lidar_hillshade_historik` | wms | same-origin | hillshade_1_6m | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.lidar_quickdhm_exaggerated` | wms | same-origin | quickDHM_skyggekort_terraen_overdrevet | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.lidar_dhm_terrain_hillshade` | wms | same-origin | dhm_terraen_skyggekort | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `lidar.nl-ahn` | dynamic | ahn.arcgisonline.nl | exportImage |  | image/png | yes | auto | watch · AHN / Esri Nederland |
 | `lidar.no-hoydedata` | dynamic | hoydedata.no | exportImage |  | image/png | yes | auto | watch · Kartverket (høydedata.no) |
 | `lidar.pl-nmt` | dynamic | mapy.geoportal.gov.pl | Raster | 1.3.0 | image/png | unknown | auto | watch · GUGiK / geoportal.gov.pl |
@@ -165,7 +187,7 @@ until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one
 | `premium.kdr-gb` | wms | pastmaps.cenagis.edu.pl | ihpan:kdr_gb_3857 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `premium.wig-100k` | wms | pastmaps.cenagis.edu.pl | ihpan:wig100k_3857 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 
-**70/70 third-party layers guarded** (59 probed, 11 watched); 0 self-handled + 4 same-origin, 1 runtime. 0 error(s), 0 warning(s).
+**70/70 third-party layers guarded** (59 probed, 11 watched); 0 self-handled + 26 same-origin, 1 runtime. 0 error(s), 0 warning(s).
 
 ### Small print
 
@@ -240,6 +262,101 @@ One concrete tile per layer, built by the same code the map runs (sample tile 12
 3D /api/geo/dk-orto?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2025_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
+# danish.hist_hoeje — High measurement table sheets
+2D https://api.dataforsyningen.dk/topo20_hoeje_maalebordsblade_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dtk_hoeje_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=hist_hoeje&service=WMS&request=GetMap&version=1.3.0&layers=dtk_hoeje_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.hist_lave — Low measurement table sheets
+2D https://api.dataforsyningen.dk/topo20_lave_maalebordsblade_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dtk_lave_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=hist_lave&service=WMS&request=GetMap&version=1.3.0&layers=dtk_lave_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.hist_preussen — Prussian measurement table sheets
+2D https://api.dataforsyningen.dk/topo25_preussen_maalebordsblade_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dtk_preussen_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=hist_preussen&service=WMS&request=GetMap&version=1.3.0&layers=dtk_preussen_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.topo4cm_1953_1976 — 4 cm map 1953-1976
+2D https://api.dataforsyningen.dk/topo4cm_1953_1976_DAF?service=WMS&request=GetMap&version=1.3.0&layers=topo4cm_1953_1976&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=topo4cm_1953_1976&service=WMS&request=GetMap&version=1.3.0&layers=topo4cm_1953_1976&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.topo4cm_1980_2001 — 4 cm map 1980-2001
+2D https://api.dataforsyningen.dk/topo4cm_1980_2001_DAF?service=WMS&request=GetMap&version=1.3.0&layers=topo4cm_1980_2001&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=topo4cm_1980_2001&service=WMS&request=GetMap&version=1.3.0&layers=topo4cm_1980_2001&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.orto_sommer_1999 — Summer orthophoto 1999
+2D https://api.dataforsyningen.dk/wms/orto_sommer_1999?service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_1999&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=orto_sommer_1999&service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_1999&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.orto_sommer_2002 — Summer orthophoto 2002
+2D https://api.dataforsyningen.dk/wms/orto_sommer_2002?service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2002&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=orto_sommer_2002&service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2002&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.orto_sommer_2005 — Summer orthophoto 2005
+2D https://api.dataforsyningen.dk/wms/orto_sommer_2005?service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2005&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=orto_sommer_2005&service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2005&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.orto_sommer_2008 — Summer orthophoto 2008
+2D https://api.dataforsyningen.dk/wms/orto_sommer_2008?service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2008&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=orto_sommer_2008&service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2008&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.orto_foraar_2016 — Spring orthophoto 2016
+2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2016_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-orto?layer=orto_foraar_2016&service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2016_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.orto_foraar_2017 — Spring orthophoto 2017
+2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2017_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-orto?layer=orto_foraar_2017&service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2017_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.orto_foraar_2018 — Spring orthophoto 2018
+2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2018_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-orto?layer=orto_foraar_2018&service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2018_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.orto_foraar_2019 — Spring orthophoto 2019
+2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2019_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-orto?layer=orto_foraar_2019&service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2019_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.orto_foraar_2020 — Spring orthophoto 2020
+2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2020_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-orto?layer=orto_foraar_2020&service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2020_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.orto_foraar_2021 — Spring orthophoto 2021
+2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2021_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-orto?layer=orto_foraar_2021&service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2021_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.orto_foraar_2022 — Spring orthophoto 2022
+2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2022_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-orto?layer=orto_foraar_2022&service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2022_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.orto_foraar_2023 — Spring orthophoto 2023
+2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2023_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-orto?layer=orto_foraar_2023&service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2023_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.orto_foraar_2024 — Spring orthophoto 2024
+2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2024_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-orto?layer=orto_foraar_2024&service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2024_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.orto_foraar_2025 — Spring orthophoto 2025
+2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2025_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-orto?layer=orto_foraar_2025&service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2025_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
 # sat.vhr-2012 — Satellite 2012 (Copernicus VHR)
 2D https://copernicus.discomap.eea.europa.eu/arcgis/services/GioLand/VeryHighResolution2012/MapServer/WMSServer?service=WMS&request=GetMap&version=1.1.1&layers=Image&styles=&format=image%2Fjpeg&transparent=false&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/map3d/tile?layer=sat.vhr-2012&z={z}&x={x}&y={y}
@@ -258,6 +375,21 @@ One concrete tile per layer, built by the same code the map runs (sample tile 12
 # danish.naturtyper — Denmark · Protected nature types (NBL § 3)
 2D https://arealeditering-dist-geo.miljoeportal.dk/geoserver/wms?service=WMS&request=GetMap&version=1.3.0&layers=dai%3Abes_naturtyper&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://arealeditering-dist-geo.miljoeportal.dk/geoserver/wms?service=WMS&request=GetMap&version=1.3.0&layers=dai%3Abes_naturtyper&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.lidar_hillshade_historik — LiDAR hillshade 1.6 m (DHM historik)
+2D https://api.dataforsyningen.dk/dhm_historik_DAF?service=WMS&request=GetMap&version=1.3.0&layers=hillshade_1_6m&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=lidar_hillshade_historik&service=WMS&request=GetMap&version=1.3.0&layers=hillshade_1_6m&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.lidar_quickdhm_exaggerated — LiDAR hillshade, exaggerated terrain (quickDHM)
+2D https://api.dataforsyningen.dk/wms/dhm_temp?service=WMS&request=GetMap&version=1.3.0&layers=quickDHM_skyggekort_terraen_overdrevet&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=lidar_quickdhm_exaggerated&service=WMS&request=GetMap&version=1.3.0&layers=quickDHM_skyggekort_terraen_overdrevet&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.lidar_dhm_terrain_hillshade — LiDAR terrain hillshade (DHM)
+2D https://api.dataforsyningen.dk/dhm_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dhm_terraen_skyggekort&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=lidar_dhm_terrain_hillshade&service=WMS&request=GetMap&version=1.3.0&layers=dhm_terraen_skyggekort&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # lidar.nl-ahn — Netherlands · AHN (DTM/DSM)

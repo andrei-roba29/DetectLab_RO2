@@ -1,7 +1,7 @@
 /*
  * netlify/functions/dk-orto.mjs
  * ───────────────────────────────────────────────────────────────────────────
- * Denmark · GeoDanmark Ortofoto base map — credential-adding WMS proxy.
+ * Denmark · GeoDanmark spring orthophoto WMS years — credential-adding proxy.
  *
  * Route (see netlify.toml):  GET /api/geo/dk-orto?service=WMS&request=GetMap&…
  *

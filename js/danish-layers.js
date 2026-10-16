@@ -14,9 +14,9 @@
  *     map draws at a time; the same bases are mirrored as buttons in the
  *     existing basemap control (bottom-left) and the two stay in sync;
  *   • overlay rows are checkboxes with their own opacity slider;
- *   • the group switch turns the selected base map on/off, the chevron
- *     collapses the group, the ℹ button credits the sources and lists the
- *     credentials a layer needs;
+     *   • the group switch turns the selected base map on/off, the chevron
+ *     collapses the group, the ℹ button credits sources and explains protected
+ *     layers need server-side credentials;
  *   • rows are keyboard-operable (real radio/checkbox/range inputs inside
  *     <label>s, so Tab + Space + arrows work) and the group row carries
  *     aria-expanded / aria-hidden where the country filter needs them.
@@ -30,24 +30,16 @@
  *   credential never turns into a blank basemap.
  *
  * Credentials
- *   DTK25 and the orthophoto are fetched through same-origin proxy routes
- *   (/api/geo/dk-dtk25, /api/geo/dk-orto — netlify/functions/, backend/) that
- *   attach the secret server-side. This file therefore contains no token and no
- *   password, and it must never contain one. Two documented local-only paths
- *   exist for a workstation with no backend:
- *     • window.DETECTLAB_DK_TOKEN (Dataforsyningen) — the same insecure,
- *       local-preview-only escape hatch js/dataforsyningen-dhm-layer.js uses
- *       (DENMARK_LIDAR_DATAFORSYNINGEN.md §5.3). It is only consulted when the
- *       proxy is not deployed at all, never in preference to it;
- *     • a direct call to the official public WFS for the heritage layer.
- *   Neither is used on a deployment: the proxies answer first (or the probe
- *   reports the missing variable and the row says what to set).
+ *   Credentialed Dataforsyningen/Datafordeler WMS layers use same-origin
+ *   proxy routes, which append credentials server-side. This file never reads
+ *   or embeds a secret. The browser shows a generic server-configuration notice
+ *   and never receives missing variable names or credential values.
  *
  * Failure handling
- *   A configuration error (HTTP 501 layer_not_configured) is explained in the
- *   row, and DTK25 falls back to the public OpenStreetMap base map, so a Danish
- *   visitor is never left with an empty basemap. Real tile errors surface the
- *   panel's own notice through the row status line.
+ *   A configuration error (HTTP 503) is explained generically in the row, and
+ *   DTK25 falls back to the public OpenStreetMap base map, so a Danish visitor
+ *   is never left with an empty basemap. Real tile errors surface the panel's
+ *   own notice through the row status line.
  */
 (function (window, document) {
     'use strict';
@@ -64,6 +56,8 @@
     /* ── constants ────────────────────────────────────────────────────────── */
 
     var LAYERS = CONFIG.enabledLayers();
+    var PANEL_LAYERS = LAYERS.filter(function (layer) { return !layer.selectorGroup; });
+    var CONTROL_BASE_LAYERS = LAYERS.filter(function (layer) { return layer.group === 'base' && !layer.selectorGroup; });
     var GROUP_ROW_ID = 'danishRow';
     var SUB_CONTAINER_ID = 'danishSubLayers';
     var GROUP_NOTICE_ID = 'danishGroupNotice';
@@ -116,12 +110,12 @@
         overlay: { da: 'Tema', en: 'Overlay' },
         opacity: { da: 'Gennemsigtighed', en: 'Opacity' },
         needsToken: {
-            da: 'Serveren mangler DATAFORSYNINGEN_TOKEN, så DTK25 kan ikke hentes.',
-            en: 'The server has no DATAFORSYNINGEN_TOKEN, so DTK25 cannot be fetched.'
+            da: 'Serveren har ikke konfigureret legitimationsoplysninger til dette kortlag.',
+            en: 'The server has not configured credentials for this map layer.'
         },
         needsCredentials: {
-            da: 'Ortofoto kræver en Datafordeler-tjenestebruger (DATAFORDELER_USER og DATAFORDELER_PASSWORD).',
-            en: 'The orthophoto needs a Datafordeler service user (DATAFORDELER_USER and DATAFORDELER_PASSWORD).'
+            da: 'Serveren har ikke konfigureret legitimationsoplysninger til dette kortlag.',
+            en: 'The server has not configured credentials for this map layer.'
         },
         proxyMissing: {
             da: 'Ingen proxy her — kortet hentes direkte fra kilden (kun lokal visning).',
@@ -146,7 +140,12 @@
             da: 'kun de første vises — zoom ind for resten',
             en: 'only the first ones are shown — zoom in for the rest'
         },
-        unavailable: { da: 'kilden svarer ikke', en: 'the source is not answering' }
+        unavailable: { da: 'kilden svarer ikke', en: 'the source is not answering' },
+        springYear: { da: 'Forårsortofoto år', en: 'Spring orthophoto year' },
+        missingCredentials: {
+            da: 'Kortlaget er ikke konfigureret på serveren endnu.',
+            en: 'This map layer is not configured on the server yet.'
+        }
     };
 
     /* ── state ────────────────────────────────────────────────────────────── */
@@ -161,6 +160,7 @@
         active: {},         /* id → true when it is on the map     */
         opacity: {},        /* id → 0–100                          */
         rows: {},           /* id → { row, input, slider, pct, status } */
+        yearStatus: null,
         expanded: true,
         wfs: { timer: null, controller: null, running: false, dirty: false, last: '', layer: null },
         notices: {},        /* id → { text, kind }                 */
@@ -256,9 +256,9 @@
             'service=WMS&request=GetCapabilities&version=' + (layer.version || '1.3.0');
     }
 
-    /* Does the deployment answer the proxy route (and is it configured)? 501 →
-     * the route exists, the environment variable is missing. 404/403/network →
-     * there is no proxy at all (a static preview server). */
+    /* Does the deployment answer the proxy route (and is it configured)? 503 →
+     * the route exists but server credentials are unavailable. 404/403/network →
+     * there is no usable proxy at this origin (for example, a static preview). */
     function probeProxy(layer, done) {
         var cached = runtime.guard[layer.id];
         if (cached && cached !== 'unknown') { done(cached); return; }
@@ -274,8 +274,8 @@
             window.fetch(proxyProbeUrl(layer), { method: 'GET', credentials: 'same-origin' })
                 .then(function (response) {
                     window.clearTimeout(timer);
+                    if (response.status === 503) return finish('unconfigured');
                     if (response.ok) return finish('ok');
-                    if (response.status === 501) return finish('unconfigured');
                     return finish('absent');
                 })
                 .catch(function () {
@@ -286,12 +286,6 @@
             window.clearTimeout(timer);
             finish('absent');
         }
-    }
-
-    /* The token a local preview page was handed. Never set on a deployment. */
-    function clientToken(layer) {
-        if (!layer.clientTokenVariable) return '';
-        try { return String(window[layer.clientTokenVariable] || ''); } catch (e) { return ''; }
     }
 
     function buildTileLayer(layer, mode) {
@@ -311,34 +305,17 @@
             layers: layer.layers,
             styles: '',
             format: layer.format,
-            transparent: !!layer.transparent,
+            transparent: layer.transparent ? 'TRUE' : 'FALSE',
             version: layer.version || '1.3.0',
             tileSize: layer.tileSize || 256,
             pane: layer.group === 'base' ? PANE_BASE : PANE_RASTER,
             /* The requested request format: WMS 1.3.0, CRS=EPSG:3857, PNG,
              * 256×256, TILED — with the uppercase KVP names of the 1.3.0 spec. */
             uppercase: true,
-            tiled: true
+            tiled: 'TRUE'
         };
         Object.keys(common).forEach(function (key) { options[key] = common[key]; });
         var url = layer.url;
-        if (mode === 'direct') {
-            /* Direct means "the browser talks to the provider": either the
-             * layer's own public endpoint, or the one behind the proxy when the
-             * local-preview token path is in use.
-             *
-             * A public service is called with the same uppercase 1.3.0 KVP as
-             * the proxied ones (verified against the agency's GeoServer). Only
-             * the token path switches to lowercase: Dataforsyningen documents
-             * the parameter as `token`, and `token` is not a TileLayer option,
-             * so Leaflet copies it into the WMS query string verbatim. */
-            if (layer.upstream) url = layer.upstream;
-            var token = clientToken(layer);
-            if (token) {
-                options.uppercase = false;
-                options.token = token;
-            }
-        }
         /* Built with the constructor, not the L.tileLayer.wms *factory*: the
          * availability guard (js/wms-health.js) wraps that factory, and these
          * rows must stay under this module's control — a guard trip would flip
@@ -640,9 +617,7 @@
      * base map switch to the public Danish alternative so the map is never
      * empty. */
     function handleUnconfigured(layer) {
-        var needsToken = (layer.requiresCredentials || []).indexOf('DATAFORSYNINGEN_TOKEN') !== -1;
-        var notice = tr(TEXT[needsToken ? 'needsToken' : 'needsCredentials']);
-        setStatus(layer.id, notice, 'error');
+        setStatus(layer.id, tr(TEXT.missingCredentials), 'error');
         runtime.active[layer.id] = false;
         var built = runtime.built[layer.id];
         if (runtime.map && built && runtime.map.hasLayer(built)) runtime.map.removeLayer(built);
@@ -690,7 +665,7 @@
                 return;
             }
             if (state === 'unconfigured') { handleUnconfigured(layer); return; }
-            if (layer.directFallback || clientToken(layer)) { tryDirectFallback(layer); return; }
+            if (layer.directFallback) { tryDirectFallback(layer); return; }
             handleUnconfigured(layer);
         });
     }
@@ -711,7 +686,16 @@
     function setStatus(id, text, kind) {
         runtime.notices[id] = text ? { text: text, kind: kind || 'info' } : null;
         var row = runtime.rows[id];
-        if (!row || !row.status) return;
+        var configLayer = CONFIG.byId(id);
+        if (!row || !row.status) {
+            if (configLayer && configLayer.selectorGroup === 'spring-orthophoto' && runtime.yearStatus) {
+                runtime.yearStatus.textContent = text || '';
+                runtime.yearStatus.style.display = text ? 'block' : 'none';
+                runtime.yearStatus.className = 'danish-layer-status' + (kind ? ' is-' + kind : '');
+                runtime.yearStatus.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+            }
+            return;
+        }
         row.status.textContent = text || '';
         row.status.style.display = text ? 'block' : 'none';
         row.status.className = 'danish-layer-status' + (kind ? ' is-' + kind : '');
@@ -831,17 +815,57 @@
         return button;
     }
 
+    function buildYearSelector() {
+        var years = LAYERS.filter(function (layer) { return layer.selectorGroup === 'spring-orthophoto'; });
+        if (!years.length) return null;
+        var current = years.filter(function (layer) { return runtime.selected === layer.id; })[0] ||
+            years.filter(function (layer) { return /2025$/.test(layer.id); })[0] || years[years.length - 1];
+        var select = el('select', {
+            class: 'danish-year-select',
+            id: 'danishSpringOrthoYear',
+            'aria-label': tr(TEXT.springYear)
+        });
+        years.forEach(function (layer) {
+            var year = layer.id.slice('orto_foraar_'.length);
+            select.appendChild(el('option', { value: layer.id, text: year }));
+        });
+        select.value = current.id;
+        select.addEventListener('change', function () {
+            var layer = CONFIG.byId(select.value);
+            if (layer && layer.selectorGroup === 'spring-orthophoto') {
+                years.forEach(function (yearLayer) { setStatus(yearLayer.id, '', 'info'); });
+                runtime.selected = layer.id;
+                switchOn(layer);
+                syncUI();
+            }
+        });
+        var wrap = el('div', { class: 'danish-year-wrap' }, [
+            el('label', { class: 'danish-year-control', for: 'danishSpringOrthoYear' }, [
+                el('span', { class: 'danish-layer-title', text: tr(TEXT.springYear) }), select
+            ]),
+            el('div', { class: 'danish-layer-status', id: 'danishSpringOrthoStatus', role: 'status', style: 'display:none' })
+        ]);
+        runtime.yearStatus = wrap.lastChild;
+        var notice = runtime.notices[current.id];
+        if (notice) setStatus(current.id, notice.text, notice.kind);
+        return wrap;
+    }
+
     function buildPanel() {
         var container = document.getElementById(SUB_CONTAINER_ID);
         if (!container) return;
         container.innerHTML = '';
         var sections = [
-            [tr(TEXT.base), LAYERS.filter(function (l) { return l.group === 'base'; })],
-            [tr(TEXT.overlay), LAYERS.filter(function (l) { return l.group !== 'base'; })]
+            [tr(TEXT.base), PANEL_LAYERS.filter(function (l) { return l.group === 'base'; })],
+            [tr(TEXT.overlay), PANEL_LAYERS.filter(function (l) { return l.group !== 'base'; })]
         ];
-        sections.forEach(function (section) {
-            if (!section[1].length) return;
+        sections.forEach(function (section, index) {
+            if (!section[1].length && index !== 0) return;
             container.appendChild(el('div', { class: 'danish-layer-section', text: section[0] }));
+            if (index === 0) {
+                var yearControl = buildYearSelector();
+                if (yearControl) container.appendChild(yearControl);
+            }
             section[1].forEach(function (layer) { container.appendChild(buildRow(layer)); });
         });
 
@@ -853,8 +877,7 @@
         var control = document.getElementById('arcgisBasemapCtrl');
         if (control) {
             var anchor = control.querySelector('.arcgis-basemap-hs');
-            LAYERS.forEach(function (layer) {
-                if (layer.group !== 'base') return;
+            CONTROL_BASE_LAYERS.forEach(function (layer) {
                 var existing = control.querySelector('[data-danish-basemap="' + layer.id + '"]');
                 if (existing) existing.parentNode.removeChild(existing);
                 var button = controlButton(layer);
@@ -889,6 +912,11 @@
             }
             if (entry.pct) entry.pct.textContent = runtime.opacity[layer.id] + '%';
         });
+        var yearSelect = document.getElementById('danishSpringOrthoYear');
+        if (yearSelect) {
+            var selectedSpring = LAYERS.filter(function (layer) { return layer.selectorGroup === 'spring-orthophoto' && layer.id === runtime.selected; })[0];
+            if (selectedSpring) yearSelect.value = selectedSpring.id;
+        }
         var any = LAYERS.some(function (layer) { return !!runtime.active[layer.id]; });
         var master = document.getElementById(MASTER_ID);
         if (master && master.checked !== any) master.checked = any;
@@ -922,7 +950,7 @@
         runtime.expanded = !!expanded;
         var container = document.getElementById(SUB_CONTAINER_ID);
         if (container) {
-            container.style.maxHeight = runtime.expanded ? '1600px' : '0';
+            container.style.maxHeight = runtime.expanded ? '6000px' : '0';
             container.style.opacity = runtime.expanded ? '1' : '0';
             container.style.marginTop = runtime.expanded ? '8px' : '0';
         }
@@ -954,7 +982,7 @@
         facts.push('zoom ' + (layer.minZoom || 0) + '–' + (layer.maxZoom || 18));
         if (layer.upstream && layer.upstream !== layer.url) facts.push(layer.upstream);
         var needs = layer.requiresCredentials || [];
-        if (needs.length) facts.push((da ? 'serveren skal have: ' : 'set on the server: ') + needs.join(', '));
+        if (needs.length) facts.push(da ? 'serverlegitimationsoplysninger kræves' : 'server-side credentials required');
         if (layer.enabled === false) facts.push(da ? 'deaktiveret' : 'disabled');
         if (layer.permission && layer.permission.required) {
             facts.push((da ? 'kræver tilladelse: ' : 'permission required: ') + (layer.permission.note || ''));

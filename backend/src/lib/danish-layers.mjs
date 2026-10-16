@@ -7,17 +7,18 @@
  * backend behave identically (the browser only ever talks to the same-origin
  * paths, and never sees a credential):
  *
- *   GET /api/geo/dk-dtk25      Dataforsyningen DTK25 topographic WMS
- *                              → the account-wide token is added as a header
- *   GET /api/geo/dk-orto       Datafordeler GeoDanmark Ortofoto WMS
- *                              → the service user's username/password are added
+ *   GET /api/geo/dk-dtk25      Dataforsyningen WMS allow-list (DTK25, LiDAR,
+ *                              historic maps and summer orthophotos) → token query
+ *   GET /api/geo/dk-orto       Datafordeler GeoDanmark spring orthophoto years
+ *                              → service-user username/password query
  *   GET /api/geo/dk-heritage   Slots- og Kulturstyrelsen "Fund og Fortidsminder"
  *                              WFS 1.0.0 → GeoJSON, reprojected to EPSG:4326
  *
  * Why a proxy at all
  *   • api.dataforsyningen.dk cannot restrict a token to a domain or an IP, so
  *     shipping it to a browser hands it to every visitor (and to their
- *     DevTools, history, Referer headers and any scraper).
+ *     DevTools, history, Referer headers and any scraper). The WMS proxy
+ *     attaches it as the requested `token` KVP only on the server-side URL.
  *   • Datafordeleren only serves the orthophoto to an identified service user;
  *     the credentials must not exist client-side either.
  *   • The heritage WFS speaks EPSG:25832 (UTM 32N) and answers an EPSG:4326
@@ -106,12 +107,75 @@ export function jsonProblem(status, error, extra) {
 }
 
 export function missingCredentials(layer, variables) {
-    return jsonProblem(501, 'layer_not_configured', {
+    // Keep deployment variable names in server logs only. The public response
+    // is deliberately generic so it does not disclose configuration details.
+    console.warn('[danish-proxy] Missing server credential', {
         layer: layer.id,
-        credentials: variables,
-        hint: 'Set ' + variables.join(', ') + ' on the deployment (Netlify environment variables ' +
-            'or backend/.env) — see DATA_SOURCES.md.'
+        variables,
     });
+    return jsonProblem(503, 'service_unavailable');
+}
+
+/** Add the configured auth parameters to a fixed upstream request. Secrets are
+ * only added server-side; the browser's query is stripped by forwardParams(). */
+export function appendLayerAuth(layer, params) {
+    const out = params instanceof URLSearchParams ? new URLSearchParams(params) : new URLSearchParams();
+    let providerUrl;
+    try { providerUrl = new URL(layer.upstream); } catch { return { params: out, missing: [], error: 'invalid_upstream' }; }
+    const host = providerUrl.hostname.toLowerCase();
+    if (layer.auth === 'token') {
+        if (providerUrl.protocol !== 'https:' || host !== 'api.dataforsyningen.dk') return { params: out, missing: [], error: 'credential_provider_mismatch' };
+        const token = process.env.DATAFORSYNINGEN_TOKEN;
+        if (!token) return { params: out, missing: layer.requiresCredentials || ['DATAFORSYNINGEN_TOKEN'] };
+        out.set('token', token);
+    } else if (layer.auth === 'basic') {
+        if (providerUrl.protocol !== 'https:' || host !== 'services.datafordeler.dk') return { params: out, missing: [], error: 'credential_provider_mismatch' };
+        const username = process.env.DATAFORDELER_USERNAME || process.env.DATAFORDELER_USER;
+        const password = process.env.DATAFORDELER_PASSWORD;
+        const missing = [];
+        if (!username) missing.push('DATAFORDELER_USERNAME');
+        if (!password) missing.push('DATAFORDELER_PASSWORD');
+        if (missing.length) return { params: out, missing };
+        out.set('username', username);
+        out.set('password', password);
+    }
+    return { params: out, missing: [] };
+}
+
+function normalizedOrigin(value) {
+    try {
+        const parsed = new URL(value);
+        if (!['https:', 'http:'].includes(parsed.protocol) || parsed.username || parsed.password ||
+            parsed.pathname !== '/' || parsed.search || parsed.hash) return null;
+        if (parsed.protocol === 'http:' && !['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname)) return null;
+        return parsed.origin;
+    } catch {
+        return null;
+    }
+}
+
+function danishProxyAllowedOrigins() {
+    return new Set(String(process.env.DANISH_PROXY_ALLOWED_ORIGINS || '')
+        .split(',')
+        .map((entry) => normalizedOrigin(entry.trim()))
+        .filter(Boolean));
+}
+
+function sameOriginOrNoOrigin(request) {
+    const headers = request.headers;
+    const fetchSite = headers && headers.get && headers.get('sec-fetch-site');
+    if (fetchSite && fetchSite.toLowerCase() === 'cross-site') return false;
+    const originHeader = headers && headers.get && headers.get('origin');
+    if (!originHeader) return true; // same-origin tile/image requests may omit Origin
+
+    const origin = normalizedOrigin(originHeader);
+    if (!origin) return false;
+    try {
+        if (origin === new URL(request.url).origin) return true;
+    } catch {
+        return false;
+    }
+    return danishProxyAllowedOrigins().has(origin);
 }
 
 /** The layer config entry for a route, or null. */
@@ -273,64 +337,26 @@ export function reprojectFeatureCollection(collection) {
 const CACHE_TILE = 'public, max-age=604800, immutable';
 const CACHE_CDN = 'public, s-maxage=604800, stale-while-revalidate=86400';
 
-/** DTK25 — the token is added as a header, as Dataforsyningen recommends. */
+/** Config-selected Dataforsyningen WMS — append the token server-side. */
 export async function dtk25Response(request) {
-    const layer = danishLayer('dtk25');
-    const token = process.env.DATAFORSYNINGEN_TOKEN;
-    if (!token) return missingCredentials(layer, layer.requiresCredentials);
-
     const incoming = new URL(request.url).searchParams;
+    const layerId = param(incoming, 'layer') || param(incoming, 'dklayer') || 'dtk25';
+    const layer = danishLayer(layerId);
+    if (!layer || layer.type !== 'wms' || layer.auth !== 'token') {
+        return jsonProblem(400, 'layer_not_allowed');
+    }
+    if (!sameOriginOrNoOrigin(request)) return jsonProblem(403, 'origin_not_allowed');
+
     const request_ = param(incoming, 'request').toLowerCase();
     if (request_ !== 'getmap' && request_ !== 'getcapabilities') {
         return jsonProblem(400, 'unsupported_request');
     }
     const upstream = new URL(layer.upstream);
-    upstream.search = forwardParams(incoming, { layers: layer.layers }).toString();
-
-    let res;
-    try {
-        res = await fetch(upstream.toString(), { headers: { token } });
-    } catch {
-        return jsonProblem(502, 'upstream_unreachable');
-    }
-    const type = res.headers.get('content-type') || 'application/octet-stream';
-    const body = Buffer.from(await res.arrayBuffer());
-    if (!res.ok || /xml|html|json/i.test(type)) {
-        const head = body.toString('utf8', 0, 800);
-        const unauthorized = res.status === 401 || res.status === 403 ||
-            /not authori[sz]ed|unauthorized|invalid token/i.test(head);
-        return jsonProblem(unauthorized ? 401 : 502,
-            unauthorized ? 'dataforsyningen_token_invalid' : 'upstream_error',
-            { layer: layer.id });
-    }
-    return new Response(body, {
-        status: 200,
-        headers: { 'Content-Type': type, 'Cache-Control': CACHE_TILE, 'Netlify-CDN-Cache-Control': CACHE_CDN }
-    });
-}
-
-/** GeoDanmark Ortofoto — Datafordeleren wants an identified service user. */
-export async function ortoResponse(request) {
-    const layer = danishLayer('orto');
-    const user = process.env.DATAFORDELER_USER || process.env.DATAFORDELER_USERNAME;
-    const password = process.env.DATAFORDELER_PASSWORD;
-    if (!user || !password) return missingCredentials(layer, layer.requiresCredentials);
-
-    const incoming = new URL(request.url).searchParams;
-    const request_ = param(incoming, 'request').toLowerCase();
-    if (request_ !== 'getmap' && request_ !== 'getcapabilities') {
-        return jsonProblem(400, 'unsupported_request');
-    }
-    const upstream = new URL(layer.upstream);
-    /* Datafordeleren documents the service user as URL credentials
-     * (?username=…&password=…). They are added here, server-side, and a caller's
-     * own username/password are stripped, so a visitor can never borrow or
-     * override the deployment's identity. */
-    upstream.search = forwardParams(incoming, {
-        layers: layer.layers,
-        username: user,
-        password
-    }).toString();
+    const upstreamParams = forwardParams(incoming, { layers: layer.layers });
+    const auth = appendLayerAuth(layer, upstreamParams);
+    if (auth.error) return jsonProblem(400, auth.error);
+    if (auth.missing.length) return missingCredentials(layer, auth.missing);
+    upstream.search = auth.params.toString();
 
     let res;
     try {
@@ -340,8 +366,62 @@ export async function ortoResponse(request) {
     }
     const type = res.headers.get('content-type') || 'application/octet-stream';
     const body = Buffer.from(await res.arrayBuffer());
-    if (!res.ok || /xml|html|json/i.test(type)) {
-        const head = body.toString('utf8', 0, 800);
+    const head = body.toString('utf8', 0, 2000);
+    const capabilities = request_ === 'getcapabilities' && res.ok && /xml/i.test(type) &&
+        /WMS_Capabilities|WMT_MS_Capabilities/i.test(head);
+    if (!res.ok || (!capabilities && /xml|html|json/i.test(type))) {
+        const unauthorized = res.status === 401 || res.status === 403 ||
+            /not authori[sz]ed|unauthorized|invalid token/i.test(head);
+        return jsonProblem(unauthorized ? 401 : 502,
+            unauthorized ? 'dataforsyningen_token_invalid' : 'upstream_error',
+            { layer: layer.id });
+    }
+    return new Response(body, {
+        status: 200,
+        headers: {
+            'Content-Type': type,
+            'Cache-Control': capabilities ? 'no-store' : CACHE_TILE,
+            'Netlify-CDN-Cache-Control': capabilities ? 'no-store' : CACHE_CDN
+        }
+    });
+}
+
+/** Config-selected GeoDanmark spring WMS — identified service user required. */
+export async function ortoResponse(request) {
+    const incoming = new URL(request.url).searchParams;
+    const layerId = param(incoming, 'layer') || param(incoming, 'dklayer') || 'orto';
+    const layer = danishLayer(layerId);
+    if (!layer || layer.type !== 'wms' || layer.auth !== 'basic') {
+        return jsonProblem(400, 'layer_not_allowed');
+    }
+    if (!sameOriginOrNoOrigin(request)) return jsonProblem(403, 'origin_not_allowed');
+
+    const request_ = param(incoming, 'request').toLowerCase();
+    if (request_ !== 'getmap' && request_ !== 'getcapabilities') {
+        return jsonProblem(400, 'unsupported_request');
+    }
+    const upstream = new URL(layer.upstream);
+    /* Datafordeleren documents the service user as URL credentials
+     * (?username=…&password=…). They are added here, server-side, and a caller's
+     * own username/password are stripped, so a visitor can never borrow or
+     * override the deployment's identity. */
+    const auth = appendLayerAuth(layer, forwardParams(incoming, { layers: layer.layers }));
+    if (auth.error) return jsonProblem(400, auth.error);
+    if (auth.missing.length) return missingCredentials(layer, auth.missing);
+    upstream.search = auth.params.toString();
+
+    let res;
+    try {
+        res = await fetch(upstream.toString());
+    } catch {
+        return jsonProblem(502, 'upstream_unreachable');
+    }
+    const type = res.headers.get('content-type') || 'application/octet-stream';
+    const body = Buffer.from(await res.arrayBuffer());
+    const head = body.toString('utf8', 0, 2000);
+    const capabilities = request_ === 'getcapabilities' && res.ok && /xml/i.test(type) &&
+        /WMS_Capabilities|WMT_MS_Capabilities/i.test(head);
+    if (!res.ok || (!capabilities && /xml|html|json/i.test(type))) {
         const unauthorized = res.status === 401 || res.status === 403 ||
             /unauthorized|not authori[sz]ed|invalid (user|credential)/i.test(head);
         return jsonProblem(unauthorized ? 401 : 502,
@@ -350,7 +430,11 @@ export async function ortoResponse(request) {
     }
     return new Response(body, {
         status: 200,
-        headers: { 'Content-Type': type, 'Cache-Control': CACHE_TILE, 'Netlify-CDN-Cache-Control': CACHE_CDN }
+        headers: {
+            'Content-Type': type,
+            'Cache-Control': capabilities ? 'no-store' : CACHE_TILE,
+            'Netlify-CDN-Cache-Control': capabilities ? 'no-store' : CACHE_CDN
+        }
     });
 }
 
@@ -438,6 +522,9 @@ export async function heritageResponse(request) {
 }
 
 /** Route table shared by the Netlify functions, the dev server and the tests. */
+export const dataforsyningenWmsResponse = dtk25Response;
+export const datafordelerWmsResponse = ortoResponse;
+
 export const ROUTES = {
     '/api/geo/dk-dtk25': dtk25Response,
     '/api/geo/dk-orto': ortoResponse,

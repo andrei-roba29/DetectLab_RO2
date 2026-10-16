@@ -12,8 +12,8 @@
  *      LAYERS / format / version / CRS, and a documented guard opt-out;
  *   3. the proxy library (backend/src/lib/danish-layers.mjs) — the token and the
  *      service user are added server-side only, a caller can neither smuggle nor
- *      override credentials, a missing credential is a clean 501 naming the
- *      variable, and the heritage WFS is asked in EPSG:25832 and answered in
+ *      override credentials, missing credentials return a generic 503, and the
+ *      heritage WFS is asked in EPSG:25832 and answered in
  *      EPSG:4326 (the projection is checked against PROJ reference values);
  *   4. the map module (js/danish-layers.js) in a stub DOM + Leaflet — rows built
  *      from the config, exclusive bases, per-overlay opacity, nothing requested
@@ -39,10 +39,11 @@ const CONFIG = require('./js/danish-layers.config.js');
 let passed = 0;
 function ok(label) { passed += 1; console.log('  ✓ ' + label); }
 
-const WIRED = ['dtk25', 'orto', 'naturtyper', 'osm', 'fortidsminder'];      /* config order */
-const RENDERED = ['dtk25', 'orto', 'osm', 'naturtyper', 'fortidsminder'];   /* bases, then overlays */
+const WIRED = CONFIG.enabledLayers().map((layer) => layer.id);
+const RENDERED = CONFIG.enabledLayers().filter((layer) => !layer.selectorGroup)
+    .sort((a, b) => (a.group === b.group ? 0 : (a.group === 'base' ? -1 : 1))).map((layer) => layer.id);
 /* A stand-in for the Dataforsyningen token: the suite only checks that the
-   token travels as the `token` header / local-preview parameter, never that a
+   token travels server-side, never in browser requests, never that a
    real one works. No credential may ever be committed. */
 const TOKEN = 'test-token-not-a-credential';
 
@@ -50,16 +51,23 @@ const TOKEN = 'test-token-not-a-credential';
  * 1. the config
  * ══════════════════════════════════════════════════════════════════════════ */
 {
-    assert.strictEqual(CONFIG.layers.length, 6, 'the config describes exactly six layers');
+    assert.strictEqual(CONFIG.layers.length, 30, 'the existing Danish layers plus the requested LiDAR and historical layers are configured');
     assert.strictEqual(CONFIG.country, 'DK');
-    assert.deepStrictEqual(CONFIG.layers.map((l) => l.id),
+    assert.deepStrictEqual(CONFIG.layers.slice(0, 6).map((l) => l.id),
         ['dtk25', 'orto', 'naturtyper', 'osm', 'historic-witx', 'fortidsminder']);
+    assert.strictEqual(CONFIG.layers.filter((l) => l.id.indexOf('lidar_') === 0).length, 3);
+    assert.strictEqual(CONFIG.layers.filter((l) => l.id.indexOf('orto_foraar_') === 0).length, 10);
+    assert.strictEqual(CONFIG.layers.filter((l) => l.id.indexOf('orto_sommer_') === 0).length, 4);
     assert.deepStrictEqual(CONFIG.enabledLayers().map((l) => l.id), WIRED);
     assert.strictEqual(CONFIG.byId('historic-witx').enabled, false);
-    ok('six layers in the documented order; the four wired + the official heritage WFS; witx disabled');
+    assert.strictEqual(CONFIG.byId('witx_fundogfortidsminder_areal').enabled, false);
+    assert.strictEqual(CONFIG.byId('witx_fundogfortidsminder').enabled, false);
+    assert.strictEqual(CONFIG.byId('witx_fundogfortidsminder_areal').layers, 'witx:FundOgFortidsminderAreal');
+    assert.strictEqual(CONFIG.byId('witx_fundogfortidsminder').layers, 'witx:FundOgFortidsminder');
+    ok('existing Danish layers retained; three LiDAR, historic map, summer and spring-year layers added; witx disabled');
 
     const FIELDS = ['id', 'title', 'group', 'type', 'url', 'layers', 'crs', 'format', 'minZoom', 'maxZoom',
-        'attribution', 'opacity', 'defaultOn', 'enabled', 'requiresCredentials', 'provider', 'licence', 'bounds'];
+        'attribution', 'opacity', 'defaultOn', 'enabled', 'requiresCredentials', 'auth', 'provider', 'licence', 'bounds'];
     CONFIG.layers.forEach((layer) => {
         FIELDS.forEach((field) => {
             assert.ok(Object.prototype.hasOwnProperty.call(layer, field),
@@ -88,7 +96,7 @@ const TOKEN = 'test-token-not-a-credential';
     });
     assert.deepStrictEqual(CONFIG.byId('dtk25').requiresCredentials, ['DATAFORSYNINGEN_TOKEN']);
     assert.deepStrictEqual(CONFIG.byId('orto').requiresCredentials,
-        ['DATAFORDELER_USER', 'DATAFORDELER_PASSWORD']);
+        ['DATAFORDELER_USERNAME', 'DATAFORDELER_PASSWORD']);
     ok('credentialed layers use same-origin routes and name their environment variables');
 
     const defaults = CONFIG.layers.filter((l) => l.defaultOn);
@@ -97,11 +105,13 @@ const TOKEN = 'test-token-not-a-credential';
     assert.strictEqual(defaults[0].group, 'base');
     ok('exactly one Danish base map starts switched on (DTK25)');
 
-    assert.deepStrictEqual(CONFIG.enabledLayers().filter((l) => l.group === 'base').map((l) => l.id),
-        ['dtk25', 'orto', 'osm']);
-    assert.deepStrictEqual(CONFIG.enabledLayers().filter((l) => l.group !== 'base').map((l) => l.id),
-        ['naturtyper', 'fortidsminder']);
-    ok('three base maps (radio) and two overlays (checkbox)');
+    assert.ok(CONFIG.enabledLayers().filter((l) => l.group === 'base').length >= 15);
+    assert.ok(CONFIG.enabledLayers().filter((l) => l.group !== 'base').length >= 5);
+    assert.ok(CONFIG.enabledLayers().filter((l) => l.group === 'base').every((l) => l.defaultOn === false || l.id === 'dtk25'));
+    assert.ok(CONFIG.byId('lidar_hillshade_historik').minZoom <= 12 && CONFIG.byId('lidar_hillshade_historik').maxZoom >= 17);
+    assert.ok(CONFIG.byId('lidar_quickdhm_exaggerated').minZoom <= 12 && CONFIG.byId('lidar_dhm_terrain_hillshade').minZoom <= 12);
+    assert.ok(CONFIG.layers.filter((l) => l.selectorGroup === 'spring-orthophoto').length === 10);
+    ok('exclusive base maps (radio) and independent overlays (checkbox)');
 
     const nature = CONFIG.byId('naturtyper');
     assert.strictEqual(nature.requiresCredentials.length, 0);
@@ -239,12 +249,10 @@ async function testProxies() {
 
     delete process.env.DATAFORSYNINGEN_TOKEN;
     let response = await lib.dtk25Response(new Request('https://x/api/geo/dk-dtk25?service=WMS&request=GetMap'));
-    assert.strictEqual(response.status, 501, 'without the token the route refuses politely');
+    assert.strictEqual(response.status, 503, 'without the token the route returns service unavailable');
     let body = await response.json();
-    assert.strictEqual(body.error, 'layer_not_configured');
-    assert.deepStrictEqual(body.credentials, ['DATAFORSYNINGEN_TOKEN']);
-    assert.ok(body.hint.indexOf('DATAFORSYNINGEN_TOKEN') !== -1);
-    ok('DTK25 without DATAFORSYNINGEN_TOKEN → 501 naming the variable (never a blank map)');
+    assert.deepStrictEqual(body, { error: 'service_unavailable' }, 'the client receives no variable or layer details');
+    ok('DTK25 missing credential → generic 503; variable details stay server-side');
 
     process.env.DATAFORSYNINGEN_TOKEN = 'server-side-token';
     response = await lib.dtk25Response(new Request(
@@ -256,12 +264,12 @@ async function testProxies() {
     assert.ok(response.headers.get('Cache-Control').indexOf('max-age=604800') !== -1, 'the tile is cacheable');
     let upstream = calls[calls.length - 1];
     assert.ok(upstream.url.indexOf('https://api.dataforsyningen.dk/dtk_25_DAF?') === 0, 'a fixed upstream host');
-    assert.ok(upstream.url.indexOf('server-side-token') === -1, 'the token is NOT in the URL');
-    assert.strictEqual(upstream.options.headers.token, 'server-side-token', 'it travels as a header');
+    assert.ok(upstream.url.indexOf('token=server-side-token') !== -1, 'the token is present only on the server-to-provider URL');
+    assert.ok(upstream.url.indexOf('token=server-side-token') !== -1, 'it travels as a server-side query parameter');
     assert.ok(upstream.url.indexOf('someone-elses') === -1, 'a caller cannot inject a token');
     assert.ok(upstream.url.indexOf('steal') === -1, 'a caller cannot inject credentials');
     assert.ok(/LAYERS=dtk25_2023/i.test(upstream.url), 'the LAYERS value comes from the config');
-    ok('DTK25: token added as a header; caller-supplied token/username/password stripped');
+    ok('Dataforsyningen: token added server-side; caller-supplied credentials stripped');
 
     await lib.dtk25Response(new Request('https://x/api/geo/dk-dtk25?request=GetMap&LAYERS=some_other_layer'));
     const injected = decodeURIComponent(calls[calls.length - 1].url);
@@ -272,14 +280,15 @@ async function testProxies() {
     ok('DTK25: upstream and LAYERS are allow-listed, unsupported requests are refused');
 
     delete process.env.DATAFORDELER_USER;
+    delete process.env.DATAFORDELER_USERNAME;
     delete process.env.DATAFORDELER_PASSWORD;
     response = await lib.ortoResponse(new Request('https://x/api/geo/dk-orto?request=GetMap'));
-    assert.strictEqual(response.status, 501);
+    assert.strictEqual(response.status, 503);
     body = await response.json();
-    assert.deepStrictEqual(body.credentials, ['DATAFORDELER_USER', 'DATAFORDELER_PASSWORD']);
-    ok('orthophoto without the Datafordeler service user → 501 naming both variables');
+    assert.deepStrictEqual(body, { error: 'service_unavailable' }, 'the generic response hides missing variable names');
+    ok('orthophoto missing credentials → generic 503; variable details stay server-side');
 
-    process.env.DATAFORDELER_USER = 'service-user';
+    process.env.DATAFORDELER_USERNAME = 'service-user';
     process.env.DATAFORDELER_PASSWORD = 'service-pass';
     response = await lib.ortoResponse(new Request(
         'https://x/api/geo/dk-orto?service=WMS&version=1.3.0&request=GetMap&username=attacker&password=attacker'));
@@ -348,6 +357,7 @@ async function testProxies() {
     global.fetch = realFetch;
     delete process.env.DATAFORSYNINGEN_TOKEN;
     delete process.env.DATAFORDELER_USER;
+    delete process.env.DATAFORDELER_USERNAME;
     delete process.env.DATAFORDELER_PASSWORD;
     ok('all three routes exercised against a stubbed upstream (no network)');
 
@@ -363,12 +373,12 @@ async function testProxies() {
         assert.ok(backend.indexOf("router.get('" + route + "'") !== -1, 'the Express mirror serves ' + route);
     });
     const env = read('backend/.env.example');
-    assert.ok(env.indexOf('DATAFORDELER_USER') !== -1 && env.indexOf('DATAFORDELER_PASSWORD') !== -1,
+    assert.ok(env.indexOf('DATAFORDELER_USERNAME') !== -1 && env.indexOf('DATAFORDELER_PASSWORD') !== -1,
         'the variable names are documented for self-hosting');
     const devServer = read('tools/map3d-dev-server.mjs');
     assert.ok(devServer.indexOf('DANISH_ROUTES') !== -1, 'the local dev server serves the same routes');
-    assert.ok(devServer.indexOf('DETECTLAB_DK_TOKEN') !== -1,
-        'and can hand a workstation the documented local token');
+    assert.ok(devServer.indexOf('DETECTLAB_DK_TOKEN') === -1,
+        'the server never injects the credential into client HTML');
     ok('Netlify routes/functions, the Express mirror, the docs and the dev server are wired');
 }
 
@@ -388,7 +398,7 @@ async function testMapModule() {
         clearTimeout() {},
         setInterval: () => 0,
         clearInterval() {},
-        fetch: () => Promise.resolve(new Response('', { status: 501 })),
+        fetch: () => Promise.resolve(new Response('', { status: 503 })),
         Response, Request, AbortController: function () { this.abort = () => {}; },
         alert() {},
         L: leaflet,
@@ -411,6 +421,12 @@ async function testMapModule() {
         'the base radios share one name → mutually exclusive');
     assert.strictEqual(dom.byId['danishToggle_naturtyper'].type, 'checkbox', 'overlay rows are checkboxes');
     assert.ok(dom.byId['danishOpacity_naturtyper'], 'overlays get an opacity slider');
+    ['lidar_hillshade_historik', 'lidar_quickdhm_exaggerated', 'lidar_dhm_terrain_hillshade'].forEach((id) => {
+        assert.ok(dom.byId['danishToggle_' + id], id + ' is a selectable overlay row');
+        assert.equal(dom.byId['danishOpacity_' + id].value, '100', id + ' slider starts at 100%');
+    });
+    assert.ok(dom.byId['danishSpringOrthoYear'], 'spring orthophoto years have one dropdown');
+    assert.equal(dom.byId['danishSpringOrthoYear'].children.length, 10, 'the year dropdown has 2016–2025');
 
     /* The info panel takes plain text: it links the URLs it finds and prints the
        description through textContent, so markup or newlines would show up
@@ -430,8 +446,10 @@ async function testMapModule() {
         'the licence is named once, not twice');
     assert.ok(info[0].attribution.indexOf('https://creativecommons.org/licenses/by/4.0/') !== -1,
         'the licence URL is there for the renderer to link');
-    assert.ok(/set on the server: DATAFORSYNINGEN_TOKEN/.test(info[0].description),
-        'the info names the environment variable the row needs');
+    assert.ok(/server-side credentials required/.test(info[0].description),
+        'the info explains server credentials without exposing variable names');
+    assert.ok(!/DATAFORSYNINGEN_TOKEN|DATAFORDELER_USERNAME|DATAFORDELER_PASSWORD/.test(info[0].description),
+        'the visitor-facing info contains no variable names');
     assert.ok(/zoom 13/.test(info[1].description) && /CC0 1\.0/.test(info[1].attribution),
         'the heritage row states its own zoom gate and licence');
     assert.ok(/disabled/.test(info[2].description) && /permission required/.test(info[2].description),
@@ -441,26 +459,38 @@ async function testMapModule() {
     ok('rows, radio group, checkboxes and sliders are generated from the config');
 
     /* The default base map is switched on at start and probed once; the stub
-     * answers 501, so DTK25 must explain the missing credential and fall back to
-     * the public Danish basemap rather than leave an empty map. */
+     * answers 503, so DTK25 shows a generic missing-configuration notice and
+     * falls back to the public Danish basemap rather than leaving an empty map. */
     await settle();
-    assert.ok(dom.byId['danishStatus_dtk25'].textContent.indexOf('DATAFORSYNINGEN_TOKEN') !== -1,
-        'the row names the variable to set');
+    assert.ok(/not configured on the server/.test(dom.byId['danishStatus_dtk25'].textContent),
+        'the row gives a generic server-configuration notice');
+    assert.ok(!/DATAFORSYNINGEN_TOKEN|DATAFORDELER_USERNAME|DATAFORDELER_PASSWORD/.test(dom.byId['danishStatus_dtk25'].textContent),
+        'the row does not expose environment variable names');
     assert.ok(dom.byId['danishGroupNotice'].textContent.length > 0, 'the group says what happened');
     assert.strictEqual(API.isActive('osm'), true, 'OpenStreetMap took over');
     assert.ok(leaflet.calls.tileLayer.some((c) => c.url.indexOf('tile.openstreetmap.org') !== -1),
         'and it is the XYZ layer that was built');
-    ok('DTK25 without a server token: named in the row, explained in the group, OSM takes over');
+    ok('DTK25 generic 503 status explains the issue and falls back to OSM');
+
+    /* The three requested LiDAR layers are lazy and report missing credentials generically. */
+    assert.strictEqual(leaflet.calls.tileLayerWms.length, 0, 'no WMS tile layer is built before an overlay is activated');
+    API.activate('lidar_hillshade_historik');
+    await settle();
+    assert.ok(/not configured on the server/.test(dom.byId['danishStatus_lidar_hillshade_historik'].textContent),
+        'the LiDAR row gives a generic configuration notice');
+    assert.ok(!/DATAFORSYNINGEN_TOKEN|DATAFORDELER_USERNAME|DATAFORDELER_PASSWORD/.test(dom.byId['danishStatus_lidar_hillshade_historik'].textContent),
+        'the LiDAR row does not expose environment variable names');
+    assert.strictEqual(API.isActive('lidar_hillshade_historik'), false, 'unconfigured LiDAR does not silently appear active');
+    ok('LiDAR rows are lazy and show only generic credential status');
 
     /* A public overlay is built on demand, with the documented request format. */
-    assert.strictEqual(leaflet.calls.tileLayerWms.length, 0, 'nothing WMS was built before the switch');
     API.activate('naturtyper');
     const nature = leaflet.calls.tileLayerWms[0];
     assert.ok(nature && nature.url.indexOf('miljoeportal.dk') !== -1, 'the overlay was built from its own URL');
     assert.strictEqual(nature.options.layers, 'dai:bes_naturtyper');
     assert.strictEqual(nature.options.uppercase, true, 'uppercase KVP (WMS 1.3.0)');
-    assert.strictEqual(nature.options.tiled, true, 'TILED');
-    assert.strictEqual(nature.options.transparent, true, 'TRANSPARENT');
+    assert.strictEqual(nature.options.tiled, 'TRUE', 'TILED=TRUE is serialized exactly as required');
+    assert.strictEqual(nature.options.transparent, 'TRUE', 'TRANSPARENT=TRUE is serialized exactly as required');
     assert.strictEqual(nature.options.format, 'image/png');
     assert.ok(nature.options.crs === undefined && nature.options.srs === undefined,
         'no CRS option → Leaflet sends the map CRS, EPSG:3857');
@@ -497,20 +527,48 @@ async function testMapModule() {
     assert.strictEqual(API.selectedBase(), 'dtk25');
     ok('Danish base maps are mutually exclusive; overlays are independent');
 
-    /* A workstation with no proxy at all: the documented local-only token path
-     * asks the provider directly, and the row says so. */
+    /* A client-injected token must never enable direct provider requests. */
     sandbox.DETECTLAB_DK_TOKEN = 'local-only-token';
     sandbox.fetch = () => Promise.resolve(new Response('', { status: 404 }));
     delete API.state.guard.dtk25;
     API.activate('dtk25');
     await settle();
-    const direct = leaflet.calls.tileLayerWms.filter((c) => c.url.indexOf('api.dataforsyningen.dk') !== -1).pop();
-    assert.ok(direct, 'with no proxy the token path falls back to the provider');
-    assert.strictEqual(direct.options.token, 'local-only-token', 'the page-supplied token is used');
-    assert.strictEqual(direct.options.uppercase, false, 'and the token parameter keeps its lowercase spelling');
-    assert.strictEqual(API.modeOf('dtk25'), 'direct');
-    assert.strictEqual(API.isActive('dtk25'), true);
-    ok('local preview without a proxy: provider called directly with the documented local token');
+    assert.ok(!leaflet.calls.tileLayerWms.some((c) => c.url.indexOf('api.dataforsyningen.dk') !== -1),
+        'the browser never falls back to a token-bearing provider URL');
+    assert.strictEqual(API.isActive('dtk25'), false, 'a missing proxy leaves the protected layer off');
+    ok('no client-side Dataforsyningen token fallback is permitted');
+
+    const springYear = dom.byId['danishSpringOrthoYear'];
+    springYear.value = 'orto_foraar_2024';
+    springYear.dispatch('change');
+    await settle();
+    assert.ok(/not configured on the server/.test(dom.byId['danishSpringOrthoStatus'].textContent),
+        'the one-year selector reports a generic missing-configuration state');
+    assert.ok(!/DATAFORDELER_USERNAME|DATAFORDELER_PASSWORD/.test(dom.byId['danishSpringOrthoStatus'].textContent),
+        'the selector does not expose variable names');
+    ok('the spring-year dropdown exposes a generic missing-credentials status');
+
+    sandbox.fetch = () => Promise.resolve(new Response('<WMS_Capabilities/>', {
+        status: 200, headers: { 'Content-Type': 'text/xml' }
+    }));
+    delete API.state.guard.orto_foraar_2024;
+    springYear.value = 'orto_foraar_2024';
+    springYear.dispatch('change');
+    await settle();
+    assert.strictEqual(API.selectedBase(), 'orto_foraar_2024');
+    assert.strictEqual(API.isActive('orto_foraar_2024'), true);
+    assert.ok(leaflet.calls.tileLayerWms.some((call) => call.url.indexOf('layer=orto_foraar_2024') !== -1),
+        'selecting a year creates exactly that year layer through the configured route');
+    ok('the spring-year dropdown activates the chosen mutually exclusive base layer');
+
+    delete API.state.guard.lidar_quickdhm_exaggerated;
+    API.activate('lidar_quickdhm_exaggerated');
+    await settle();
+    const quickDhm = leaflet.calls.tileLayerWms.filter((call) => call.url.indexOf('layer=lidar_quickdhm_exaggerated') !== -1).pop();
+    assert.ok(quickDhm, 'an enabled LiDAR overlay is actually created and added after its proxy probe');
+    assert.strictEqual(quickDhm.options.layers, 'quickDHM_skyggekort_terraen_overdrevet');
+    assert.strictEqual(API.isActive('lidar_quickdhm_exaggerated'), true);
+    ok('configured LiDAR overlay builds the exact layer through the same-origin proxy');
 
     /* The guard replaces L.tileLayer.wms; a Danish row that went through it
      * could have its switch flipped under the module's feet. Every WMS layer
@@ -543,7 +601,8 @@ async function testMapModule() {
     const controlButtons = dom.byId['arcgisBasemapCtrl'].descendants
         .filter((n) => n.attributes && n.attributes['data-danish-basemap']);
     assert.deepStrictEqual(controlButtons.map((b) => b.attributes['data-danish-basemap']),
-        ['dtk25', 'orto', 'osm'], 'the three Danish bases are offered in the existing control');
+        CONFIG.enabledLayers().filter((l) => l.group === 'base' && !l.selectorGroup).map((l) => l.id),
+        'the existing base layers remain offered in the same basemap control (year options stay in one dropdown)');
     ok('the Danish bases appear as buttons in the existing basemap control');
 
     /* Language: DA + EN strings, and the module follows a language change. */
@@ -570,10 +629,10 @@ function testWiring() {
     assert.ok(html.indexOf('id="danishSubLayers"') !== -1, '…and the container the rows are built into');
     assert.ok(html.indexOf('id="danishToggle"') !== -1, '…and the group switch');
     assert.ok(html.indexOf('onclick="toggleDanishSubLayers()"') !== -1, '…and the collapse button');
-    assert.ok(html.indexOf('js/danish-layers.config.js?v=20261015-danish') <
+    assert.ok(html.indexOf('js/danish-layers.config.js?v=20261016-danish-wms-layers') <
         html.indexOf('js/layer-registry.js?v=20261015-danish-layers'),
         'the config loads before the registry that mirrors it');
-    assert.ok(html.indexOf('js/danish-layers.js?v=20261015-basemap-collapse') >
+    assert.ok(html.indexOf('js/danish-layers.js?v=20261016-danish-wms-layers') >
         html.indexOf('js/map-app.js?v=20261015-basemap-collapse'),
         'the module loads after the map module');
     ok('index.html: group row, container and both scripts in the right order');
@@ -591,8 +650,8 @@ function testWiring() {
         'map-app.js hands the country selection to the Danish rows');
     assert.ok(Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]) >= 212,
         'the service-worker cache moved on for the Danish layers');
-    assert.ok(sw.indexOf("'js/danish-layers.js?v=20261015-basemap-collapse'") !== -1, 'the new scripts are precached');
-    assert.ok(css.indexOf('.danish-layer-row') !== -1 && css.indexOf('.danish-basemap-btn') !== -1,
+    assert.ok(sw.indexOf("'js/danish-layers.js?v=20261016-danish-wms-layers'") !== -1, 'the new scripts are precached');
+    assert.ok(css.indexOf('.danish-layer-row') !== -1 && css.indexOf('.danish-basemap-btn') !== -1 && css.indexOf('.danish-year-select') !== -1,
         'the generated rows and the basemap buttons are styled');
     assert.ok(css.indexOf('focus-visible') !== -1, 'and keyboard focus stays visible');
     ok('map-app hook, service worker, stylesheet and keyboard focus are wired');
@@ -669,6 +728,7 @@ function buildDom() {
             },
             setAttribute(key, value) {
                 this.attributes[key] = String(value);
+                if (key === 'value') this.value = String(value);
                 if (key === 'id') { this.id = String(value); byId[this.id] = this; }
                 if (key === 'type') this.type = String(value);
             },

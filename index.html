@@ -26,7 +26,7 @@
     <link rel="stylesheet" href="css/leaflet.photon.css">
     <link rel="stylesheet" href="css/leaflet-measure.css">
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
-    <link rel="stylesheet" href="css/styles.css?v=20261015-fullscreen-zoom-alignment">
+    <link rel="stylesheet" href="css/styles.css?v=20261016-danish-layer-panel">
     <!-- 3D TERRAIN VIEW (2D ⇄ 3D) — MapLibre GL JS, vendored like Leaflet.
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
@@ -2587,7 +2587,7 @@
 
                         <!-- Base maps (radio, one at a time) and overlays (checkbox,
                              with an opacity slider each) are generated here. -->
-                        <div id="danishSubLayers" class="danish-sublayers" style="display:flex;flex-direction:column;gap:8px;overflow:hidden;transition:max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;max-height:1600px;opacity:1;"></div>
+                        <div id="danishSubLayers" class="danish-sublayers" style="display:flex;flex-direction:column;gap:8px;overflow:hidden;transition:max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;max-height:6000px;opacity:1;"></div>
                     </div>
 
                     <div class="transp-divider active" data-category="free"></div>
@@ -4903,7 +4903,7 @@
     <!-- The Danish layers (Denmark): the CONFIG is the single description of
          every Danish layer and it is loaded before the registry, which mirrors
          it. js/danish-layers.js (below, after map-app.js) draws them. -->
-    <script src="js/danish-layers.config.js?v=20261015-danish"></script>
+    <script src="js/danish-layers.config.js?v=20261016-danish-wms-layers"></script>
     <script src="js/layer-registry.js?v=20261015-danish-layers"></script>
     <!-- Roman roads („Drumuri romane”): the parser owns the record/geometry
          format, the layer paints the road network on canvas tiles, and the
@@ -4915,7 +4915,7 @@
     <script src="js/map-app.js?v=20261015-basemap-collapse"></script>
     <!-- Danish layers: panel rows, basemap-control buttons and the lazy
          Leaflet layers, all built from js/danish-layers.config.js. -->
-    <script src="js/danish-layers.js?v=20261015-basemap-collapse"></script>
+    <script src="js/danish-layers.js?v=20261016-danish-wms-layers"></script>
     <script src="js/historical-eu-maps.js?v=20261013-flat-hist-maps"></script>
     <!-- 2D ⇄ 3D: MapLibre GL viewer draped over the DEM. The 3D deck is the
          mirror of the live 2D Leaflet map — raster, WMS/WMTS, image overlays,
