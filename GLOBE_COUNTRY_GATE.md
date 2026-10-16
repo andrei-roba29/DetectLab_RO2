@@ -210,6 +210,46 @@ Leaflet/Web-Mercator owns its placement, while the 3D renderer is only a
 transitional selection surface. The lock, persistence, layer filtering, bounds
 pane, country dock, and exit-view behavior are unchanged.
 
+## The outline while the map is turned
+
+`map-rotate.js` keeps the whole map pane rotated by the compass bearing, and it
+redefines `containerPointToLayerPoint` so hit-testing, tooltips and measures
+land where they look. That redefinition reaches into the *clip* window of every
+vector renderer: `L.Renderer._update` turns the padded viewport corners into a
+box, and it now receives corners that are already un-rotated, while Leaflet
+flattens them into an axis-aligned box of the *unrotated* size and shifts it by
+the turn. The `<svg>` element (padding `0.1`) then no longer covers the viewport
+on screen, and `Polyline._clipPoints` — which clips against exactly that box —
+drops the geometry outside it: whole arcs of a selected country's border vanish
+and come back while zooming or dragging, and at 90° the outline is gone
+completely. A stock `L.SVG` layer in `overlayPane` behaves identically, so this
+is not specific to the gate outline.
+
+The compensation lives in one place, next to the identical one the tile grid
+already had (`GridLayer._getTiledPixelBounds`): the four padded view corners go
+through `rotatePoint(…, -bearing, pivot)`, minus the pane position, and their
+bounding box (floored/ceiled to whole pixels) becomes `renderer._bounds`. SVG
+only — growing a *canvas* renderer's bitmap to the 45° box would double the
+backing store of every canvas layer (×DPR²) for a sub-pixel clip. North-up the
+patch delegates to Leaflet untouched, so nothing moves for the ordinary case.
+
+`BoundsSVG` also keeps its own invariant: the anchor the outline is scaled
+around (`_outlinePixelOrigin + _bounds.min`, consumed by `_updateTransform`) is
+re-captured only when `L.SVG._update` actually recomputed `_bounds` — never
+while `map._animatingZoom` holds a zoom mid-flight. Otherwise a layer added,
+refreshed or re-fitted during an animation would scale the whole outline around
+an anchor belonging to a different zoom. Its translate is deliberately left
+unrounded: `GridLayer` rounds a *level* around that level's own origin, and
+rounding only one of the two independently puts the border up to a pixel away
+from the imagery it is measured against.
+
+`node test-rotated-vector-bounds.js` runs the shipped `_update` against the
+property it must satisfy (every viewport corner of a turned view lands inside
+the element box) and proves the stock box loses corners at every bearing that is
+not a multiple of 180°. `node test-country-outline-zoom-browser.js` keeps the
+outline within 2 px of the tile grid through animated zooms, at bearing 0° and
+35°, in a real browser.
+
 ## One hand-off frame (v189 — the zoom the two surfaces meet on)
 
 The globe used to end its flight on a zoom of its own: `zoomFor()` in
@@ -327,7 +367,8 @@ single-select flow and the v189 hand-off zoom/conversion/clamp),
 math and the canvas↔flat-map frame cross-check), `node test-country-dock.js`
 (public API, lock, dock, exit/re-entry and the shared hand-off frame), and
 `node test-country-layer-filter.js` (country-scoped layers and the outline-only
-bounds overlay). The public `window.DetectLabGlobeGate` API and `_test` hooks
+bounds overlay), and `node test-rotated-vector-bounds.js` (the clip window every
+SVG renderer gets while the map is turned, plus the outline's zoom anchor). The public `window.DetectLabGlobeGate` API and `_test` hooks
 remain in `js/globe-country-picker.js` (`countryHandoffFrame`,
 `countryFitZoom`, `canvasFrameScale`, `bboxBounds`, `FIT_PADDING` are exported
 for the suites).

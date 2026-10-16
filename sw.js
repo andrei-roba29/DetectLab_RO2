@@ -518,7 +518,12 @@
 // v220: Danish WMS expansion (three LiDAR overlays, historical sheets and
 //   orthophoto years) in the existing panel. Credentials stay server-side;
 //   WITX WFS/tile entries are disabled placeholders. See DATA_SOURCES.md.
-const CACHE_NAME = 'detectlab-v220-danish-wms-layers';
+// v221: country borders while the map is turned — vector renderers now clip to
+//   the bounding box of the ROTATED viewport (js/map-rotate.js) instead of
+//   losing on-screen geometry, and the gate outline's zoom anchor follows
+//   Leaflet's bounds refresh exactly (js/globe-country-picker.js). See
+//   GLOBE_COUNTRY_GATE.md.
+const CACHE_NAME = 'detectlab-v221-rotated-vector-clip';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1191,6 +1196,17 @@ const PRECACHE_URLS = [
   'css/globe-country-picker.css?v=20261013-no-change-pill',
   'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
   'js/globe-country-picker.js?v=20261015-outline-zoom-anchor',
+  // v221: a TURNED map used to clip vector geometry away. L.Renderer derives the
+  // box of every <svg> from the padded viewport corners through
+  // containerPointToLayerPoint, which map-rotate.js un-rotates — so Leaflet
+  // flattened already-rotated corners into an axis-aligned box that no longer
+  // covered the viewport, and Polyline._clipPoints threw the visible part of a
+  // country border away (all of it at 90°), which made borders look like they
+  // moved on zoom/pan. The box is now the bounding box of the turned view, like
+  // the tile grid's compensation. The gate outline also re-captures its zoom
+  // anchor only when Leaflet really recomputed the renderer bounds.
+  'js/map-rotate.js?v=20261016-rotated-vector-clip',
+  'js/globe-country-picker.js?v=20261016-outline-anchor-guard',
   'js/globe-country-picker.js?v=20261014-country-exit-3d',
   'js/globe-country-picker.js?v=20261013-no-change-pill',
   'js/wms-health.js?v=20261014-provider-guard',

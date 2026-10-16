@@ -21,7 +21,7 @@ console.log('[Test] Lazy ArcGIS country gate...');
 
 // Page and service-worker wiring: adapter before the public gate, no eager CDN.
 const adapterUrl = 'js/globe-arcgis-gate.js?v=20261013-handoff-zoom';
-const pickerUrl = 'js/globe-country-picker.js?v=20261015-outline-zoom-anchor';
+const pickerUrl = 'js/globe-country-picker.js?v=20261016-outline-anchor-guard';
 const cssUrl = 'css/globe-country-picker.css?v=20261013-no-change-pill';
 const translationsUrl = 'js/translations.js?v=20261015-danish-layers';
 for (const asset of [adapterUrl, pickerUrl, cssUrl, translationsUrl]) {

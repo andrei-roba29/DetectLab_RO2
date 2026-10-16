@@ -90,15 +90,56 @@ async function main() {
                         anchor.remove();
                     }
                 }
+                // A turned map must not clip away the border the user can see.
+                // L.Renderer._bounds is both the <svg> element's box and the
+                // window Polyline._clipPoints keeps, so any visible vertex
+                // outside it is drawn nowhere — the old rotation bug lost a
+                // quarter of the ring at 35° and all of it at 90°, while the
+                // anchor test above stayed green (the offset cancels).
+                const clipReport = [];
+                // z5 keeps the whole country inside a 390px viewport as well as a
+                // 1280px one, so every scenario has vertices to measure; the pan
+                // is a fraction of the viewport, i.e. a drag that leaves some of
+                // the border on screen.
+                const viewSize = map.getSize();
+                map.setView(layer.getBounds().getCenter(), 5, { animate: false });
+                ring = layer.getLatLngs();
+                while (Array.isArray(ring[0])) ring = ring[0];
+                for (const bearing of [0, 35, 90]) {
+                    map.setBearing(bearing, { force: true });
+                    for (const pan of [[0, 0], [Math.round(viewSize.x * 0.15), Math.round(viewSize.y * 0.15)]]) {
+                        // panBy ends the view change like a real drag does, so the
+                        // renderer recomputes its box with the turn applied.
+                        map.panBy(pan, { animate: false });
+                        const clipBox = layer._renderer._bounds;
+                        let visible = 0, clipped = 0;
+                        for (const ll of ring) {
+                            const c = map.latLngToContainerPoint(ll);
+                            if (c.x < 1 || c.y < 1 || c.x > viewSize.x - 1 || c.y > viewSize.y - 1) continue;
+                            visible++;
+                            if (!clipBox.contains(map.latLngToLayerPoint(ll))) clipped++;
+                        }
+                        clipReport.push({
+                            bearing, pan: pan.join(','), visible, clipped,
+                            painted: (layer._path.getAttribute('d') || '').length > 10
+                        });
+                    }
+                }
                 const oldRenderer = layer._renderer;
                 await DetectLabGlobeGate.selectCountry('DE');
-                return { maxError, samples, steps, oldRendererRemoved: !map.hasLayer(oldRenderer),
+                return { maxError, samples, steps, clipReport, oldRendererRemoved: !map.hasLayer(oldRenderer),
                     svgCount: map.getPane(t.BOUNDS_PANE).querySelectorAll('svg').length };
             });
             assert(result.samples > 10, 'test samples live animated zoom frames');
             assert(result.maxError < 2, `outline moved relative to LiDAR tiles: ${JSON.stringify(result)}`);
+            assert(result.clipReport.reduce((n, r) => n + r.visible, 0) > 0,
+                `the outline has to be on screen for the clip checks to mean anything: ${JSON.stringify(result.clipReport)}`);
+            for (const r of result.clipReport) {
+                assert(r.clipped === 0, `turned map clipped visible border away: ${JSON.stringify(r)}`);
+                if (r.visible) assert(r.painted, `the visible outline must be painted: ${JSON.stringify(r)}`);
+            }
             assert(result.oldRendererRemoved && result.svgCount === 1, 'country switching removes the dedicated renderer');
-            console.log(`✓ ${width}px: country outline stays aligned with LiDAR tiles throughout animated zoom, north-up and rotated`);
+            console.log(`✓ ${width}px: country outline stays aligned with LiDAR tiles throughout animated zoom, north-up and rotated, and is never clipped away by a turned view (${result.clipReport.length} bearing/pan scenarios)`);
         }
     } finally { await browser.close(); }
 }

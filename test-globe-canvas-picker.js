@@ -17,9 +17,9 @@ assert(indexHtml.includes('id="globeGateCanvas"'), 'index.html contains globeGat
 assert(indexHtml.includes('id="globeGateZoomIn"'), 'index.html contains globeGateZoomIn');
 assert(indexHtml.includes('id="globeGateZoomOut"'), 'index.html contains globeGateZoomOut');
 assert(indexHtml.includes('id="globeGateFallbackSelect"'), 'index.html keeps the no-canvas fallback select');
-assert(indexHtml.includes('js/globe-country-picker.js?v=20261015-outline-zoom-anchor'), 'index.html loads the re-versioned picker');
+assert(indexHtml.includes('js/globe-country-picker.js?v=20261016-outline-anchor-guard'), 'index.html loads the re-versioned picker');
 assert(indexHtml.includes('css/globe-country-picker.css?v=20261013-no-change-pill'), 'index.html loads the re-versioned css');
-assert(indexHtml.indexOf('js/globe-country-picker.js?v=20261015-outline-zoom-anchor') <
+assert(indexHtml.indexOf('js/globe-country-picker.js?v=20261016-outline-anchor-guard') <
        indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d') &&
        indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d') <
        indexHtml.indexOf('js/map-app.js?v=20261015-basemap-collapse'),
@@ -43,7 +43,7 @@ console.log('  ✓ local canvas-gate assets shipped');
 
 // ── 3. sw.js precache ──
 const swJs = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8');
-['js/globe-country-picker.js?v=20261015-outline-zoom-anchor', 'css/globe-country-picker.css?v=20261013-no-change-pill',
+['js/globe-country-picker.js?v=20261016-outline-anchor-guard', 'css/globe-country-picker.css?v=20261013-no-change-pill',
  'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
  'js/d3.min.js?v=7.9.0', 'js/topojson-client.min.js?v=3.1.0',
  'data/countries-50m.json?v=20261008',
