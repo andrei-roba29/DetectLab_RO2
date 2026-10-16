@@ -512,6 +512,11 @@
         } catch (e) { /* ignore */ }
     }
 
+    /** Did the service answer with an HTTP status (rather than fail the fetch)? */
+    function answeredWithStatus(error) {
+        return !!(error && /^\d{3}\s+for\s/.test(String(error.message || '')));
+    }
+
     /** Fetch one tile, healing a host that turns out to have no CORS. */
     /* ═══════════════════════════════════════════════════════════════════════
      *  PREFETCHED TILES — the LiDAR focus disc
@@ -654,6 +659,13 @@
                 throw new Error(((response && response.status) || 0) + ' for ' + target);
             })
             .catch(function (error) {
+                /* The service ANSWERED (a 404 for a tile beyond its coverage, a
+                 * 500, …): that is not a CORS verdict. Treating every HTTP
+                 * error as “no CORS” moved whole hosts onto the proxy for the
+                 * rest of the session, and a tile the service simply does not
+                 * have then cost an extra hop — or, where the proxy refuses the
+                 * host, turned into a hole in the terrain. */
+                if (answeredWithStatus(error)) throw error;
                 if (useProxy && !options.proxyUrl) {
                     /* Proxy refused/unreachable: a CORS-enabled upstream can
                      * still serve the tile directly — better than a hole. */
@@ -825,7 +837,21 @@
             state.primedLayer[url] = key;
             primedPut(url, data, true, sig);
             return data;
-        }, function () { return payload; });
+        }, function (error) {
+            /* The clip could not be computed (a browser with no canvas to
+             * repaint in, a tile that would not decode). Keep the tile as it
+             * is — a rim tile that runs a few pixels past the edge of the disc
+             * beats a hole in the middle of it — and remember it as prepared
+             * so the next frame does not pay for the same failure again. */
+            if (!state.clipWarned) {
+                state.clipWarned = true;
+                pushError('could not clip a tile of ' + (key || '?') + ' to the LiDAR disc: ' +
+                    ((error && error.message) || error));
+            }
+            state.primedLayer[url] = key;
+            primedPut(url, payload, true, sig);
+            return payload;
+        });
     }
 
     /* ═══════════════════════════════════════════════════════════════════════
@@ -874,8 +900,22 @@
         function prepare(entry) {
             var defId = entry.defId || null;
             var key = entry.layerKey || (defId ? 'def:' + defId : null);
-            var tile = { z: entry.z, x: entry.x, y: entry.y };
-            var templateUrl = entry.template || (key ? 'dl2d://' + key + '/' + entry.z + '/' + entry.x + '/' + entry.y : entry.url);
+            /* The tile's identity. Named `tileId`, not `tile`: the fetch below
+             * resolves with its own `tile` ({ data }), and a callback parameter
+             * of the same name shadowed this object — so the disc clip was
+             * handed { data } instead of { z, x, y }, read z/x/y as undefined,
+             * classified every tile of the disc as "outside it" and stored the
+             * transparent 1×1 PNG as the prepared bytes. The dialog reported
+             * every tile as downloaded and draped, and 3D showed an empty disc:
+             * "it says it is loading them and nothing appears". */
+            var tileId = { z: entry.z, x: entry.x, y: entry.y };
+            /* The deck key this tile is served under in 3D — the SAME
+             * substituted URL the dl2d:// protocol handler asks for, so a
+             * prepared tile is found again (a raw template with {z}/{x}/{y} in
+             * it is one shared key for every tile of the layer). */
+            var templateUrl = (entry.template && String(entry.template).indexOf('{') === -1)
+                ? String(entry.template)
+                : (key ? 'dl2d://' + key + '/' + entry.z + '/' + entry.x + '/' + entry.y : (entry.url || ''));
 
             /* A layer that draws its own tiles (a country module building a
              * WMS GetMap per tile) has no URL to fetch: it is rendered through
@@ -889,7 +929,7 @@
                 }
                 return MIRROR.renderTile(MIRROR.layerByKey(key), entry.z, entry.x, entry.y).then(function (bytes) {
                     /* renderTile repaints a CSS-blended layer itself. */
-                    return clipFocusedTile(key, templateUrl, bytes, tile).then(function () {});
+                    return clipFocusedTile(key, templateUrl, bytes, tileId).then(function () {});
                 });
             }
 
@@ -901,12 +941,12 @@
                 proxyUrl = REGISTRY.proxyTemplate(def, { time: REGISTRY.timeOf(def), mode: REGISTRY.modeOf(def, {}) });
             }
             return fetchTile(entry.url, null, { proxyUrl: proxyUrl, preferProxy: preferProxy })
-                .then(function (tile) {
-                    primedPut(entry.url, tile.data, false);
-                    report.bytes += primeBytesOf(tile.data);
+                .then(function (fetched) {
+                    primedPut(entry.url, fetched.data, false);
+                    report.bytes += primeBytesOf(fetched.data);
                     var layer = key && MIRROR.layerByKey ? MIRROR.layerByKey(key) : null;
-                    return blendedTile(layer, entry.url, tile.data).then(function (bytes) {
-                        return clipFocusedTile(key, entry.url, bytes, tile).then(function () {});
+                    return blendedTile(layer, entry.url, fetched.data).then(function (bytes) {
+                        return clipFocusedTile(key, entry.url, bytes, tileId).then(function () {});
                     });
                 });
         }
@@ -2953,17 +2993,58 @@
     /* ═══════════════════════════════════════════════════════════════════════
      *  PUBLIC API
      * ═══════════════════════════════════════════════════════════════════════ */
+    /* ═══════════════════════════════════════════════════════════════════════
+     *  TERRAIN EXAGGERATION
+     * -----------------------------------------------------------------------
+     *  Every map.setTerrain() builds a NEW Terrain object and a NEW
+     *  RenderToTexture (MapLibre 5: `this.terrain = new Terrain(...);
+     *  this.painter.renderToTexture = new RenderToTexture(...)`) and frees
+     *  neither of the previous pair. A slider drag fires `input` once per
+     *  pixel, so dragging it allocated a render target per pixel and ran the
+     *  device out of GPU memory — on a phone that kills the tab, reported as
+     *  “modifying the terrain exaggeration crashes the app”.
+     *
+     *  So the value is applied once per frame at most, never re-applied when
+     *  it has not moved, and never asked for on a style that has no DEM source
+     *  (a mobile profile with no terrain tiles has none, and setTerrain then
+     *  throws “cannot load terrain, because there exists no source with ID”).
+     * ═══════════════════════════════════════════════════════════════════════ */
+    var exagApply = null;
+
+    function applyExaggeration() {
+        exagApply = null;
+        if (!map) return;
+        var ts = terrainSource();
+        if (!ts || !ts.id) return;
+        var present = false;
+        try {
+            present = typeof map.getSource === 'function' ? !!map.getSource(ts.id) : false;
+        } catch (e) { present = false; }
+        if (!present) return;                     /* no DEM in this style: nothing to exaggerate */
+        try { map.setTerrain({ source: ts.id, exaggeration: state.exaggeration }); } catch (e) { /* style not loaded yet */ }
+    }
+
+    function scheduleExaggeration() {
+        if (exagApply) return;                    /* a frame is already booked */
+        var run = function () { applyExaggeration(); };
+        if (typeof root.requestAnimationFrame === 'function') {
+            exagApply = root.requestAnimationFrame(function () { exagApply = null; run(); });
+        } else {
+            exagApply = setTimeout(function () { exagApply = null; run(); }, 60);
+        }
+    }
+
     function setExaggeration(value) {
         var min = CONFIG.terrain.minExaggeration || 0.5;
         var max = CONFIG.terrain.maxExaggeration || 4;
         var v = Math.max(min, Math.min(max, Number(value) || min));
+        var same = state.exaggeration === v;
         state.exaggeration = v;
-        if (map) {
-            try { map.setTerrain({ source: terrainSource().id, exaggeration: v }); } catch (e) { /* ignore */ }
-        }
         if (bar && bar.querySelector('.m3d-exag-val')) {
             bar.querySelector('.m3d-exag-val').textContent = v.toFixed(1) + '×';
         }
+        if (same) return v;                       /* nothing changed: no setTerrain */
+        scheduleExaggeration();
         return v;
     }
 
@@ -3137,6 +3218,16 @@
             if (!url || !state.primedOut[url]) return false;
             if (layerKey && state.primedLayer[url] && state.primedLayer[url] !== layerKey) return false;
             return true;
+        },
+        /* The bytes this tile will actually be draped as, or null. “Prepared”
+         * alone is not an answer: a tile can be in the cache as the transparent
+         * 1×1 placeholder the disc clip writes for a tile outside the disc, and
+         * a dialog that counted those as ready used to promise a download it
+         * could not deliver. */
+        preparedTile: function (url, layerKey) {
+            if (!url || !state.primedOut[url]) return null;
+            if (layerKey && state.primedLayer[url] && state.primedLayer[url] !== layerKey) return null;
+            return state.primedOut[url].data || null;
         },
         _focusSig: function (key) { return focusSigFor(key); },
         _pipelineSig: function (key, url) { return pipelineSigFor(key, url); },

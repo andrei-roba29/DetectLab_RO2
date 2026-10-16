@@ -47,9 +47,9 @@ const registrySource = read('js/layer-registry.js');
 const viewerSource = read('js/map3d-terrain.js');
 const focusSource = read('js/lidar-3d-focus.js');
 
-const TAG = '20261014-lidar-3d-focus';
-/* The viewer and its skin moved on without the terrain toggle (v213). */
-const TAG_VIEWER = '20261015-3d-no-terrain-toggle';
+/* Every build that changes the LiDAR 3D focus path bumps its own tag. */
+const TAG = '20261016-lidar-3d-focus-fix';
+const TAG_VIEWER = '20261016-lidar-3d-tiles-fix';
 
 /* One real event-loop turn: the viewer runs its entry gate through a promise,
  * so the dialog is not in the DOM in the same tick as open(). */
@@ -331,17 +331,36 @@ const fakeCanvas = function () {
         'the dialog sits above the layer panel and the search bar (it decides what 3D may load)');
     ['#map3d-focus .m3d-focus-card', '#map3d-focus .m3d-focus-layers', '#map3d-focus .m3d-focus-radius',
      '#map3d-focus .m3d-focus-chips', '#map3d-focus .m3d-focus-point-block', '#map3d-focus .m3d-focus-actions',
-     '#map3d-focus .m3d-focus-progress', '#map3d-focus .m3d-focus-hint', '#map3d-bar .m3d-lidar',
+     '#map3d-focus .m3d-focus-progress', '#map3d-focus .m3d-focus-x', '#map3d-bar .m3d-lidar',
      '#detectlab-map.m3d-picking'].forEach(function (selector) {
         assert(skin.indexOf(selector) !== -1, 'the skin styles ' + selector);
     });
 
+    /* The banner that told the user to tap the map is gone. It declared
+     * `display: flex`, which beat the UA rule for [hidden], so it was never
+     * actually hidden — an always-on overlay across the top of the dialog that
+     * swallowed the tap meant for its close button. Nothing may resurrect it. */
+    assert(!/m3d-focus-hint\b(?!line)/.test(skin) && !/m3d-focus-hint["'`\s>]/.test(focusSource),
+        'the tap-to-pick banner is gone (its CSS kept it visible over the close button)');
+    assert(!/pickingCancel/.test(focusSource) && !/hintText/.test(focusSource),
+        'and the strings that fed it are gone with it');
+    /* The close button is a real touch target: 44px, the size the rest of the
+     * app's controls use. */
+    const xRule = (skin.match(/#map3d-focus \.m3d-focus-x \{[^}]*\}/) || [''])[0];
+    assert(/min-width: 44px/.test(xRule) && /min-height: 44px/.test(xRule),
+        'the close button is a 44px touch target, not a 20px glyph');
+
     assert(swJs.includes("'js/lidar-3d-focus.js?v=" + TAG + "'") && swJs.includes("'js/lidar-3d-focus.js'"),
         'the service worker pre-caches the focus module (a cold PWA keeps the feature)');
-    ['js/map3d-terrain.js?v=' + TAG_VIEWER, 'js/map3d-mirror.js?v=' + TAG, 'js/map-app.js?v=' + TAG,
+    ['js/map3d-terrain.js?v=' + TAG_VIEWER, 'js/map3d-mirror.js?v=' + TAG,
      'css/map3d-terrain.css?v=' + TAG_VIEWER].forEach(function (asset) {
         assert(swJs.includes("'" + asset + "'"), 'sw.js pre-caches ' + asset);
     });
+    /* map-app.js is not part of this change, but the service worker has to
+     * pre-cache the very build index.html asks for — not a stale one. */
+    const mapAppTag = (indexHtml.match(/js\/map-app\.js\?v=([^"']+)/) || [])[1];
+    assert(mapAppTag && swJs.includes("'js/map-app.js?v=" + mapAppTag + "'"),
+        'sw.js pre-caches the map-app.js build index.html loads (' + mapAppTag + ')');
     const shellVersion = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
     assert(shellVersion >= 209, 'the shell cache is bumped so installed PWAs pick the feature up (v' + shellVersion + ')');
 
@@ -851,6 +870,38 @@ function runViewerSuite() {
         assert(viewer.primedBytes() > 0, 'and their bytes are counted too');
         assert(entries.every(function (item) { return viewer.isPrepared(item.url, '2d.R1') === true; }),
             'every tile of the disc answers “prepared” — the dialog will not promise a download it does not need');
+
+        /* …and “prepared” has to mean the TILE, not the transparent placeholder
+         * the disc clip writes for a tile outside the disc. The prefetch used
+         * to hand the clip the fetch's own `{ data }` object (a callback
+         * parameter shadowing the `{ z, x, y }` tile identity), so the clip read
+         * z/x/y as undefined, judged every tile of the disc to be outside it and
+         * cached the 1×1 transparent PNG as the prepared bytes: the dialog
+         * reported every tile as downloaded and draped, 3D showed an empty
+         * circle, and nothing was ever re-fetched because the cache said so. */
+        const placeholder = mirror.disc.blankTile();
+        const served = entries.map(function (item) { return viewer.preparedTile(item.url, '2d.R1'); });
+        assert(served.every(function (bytes) { return !!bytes && bytes.byteLength > placeholder.byteLength; }),
+            'every prepared tile carries the pixels the service sent, not the placeholder (' +
+            served.map(function (b) { return b ? b.byteLength : 0; }).join(',') + ' bytes vs ' +
+            placeholder.byteLength + ')');
+        /* The disc clip runs on the tile's own coordinates: a tile the disc
+         * covers is kept, one it only grazes is clipped, one it misses is the
+         * placeholder. Ask the cache for a tile the plan never asked for. */
+        const outside = mirror.disc.tileWindow(plan.disc, plan.zFit);
+        let missed = null;
+        for (let x = outside.x0; x <= outside.x1 && !missed; x += 1) {
+            for (let y = outside.y0; y <= outside.y1 && !missed; y += 1) {
+                if (!mirror.disc.touchesTile(plan.disc, plan.zFit, x, y)) missed = { z: plan.zFit, x: x, y: y };
+            }
+        }
+        if (missed) {
+            const url = mirror.tileUrlFor(plan.layer.layer, missed.z, missed.x, missed.y);
+            assert(viewer._focusExcludesTile('2d.R1', missed.z, missed.x, missed.y) === true,
+                'a tile outside the disc is excluded, so nothing is fetched around it');
+            assert(viewer.preparedTile(url, '2d.R1') === null,
+                'and it was never prepared in the first place');
+        }
         assert(viewer.isPrepared('https://tiles.example.org/ro1m/other/1/1/1', '2d.R1') === false,
             'a tile that was never fetched does not');
 
@@ -987,14 +1038,19 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
         'a quick distance moves the slider and the dialog state');
     assert(after !== before, 'and re-plans the disc (' + before + ' → ' + after + ' tiles)');
 
-    /* Picking: the card steps aside, the hint asks for the tap. */
+    /* Picking: the card steps aside and the crosshair takes over. There is no
+     * banner to ask for the tap — one used to sit over the card and swallow the
+     * taps meant for its close button. */
     node.querySelector('.m3d-focus-pick').click();
     assert(focus.status().picking === true, 'the map is armed for a pick');
     assert(windowStub._dlLidarFocusPicking === true,
         'and the LiDAR Scanner is told to stand down (the tap belongs to the dialog)');
-    assert(node.querySelector('.m3d-focus-card').hidden === true &&
-           node.querySelector('.m3d-focus-hint').hidden === false,
-        'the card steps aside so the whole map is clickable, with the hint on screen');
+    assert(node.querySelector('.m3d-focus-card').hidden === true,
+        'the card steps aside so the whole map is clickable');
+    assert(doc.getElementById('detectlab-map').classList.contains('m3d-picking'),
+        'and the map shows the crosshair that says what the next tap does');
+    assert(node.querySelectorAll('.m3d-focus-hint').length === 0,
+        'no banner is left over the card to intercept a tap');
     map._click(45.12, 24.34);
     assert(focus.status().picking === false, 'the tap ends the pick');
     assert(focus.status().dialog.point.lat === 45.12 && focus.status().dialog.pointPicked === true,

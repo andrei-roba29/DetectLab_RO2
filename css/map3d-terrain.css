@@ -459,6 +459,14 @@ body.is-pwa.is-3d #map3d-bar {
     cursor: pointer;
     padding: 2px 6px;
     border-radius: 6px;
+    /* A real touch target: this dialog is the one place a phone user has to be
+     * able to get out of, and its header is where they look for it. */
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
 }
 
 #map3d-focus .m3d-focus-x:hover { background: rgba(184, 216, 240, 0.14); }
@@ -634,35 +642,6 @@ body.is-pwa.is-3d #map3d-bar {
     font: inherit;
     cursor: pointer;
     min-height: 44px;
-}
-
-/* While the user is choosing the point the card steps aside: the hint is the
- * only thing on screen, and it must not swallow the tap it is asking for. */
-#map3d-focus .m3d-focus-hint {
-    pointer-events: auto;
-    position: absolute;
-    top: calc(12px + env(safe-area-inset-top, 0px));
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    max-width: calc(100% - 24px);
-    padding: 9px 12px;
-    border-radius: 999px;
-    background: rgba(6, 14, 30, 0.92);
-    border: 1px solid rgba(200, 169, 110, 0.5);
-    font-size: 0.76rem;
-}
-
-#map3d-focus .m3d-focus-hint button {
-    padding: 6px 10px;
-    border-radius: 999px;
-    border: 1px solid rgba(184, 216, 240, 0.28);
-    background: rgba(184, 216, 240, 0.1);
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
 }
 
 /* Crosshair while picking: the next tap is the centre of the LiDAR area. */
