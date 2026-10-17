@@ -125,9 +125,63 @@ async function main() {
                         });
                     }
                 }
+                // (Re)drawn mid-zoom: an outline whose renderer is born while
+                // a zoom animation is in flight never receives its zoomanim,
+                // so it used to paint straight onto the target frame — flat,
+                // fully zoomed — while the tiles were still scaling (the
+                // intermittent “border zooms in 2D”). It must now either
+                // stay aligned or stay hidden until the zoom settles, and
+                // its stroke must not CSS-scale (non-scaling-stroke).
+                map.setView(layer.getBounds().getCenter(), startZoom, { animate: false });
+                await new Promise(resolve => setTimeout(resolve, 60));
+                const midZoom = { hidden: 0, visible: 0, maxError: 0 };
+                map.setZoom(startZoom + 4, { animate: true });
+                while (!map._animatingZoom) await new Promise(r => setTimeout(r, 5));
+                // Simulate the 10m refinement landing mid-flight: a new
+                // feature object forces showCountryBoundsLayer to swap the
+                // outline and its dedicated renderer.
+                const roEntry = t.G.byIso.RO;
+                roEntry.feature = JSON.parse(JSON.stringify(roEntry.feature));
+                t.refreshCountryBoundsLayer();
+                const midLayer = t.state.boundsLayer.getLayers()[0];
+                const level2 = tiles._levels[tiles._tileZoom];
+                const anchorPoint = map.project(latlng, tiles._tileZoom).subtract(level2.origin);
+                const anchor2 = document.createElement('span');
+                anchor2.style.cssText = `position:absolute;left:${anchorPoint.x}px;top:${anchorPoint.y}px;width:0;height:0;`;
+                level2.el.appendChild(anchor2);
+                const strokeEffect = midLayer._path.getAttribute('vector-effect');
+                for (let j = 0; j < 40 && map._animatingZoom; j++) {
+                    await new Promise(resolve => requestAnimationFrame(resolve));
+                    const container = midLayer._renderer && midLayer._renderer._container;
+                    if (!container || !container.isConnected) continue;
+                    if (container.style.visibility === 'hidden') { midZoom.hidden++; continue; }
+                    midZoom.visible++;
+                    const p = midLayer._rings[0][0];
+                    const actual = new DOMPoint(p.x, p.y).matrixTransform(midLayer._path.getScreenCTM());
+                    const expected = anchor2.getBoundingClientRect();
+                    midZoom.maxError = Math.max(midZoom.maxError, Math.hypot(actual.x - expected.x, actual.y - expected.y));
+                }
+                anchor2.remove();
+                while (map._animatingZoom) await new Promise(r => setTimeout(r, 10));
+                await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                const settledContainer = midLayer._renderer._container;
+                const mapRect = map.getContainer().getBoundingClientRect();
+                const want = map.latLngToContainerPoint(latlng);
+                const gotPoint = midLayer._rings[0][0];
+                const got = new DOMPoint(gotPoint.x, gotPoint.y).matrixTransform(midLayer._path.getScreenCTM());
+                const settledError = Math.hypot(
+                    got.x - (mapRect.left + want.x), got.y - (mapRect.top + want.y));
+                const midZoomReport = {
+                    hiddenFrames: midZoom.hidden,
+                    visibleFrames: midZoom.visible,
+                    maxVisibleError: midZoom.maxError,
+                    settledVisible: settledContainer.style.visibility !== 'hidden',
+                    settledError,
+                    strokeEffect
+                };
                 const oldRenderer = layer._renderer;
                 await DetectLabGlobeGate.selectCountry('DE');
-                return { maxError, samples, steps, clipReport, oldRendererRemoved: !map.hasLayer(oldRenderer),
+                return { maxError, samples, steps, clipReport, midZoom: midZoomReport, oldRendererRemoved: !map.hasLayer(oldRenderer),
                     svgCount: map.getPane(t.BOUNDS_PANE).querySelectorAll('svg').length };
             });
             assert(result.samples > 10, 'test samples live animated zoom frames');
@@ -139,7 +193,15 @@ async function main() {
                 if (r.visible) assert(r.painted, `the visible outline must be painted: ${JSON.stringify(r)}`);
             }
             assert(result.oldRendererRemoved && result.svgCount === 1, 'country switching removes the dedicated renderer');
-            console.log(`✓ ${width}px: country outline stays aligned with LiDAR tiles throughout animated zoom, north-up and rotated, and is never clipped away by a turned view (${result.clipReport.length} bearing/pan scenarios)`);
+            assert(result.midZoom.hiddenFrames > 0,
+                `an outline redrawn mid-zoom must wait the animation out hidden instead of painting at the target frame: ${JSON.stringify(result.midZoom)}`);
+            assert(result.midZoom.maxVisibleError < 2,
+                `a mid-zoom outline that is visible must stay aligned: ${JSON.stringify(result.midZoom)}`);
+            assert(result.midZoom.settledVisible && result.midZoom.settledError < 2,
+                `the mid-zoom outline must reappear, aligned, when the zoom settles: ${JSON.stringify(result.midZoom)}`);
+            assert.strictEqual(result.midZoom.strokeEffect, 'non-scaling-stroke',
+                'the border stroke must not CSS-scale during an animated zoom');
+            console.log(`✓ ${width}px: country outline stays aligned with LiDAR tiles throughout animated zoom, north-up and rotated, is never clipped away by a turned view (${result.clipReport.length} bearing/pan scenarios), and a mid-zoom redraw waits the animation out instead of zooming flat`);
         }
     } finally { await browser.close(); }
 }

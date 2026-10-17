@@ -291,8 +291,8 @@ assert(shellVersion >= 196,
  * 3D controls. */
 const TAGS = {
     'js/layer-registry.js': '20261015-danish-layers',
-    'js/map3d-terrain.js': '20261016-lidar-3d-tiles-fix',
-    'css/map3d-terrain.css': '20261016-lidar-3d-tiles-fix',
+    'js/map3d-terrain.js': '20261017-lidar-3d-entry-handover',
+    'css/map3d-terrain.css': '20261017-lidar-3d-entry-handover',
     'js/danish-layers.config.js': '20261016-danish-wms-layers',
     'js/danish-layers.js': '20261016-danish-wms-layers'
 };

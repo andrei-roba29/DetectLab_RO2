@@ -250,6 +250,40 @@ not a multiple of 180°. `node test-country-outline-zoom-browser.js` keeps the
 outline within 2 px of the tile grid through animated zooms, at bearing 0° and
 35°, in a real browser.
 
+## The outline while a zoom is already running (v222 — “border zooms in 2D”)
+
+The anchor guard above covers an outline that is *on* the map when a zoom
+starts. It does not cover an outline that is **(re)drawn while a zoom
+animation is already in flight** — the globe hand-off fit still running when
+the selection lands, the 10 m refinement swapping the outline mid-zoom, a
+dock switch during a wheel zoom. A renderer born then never receives the
+animation's `zoomanim` (Leaflet fired it before the renderer existed), and
+because the map has already `_move()`d to the target, its rings project
+straight onto the final frame: the border paints flat and fully zoomed while
+every tile level is still CSS-scaling towards it, then snaps into agreement
+at `zoomend`. Whether a given zoom showed it depended purely on that race —
+hence “sometimes”.
+
+`BoundsSVG` now tracks the distinction explicitly. `_onAnimZoom` marks the
+renderer as having *joined* the animation before delegating to Leaflet, and
+`_syncOutlineZoomVisibility()` (run from every `_update`) hides the
+container for the remainder of a flight only when the renderer never
+joined it. There is no honest transform to join with at that point — the
+animation's starting frame is gone — so the outline waits it out (a
+fraction of a second) and is revealed by the `moveend` `_update` that
+Leaflet always fires in the same synchronous stack as `zoomend`, so no
+painted frame can show it unhidden-but-untransformed. An outline already on
+the map when the zoom started is never hidden. Separately, `_initPath`
+stamps `vector-effect="non-scaling-stroke"` on the border, so the stroke
+keeps the constant device-pixel width Leaflet reprojects it to at `zoomend`
+instead of fattening/thinning with the CSS scale mid-flight; the geometry
+itself still scales with the map, and at rest nothing changes.
+
+Regression coverage: `node test-country-outline-zoom.js` (the lifecycle,
+run against the shipped functions) and the mid-zoom redraw scenario in
+`test-country-outline-zoom-browser.js` (hidden while the redrawn outline
+would be unaligned, visible and within 2 px once settled, stroke stamped).
+
 ## One hand-off frame (v189 — the zoom the two surfaces meet on)
 
 The globe used to end its flight on a zoom of its own: `zoomFor()` in

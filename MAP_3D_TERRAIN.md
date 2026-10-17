@@ -440,12 +440,59 @@ tile), byte-budgeted at 2 400 entries / 96 MB on desktop and 900 / 28 MB on phon
 (`status().lidar.primed` counts them, `clearPrimed()` forgets them). Moving the disc or
 closing the focus drops the tiles of the old one.
 
+“Sometimes the fetch finishes, 3D opens, and only the base map is there” was a
+first-entry defect in how those tiles are addressed. The prefetch resolves each tile's
+layer through the mirror's key table (`DetectLabMirror.layerByKey`), and so does the
+blend/clip signature — but that table is only filled by `collect()`, which the viewer
+otherwise runs once the 3D view is already opening. On a first entry the table was
+empty: every canvas-route tile (the nine country products draw their own tiles) rejected
+with “the 2D layer did not finish drawing”, and blended tiles were stored under a
+pipeline signature the serve path never asks for. The dialog folded into 3D with a disc
+that existed only on paper, and the view fell back to live per-tile requests racing
+MapLibre's aborts — usually rescued, sometimes an empty disc over the base map.
+`prefetchTiles()` now collects the mirror first, exactly as the view will see it. The
+country products needed a second bridge: their 3D source is `dl3d://<defId>` while
+their canvas prefetch stores under the `dl2d://<deck key>` of the live layer, so the
+`dl3d` handler also honours the prepared `dl2d` disc of the current focus before it
+fetches anything live. The invariant the suite now holds end to end: for every tile of
+the disc, at the moment 3D opens, the protocol handlers answer with the prepared pixels
+and make no request at all.
+
+The same “nothing happens” shape had a second, quieter cause in the handover itself:
+the fetch finished, the dialog said “Done”, and no 3D view ever appeared. The gate is
+answered by `settle()`, which sat at the end of the post-fetch bookkeeping (apply the
+counted focus, paint “Done”, write the pill summary) with nothing guarding it — any
+throw in that stretch (a Leaflet layer that will not restyle, a bar row mid-teardown)
+left the dialog at “Done” and the gate unanswered forever. The bookkeeping is now
+guarded, the focus having been applied before the download is what the entry proceeds
+on, and the gate is always answered. Two sibling dead-ends were closed with it: the
+no-WebGL report used to leave `state.open` set (unlike `fail3D`), so every later tap
+on the 3D button answered “already open” and did nothing at all — it now reads as
+closed, and the next tap retries; and a single stalled tile fetch (a provider that
+accepts the connection and then says nothing, the classic throttled-service behaviour
+under the six-lane burst) could park the prefetch a tile short of done forever —
+prefetch fetches now carry a 45 s per-tile deadline, after which the tile simply
+counts as failed and is asked again on demand inside 3D.
+
 Two key spaces meet on this path and both travel with the focus: the **deck key** of a
 mirrored layer (`2d.<stamp>`, what `dl2d://` and the clip are addressed by) and the **LiDAR
 family key** the tag carries (`lidar.ro1m`, `def:lidar.fr-mnh`, what the mirror item, the
 registry and the dialog agree on). `js/map-app.js` tags every LiDAR sub-layer it builds with
 `_dlLidar = { key, label }` (next to the existing `_dlDefId`), which is where the dialog
 learns the label the user sees in the panel.
+
+When the fetch finishes and the 3D view opens, the window does not disappear:
+it **folds itself into a slim pill** pinned to the bottom centre of the 3D view
+(the sheet's layer name, the radius, how many tiles are ready, and a ▴ arrow),
+so the prepared area stays reachable without ever covering the terrain. The pill
+is the same dialog minimized, not a reopened copy: clicking it — arrow and all —
+expands the full window over the running 3D view (live mode, so confirming
+re-points the view), cancelling an expanded window folds it back into the pill,
+and removing the LiDAR from the 3D bar takes the pill away with the focus. That
+it only ever shows over the 3D view is pure CSS (`body:not(.is-3d)` hides the
+folded host); closing 3D folds it out of sight, returning to 3D brings it back.
+`DetectLabLidar3D.minimizeDialog()` / `.expandDialog()` drive it by hand and
+`status().dialog.minimized` says which form the window is in.
 
 Anything the viewer knows about the focus is readable without a debugger:
 
