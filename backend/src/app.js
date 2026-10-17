@@ -14,6 +14,7 @@ import promoRouter from './routes/promo.js';
 import evidenceRouter from './routes/evidence.js';
 import newsletterRouter from './routes/newsletter.js';
 import geoProxyRouter from './routes/geoProxy.js';
+import finlandProxyRouter from './routes/finlandProxy.js';
 import { startScheduler } from './jobs/scheduler.js';
 import { startEvidenceWorker } from './services/evidence/ingestionWorker.js';
 
