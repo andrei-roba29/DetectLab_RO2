@@ -3230,15 +3230,21 @@
                         btn.title = btn.textContent;
                     }
                 });
-                // The retracted header always names the ACTIVE base map, so the
-                // map can be read without unfolding the list.
+                // Header is icon-only per requirement (no writing), but keep
+                // accessible name and tooltip with active basemap.
                 var headLabel = ctrl.querySelector('.arcgis-basemap-header-label');
                 if (headLabel) {
                     var cur = ARCGIS_BASEMAP_LABELS[key] || ARCGIS_BASEMAP_LABELS.imagery;
                     headLabel.textContent = cur[useRo ? 'ro' : 'en'];
                 }
                 var head = ctrl.querySelector('.arcgis-basemap-header');
-                if (head) head.title = ARCGIS_BASEMAP_LABELS.hint[useRo ? 'ro' : 'en'];
+                if (head) {
+                    var cur2 = ARCGIS_BASEMAP_LABELS[key] || ARCGIS_BASEMAP_LABELS.imagery;
+                    var activeName = cur2[useRo ? 'ro' : 'en'];
+                    var hint = ARCGIS_BASEMAP_LABELS.hint[useRo ? 'ro' : 'en'];
+                    head.title = activeName + ' — ' + hint;
+                    head.setAttribute('aria-label', activeName + ' — ' + hint);
+                }
                 var hsText = ctrl.querySelector('.arcgis-basemap-hs-text');
                 if (hsText) hsText.textContent = ARCGIS_BASEMAP_LABELS.hillshade[useRo ? 'ro' : 'en'];
                 ctrl.setAttribute('aria-label', useRo ? 'Hartă de bază ArcGIS' : 'ArcGIS basemap');
@@ -3291,12 +3297,13 @@
                 header.setAttribute('aria-controls', 'arcgisBasemapList');
                 var headerIcon = L.DomUtil.create('span', 'arcgis-basemap-header-icon', header);
                 headerIcon.setAttribute('aria-hidden', 'true');
-                headerIcon.innerHTML = '<svg viewBox="0 0 16 16" width="13" height="13" focusable="false">' +
+                // Icon-only header per requirement: layer icon, no writing
+                headerIcon.innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" focusable="false">' +
                     '<path d="M8 1.7 14.3 5 8 8.3 1.7 5 8 1.7Z" fill="none" stroke="currentColor" ' +
-                    'stroke-width="1.1" stroke-linejoin="round"/>' +
-                    '<path d="M1.7 8 8 11.3 14.3 8" fill="none" stroke="currentColor" stroke-width="1.1" ' +
+                    'stroke-width="1.2" stroke-linejoin="round"/>' +
+                    '<path d="M1.7 8 8 11.3 14.3 8" fill="none" stroke="currentColor" stroke-width="1.2" ' +
                     'stroke-linecap="round" stroke-linejoin="round"/>' +
-                    '<path d="M1.7 11 8 14.3 14.3 11" fill="none" stroke="currentColor" stroke-width="1.1" ' +
+                    '<path d="M1.7 11 8 14.3 14.3 11" fill="none" stroke="currentColor" stroke-width="1.2" ' +
                     'stroke-linecap="round" stroke-linejoin="round"/></svg>';
                 var headerLabel = L.DomUtil.create('span', 'arcgis-basemap-header-label', header);
                 var headerChevron = L.DomUtil.create('span', 'arcgis-basemap-chevron', header);
