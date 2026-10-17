@@ -86,7 +86,16 @@
          * registry appears in this map. The layer itself opts out of the guard
          * with _detectlabNoGuard (js/danish-layers.js owns its row: a status
          * line under the switch instead of a flipped switch). */
-        'arealeditering-dist-geo.miljoeportal.dk': 'Danmarks Miljøportal'
+        'arealeditering-dist-geo.miljoeportal.dk': 'Danmarks Miljøportal',
+        /* The Albanian ASIG layers (js/asig-albania-layers.config.js) read
+         * this state GeoServer directly: it is public, tokenless and its
+         * raster tiles need no CORS. Listed here so the provider is named if
+         * it stops answering, per the rule that every third-party endpoint of
+         * the registry appears in this map. The layers themselves opt out of
+         * the guard with _detectlabNoGuard (js/asig-albania-layers.js owns
+         * its rows: per-tile EPSG:4326 fallback after repeated tile errors
+         * and a status line under the switch instead of a flipped switch). */
+        'geoportal.asig.gov.al': 'ASIG / geoportal.asig.gov.al'
     };
 
     /* A re-pointed CENAGIS catalogue (window.DETECTLAB_CENAGIS_WMS, read by

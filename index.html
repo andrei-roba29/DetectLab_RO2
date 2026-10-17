@@ -26,7 +26,7 @@
     <link rel="stylesheet" href="css/leaflet.photon.css">
     <link rel="stylesheet" href="css/leaflet-measure.css">
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
-    <link rel="stylesheet" href="css/styles.css?v=20261016-danish-layer-panel">
+    <link rel="stylesheet" href="css/styles.css?v=20261017-albania-asig">
     <!-- 3D TERRAIN VIEW (2D ⇄ 3D) — MapLibre GL JS, vendored like Leaflet.
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
@@ -2598,6 +2598,47 @@
                         <div id="danishSubLayers" class="danish-sublayers" style="display:flex;flex-direction:column;gap:8px;overflow:hidden;transition:max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;max-height:6000px;opacity:1;"></div>
                     </div>
 
+                    <!-- Shqipëri / Albania — the ASIG geoportal layers. Every entry
+                         (title in RO+EN, WMS LAYERS, format, transparency, zoom
+                         limits, attribution) lives in
+                         js/asig-albania-layers.config.js; js/asig-albania-layers.js
+                         builds these rows and the Leaflet layers from it, so a new
+                         Albanian layer — or a renamed dated snapshot of the
+                         protected-sites layers — never touches map code.
+                         Sources and the projection strategy: ALBANIA_ASIG_LAYERS.md. -->
+                    <div class="transp-layer-row active" data-category="free" id="albaniaRow">
+                        <div class="transp-layer-label" style="margin-bottom:6px">
+                            <span style="display:flex;align-items:center;gap:7px;min-width:0">
+                                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style="flex-shrink:0">
+                                    <rect x="1" y="2" width="11" height="9" rx="0.8" fill="rgba(224,30,32,0.4)" stroke="#e04545" stroke-width="0.9" />
+                                    <path d="M6.5 4.2 L5.1 5.4 L6.5 6.1 L7.9 5.4 Z" fill="#1c1c1e" />
+                                    <path d="M6.5 6.1 L4.6 8.3 L6.5 7.5 L8.4 8.3 Z" fill="#1c1c1e" />
+                                </svg>
+                                <span class="t" data-key="albania_group_title" id="albaniaGroupTitle">Albania · hărți ASIG</span>
+                                <button type="button" class="layer-info-btn" onclick="event.stopPropagation();showAlbaniaInfo()" title="Albanian layers: sources, licences and projection"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="7.5" r="1.3" fill="currentColor" /><rect x="10.8" y="10.5" width="2.4" height="7" rx="1.2" fill="currentColor" /></svg></button>
+                            </span>
+                            <span style="display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0">
+                                <button type="button" id="albaniaGotoBtn" onclick="event.stopPropagation();goToAlbaniaView()" title="Centre the map on Tirana, Albania" style="background:none;border:1px solid rgba(224,69,69,0.45);color:rgba(245,240,235,0.8);border-radius:3px;cursor:pointer;font-size:0.62rem;padding:2px 5px;line-height:1.2;">Tirana</button>
+                                <button type="button" onclick="toggleAlbaniaSubLayers()" id="albaniaExpandBtn" title="Expand/Collapse the Albanian sublayers" aria-expanded="false" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:rgba(224,69,69,0.85);display:flex;align-items:center;transition:color 0.2s;" onmouseover="this.style.color='rgba(224,69,69,1)'" onmouseout="this.style.color='rgba(224,69,69,0.85)'">
+                                    <svg id="albaniaExpandIcon" width="12" height="12" viewBox="0 0 12 12" fill="none" style="transition:transform 0.25s ease;transform:rotate(-90deg)">
+                                        <polyline points="2,4 6,8 10,4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                                    </svg>
+                                </button>
+                                <label class="apm-toggle-switch" title="Toggle the Albanian layers on/off">
+                                    <input type="checkbox" id="albaniaToggle" onchange="toggleAlbaniaLayers(this.checked)">
+                                    <span class="apm-toggle-track"></span>
+                                </label>
+                            </span>
+                        </div>
+
+                        <div id="albaniaGroupNotice" class="albania-group-notice" role="status" style="display:none"></div>
+
+                        <!-- Raster overlays (independent checkboxes, an opacity slider
+                             each) and the collapsible "Protected Sites" group of four
+                             child checkboxes are generated here. -->
+                        <div id="albaniaSubLayers" class="albania-sublayers" style="display:flex;flex-direction:column;gap:8px;overflow:hidden;transition:max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;max-height:0;opacity:0;"></div>
+                    </div>
+
                     <div class="transp-divider active" data-category="free"></div>
 
                     <!-- Roman Empire (premium) -->
@@ -4817,7 +4858,7 @@
         </div>
     </footer>
 
-    <script src="js/translations.js?v=20261015-danish-layers"></script>
+    <script src="js/translations.js?v=20261017-albania-asig"></script>
 
     <!-- Leaflet JS (from qgis2web folder) -->
     <script src="js/leaflet.js"></script>
@@ -4825,7 +4866,7 @@
          historical maps): probes one GetMap tile per layer, marks the row
          unavailable and explains 200-with-error-body failures instead of
          silently showing empty tiles. See js/wms-health.js. -->
-    <script src="js/wms-health.js?v=20261014-guard-watch"></script>
+    <script src="js/wms-health.js?v=20261017-albania-asig"></script>
     <!-- Global tile performance governor: gesture-safe defaults for every tile
          layer of the app (LIDAR, CORONA 60's, historical maps, APM…), one tile
          update per layer per gesture and a page-wide budget on live tiles.
@@ -4912,7 +4953,13 @@
          every Danish layer and it is loaded before the registry, which mirrors
          it. js/danish-layers.js (below, after map-app.js) draws them. -->
     <script src="js/danish-layers.config.js?v=20261016-danish-wms-layers"></script>
-    <script src="js/layer-registry.js?v=20261015-danish-layers"></script>
+    <!-- The Albanian layers (ASIG geoportal): same contract — the CONFIG is
+         the single description of every Albanian layer (WMS LAYERS names
+         included; the protected-sites names carry publication dates and
+         change) and it is loaded before the registry, which mirrors it.
+         js/asig-albania-layers.js (below, after map-app.js) draws them. -->
+    <script src="js/asig-albania-layers.config.js?v=20261017-albania-asig"></script>
+    <script src="js/layer-registry.js?v=20261017-albania-asig"></script>
     <!-- Roman roads („Drumuri romane”): the parser owns the record/geometry
          format, the layer paints the road network on canvas tiles, and the
          worker streams + parses the NDJSON off the main thread. map-app.js
@@ -4920,10 +4967,13 @@
          See ROMAN_ROADS_PERFORMANCE.md. -->
     <script src="js/roman-roads-parser.js?v=20261015-roman-roads"></script>
     <script src="js/roman-roads.js?v=20261015-roman-roads"></script>
-    <script src="js/map-app.js?v=20261015-basemap-collapse"></script>
+    <script src="js/map-app.js?v=20261017-albania-asig"></script>
     <!-- Danish layers: panel rows, basemap-control buttons and the lazy
          Leaflet layers, all built from js/danish-layers.config.js. -->
     <script src="js/danish-layers.js?v=20261016-danish-wms-layers"></script>
+    <!-- Albanian layers (ASIG): panel rows and the lazy Leaflet layers, all
+         built from js/asig-albania-layers.config.js. -->
+    <script src="js/asig-albania-layers.js?v=20261017-albania-asig"></script>
     <script src="js/historical-eu-maps.js?v=20261013-flat-hist-maps"></script>
     <!-- 2D ⇄ 3D: MapLibre GL viewer draped over the DEM. The 3D deck is the
          mirror of the live 2D Leaflet map — raster, WMS/WMTS, image overlays,

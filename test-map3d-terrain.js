@@ -82,7 +82,7 @@ const TAG = '20261013-3d-terrain';             /* MapLibre itself (unchanged) */
 const TAG_3D = '20261017-lidar-3d-entry-handover';    /* mirror                        */
 const TAG_VIEWER = '20261017-lidar-3d-entry-handover'; /* viewer                       */
 const TAG_FOCUS = '20261017-lidar-3d-entry-handover';  /* LiDAR focus (3D, one disc)   */
-const TAG_REGISTRY = '20261015-danish-layers';     /* shared registry (WMS audit)  */
+const TAG_REGISTRY = '20261017-albania-asig';      /* shared registry (WMS audit)  */
 
 // ══════════════════════════════════════════════════════════════
 // 1. Static wiring — the viewer must be reachable in the app
