@@ -54,7 +54,7 @@
      * importing the module must never be fatal. */
     if (!root) return;
 
-    var VERSION = '2026-10-15-natural-country-fill-v1';
+    var VERSION = '2026-10-17-archeo-3d-projection-v1';
 
     /* Leaflet's own pane z-index defaults — used when a layer has no pane. */
     var PANE_Z = {
@@ -453,8 +453,25 @@
         if (layer._raster && typeof layer.setRaster === 'function') return true;
         return false;
     }
+    /* A layer that can hand the mirror its own georeferenced picture —
+     * `_dl3dImage()` → { url, coordinates } — drapes as an image. The score
+     * raster of js/archeo-potential.js uses this: MapLibre has no heatmap that
+     * reproduces a score ramp (its density saturates), but a PNG of the very
+     * same colourised raster does, pixel for pixel. */
+    function hasImageHook(layer) {
+        return !!(layer && typeof layer._dl3dImage === 'function');
+    }
     function isRotatedOverlay(layer) {
         return layer && layer._rotation != null && layer._img && layer._canvas;
+    }
+
+    /* Leaflet renderers (the canvas/SVG a pane draws its paths with) live on the
+     * map as layers, but they hold no geometry of their own — their children
+     * are the layers the user sees. Reporting them as “no 3D equivalent” told
+     * the user about plumbing. */
+    function isRenderer(layer) {
+        var Leaflet = L();
+        return !!(Leaflet && Leaflet.Renderer && layer instanceof Leaflet.Renderer);
     }
 
     function classify(layer, Leaflet) {
@@ -468,6 +485,7 @@
          * createTile: the country LiDAR canvases, the heritage canvas). */
         if (typeof layer.createTile === 'function') return 'raster';
         if (isMarkerCluster(layer)) return 'cluster';
+        if (hasImageHook(layer)) return 'image';
         if (isHeatLayer(layer)) return 'heat';
         /* The app's own rotated overlay (L.RotatedImageOverlay in js/map-app.js)
          * is an L.Layer, not an L.ImageOverlay — it is still a georeferenced
@@ -820,11 +838,22 @@
         if (!raster || !raster.cols || !raster.rows) return points;
         var cols = Number(raster.cols), rows = Number(raster.rows);
         var bbox = raster.bbox;
-        if (!Array.isArray(bbox) || bbox.length !== 4) return points;
-        var west = Math.min(Number(bbox[0]), Number(bbox[2]));
-        var east = Math.max(Number(bbox[0]), Number(bbox[2]));
-        var south = Math.min(Number(bbox[1]), Number(bbox[3]));
-        var north = Math.max(Number(bbox[1]), Number(bbox[3]));
+        /* Two shapes exist: the Archaeological Potential grid carries an object
+         * {minLat, maxLat, minLng, maxLng} (grid.bbox), while the array form
+         * [west, south, east, north] is the older contract. Accept both — an
+         * unreadable bbox used to drop the whole heatmap from 3D without a word. */
+        var west, east, south, north;
+        if (Array.isArray(bbox) && bbox.length === 4) {
+            west = Math.min(Number(bbox[0]), Number(bbox[2]));
+            east = Math.max(Number(bbox[0]), Number(bbox[2]));
+            south = Math.min(Number(bbox[1]), Number(bbox[3]));
+            north = Math.max(Number(bbox[1]), Number(bbox[3]));
+        } else if (bbox && typeof bbox === 'object') {
+            west = Number(bbox.minLng); east = Number(bbox.maxLng);
+            south = Number(bbox.minLat); north = Number(bbox.maxLat);
+        } else {
+            return points;
+        }
         if (!(east > west) || !(north > south)) return points;
         var base = raster.base, values = raster.values, valid = raster.valid;
         var peak = 0;
@@ -847,11 +876,12 @@
                     properties: { w: w },
                     geometry: {
                         type: 'Point',
-                        /* row 0 is the top of the grid, exactly as the 2D
-                         * raster draws it, so the heat lands on the same cells. */
+                        /* row 0 is the SOUTHERN edge (buildHeatRaster indexes
+                         * row 0 at minLat; the 2D picture flips it on draw), so
+                         * the points land on the same cells the canvas paints. */
                         coordinates: [
                             west + cellLng * (col + 0.5),
-                            north - cellLat * (row + 0.5)
+                            south + cellLat * (row + 0.5)
                         ]
                     }
                 });
@@ -1307,6 +1337,17 @@
             base.layer = layer;
         }
 
+        if (kind === 'image' && hasImageHook(layer)) {
+            var picture = null;
+            try { picture = layer._dl3dImage(); } catch (e) { picture = null; }
+            if (!picture || !picture.url || !picture.coordinates) return null;
+            return Object.assign(base, {
+                url: String(picture.url),
+                coordinates: picture.coordinates,
+                label: base.label || 'image overlay'
+            });
+        }
+
         if (kind === 'image') {
             var coordinates = overlayCoordinates(layer);
             var url = layer._url || (layer._image && layer._image.src) ||
@@ -1589,6 +1630,12 @@
 
     function walk(map, layer, out, depth) {
         if (!layer || depth > 4) return;
+        /* `_dl3dSkip`: the layer is drawn in 2D by a group that also offers its
+         * features through `_dl3dFeatures()` (the Archaeological Potential bubbles
+         * and red mask). Leaflet puts a LayerGroup's children on the map as well
+         * as in the group, so without this every bubble was mirrored twice and
+         * the 400-item deck budget ran out before the heatmap and the mask. */
+        if (layer._dl3dSkip || isRenderer(layer)) return;
         var Leaflet = L();
         var kind = classify(layer, Leaflet);
         if (kind === 'group') {
@@ -1622,6 +1669,7 @@
         var skippedLayers = 0;
         byKey = {};
         map.eachLayer(function (layer) {
+            if (layer && (layer._dl3dSkip || isRenderer(layer))) return;   /* owned by a virtual 3D layer, or plumbing */
             /* A map with thousands of *top-level* layers (no group to merge
              * within) would otherwise be described in full before the deck
              * budget could drop it — the work, not just the deck, has to be

@@ -2138,6 +2138,7 @@
     var _heatRaster = null;      // rasterul de scoruri al ultimei rulări (debug)
     var _currentResults = null;  // celulele scorate la ultima rulare (API public)
     var _currentField = null;    // câmpul complet (debug / teste)
+    var _renderSeq = 0;          // o rulare de randare = un nou set de forme 3D
     // Stratul pornește întotdeauna OPRIT implicit — wireUI() forțează OFF la
     // prima cablare (fără `checked` în HTML + resetarea oricărei stări
     // restaurate de browser la reload), nu doar citește comutatorul.
@@ -2232,7 +2233,10 @@
 
     function clickThroughCanvas(map, paneName, padding) {
         if (typeof L === 'undefined' || typeof L.canvas !== 'function') return null;
-        return armClickThrough(L.canvas(assignPane(map, { padding: padding }, paneName)));
+        var renderer = armClickThrough(L.canvas(assignPane(map, { padding: padding }, paneName)));
+        // Rendererul e infrastructură, nu un strat: 3D nu-l numără ca „fără echivalent”.
+        renderer._dl3dSkip = true;
+        return renderer;
     }
 
     // Renderer canvas pentru bule: cu câteva sute/mii de cercuri, SVG-ul ar
@@ -2689,6 +2693,31 @@
                 x: Math.round(this._anchor.x * scale - npo.x),
                 y: Math.round(this._anchor.y * scale - npo.y)
             }, scale);
+        },
+
+        // 3D (js/map3d-mirror.js → MapLibre image source, draped over terrain):
+        // the SAME colourised raster the 2D canvas paints, as a PNG, with the
+        // grid's geographic corners. _srcCanvas is already north-up, so the
+        // picture needs no further flip. Encoded once per raster.
+        _dl3dImage: function () {
+            var raster = this._raster;
+            if (!raster || !raster.bbox || !raster.cols || !raster.rows) return null;
+            if (!this._srcCanvas) this._srcCanvas = createHeatSourceCanvas(raster);
+            var src = this._srcCanvas;
+            if (!src || typeof src.toDataURL !== 'function') return null;
+            if (raster._dl3dUrl === undefined) {
+                try { raster._dl3dUrl = src.toDataURL('image/png'); }
+                catch (e) { raster._dl3dUrl = null; }
+            }
+            if (!raster._dl3dUrl) return null;
+            var b = raster.bbox;
+            return {
+                url: raster._dl3dUrl,
+                coordinates: [
+                    [b.minLng, b.maxLat], [b.maxLng, b.maxLat],
+                    [b.maxLng, b.minLat], [b.minLng, b.minLat]
+                ]
+            };
         }
     };
 
@@ -2720,6 +2749,7 @@
         // îl traduce în rampă heatmap-color — fără ea, heatmap-ul 3D ar
         // desena albastru→roșu în locul albastru→verde→galben→violet.
         var layer = makeHeatLayer(raster, {
+            name: 'Archeological Potential Sites — heatmap',
             opacity: CONFIG.HEAT.OPACITY,
             gradient: HEAT_GRADIENT,
             radius: Math.max(6, (raster.cellM || 180) / 2),
@@ -2830,12 +2860,206 @@
         if (_resultsVisible) group.addTo(map);
     }
 
+    /* ── 3D: aceeași ieșire, ca forme la sol (js/map3d-mirror.js) ───────────
+     * Bulele și masca roșie sunt L.circle / L.rectangle / L.polygon. În MapLibre,
+     * `circle-radius` e în PIXELI: o bulă de 420 m ajungea în 3D ca un punct de
+     * 420 px la orice zoom, iar inelele roșii de 700 m ca puncte de 700 px. Copia
+     * 3D se construiește deci în METRI la sol: fiecare cerc devine un poligon cu
+     * 32 de laturi (aceeași construcție ca cercurile patrimoniului de 600 m din
+     * js/map-app.js, și aceeași rază pe care o citește L.circle), care se
+     * drapează pe teren și se scalează odată cu harta. Culorile și opacitățile
+     * vin din aceleași funcții de stil ca în 2D (styleFor, scoreColorHex).
+     *
+     * Copiii 2D ai grupurilor sunt marcați `_dl3dSkip`: Leaflet îi pune pe hartă
+     * și individual, iar mirror-ul i-ar fi numărat a doua oară (ceea ce umplea
+     * bugetul de 400 de elemente înainte de heatmap și de mască). */
+    var CIRCLE_SEGMENTS_3D = 32;
+
+    // Inelul unui cerc la sol, în ordinea GeoJSON ([lng, lat], închis). Pasul în
+    // latitudine e r / 111 320 m, cel în longitudine e întins cu 1/cos(lat) —
+    // exact ca L.circle, deci raza e aceeași în 2D și în 3D.
+    function groundRing3d(lat, lng, radiusM) {
+        var ring = [];
+        var latRad = lat * Math.PI / 180;
+        var dLat = radiusM / 111320;
+        var dLng = radiusM / (111320 * Math.max(Math.abs(Math.cos(latRad)), 0.2));
+        for (var i = 0; i < CIRCLE_SEGMENTS_3D; i++) {
+            var a = (i / CIRCLE_SEGMENTS_3D) * Math.PI * 2;
+            ring.push([lng + Math.sin(a) * dLng, lat + Math.cos(a) * dLat]);
+        }
+        ring.push(ring[0].slice());
+        return ring;
+    }
+
+    // Inel dintr-un dreptunghi {[lat, lng], [lat, lng]} (colțurile SV și ND).
+    function rectRing3d(bounds) {
+        var s = bounds[0], n = bounds[1];
+        return [
+            [s[1], s[0]], [n[1], s[0]], [n[1], n[0]], [s[1], n[0]], [s[1], s[0]]
+        ];
+    }
+
+    // Inel dintr-o listă de [lat, lng], închis pentru GeoJSON.
+    function closedRing3d(latlngs) {
+        var ring = (latlngs || []).map(function (p) { return [p[1], p[0]]; });
+        if (ring.length) {
+            var first = ring[0], last = ring[ring.length - 1];
+            if (first[0] !== last[0] || first[1] !== last[1]) ring.push(first.slice());
+        }
+        return ring;
+    }
+
+    function feature3d(geometry, properties) {
+        return { type: 'Feature', properties: properties, geometry: geometry };
+    }
+
+    // Bulele: același stil ca în 2D (culoarea din scor, aceleași trepte de
+    // opacitate). Ca în 2D, o bulă fără contur (greutate ≤ 0.9) n-are linie.
+    // Popup-ul e cel din 2D — stelele și procentul rămân la click și în 3D.
+    function bubbleFeatures3d(bubbles) {
+        return (bubbles || []).map(function (c, idx) {
+            var style = styleFor(c.score);
+            var stroke = style.weight > 0.9;
+            return feature3d(
+                { type: 'Polygon', coordinates: [groundRing3d(c.lat, c.lng, c.radiusM)] },
+                {
+                    fillColor: style.fillColor,
+                    color: style.color,
+                    fillOpacity: style.fillOpacity,
+                    opacity: stroke ? style.opacity : 0,
+                    popup: popupHtml(c, idx + 1)
+                }
+            );
+        });
+    }
+
+    // Grupul de lucru: aria de căutare + centrul (+ triunghiurile, dacă e debug),
+    // plus bulele când modul e „Bule”. `kind: 'radius'` = formă fără popup
+    // (aceeași convenție ca cercurile patrimoniului).
+    function workingAreaFeatures3d(ctx, field, drawBubbles) {
+        var features = [];
+        var style = CONFIG.PIN || {};
+        var areaColor = style.COLOR || '#a070e8';
+        if (CONFIG.SHOW_WORKING_AREA) {
+            features.push(feature3d(
+                { type: 'Polygon', coordinates: [groundRing3d(ctx.centerLat, ctx.centerLng, ctx.radius)] },
+                { color: areaColor, fillColor: areaColor, fillOpacity: 0.03, opacity: 0.5, kind: 'radius' }
+            ));
+            features.push(feature3d(
+                { type: 'Point', coordinates: [ctx.centerLng, ctx.centerLat] },
+                { color: areaColor, fillColor: style.FILL || '#c4a0f0', fillOpacity: 0.9, opacity: 1, radius: 4, kind: 'radius' }
+            ));
+        }
+        if (CONFIG.SHOW_TRIANGULATION && ctx.triangles) {
+            ctx.triangles.forEach(function (t) {
+                features.push(feature3d(
+                    { type: 'LineString', coordinates: [
+                        [t.a.lng, t.a.lat], [t.b.lng, t.b.lat], [t.c.lng, t.c.lat], [t.a.lng, t.a.lat]
+                    ] },
+                    { color: 'rgb(163,112,232)', opacity: 0.55, kind: 'radius' }
+                ));
+            });
+        }
+        if (drawBubbles) {
+            bubbleFeatures3d(field.bubbles).forEach(function (f) { features.push(f); });
+        }
+        return {
+            geojson: { type: 'FeatureCollection', features: features },
+            paints: {
+                line: { 'line-color': areaColor, 'line-width': 1, 'line-opacity': 1 },
+                fill: { 'fill-color': areaColor, 'fill-opacity': 0.5 },
+                circle: {
+                    'circle-radius': 4, 'circle-color': style.FILL || '#c4a0f0',
+                    'circle-stroke-color': areaColor, 'circle-stroke-width': 1.5,
+                    'circle-stroke-opacity': 1, 'circle-opacity': 0.9
+                },
+                layout: {}
+            },
+            stamp: 'archeo-area|' + _renderSeq + '|' + (drawBubbles ? 'bubbles' : 'heat'),
+            label: 'Archeological Potential Sites'
+        };
+    }
+
+    // Masca roșie în 3D: aceleași trei familii ca în 2D — intravilanul UAT
+    // (dreptunghiuri, fără contur), razele de protecție (cercuri la sol de
+    // 700 m) și contururile siturilor-poligon. Nu are popup (non-interactivă).
+    function exclusionFeatures3d(field, ctx) {
+        var M = CONFIG.MASK || {};
+        var red = M.COLOR || '#e03c3c';
+        var redFill = M.FILL || '#c0392b';
+        var features = [];
+        uatMaskRectangles(field).forEach(function (bounds) {
+            features.push(feature3d(
+                { type: 'Polygon', coordinates: [rectRing3d(bounds)] },
+                {
+                    color: red, opacity: 0, fillColor: redFill,
+                    fillOpacity: M.FILL_OPACITY_UAT === undefined ? 0.34 : M.FILL_OPACITY_UAT,
+                    kind: 'exclusion'
+                }
+            ));
+        });
+        var siteRadius = (ctx.siteRadius || CONFIG.SITE_RADIUS_M) + (ctx.siteBuffer || CONFIG.SITE_BUFFER_M);
+        (ctx.sites || []).forEach(function (s) {
+            if (s.isGuard) return; // gărzile de poligon nu se desenează ca cercuri
+            features.push(feature3d(
+                { type: 'Polygon', coordinates: [groundRing3d(s.lat, s.lng, siteRadius)] },
+                {
+                    color: red, opacity: 0.6, fillColor: redFill,
+                    fillOpacity: M.FILL_OPACITY_SITE === undefined ? 0.2 : M.FILL_OPACITY_SITE,
+                    kind: 'exclusion'
+                }
+            ));
+        });
+        (ctx.polygons || []).forEach(function (poly) {
+            poly.rings.forEach(function (ring) {
+                var latlngs = ring.map(function (p) {
+                    var ll = localMetersToLatLng(p.x, p.y, ctx.centerLat);
+                    return [ll.lat, ll.lng];
+                });
+                features.push(feature3d(
+                    { type: 'Polygon', coordinates: [closedRing3d(latlngs)] },
+                    { color: red, opacity: 0.8, fillColor: redFill, fillOpacity: 0.3, kind: 'exclusion' }
+                ));
+            });
+        });
+        return {
+            geojson: { type: 'FeatureCollection', features: features },
+            paints: {
+                line: { 'line-color': red, 'line-width': 1, 'line-opacity': 1 },
+                fill: { 'fill-color': redFill, 'fill-opacity': 0.3 },
+                circle: { 'circle-radius': 3, 'circle-color': redFill, 'circle-stroke-color': red, 'circle-stroke-width': 1, 'circle-opacity': 0.5 },
+                layout: {}
+            },
+            stamp: 'archeo-mask|' + _renderSeq,
+            label: 'Archeological exclusion (red)'
+        };
+    }
+
+    // Grupul devine sursa 3D a propriilor forme (`_dl3dFeatures`, construit
+    // leneș și păstrat până la următoarea randare), iar copiii 2D sunt săriți.
+    // `name` e eticheta din panoul 3D (options.name are prioritate în mirror).
+    function own3dFeatures(group, name, build) {
+        if (!group) return;
+        // Un grup fără eachLayer (stub, grup gol) nu trebuie să rupă randarea 2D.
+        if (typeof group.eachLayer === 'function') {
+            group.eachLayer(function (child) { child._dl3dSkip = true; });
+        }
+        group.options = group.options || {};
+        group.options.name = name;
+        var built = null;
+        group._dl3dFeatures = function () {
+            if (!built) built = build();
+            return built;
+        };
+    }
+
     /* ── randarea completă a unei rulări ─────────────────────────────────── */
     function renderField(field) {
         var map = window._dlMap;
         if (!map || !field) return;
         ensurePane(map);
         clearRendered(map);
+        _renderSeq += 1;
 
         var ctx = field.ctx;
         _layerGroup = L.layerGroup([]);
@@ -2844,13 +3068,21 @@
         // Modul de afișare e cel din UI, nu cel cu care a fost calculat câmpul:
         // comutarea Bule↔Heatmap redesenează imediat ultima analiză în noul mod
         // (altfel butoanele par să nu facă nimic până la următoarea „Detectează”).
-        if (outputMode() === 'heat') renderHeat(map, field);
+        var drawBubbles = outputMode() !== 'heat';
+        if (!drawBubbles) renderHeat(map, field);
         else renderBubbles(map, field, _layerGroup);
 
         // Masca roșie (intravilan UAT + razele de protecție + contururile
         // poligon) se desenează în AMBELE moduri: explică de ce există goluri
         // între bule și marchează zonele în care detectarea nu e permisă.
         renderExclusionMask(map, field, ctx);
+
+        // 3D: grupul de lucru și masca primesc formele la sol; heatmap-ul se
+        // trimite ca imagine prin _dl3dImage() (vezi heatLayerProto).
+        own3dFeatures(_layerGroup, 'Archeological Potential Sites',
+            function () { return workingAreaFeatures3d(ctx, field, drawBubbles); });
+        own3dFeatures(_maskGroup, 'Archeological exclusion (red)',
+            function () { return exclusionFeatures3d(field, ctx); });
 
         if (_resultsVisible) _layerGroup.addTo(map);
     }
