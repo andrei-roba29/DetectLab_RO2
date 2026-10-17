@@ -271,3 +271,28 @@ are likewise added server-side as `username` and `password` query parameters.
   `node tools/verify-danish-capabilities.mjs` from a network that can reach the
   providers after setting credentials; it reports each layer match without
   printing secret values.
+
+## The Finnish layers (Finland · Finnish maps)
+
+Declared in `js/finland-layers.config.js` (52 entries; the enabled ones are
+mirrored into `js/layer-registry.js` as `finland.*`). Full per-layer status,
+endpoint inventory, projection notes and the verification report:
+**`FINLAND_LAYERS.md`**.
+
+| provider | service | licence | attribution as shown | credential / permission |
+|---|---|---|---|---|
+| Maanmittauslaitos (MML) | WMTS `korkeusmalli_vinovalo` (karttamoottori; `avoin-karttakuva` with the free self-service key via the proxy) | open data, CC BY 4.0 | “Korkeusmalli © Maanmittauslaitos (CC BY 4.0)” | none for karttamoottori; optional `MML_API_KEY` (env-only) unlocks the official avoin-karttakuva WMTS server-side |
+| Maanmittauslaitos | HKP kiinteistötietojen karttapalvelu (`GetLayerTile`, Mapbox Vector Tiles) | MML service terms | “Kiinteistötietojen karttapalvelu © Maanmittauslaitos” | none |
+| Museovirasto | kartta.museoverkko.fi `GetWFSFeatures` (Muinaisjäännösrekisteri + Rakennusperintörekisteri) | CC BY 4.0 | “Data: Museovirasto, Muinaisjäännösrekisteri (CC BY 4.0)” (+ Antiquities Act 295/1963 note, ≈ ±50 m accuracy note, KYPPI links) | none for the 22 public layer ids; the official OGC WFS and the havaintokohteet / muut kulttuuriperintö tables are Museoverkko-account-gated (rows listed, disabled, with the explanation) |
+| Museovirasto | museoverkko `GetLayerTile` (maastokartta) | — | “Maastokartta © Museovirasto; taustakartta © Maanmittauslaitos” | none (route currently failing upstream — degraded, retried, proxy-fallbackable) |
+| SYKE | paikkatiedot.ymparisto.fi GeoServer (`syke_rakennussuojelukohteet`, `inspire_ps`) | CC BY 4.0 | “© Suomen ympäristökeskus (SYKE) (CC BY 4.0)” | none |
+| Ålands landskapsregering | kartor.regeringen.ax ArcGIS `Kulturarv/Fornminnen` | CC BY 4.0 | “© Ålands landskapsregering (CC BY 4.0)” | none |
+| Own data (Supabase-hosted Museovirasto exports) | `Harti/Finlanda` GeoPackages → local EPSG:4326 GeoJSON conversions | source terms as above | per-file row | `SUPABASE_SERVICE_KEY` only for the optional `--upload` mirroring; originals never overwritten |
+
+Finnish credential variables (env-only, documented in
+`backend/.env.example`-style comments in `backend/src/lib/finland-geo.mjs`):
+`MML_API_KEY` (optional), `FINLAND_PROXY_ALLOWED_ORIGINS` (optional),
+`SUPABASE_SERVICE_KEY` (converter `--upload` only). The proxy route
+`/api/geo/finland` is allow-listed per source, rejects cross-origin callers,
+strips credentials and caps bodies — it is the *fallback* path; direct
+requests are always tried first.

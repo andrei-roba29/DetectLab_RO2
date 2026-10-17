@@ -95,7 +95,22 @@
          * the guard with _detectlabNoGuard (js/asig-albania-layers.js owns
          * its rows: per-tile EPSG:4326 fallback after repeated tile errors
          * and a status line under the switch instead of a flipped switch). */
-        'geoportal.asig.gov.al': 'ASIG / geoportal.asig.gov.al'
+        'geoportal.asig.gov.al': 'ASIG / geoportal.asig.gov.al',
+        /* The Finnish layers (js/finland-layers.config.js) read these hosts
+         * directly — the SYKE GeoServer and the Åland ArcGIS server answer
+         * plain <img> tiles that need no CORS, and karttamoottori serves the
+         * hillshade <img> mosaics. Listed here so the provider is named if
+         * one stops answering, per the rule that every third-party endpoint
+         * of the registry appears in this map. The layers themselves opt out
+         * of the guard with _detectlabNoGuard (js/finland-layers.js owns its
+         * rows: direct→proxy fallback after repeated failures, a transparent
+         * pixel per failed tile and a status line with Retry under the
+         * switch instead of a flipped switch). */
+        'paikkatiedot.ymparisto.fi': 'SYKE / paikkatiedot.ymparisto.fi',
+        'kartor.regeringen.ax': 'Ålands landskapsregering (kartor.regeringen.ax)',
+        'karttamoottori.maanmittauslaitos.fi': 'Maanmittauslaitos (karttamoottori)',
+        'kartta.museoverkko.fi': 'Museovirasto (museoverkko)',
+        'hkp.maanmittauslaitos.fi': 'Maanmittauslaitos (kiinteistötietojen karttapalvelu)'
     };
 
     /* A re-pointed CENAGIS catalogue (window.DETECTLAB_CENAGIS_WMS, read by

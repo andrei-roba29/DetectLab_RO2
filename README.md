@@ -5,6 +5,30 @@ serverless/Express proxy routes. This repository's map is extended in place;
 there is no separate frontend build or client-side environment-variable
 injection. The Danish WMS credentials are server-only.
 
+## Finnish heritage, cadastral and terrain layers
+
+The Finnish layer catalogue is `js/finland-layers.config.js` (52 entries:
+MML LiDAR hillshade + topographic map reprojected from the national
+ETRS-TM35FIN grid in the browser, the HKP cadastral MVT with property IDs,
+Museovirasto's ancient-monuments and protected-buildings registers via
+GetWFSFeatures, SYKE's nature/Natura 2000/built-heritage protected sites, the
+Åland ancient-monuments register and the local Supabase GeoJSON conversions).
+`js/finland-layers.js` draws them; `js/finland-tm35.js` supplies the
+EPSG:3067 maths and the MVT decoder (no proj4 needed). Per-layer status,
+endpoints and verification: **`FINLAND_LAYERS.md`**.
+
+```sh
+node -e "console.log(require('./js/finland-tm35.js').selfTest())"  # must print ok:true
+node tools/sync-finland-config.mjs --check                          # backend copy in sync
+node tools/verify-finland-layers.mjs                                # endpoint sweep (needs network)
+node tools/finland-convert-gpkg.mjs                                 # Supabase GPKG → data/finland/*.geojson
+```
+
+The optional `MML_API_KEY` (free self-service key of the MML avoin-karttakuva
+service) is env-only and attached server-side by the `/api/geo/finland`
+proxy, which is the fallback for CORS/referrer-blocked requests — direct
+requests are always tried first.
+
 ## Danish LiDAR and historical layers
 
 The Danish layer catalogue is `js/danish-layers.config.js`; the existing

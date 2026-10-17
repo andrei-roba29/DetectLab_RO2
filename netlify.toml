@@ -103,3 +103,20 @@
   from = "/api/geo/dk-heritage"
   to = "/.netlify/functions/dk-heritage"
   status = 200
+
+# ── FINLAND · same-origin proxy for the Finnish layers ─────────────────────
+# js/finland-layers.config.js defines these layers; js/finland-layers.js
+# draws them. Direct requests are tried first everywhere; this route is the
+# fallback for the hosts that send no CORS headers (every canvas mosaic, the
+# HKP MVT decoder and the museoverkko/SYKE/Åland fetches need it) and for
+# karttamoottori, which refuses some direct clients. With MML_API_KEY set,
+# src=mml-hillshade-open also serves the official avoin-karttakuva WMTS with
+# the key attached server-side. Everything is allow-listed — src, tile index,
+# layer id, bbox and a host check for the two passthrough sources.
+# Environment (optional): MML_API_KEY (free self-service key, CC BY 4.0).
+# See netlify/functions/finland-geo.mjs, backend/src/lib/finland-geo.mjs
+# and FINLAND_LAYERS.md.
+[[redirects]]
+  from = "/api/geo/finland"
+  to = "/.netlify/functions/finland-geo"
+  status = 200

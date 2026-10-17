@@ -3,6 +3,8 @@
             en: {
                 danish_group_title: 'Denmark · Danish maps',
                 albania_group_title: 'Albania · ASIG geoportal',
+                finland_group_title: 'Finland · Finnish maps',
+                finland_group_info: 'Finnish layers: Maanmittauslaitos LiDAR hillshade and the topographic map (reprojected in the browser from the national ETRS-TM35FIN grid), the cadastral map with property IDs (vector tiles), Museovirasto’s ancient-monuments register, protected buildings, SYKE’s nature / Natura 2000 / built-heritage protected sites, the Åland ancient-monuments register and locally hosted RKY / VARK datasets. Attribution is shown on the map while a layer is on; see FINLAND_LAYERS.md.',
                 danish_group_info: 'Danish layers: DTK25 topographic map and GeoDanmark orthophoto as base maps, protected nature types (NBL § 3) and scheduled ancient monuments as overlays. DTK25 and the orthophoto need a token/service user set on the server — see DATA_SOURCES.md.',
                 nav_apm: 'What is APM',
                 nav_map: 'Explore Map',
@@ -593,6 +595,8 @@
             ro: {
                 danish_group_title: 'Danemarca · hărți daneze',
                 albania_group_title: 'Albania · geoportalul ASIG',
+                finland_group_title: 'Finlanda · hărți finlandeze',
+                finland_group_info: 'Straturi finlandeze: vinovarjostul LiDAR al Maanmittauslaitos și harta topografică (reprojizate în browser din grila națională ETRS-TM35FIN), harta cadastrală cu identificatoare de proprietate (dale vectoriale), registrul muinaisjäännökset al Museovirasto, clădirile protejate, siturile protejate de natură / Natura 2000 / patrimoniu construit de la SYKE, registrul de monumente al Åland și seturile de date RKY / VARK găzduite local. Atribuirea apare pe hartă cât timp ce un strat este activ; vezi FINLAND_LAYERS.md.',
                 danish_group_info: 'Straturi daneze: harta topografică DTK25 și ortofotografia GeoDanmark ca hărți de bază, tipuri de natură protejate (NBL § 3) și monumente antice protejate ca tematice. DTK25 și ortofotografia au nevoie de un token/utilizator de serviciu configurat pe server — vezi DATA_SOURCES.md.',
                 nav_apm: 'Ce este APM',
                 nav_map: 'Explorează Harta',
@@ -10669,6 +10673,8 @@
             da: {
                 danish_group_title: 'Danmark · danske kort',
                 albania_group_title: 'Albanien · ASIG-geoportalen',
+                finland_group_title: 'Finland · finske kort',
+                finland_group_info: 'Finske lag: Maanmittauslaitos LiDAR-skyggekort og topografisk kort (omprojiceret i browseren fra det nationale ETRS-TM35FIN-gitter), matrikelkortet med ejendomsnumre (vektorfliser), Museovirastos oldtidsmindesregister, beskyttede bygninger, SYKES natur- / Natura 2000- / bygningsarv-beskyttede lokaliteter, Ålands oldtidsmindesregister og lokalt hostede RKY-/VARK-datasæt. Kreditering vises på kortet, mens et lag er slået til; se FINLAND_LAYERS.md.',
                 danish_group_info: 'Danske lag: DTK25 topografisk kort og GeoDanmark ortofoto som baggrundskort, beskyttede naturtyper (NBL § 3) og fredede fortidsminder som temaer. DTK25 og ortofoto kræver en token/tjenestebruger på serveren — se DATA_SOURCES.md.',
                 nav_apm: 'Hvad er APM',
                 nav_map: 'Udforsk kort',
@@ -15197,4 +15203,4 @@
         }, { threshold: 0.12 });
 
         document.querySelectorAll('.what-card, .step, .plan-card').forEach(el => observer.observe(el));
-;
+

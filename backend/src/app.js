@@ -41,6 +41,11 @@ app.use('/api', newsletterRouter);
 // Token-adding, caching proxy for Dataforsyningen (Denmark DHM hillshade).
 // Keeps the Danish token server-side; see backend/src/routes/geoProxy.js.
 app.use('/api', geoProxyRouter);
+// Allow-listed same-origin proxy for the Finnish layers (MML WMTS/HKP MVT,
+// museoverkko WFS, SYKE, Åland). Falls back for CORS/referrer-blocked
+// requests and attaches MML_API_KEY server-side when configured.
+// See backend/src/lib/finland-geo.mjs and FINLAND_LAYERS.md.
+app.use('/api', finlandProxyRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });

@@ -229,7 +229,17 @@
          * the app's own basemap stack on pane_satellite (398), below every
          * existing app-wide data pane (LiDAR 610, heritage 620, …). */
         'albania-raster': { label: { ro: 'Albania · raster', en: 'Albania · raster' }, z: 405 },
-        'albania-overlay': { label: { ro: 'Albania · arii protejate', en: 'Albania · protected sites' }, z: 407 }
+        'albania-overlay': { label: { ro: 'Albania · arii protejate', en: 'Albania · protected sites' }, z: 407 },
+        /* The Finnish layers (Finland: MML terrain + cadastral, Museovirasto
+         * registers, SYKE, Åland, local conversions) — described in
+         * js/finland-layers.config.js and drawn by js/finland-layers.js.
+         * The panes themselves are created by that module (rasters — the
+         * reprojected TM35FIN canvases, the SYKE/Åland tiles — at 408; the
+         * vector overlays — WFS families, MVT cadastral, local GeoJSON — at
+         * 409), above the Albanian (405/407) and Danish (399/406) stacks
+         * (the countries never overlap), below every app-wide data pane. */
+        'finland-raster': { label: { ro: 'Finlanda · raster', en: 'Finland · raster' }, z: 408 },
+        'finland-vector': { label: { ro: 'Finlanda · vectori', en: 'Finland · vectors' }, z: 409 }
     };
 
     /* ═══════════════════════════════════════════════════════════════════════
@@ -2301,6 +2311,101 @@
                         toggle: 'danishToggle_' + layer.id,
                         slider: isBase ? undefined : 'danishOpacity_' + layer.id,
                         select: isBase ? 'danishBaseMap' : undefined,
+                        selfGuarded: true,
+                        configId: layer.id
+                    }
+                });
+            });
+        } catch (e) { /* a broken config must not take the catalogue down */ }
+    }());
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     *  FINNISH LAYERS (Finland) — mirrored from js/finland-layers.config.js
+     * ───────────────────────────────────────────────────────────────────────
+     * Same contract as the Albanian and Danish mirrors: the config is the
+     * single description of every Finnish layer (MML WMTS rasters on the
+     * ETRS-TM35FIN grid, MML HKP cadastral MVT, Museovirasto GetWFSFeatures
+     * families, SYKE WMS, the Åland ArcGIS REST service and the local
+     * GeoJSON conversions); this block only copies the ENABLED ones into the
+     * shared catalogue so the diagnostics, the 3D status report and the
+     * offline audit see them. It runs in the browser (the config script is
+     * loaded first) and in Node (tools require() it), and does nothing when
+     * the config is absent.
+     *
+     * `guard:false` + `selfGuarded` for the same reason as the other country
+     * modules: js/finland-layers.js owns every row — it reprojects TM35FIN
+     * tiles on canvases, decodes MVT, debounces the WFS boxes and switches
+     * direct→proxy per layer — and the availability guard must not flip the
+     * very switch that drives that state machine.                              */
+    (function registerFinlandLayers() {
+        var cfg = null;
+        try {
+            cfg = root && root.FINLAND_LAYERS_CONFIG;
+            if (!cfg && typeof require === 'function') cfg = require('./finland-layers.config.js');
+        } catch (e) { cfg = null; }
+        if (!cfg || typeof cfg.enabledLayers !== 'function') return;
+        var SELF_GUARD = 'js/finland-layers.js owns this row: direct requests are tried first, the ' +
+            'layer falls back to the same-origin /api/geo/finland proxy after repeated failures, a ' +
+            'failed tile degrades to a transparent pixel and persistent failures are reported in the ' +
+            'row with a Retry — the switch must stay under the visitor\\\\u2019s control.';
+        /* the registry's coarser kind taxonomy */
+        var KIND = {
+            'tm35-wmts': 'wmts',
+            'mvt': 'tile',
+            'wfs': 'wfs',
+            'arcgis': 'arcgis-image',
+            'geojson': 'dynamic'
+        };
+        var UPSTREAM_BASE = {
+            'tm35-wmts': function (layer) { return layer.urlTemplate; },
+            'mvt': function () { return 'https://hkp.maanmittauslaitos.fi/hkp/action?action_route=GetLayerTile'; },
+            'wfs': function () { return 'https://kartta.museoverkko.fi/action?action_route=GetWFSFeatures'; },
+            'wms': function (layer) {
+                return (cfg.WMS_SERVICES && cfg.WMS_SERVICES[layer.service] && cfg.WMS_SERVICES[layer.service].url) || '';
+            },
+            'arcgis': function (layer) { return (cfg.endpoints && cfg.endpoints.alandRest) + '/' + layer.restService; },
+            'geojson': function (layer) { return (cfg.endpoints && cfg.endpoints.supabase) + (layer.supabaseFile || ''); }
+        };
+        try {
+            cfg.enabledLayers().forEach(function (layer) {
+                var id = 'finland.' + layer.id;
+                if (BY_ID[id]) return;
+                var isVector = layer.kind === 'wfs' || layer.kind === 'mvt' || layer.kind === 'geojson';
+                API.register({
+                    id: id,
+                    group: isVector ? 'finland-vector' : 'finland-raster',
+                    z: isVector ? 409 : 408,
+                    kind: KIND[layer.kind] || layer.kind,
+                    title: { ro: layer.title.en, en: layer.title.en, fi: layer.title.fi },
+                    url: UPSTREAM_BASE[layer.kind] ? UPSTREAM_BASE[layer.kind](layer) : '',
+                    upstream: UPSTREAM_BASE[layer.kind] ? UPSTREAM_BASE[layer.kind](layer) : '',
+                    layer: layer.layers || layer.layerNames && layer.layerNames.join(',') || null,
+                    format: layer.format,
+                    transparent: layer.transparent !== false,
+                    version: layer.version,
+                    crs: (layer.kind === 'tm35-wmts' || layer.kind === 'mvt') ? 'EPSG:3067'
+                        : layer.kind === 'wfs' ? 'EPSG:4326'
+                            : (layer.crs || 'EPSG:3857'),
+                    tileSize: 256,
+                    minZoom: layer.minZoom,
+                    maxZoom: layer.maxZoom || 20,
+                    maxNativeZoom: layer.maxNativeZoom || layer.maxNativeLevel,
+                    opacity: layer.opacity,
+                    bounds: cfg.countryBounds,
+                    attribution: layer.attributionRow || cfg.attribution,
+                    provider: cfg.provider,
+                    licence: cfg.licence,
+                    requiresCredentials: [],
+                    cors: 'unknown',
+                    proxy: 'auto',
+                    guard: false,
+                    selfGuarded: true,
+                    selfGuardedReason: SELF_GUARD,
+                    notes: layer.notes,
+                    ui: {
+                        toggle: 'finlandToggle_' + layer.id,
+                        slider: 'finlandOpacity_' + layer.id,
+                        pct: 'finlandPct_' + layer.id,
                         selfGuarded: true,
                         configId: layer.id
                     }
