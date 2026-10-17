@@ -113,10 +113,19 @@ until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one
 | `sat.vhr-2012` | wms | copernicus.discomap.eea.europa.eu | Image | 1.1.1 | image/jpeg | no | always | probe · Copernicus Land / EEA discomap |
 | `sat.vhr-2018` | wms | image.discomap.eea.europa.eu | VHR_2018_WM | 1.1.1 | image/jpeg | no | always | probe · Copernicus Land / EEA discomap |
 | `sat.vhr-2021` | wms | image.discomap.eea.europa.eu | VHR_2021_LAEA | 1.1.1 | image/jpeg | no | always | probe · Copernicus Land / EEA discomap |
+| `albania.topo50k` | wms | geoportal.asig.gov.al | Topografike:50K_Topografike | 1.1.1 | image/png | unknown | auto | probe · ASIG / geoportal.asig.gov.al |
+| `albania.ortho1999` | wms | geoportal.asig.gov.al | Orthophoto:Ortofoto_1999 | 1.1.1 | image/png | unknown | auto | probe · ASIG / geoportal.asig.gov.al |
+| `albania.ortho1994` | wms | geoportal.asig.gov.al | orthophoto_2015:OrthoImagery_20cm | 1.1.1 | image/jpeg | unknown | auto | probe · ASIG / geoportal.asig.gov.al |
+| `albania.dsm` | wms | geoportal.asig.gov.al | DSM:Dsm_Hill_Group | 1.1.1 | image/png | unknown | auto | probe · ASIG / geoportal.asig.gov.al |
+| `albania.lidar` | wms | geoportal.asig.gov.al | Dtm_2015:Hillshade_2015_group | 1.1.1 | image/png | unknown | auto | probe · ASIG / geoportal.asig.gov.al |
 | `danish.naturtyper` | wms | arealeditering-dist-geo.miljoeportal.dk | dai:bes_naturtyper | 1.3.0 | image/png | unknown | auto | probe · Danmarks Miljøportal |
 | `danish.lidar_hillshade_historik` | wms | same-origin | hillshade_1_6m | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `danish.lidar_quickdhm_exaggerated` | wms | same-origin | quickDHM_skyggekort_terraen_overdrevet | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `danish.lidar_dhm_terrain_hillshade` | wms | same-origin | dhm_terraen_skyggekort | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `albania.heritage` | wms | geoportal.asig.gov.al | iktk:zonatembrojturatetrashegimisekulturo… | 1.1.1 | image/png | unknown | auto | probe · ASIG / geoportal.asig.gov.al |
+| `albania.natural` | wms | geoportal.asig.gov.al | akzm:zonat_mbrojtura_081124 | 1.1.1 | image/png | unknown | auto | probe · ASIG / geoportal.asig.gov.al |
+| `albania.cultural` | wms | geoportal.asig.gov.al | iktk:zonatembrojturatetrashegimisekulturo… | 1.1.1 | image/png | unknown | auto | probe · ASIG / geoportal.asig.gov.al |
+| `albania.monument` | wms | geoportal.asig.gov.al | akzm:monumentet_natyrore_07032023 | 1.1.1 | image/png | unknown | auto | probe · ASIG / geoportal.asig.gov.al |
 | `lidar.nl-ahn` | dynamic | ahn.arcgisonline.nl | exportImage |  | image/png | yes | auto | watch · AHN / Esri Nederland |
 | `lidar.no-hoydedata` | dynamic | hoydedata.no | exportImage |  | image/png | yes | auto | watch · Kartverket (høydedata.no) |
 | `lidar.pl-nmt` | dynamic | mapy.geoportal.gov.pl | Raster | 1.3.0 | image/png | unknown | auto | watch · GUGiK / geoportal.gov.pl |
@@ -187,7 +196,7 @@ until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one
 | `premium.kdr-gb` | wms | pastmaps.cenagis.edu.pl | ihpan:kdr_gb_3857 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `premium.wig-100k` | wms | pastmaps.cenagis.edu.pl | ihpan:wig100k_3857 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 
-**70/70 third-party layers guarded** (59 probed, 11 watched); 0 self-handled + 26 same-origin, 1 runtime. 0 error(s), 0 warning(s).
+**79/79 third-party layers guarded** (68 probed, 11 watched); 0 self-handled + 26 same-origin, 1 runtime. 0 error(s), 0 warning(s).
 
 ### Small print
 
@@ -223,6 +232,7 @@ None — every checked invariant holds.
 | **Copernicus Land / EEA discomap** (`copernicus.discomap.eea.europa.eu`) | ArcGIS MapServer/WMSServer GetMap, WMS 1.1.1, JPEG (transparent=false) | 200 + an ArcGIS JSON error, or a blank JPEG outside the VHR footprint of that year | external | probe; the 3D view always goes through the same-origin proxy because the host sends no CORS headers |
 | **Copernicus Land / EEA discomap** (`image.discomap.eea.europa.eu`) | ArcGIS ImageServer/WMSServer GetMap, WMS 1.1.1, JPEG | 200 + an ArcGIS JSON error, or a blank JPEG where the LAEA-native mosaic has no data | external | probe; 3D through the proxy for the same reason |
 | **Danmarks Miljøportal** (`arealeditering-dist-geo.miljoeportal.dk`) | WMS 1.3.0 GetMap (CRS=EPSG:3857, uppercase KVP), dai:bes_naturtyper, PNG + transparent | 200 + ServiceExceptionReport XML (GeoServer answers exceptions with 200), or an all-alpha tile where the layer has no polygons. The capabilities advertise only EPSG:25832/CRS:84 while GetMap serves 3857 normally — judge by the tile, not by the capabilities | external (the agency GeoServer) | no guard row: js/danish-layers.js owns the switch and prints its own status line (the layer opts out with _detectlabNoGuard); the host is still named in js/wms-health.js HOSTS so a tile-error burst can be attributed |
+| **ASIG / geoportal.asig.gov.al** (`geoportal.asig.gov.al`) | WMS 1.1.1 GetMap (SRS=EPSG:3857) per Leaflet tile for the nine Albanian layers (Dtm_2015:Hillshade_2015_group, DSM:Dsm_Hill_Group, Orthophoto:Ortofoto_1999, orthophoto_2015:OrthoImagery_20cm — JPEG, Topografike:50K_Topografike and the four dated iktk:/akzm: protected-sites overlays); the identical rasters exist as WMTS on the national EPSG:6870 grid | 200 + ServiceExceptionReport XML (GeoServer answers exceptions with 200), or an all-alpha / empty tile past the Albanian coverage; a renamed protected-sites snapshot answers "Could not find layer …" the same way — re-check the names in GetCapabilities before editing js/asig-albania-layers.config.js | external (the agency GeoServer; government host, no SLA) | no guard row: js/asig-albania-layers.js owns the switch and prints its own status line (the layers opt out with _detectlabNoGuard; repeated tile errors first retry in EPSG:4326, then the row says the source is not answering); the host is still named in js/wms-health.js HOSTS so a tile-error burst can be attributed |
 | **IGN France / Géoplateforme** (`data.geopf.fr`) | WMS 1.3.0 GetMap (CRS=EPSG:3857), IGNF_LIDAR-HD_* | 200 + ServiceExceptionReport XML, or 400 for an unknown LAYERS/CRS pair | external | probe before the layer is added |
 | **swisstopo** (`wmts.geo.admin.ch`) | WMTS KVP GetTile (ch.swisstopo.swisssurface3d-relief) | 200 + WMTS ServiceException XML, or swisstopo's standard no-data tile beyond the modelled area | external | adopted by the guard when it goes on the map, then watched: three failed tiles in a row remove the layer and explain the provider (no probe — the host publishes dozens of products) |
 | **Environment Agency (England)** (`environment.data.gov.uk`) | WMTS KVP GetTile, TILEMATRIXSET=WebMercatorQuad | 200 + XML ServiceException for a tile outside the published limits | external | adopted and watched for tile errors; the module itself clips its bounds and asks for transparent tiles past maxNativeZoom |
@@ -372,6 +382,31 @@ One concrete tile per layer, built by the same code the map runs (sample tile 12
 3D /api/map3d/tile?layer=sat.vhr-2021&z={z}&x={x}&y={y}
 ```
 ```
+# albania.topo50k — Topographic map 1:50k
+2D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=Topografike%3A50K_Topografike&styles=&format=image%2Fpng&transparent=false&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=Topografike%3A50K_Topografike&styles=&format=image%2Fpng&transparent=false&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# albania.ortho1999 — Orthophoto 1999
+2D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=Orthophoto%3AOrtofoto_1999&styles=&format=image%2Fpng&transparent=false&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=Orthophoto%3AOrtofoto_1999&styles=&format=image%2Fpng&transparent=false&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# albania.ortho1994 — Orthophoto 1994
+2D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=orthophoto_2015%3AOrthoImagery_20cm&styles=&format=image%2Fjpeg&transparent=false&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=orthophoto_2015%3AOrthoImagery_20cm&styles=&format=image%2Fjpeg&transparent=false&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# albania.dsm — DSM (hillshade)
+2D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=DSM%3ADsm_Hill_Group&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=DSM%3ADsm_Hill_Group&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# albania.lidar — LiDAR
+2D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=Dtm_2015%3AHillshade_2015_group&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=Dtm_2015%3AHillshade_2015_group&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
 # danish.naturtyper — Denmark · Protected nature types (NBL § 3)
 2D https://arealeditering-dist-geo.miljoeportal.dk/geoserver/wms?service=WMS&request=GetMap&version=1.3.0&layers=dai%3Abes_naturtyper&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://arealeditering-dist-geo.miljoeportal.dk/geoserver/wms?service=WMS&request=GetMap&version=1.3.0&layers=dai%3Abes_naturtyper&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
@@ -390,6 +425,26 @@ One concrete tile per layer, built by the same code the map runs (sample tile 12
 # danish.lidar_dhm_terrain_hillshade — LiDAR terrain hillshade (DHM)
 2D https://api.dataforsyningen.dk/dhm_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dhm_terraen_skyggekort&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-dtk25?layer=lidar_dhm_terrain_hillshade&service=WMS&request=GetMap&version=1.3.0&layers=dhm_terraen_skyggekort&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# albania.heritage — Heritage Sites
+2D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=iktk%3Azonatembrojturatetrashegimisekulturore22_07_2026&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=iktk%3Azonatembrojturatetrashegimisekulturore22_07_2026&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# albania.natural — Natural Protected Sites
+2D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=akzm%3Azonat_mbrojtura_081124&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=akzm%3Azonat_mbrojtura_081124&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# albania.cultural — Cultural Protected Sites
+2D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=iktk%3Azonatembrojturatetrashegimisekulturore_pike13_05_2026&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=iktk%3Azonatembrojturatetrashegimisekulturore_pike13_05_2026&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# albania.monument — Environment: Natural monument
+2D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=akzm%3Amonumentet_natyrore_07032023&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=akzm%3Amonumentet_natyrore_07032023&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # lidar.nl-ahn — Netherlands · AHN (DTM/DSM)

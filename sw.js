@@ -553,7 +553,16 @@
 //   stalled tile fetch parked the prefetch a tile short of done forever
 //   (prefetch fetches now carry a 45 s per-tile deadline). See
 //   MAP_3D_TERRAIN.md §6.4.
-const CACHE_NAME = 'detectlab-v225-lidar-3d-entry-handover';
+// v226: Albania joins the catalogue - nine live layers from the ASIG
+//   geoportal (geoportal.asig.gov.al): DTM-2015 LiDAR hillshade, DSM
+//   hillshade, Orthophoto 1999, Orthophoto 1994 (the 20 cm 2015
+//   product), the 1:50k topographic map and four dated protected-sites
+//   overlays, one collapsed group in the Free tab, country-filtered to
+//   Albania (ALBANIA_ASIG_LAYERS.md). New modules
+//   js/asig-albania-layers.config.js + js/asig-albania-layers.js,
+//   re-versioned layer-registry.js, translations.js, wms-health.js,
+//   map-app.js and styles.css so an installed PWA picks them up.
+const CACHE_NAME = 'detectlab-v226-albania-asig-layers';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -588,6 +597,15 @@ const PRECACHE_URLS = [
   // must not depend on the network.
   'js/layer-registry.js?v=20261015-danish-layers',
   'js/danish-layers.config.js?v=20261016-danish-wms-layers',
+  'js/asig-albania-layers.config.js',
+  'js/asig-albania-layers.config.js?v=20261017-albania-asig',
+  'js/asig-albania-layers.js',
+  'js/asig-albania-layers.js?v=20261017-albania-asig',
+  'js/layer-registry.js?v=20261017-albania-asig',
+  'js/translations.js?v=20261017-albania-asig',
+  'js/wms-health.js?v=20261017-albania-asig',
+  'js/map-app.js?v=20261017-albania-asig',
+  'css/styles.css?v=20261017-albania-asig',
   'js/danish-layers.js?v=20261016-danish-wms-layers',
   'js/layer-registry.js?v=20261014-wms-audit',
   'js/layer-registry.js?v=20261013-3d-mobile',

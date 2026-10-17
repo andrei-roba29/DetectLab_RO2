@@ -630,10 +630,10 @@ function testWiring() {
     assert.ok(html.indexOf('id="danishToggle"') !== -1, '…and the group switch');
     assert.ok(html.indexOf('onclick="toggleDanishSubLayers()"') !== -1, '…and the collapse button');
     assert.ok(html.indexOf('js/danish-layers.config.js?v=20261016-danish-wms-layers') <
-        html.indexOf('js/layer-registry.js?v=20261015-danish-layers'),
+        html.indexOf('js/layer-registry.js?v=20261017-albania-asig'),
         'the config loads before the registry that mirrors it');
     assert.ok(html.indexOf('js/danish-layers.js?v=20261016-danish-wms-layers') >
-        html.indexOf('js/map-app.js?v=20261015-basemap-collapse'),
+        html.indexOf('js/map-app.js?v=20261017-albania-asig'),
         'the module loads after the map module');
     ok('index.html: group row, container and both scripts in the right order');
 

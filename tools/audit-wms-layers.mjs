@@ -652,6 +652,24 @@ const SIGNATURES = [
       'so a tile-error burst can be attributed'
   },
   {
+    host: 'geoportal.asig.gov.al',
+    provider: 'ASIG / geoportal.asig.gov.al',
+    request: 'WMS 1.1.1 GetMap (SRS=EPSG:3857) per Leaflet tile for the nine Albanian layers ' +
+      '(Dtm_2015:Hillshade_2015_group, DSM:Dsm_Hill_Group, Orthophoto:Ortofoto_1999, ' +
+      'orthophoto_2015:OrthoImagery_20cm — JPEG, Topografike:50K_Topografike and the four dated ' +
+      'iktk:/akzm: protected-sites overlays); the identical rasters exist as WMTS on the national ' +
+      'EPSG:6870 grid',
+    what: '200 + ServiceExceptionReport XML (GeoServer answers exceptions with 200), or an all-alpha / ' +
+      'empty tile past the Albanian coverage; a renamed protected-sites snapshot answers ' +
+      '"Could not find layer …" the same way — re-check the names in GetCapabilities before editing ' +
+      'js/asig-albania-layers.config.js',
+    owner: 'external (the agency GeoServer; government host, no SLA)',
+    app: 'no guard row: js/asig-albania-layers.js owns the switch and prints its own status line ' +
+      '(the layers opt out with _detectlabNoGuard; repeated tile errors first retry in EPSG:4326, ' +
+      'then the row says the source is not answering); the host is still named in js/wms-health.js ' +
+      'HOSTS so a tile-error burst can be attributed'
+  },
+  {
     host: 'data.geopf.fr',
     provider: 'IGN France / Géoplateforme',
     request: 'WMS 1.3.0 GetMap (CRS=EPSG:3857), IGNF_LIDAR-HD_*',

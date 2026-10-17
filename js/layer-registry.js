@@ -221,7 +221,15 @@
          * the app's own basemap stack on pane_satellite (398), so every existing
          * data pane keeps painting over the Danish ones. */
         'danish-base': { label: { ro: 'Danemarca · hărți de bază', en: 'Denmark · base maps' }, z: 399, base: true },
-        'danish-overlay': { label: { ro: 'Danemarca · tematice', en: 'Denmark · overlays' }, z: 406 }
+        'danish-overlay': { label: { ro: 'Danemarca · tematice', en: 'Denmark · overlays' }, z: 406 },
+        /* The Albanian layers (Albania, ASIG geoportal) — described in
+         * js/asig-albania-layers.config.js and drawn by
+         * js/asig-albania-layers.js. The panes themselves are created by that
+         * module (rasters 405, protected-sites vector overlays 407), above
+         * the app's own basemap stack on pane_satellite (398), below every
+         * existing app-wide data pane (LiDAR 610, heritage 620, …). */
+        'albania-raster': { label: { ro: 'Albania · raster', en: 'Albania · raster' }, z: 405 },
+        'albania-overlay': { label: { ro: 'Albania · arii protejate', en: 'Albania · protected sites' }, z: 407 }
     };
 
     /* ═══════════════════════════════════════════════════════════════════════
@@ -2154,6 +2162,80 @@
         diagnostics: diagnostics,
         verify2d: verify2d
     };
+    /* ═══════════════════════════════════════════════════════════════════════
+     *  ALBANIAN LAYERS (Albania · ASIG geoportal) — mirrored from
+     *  js/asig-albania-layers.config.js
+     * ───────────────────────────────────────────────────────────────────────
+     * The config is the single description of every Albanian layer; this
+     * block only copies the enabled ones into the shared catalogue, so the
+     * 2D map's diagnostics, the 3D status report and the offline audit
+     * (tools/audit-wms-layers.mjs) treat them like any other layer. It runs
+     * in the browser (the config is a plain script loaded first) and in Node
+     * (the tools require() the config), and it does nothing when the config
+     * is not there — every other page keeps working unchanged.
+     *
+     * `guard:false` + `selfGuarded` is deliberate: js/asig-albania-layers.js
+     * owns those rows (per-tile EPSG:4326 fallback after repeated errors, a
+     * transparent pixel for a failed tile and a row-level "source is not
+     * answering" notice), so the availability guard must not switch a layer
+     * off behind the visitor's back.                                       */
+    (function registerAlbaniaLayers() {
+        var cfg = null;
+        try {
+            cfg = root && root.ASIG_ALBANIA_CONFIG;
+            if (!cfg && typeof require === 'function') cfg = require('./asig-albania-layers.config.js');
+        } catch (e) { cfg = null; }
+        if (!cfg || typeof cfg.enabledLayers !== 'function') return;
+        var SELF_GUARD = 'js/asig-albania-layers.js owns this row: after repeated tile errors it falls ' +
+            'back from EPSG:3857 to per-tile EPSG:4326 requests, a failed tile degrades to a transparent ' +
+            'pixel and a persistent failure is reported in the row — the switch must stay under the ' +
+            'visitor\\u2019s control.';
+        try {
+            cfg.enabledLayers().forEach(function (layer) {
+                var id = 'albania.' + layer.id;
+                if (BY_ID[id]) return;
+                var isProtected = layer.group === 'protected';
+                API.register({
+                    id: id,
+                    group: isProtected ? 'albania-overlay' : 'albania-raster',
+                    z: isProtected ? 407 : 405,
+                    kind: 'wms',
+                    title: { ro: layer.title.ro, en: layer.title.en, sq: layer.title.en },
+                    url: (cfg.wms && cfg.wms.url) || (cfg.endpoints && cfg.endpoints.wms),
+                    upstream: (cfg.endpoints && cfg.endpoints.wms) || (cfg.wms && cfg.wms.url),
+                    layer: layer.layers,
+                    format: layer.format,
+                    transparent: !!layer.transparent,
+                    version: (cfg.wms && cfg.wms.version) || '1.1.1',
+                    crs: (cfg.wms && cfg.wms.crs) || 'EPSG:3857',
+                    tileSize: (cfg.wms && cfg.wms.tileSize) || 256,
+                    minZoom: layer.minZoom,
+                    maxZoom: 20,
+                    maxNativeZoom: layer.maxNativeZoom,
+                    opacity: layer.opacity,
+                    bounds: cfg.countryBounds,
+                    attribution: cfg.attribution,
+                    provider: cfg.provider,
+                    licence: cfg.licence,
+                    requiresCredentials: [],
+                    cors: 'unknown',
+                    proxy: 'auto',
+                    guard: false,
+                    selfGuarded: true,
+                    selfGuardedReason: SELF_GUARD,
+                    notes: layer.notes,
+                    ui: {
+                        toggle: 'albaniaToggle_' + layer.id,
+                        slider: 'albaniaOpacity_' + layer.id,
+                        pct: 'albaniaPct_' + layer.id,
+                        selfGuarded: true,
+                        configId: layer.id
+                    }
+                });
+            });
+        } catch (e) { /* a broken config must not take the catalogue down */ }
+    }());
+
     /* ═══════════════════════════════════════════════════════════════════════
      *  DANISH LAYERS (Denmark) — mirrored from js/danish-layers.config.js
      * ───────────────────────────────────────────────────────────────────────

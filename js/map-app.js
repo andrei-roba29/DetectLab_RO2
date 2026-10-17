@@ -13853,6 +13853,15 @@
                         try { danishLayers.filterForCountry(iso); } catch (e) {}
                     }
 
+                    // The Albanian rows (js/asig-albania-layers.js) are also
+                    // generated from their own config (asig-albania-layers.config.js),
+                    // so the module applies the same country rule to its own
+                    // group row and sub-rows.
+                    var albaniaLayers = window.AsigAlbaniaLayers;
+                    if (albaniaLayers && typeof albaniaLayers.filterForCountry === 'function') {
+                        try { albaniaLayers.filterForCountry(iso); } catch (e) {}
+                    }
+
                     var euCatalog = window.DetectLabEuMaps;
                     if (euCatalog && typeof euCatalog.filterForCountry === 'function') {
                         var countryExtent = null;
@@ -13903,6 +13912,10 @@
                     if (window.DetectLabDanishLayers &&
                         typeof window.DetectLabDanishLayers.filterForCountry === 'function') {
                         try { window.DetectLabDanishLayers.filterForCountry(null); } catch (e) {}
+                    }
+                    if (window.AsigAlbaniaLayers &&
+                        typeof window.AsigAlbaniaLayers.filterForCountry === 'function') {
+                        try { window.AsigAlbaniaLayers.filterForCountry(null); } catch (e) {}
                     }
                     layerDefs.concat(internationalLayerDefs).forEach(function (def) {
                         var row = null;
