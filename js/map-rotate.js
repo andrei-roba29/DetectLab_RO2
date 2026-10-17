@@ -210,6 +210,63 @@
         });
     }
 
+    /* Vector layers (the country outline, heritage polygons, archeo rings,
+     * measure, cluster spiderwebs…) are placed *and clipped* inside the box
+     * L.Renderer._update derives for their SVG/canvas element. That box comes
+     * from containerPointToLayerPoint — the very method this plugin rotates —
+     * so a turned view hands the renderer one turned corner with an
+     * axis-aligned size instead of the box of the turned viewport. Whatever the
+     * turn pushes outside that box is then thrown away twice (Polyline
+     * ._clipPoints and the element's own viewport), and because the box travels
+     * with the pane position and the viewport size, whole arcs of the border
+     * disappear and reappear while the user zooms or drags — at 90° the country
+     * outline vanishes completely. Take the four padded view corners through the
+     * same rotation and use their bounding box, the compensation
+     * _getTiledPixelBounds below already gives the tile grid. */
+    if (L.Renderer && typeof L.Renderer.prototype._update === 'function') {
+        var origRendererUpdate = L.Renderer.prototype._update;
+        L.Renderer.include({
+            _update: function () {
+                var map = this._map;
+                // North-up (or a map without rotation) must keep Leaflet's own
+                // path untouched, down to the pixel. SVG only: a <path> that
+                // falls outside the element box is *gone*, so vector layers need
+                // the corrected window, while a canvas renderer merely keeps
+                // drawing into its own bitmap — growing that to the 45° bounding
+                // box would double the backing store of every canvas layer (×DPR²,
+                // and this app has four of them) for a sub-pixel clip. The
+                // heritage/LiDAR canvases are glued to their anchor separately
+                // (see _updateCanvasTransform in map-app.js).
+                if (!map || !map._rotate || !map._bearing || typeof map._pivot !== 'function' ||
+                    !(L.SVG && this instanceof L.SVG)) {
+                    return origRendererUpdate.call(this);
+                }
+                var pad = this.options.padding || 0,
+                    size = map.getSize(),
+                    x0 = -size.x * pad, y0 = -size.y * pad,
+                    x1 = size.x * (1 + pad), y1 = size.y * (1 + pad),
+                    pivot = map._pivot(),
+                    pos = map._getMapPanePos(),
+                    minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].forEach(function (c) {
+                    var p = rotatePoint(L.point(c[0], c[1]), -map._bearing, pivot).subtract(pos);
+                    if (p.x < minX) minX = p.x;
+                    if (p.y < minY) minY = p.y;
+                    if (p.x > maxX) maxX = p.x;
+                    if (p.y > maxY) maxY = p.y;
+                });
+                // Grow outwards to whole pixels: never smaller than the turned
+                // view, never fractional (a fractional element origin would put
+                // vector edges and the tile grid on different pixel rows).
+                this._bounds = new L.Bounds(
+                    L.point(Math.floor(minX), Math.floor(minY)),
+                    L.point(Math.ceil(maxX), Math.ceil(maxY)));
+                this._center = map.getCenter();
+                this._zoom = map.getZoom();
+            }
+        });
+    }
+
     // Two-finger twist with intentional threshold and distance guard.
     // Pinch-zoom stays with Leaflet's own TouchZoom.
     L.Map.TouchRotate = L.Handler.extend({

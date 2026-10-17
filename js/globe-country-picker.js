@@ -549,8 +549,17 @@
         if (!L || !L.SVG || typeof L.SVG.extend !== 'function') return null;
         if (!BoundsSVG) BoundsSVG = L.SVG.extend({
             _update: function () {
+                // L.SVG._update skips the whole update while a zoom is animating
+                // (`_animatingZoom && _bounds`). Record the anchor under exactly
+                // that same condition: the pixel origin, `_bounds.min` and the
+                // projected rings must always describe one and the same view,
+                // or the next zoomanim scales the outline around an anchor that
+                // belongs to a different zoom — which is what makes the border
+                // jump when the view is changed while an animation is still
+                // running (a re-locked selection, a debounced resize moveend…).
+                var skip = !!(this._map && this._map._animatingZoom && this._bounds);
                 L.SVG.prototype._update.call(this);
-                if (this._map && !this._map._animatingZoom) {
+                if (this._map && !skip) {
                     this._outlinePixelOrigin = this._map.getPixelOrigin().clone();
                 }
             },
@@ -559,6 +568,12 @@
                     return L.SVG.prototype._updateTransform.call(this, center, zoom);
                 }
                 var scale = this._map.getZoomScale(zoom, this._zoom);
+                // Deliberately unrounded. GridLayer rounds the translate of a tile
+                // level, but that level and this container scale around different
+                // anchors (level origin vs pixelOrigin + _bounds.min) which their
+                // content offsets cancel exactly; rounding here would quantise one
+                // of the two on its own and put the border up to a pixel away from
+                // the imagery it is measured against. L.SVG does not round either.
                 var offset = this._outlinePixelOrigin.add(this._bounds.min)
                     .multiplyBy(scale).subtract(this._map._getNewPixelOrigin(center, zoom));
                 if (L.Browser.any3d) L.DomUtil.setTransform(this._container, offset, scale);
