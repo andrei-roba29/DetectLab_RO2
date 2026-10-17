@@ -32,6 +32,7 @@
   var terrain;
   var baseImagery;
   var baseTopo;
+  var baseTerrain;
   var staticCache = new Map();
   var dareLayers = new Map();
   var dareRegistry = new Map();
@@ -56,7 +57,7 @@
       title: 'Atlas european și roman', countries: 'Țări europene', searchCountry: 'Caută o țară…',
       zoomSelection: 'Apropie selecția', clear: 'Șterge', mapLayers: 'Straturi hartă',
       hillshade: 'World Hillshade', opacity: 'Opacitate', terrain: 'Relief 3D (elevație)',
-      basemap: 'Hartă de bază', imagery: 'Imagery', topographic: 'Topographic',
+      basemap: 'Hartă de bază', imagery: 'Imagery ArcGIS', topographic: 'Topographic ArcGIS', terrainBase: 'Terrain ArcGIS',
       dareSites: 'Situri romane DARE', allCategories: '(20 categorii)', categoriesFilter: 'Categorii și filtru',
       all: 'Toate', none: 'Niciuna', countryIso: 'ISO2 țară', walls: 'Ziduri (AWMC)',
       regionalNames: 'Nume regionale (AWMC)', politicalShading: 'Extinderi istorice', romanLayer: 'Straturi romane',
@@ -76,7 +77,7 @@
       title: 'European & Roman Atlas', countries: 'European countries', searchCountry: 'Search country…',
       zoomSelection: 'Zoom to selection', clear: 'Clear', mapLayers: 'Map layers',
       hillshade: 'World Hillshade', opacity: 'Opacity', terrain: '3D terrain (elevation)',
-      basemap: 'Basemap', imagery: 'Imagery', topographic: 'Topographic',
+      basemap: 'Basemap', imagery: 'Imagery ArcGIS', topographic: 'Topographic ArcGIS', terrainBase: 'Terrain ArcGIS',
       dareSites: 'DARE Roman sites', allCategories: '(20 categories)', categoriesFilter: 'Categories & filter',
       all: 'All', none: 'None', countryIso: 'Country ISO2', walls: 'Walls (AWMC)',
       regionalNames: 'Regional names (AWMC)', politicalShading: 'Historical extents', romanLayer: 'Roman layers',
@@ -390,8 +391,15 @@
   function setupMap(EsriMap, SceneView, Basemap, TileLayer, ElevationLayer, GraphicsLayer, Graphic, Polygon, FeatureLayer, GroupLayer, GeoJSONLayer, reactiveUtils, webMercatorUtils) {
     window.__AtlasGraphic = Graphic;
     window.__AtlasPolygon = Polygon;
-    baseImagery = new Basemap({ title: 'Imagery', baseLayers: [new TileLayer({ url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer' })] });
-    baseTopo = new Basemap({ title: 'Topographic', baseLayers: [new TileLayer({ url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer' })] });
+    baseImagery = new Basemap({ title: 'Imagery ArcGIS', baseLayers: [new TileLayer({ url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer' })] });
+    baseTopo = new Basemap({ title: 'Topographic ArcGIS', baseLayers: [new TileLayer({ url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer' })] });
+    baseTerrain = new Basemap({
+      title: 'Terrain ArcGIS',
+      baseLayers: [
+        new TileLayer({ url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer' }),
+        new TileLayer({ url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Shaded_Relief/MapServer' })
+      ]
+    });
     hillshade = new TileLayer({ url: HILLSHADE_URL, title: 'World Hillshade', visible: false, opacity: 0.7 });
     terrain = new ElevationLayer({ url: TERRAIN_URL, visible: false });
     casingGraphics = new GraphicsLayer({ title: 'Country casing', elevationInfo: { mode: 'on-the-ground' } });
@@ -456,7 +464,12 @@
     $('terr').addEventListener('change', function (event) {
       map.ground.layers.forEach(function (layer) { layer.visible = event.target.checked; });
     });
-    $('bm').addEventListener('change', function (event) { map.basemap = event.target.value === 'topo' ? baseTopo : baseImagery; });
+    $('bm').addEventListener('change', function (event) {
+      var value = event.target.value;
+      if (value === 'topo') map.basemap = baseTopo;
+      else if (value === 'terrain') map.basemap = baseTerrain;
+      else map.basemap = baseImagery;
+    });
   }
 
   var CP1252 = {

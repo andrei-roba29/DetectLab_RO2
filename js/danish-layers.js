@@ -11,8 +11,9 @@
  *
  * Panel behaviour
  *   • base rows are radio buttons — mutually exclusive, exactly one Danish base
- *     map draws at a time; the same bases are mirrored as buttons in the
- *     existing basemap control (bottom-left) and the two stay in sync;
+ *     map draws at a time; Danish bases live only in the Denmark group and are
+ *     never mirrored into the ArcGIS basemap control (which only shows Imagery,
+ *     Topographic and Terrain);
  *   • overlay rows are checkboxes with their own opacity slider;
      *   • the group switch turns the selected base map on/off, the chevron
  *     collapses the group, the ℹ button credits sources and explains protected
@@ -57,7 +58,6 @@
 
     var LAYERS = CONFIG.enabledLayers();
     var PANEL_LAYERS = LAYERS.filter(function (layer) { return !layer.selectorGroup; });
-    var CONTROL_BASE_LAYERS = LAYERS.filter(function (layer) { return layer.group === 'base' && !layer.selectorGroup; });
     var GROUP_ROW_ID = 'danishRow';
     var SUB_CONTAINER_ID = 'danishSubLayers';
     var GROUP_NOTICE_ID = 'danishGroupNotice';
@@ -798,23 +798,6 @@
         return row;
     }
 
-    function controlButton(layer) {
-        var short = tr(layer.title).replace(/^[^·]*·\s*/, '');
-        var button = el('button', {
-            type: 'button',
-            class: 'arcgis-basemap-btn danish-basemap-btn',
-            'data-danish-basemap': layer.id,
-            'aria-pressed': 'false',
-            title: tr(layer.title)
-        }, [el('span', { class: 'danish-basemap-dot' }), el('span', { class: 'danish-basemap-name', text: short })]);
-        button.addEventListener('click', function () {
-            if (runtime.active[layer.id]) deactivate(layer, {});
-            else switchOn(layer);
-            syncUI();
-        });
-        return button;
-    }
-
     function buildYearSelector() {
         var years = LAYERS.filter(function (layer) { return layer.selectorGroup === 'spring-orthophoto'; });
         if (!years.length) return null;
@@ -868,35 +851,22 @@
             }
             section[1].forEach(function (layer) { container.appendChild(buildRow(layer)); });
         });
-
-        /* Mirror the bases into the existing basemap control, so a Danish base
-         * map is switched where every other basemap is switched. The control's
-         * options live in a retractable list, so the buttons are inserted
-         * next to the hillshade row — wherever that row sits — and inherit
-         * the folding of the list. */
-        var control = document.getElementById('arcgisBasemapCtrl');
-        if (control) {
-            var anchor = control.querySelector('.arcgis-basemap-hs');
-            CONTROL_BASE_LAYERS.forEach(function (layer) {
-                var existing = control.querySelector('[data-danish-basemap="' + layer.id + '"]');
-                if (existing) existing.parentNode.removeChild(existing);
-                var button = controlButton(layer);
-                if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(button, anchor);
-                else control.appendChild(button);
-            });
-        }
+        // Danish bases are intentionally NOT mirrored into the ArcGIS basemap control —
+        // the control must only ever show Imagery (ArcGIS), Topographic (ArcGIS) and Terrain (ArcGIS).
+        // Clean up any legacy Danish buttons that might still be in the DOM from an older build.
+        try {
+            var legacyControl = document.getElementById('arcgisBasemapCtrl');
+            if (legacyControl) {
+                Array.prototype.forEach.call(legacyControl.querySelectorAll('[data-danish-basemap]'), function (btn) {
+                    if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
+                });
+            }
+        } catch (e) {}
     }
 
     function relabelControl() {
-        var control = document.getElementById('arcgisBasemapCtrl');
-        if (!control) return;
-        Array.prototype.forEach.call(control.querySelectorAll('[data-danish-basemap]'), function (button) {
-            var layer = CONFIG.byId(button.getAttribute('data-danish-basemap'));
-            if (!layer) return;
-            var name = button.querySelector('.danish-basemap-name');
-            if (name) name.textContent = tr(layer.title).replace(/^[^·]*·\s*/, '');
-            button.title = tr(layer.title);
-        });
+        // No-op: Danish titles are not mirrored into the ArcGIS basemap control any more.
+        // The control only contains the three ArcGIS basemaps.
     }
 
     function syncUI() {
@@ -920,14 +890,15 @@
         var any = LAYERS.some(function (layer) { return !!runtime.active[layer.id]; });
         var master = document.getElementById(MASTER_ID);
         if (master && master.checked !== any) master.checked = any;
-        var control = document.getElementById('arcgisBasemapCtrl');
-        if (control) {
-            Array.prototype.forEach.call(control.querySelectorAll('[data-danish-basemap]'), function (button) {
-                var pressed = !!runtime.active[button.getAttribute('data-danish-basemap')];
-                button.classList.toggle('active', pressed);
-                button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
-            });
-        }
+        // No syncing into the ArcGIS basemap control — it only shows the three ArcGIS basemaps.
+        try {
+            var legacyControl2 = document.getElementById('arcgisBasemapCtrl');
+            if (legacyControl2) {
+                Array.prototype.forEach.call(legacyControl2.querySelectorAll('[data-danish-basemap]'), function (btn) {
+                    if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
+                });
+            }
+        } catch (e2) {}
         var first = Object.keys(runtime.notices).filter(function (key) { return runtime.notices[key]; })[0];
         setNotice(first ? runtime.notices[first].text : '');
     }

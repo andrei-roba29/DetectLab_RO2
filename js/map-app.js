@@ -3203,9 +3203,9 @@
             // One source of truth for the base-map names: the buttons of the
             // retractable list AND the caption of the retracted header.
             var ARCGIS_BASEMAP_LABELS = {
-                imagery: { ro: 'Imagery (ArcGIS)', en: 'Imagery (ArcGIS)' },
-                topographic: { ro: 'Topographic (ArcGIS)', en: 'Topographic (ArcGIS)' },
-                terrain: { ro: 'Teren (ArcGIS)', en: 'Terrain (ArcGIS)' },
+                imagery: { ro: 'Imagery ArcGIS', en: 'Imagery ArcGIS' },
+                topographic: { ro: 'Topographic ArcGIS', en: 'Topographic ArcGIS' },
+                terrain: { ro: 'Terrain ArcGIS', en: 'Terrain ArcGIS' },
                 hillshade: { ro: 'Hillshade (relief)', en: 'Hillshade (terrain)' },
                 hint: { ro: 'Hartă de bază — click pentru a extinde', en: 'Base map — click to expand' }
             };
