@@ -562,6 +562,60 @@
                 if (this._map && !skip) {
                     this._outlinePixelOrigin = this._map.getPixelOrigin().clone();
                 }
+                this._syncOutlineZoomVisibility();
+            },
+            /* A renderer that is born while a zoom animation is already in
+               flight (the globe hand-off fit still running when the selection
+               lands, the 10m refinement swapping the outline mid-zoom, a dock
+               switch during a wheel zoom) never receives that animation's
+               zoomanim: Leaflet fired it before this renderer existed. It
+               therefore cannot scale with the tiles — the map has already
+               _move()d to the target, so its rings project straight onto the
+               final frame and the border sits there, flat and fully zoomed,
+               while every tile level is still CSS-scaling towards it. That
+               is the intermittent “border zooms in 2D” on zoom in/out: it
+               depends purely on whether a (re)draw raced an animation.
+               There is no honest transform to join with — the animation's
+               starting frame is gone — so the outline waits the animation
+               out hidden and is revealed by the moveend `_update` that
+               follows zoomend (Leaflet always ends an animated zoom with
+               one, in the same synchronous stack, so no painted frame ever
+               shows it unhidden-but-untransformed). An outline that was
+               already on the map when the zoom started is never hidden:
+               it received the zoomanim (see _onAnimZoom below) and scales
+               with the imagery for the whole flight. */
+            _onAnimZoom: function (ev) {
+                this._outlineJoinedZoom = true;
+                L.SVG.prototype._onAnimZoom.call(this, ev);
+            },
+            _syncOutlineZoomVisibility: function () {
+                if (!this._container || !this._container.style) return;
+                if (this._map && this._map._animatingZoom) {
+                    if (!this._outlineJoinedZoom) {
+                        this._outlineAwaitingZoom = true;
+                        this._container.style.visibility = 'hidden';
+                    }
+                } else {
+                    this._outlineJoinedZoom = false;
+                    if (this._outlineAwaitingZoom) {
+                        this._outlineAwaitingZoom = false;
+                        this._container.style.visibility = '';
+                    }
+                }
+            },
+            _initPath: function (path) {
+                L.SVG.prototype._initPath.call(this, path);
+                // During an animated zoom Leaflet CSS-scales this container,
+                // which would scale the stroke with it — the border visibly
+                // fattening/thinning like a flat 2D graphic instead of
+                // staying the constant-width line Leaflet reprojects it to
+                // at zoomend. non-scaling-stroke keeps the painted width in
+                // device pixels at every intermediate scale; the geometry
+                // itself still scales with the map, and at rest (scale 1)
+                // nothing changes.
+                if (path && path._path && typeof path._path.setAttribute === 'function') {
+                    path._path.setAttribute('vector-effect', 'non-scaling-stroke');
+                }
             },
             _updateTransform: function (center, zoom) {
                 if (!this._outlinePixelOrigin || !this._bounds) {

@@ -79,9 +79,9 @@ const mirrorSource = read('js/map3d-mirror.js');
 const skin = read('css/map3d-terrain.css');
 
 const TAG = '20261013-3d-terrain';             /* MapLibre itself (unchanged) */
-const TAG_3D = '20261016-lidar-3d-focus-fix';    /* mirror                        */
-const TAG_VIEWER = '20261016-lidar-3d-tiles-fix'; /* viewer                       */
-const TAG_FOCUS = '20261016-lidar-3d-focus-fix';  /* LiDAR focus (3D, one disc)   */
+const TAG_3D = '20261017-lidar-3d-entry-handover';    /* mirror                        */
+const TAG_VIEWER = '20261017-lidar-3d-entry-handover'; /* viewer                       */
+const TAG_FOCUS = '20261017-lidar-3d-entry-handover';  /* LiDAR focus (3D, one disc)   */
 const TAG_REGISTRY = '20261015-danish-layers';     /* shared registry (WMS audit)  */
 
 // ══════════════════════════════════════════════════════════════

@@ -31,7 +31,7 @@
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
     <link rel="stylesheet" href="css/maplibre-gl.css?v=20261013-3d-terrain">
-    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261016-lidar-3d-tiles-fix">
+    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261017-lidar-3d-entry-handover">
     <link rel="stylesheet" href="css/hist-shift.css?v=20261014-hist-shift">
     <link rel="stylesheet" href="css/globe-country-picker.css?v=20261013-no-change-pill">
     <link rel="stylesheet" href="css/country-dock.css?v=20261008">
@@ -4895,7 +4895,7 @@
     <script src="js/patrimoniu-clustering.js?v=20260914-patrimoniu-cluster"></script>
     <!-- Lightweight local adapter only; the ArcGIS CDN SDK/theme are loaded after the gate opens. -->
     <script src="js/globe-arcgis-gate.js?v=20261013-handoff-zoom"></script>
-    <script src="js/globe-country-picker.js?v=20261016-outline-anchor-guard"></script>
+    <script src="js/globe-country-picker.js?v=20261017-outline-zoom-settle"></script>
     <!-- Country dock: the slide-down country switcher glued under the search
          bar, the small World-hillshade overlay checkbox and the bottom-centre
          “Exit view” button. Loaded after the globe gate (it only talks to it
@@ -4930,8 +4930,8 @@
          GeoJSON, markers, clusters and heatmaps included (js/map3d-mirror.js)
          — so nothing can be visible in 2D and missing in 3D. MapLibre GL
          itself is downloaded only when 3D is opened (js/map3d-terrain.js). -->
-    <script src="js/map3d-mirror.js?v=20261016-lidar-3d-focus-fix"></script>
-    <script src="js/map3d-terrain.js?v=20261016-lidar-3d-tiles-fix"></script>
+    <script src="js/map3d-mirror.js?v=20261017-lidar-3d-entry-handover"></script>
+    <script src="js/map3d-terrain.js?v=20261017-lidar-3d-entry-handover"></script>
     <!-- LiDAR in the 3D view (js/lidar-3d-focus.js): a national LiDAR pyramid
          cannot be draped the way a historical sheet is, so pressing 3D with a
          LiDAR layer switched on asks for ONE layer, a point and a fetching
@@ -4939,7 +4939,7 @@
          tile path (js/map3d-terrain.js → prefetchTiles) and only then opens 3D
          — framed on the disc, on tiles that are already in memory. Installs the
          viewer's entry gate (DetectLabMap3D.setEntryGate). -->
-    <script src="js/lidar-3d-focus.js?v=20261016-lidar-3d-focus-fix"></script>
+    <script src="js/lidar-3d-focus.js?v=20261017-lidar-3d-entry-handover"></script>
     <!-- Mutarea hărților istorice (gratuite + premium) prin long-press:
          switch ON = drag-ul mișcă suprapunerea istorică (limitat, persistent),
          long-press din nou + switch OFF = lock pe poziția curentă. -->

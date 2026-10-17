@@ -30,6 +30,15 @@
  *   The same dialog is reachable from the 3D bar (“Change the area”), where it
  *   re-prepares and re-applies the focus to the running 3D view.
  *
+ *   Once the tiles are fetched and the 3D view is entered, the window does
+ *   not vanish: it MINIMIZES to a slim pill at the bottom of the map (layer,
+ *   fetching distance and prepared-tile count, plus an expand arrow). The
+ *   pill is only painted while 3D is up (`body.is-3d`); tapping the arrow
+ *   expands the full window again over the 3D view — in live mode, so it
+ *   re-points the running view — and cancelling an expanded window returns
+ *   it to the pill instead of dismissing it. Removing LiDAR from the 3D view
+ *   (the bar's “remove”) takes the pill away with the focus.
+ *
  * RULES THAT HOLD EVERYWHERE
  *   • ONE LiDAR layer at a time in 3D. The 2D map may stack as many as it likes
  *     (that is how you compare them); the deck draws only the chosen one, and
@@ -57,6 +66,7 @@
  *   .plan(focus, opts) .planEntries(plan) .prepare(plan, opts)
  *   .applyFocus(focus) .drawDisc(focus) .clearDisc()
  *   .beginPick(opts) .endPick(opts) .openDialog(opts) .closeDialog()
+ *   .minimizeDialog() .expandDialog()
  *   .PREPARE (pure planning helpers, for the tests)
  *   ._gate() (the entry gate the viewer calls) ._copy ._t
  * ========================================================================== */
@@ -116,6 +126,9 @@
             layersEmpty: 'Niciun strat LiDAR nu este aprins pe harta 2D.',
             center: 'Centru',
             close: 'Închide',
+            expand: 'Extinde fereastra LiDAR în 3D',
+            miniTiles: '{tiles} tile-uri pregătite',
+            minimize: 'Minimizează',
             cap: 'maximum ' + MAX_RADIUS_KM + ' km'
         },
         en: {
@@ -146,6 +159,9 @@
             layersEmpty: 'No LiDAR layer is switched on on the 2D map.',
             center: 'Centre',
             close: 'Close',
+            expand: 'Expand the LiDAR in 3D window',
+            miniTiles: '{tiles} tiles ready',
+            minimize: 'Minimize',
             cap: 'maximum ' + MAX_RADIUS_KM + ' km'
         }
     };
@@ -563,6 +579,9 @@
         preparing: false,
         stop: false,
         open: false,
+        minimized: false,       /* the card is folded into the pill (3D is up) */
+        expandedFromMini: false,/* this showing was expanded from the pill */
+        miniSummary: null,      /* { label, radiusKm, tiles } for the pill */
         el: {}
     };
 
@@ -614,7 +633,16 @@
             '<div class="m3d-focus-progress-text" aria-live="polite"></div>',
             '<button type="button" class="m3d-focus-stop"></button>',
             '</div>',
-            '</div>'
+            '</div>',
+            /* The minimized form of this very window: what it folds into once
+             * the tiles are fetched and the 3D view is entered. The whole
+             * pill is the expand control — the arrow says it opens upwards,
+             * back into the card above it. */
+            '<button type="button" class="m3d-focus-mini" hidden aria-expanded="false">',
+            '<span class="m3d-focus-mini-title"></span>',
+            '<span class="m3d-focus-mini-text"></span>',
+            '<span class="m3d-focus-mini-arrow" aria-hidden="true">▴</span>',
+            '</button>'
         ].join('');
         host.appendChild(node);
         dialog.host = node;
@@ -642,6 +670,10 @@
         el.bar = node.querySelector('.m3d-focus-bar i');
         el.progressText = node.querySelector('.m3d-focus-progress-text');
         el.stop = node.querySelector('.m3d-focus-stop');
+        el.mini = node.querySelector('.m3d-focus-mini');
+        el.miniTitle = node.querySelector('.m3d-focus-mini-title');
+        el.miniText = node.querySelector('.m3d-focus-mini-text');
+        el.miniArrow = node.querySelector('.m3d-focus-mini-arrow');
 
         el.radius.addEventListener('input', function () {
             var value = Math.max(MIN_RADIUS_KM, Math.min(MAX_RADIUS_KM, Number(el.radius.value) || DEFAULT_RADIUS_KM));
@@ -670,6 +702,7 @@
         el['x'] = node.querySelector('.m3d-focus-x');
         if (el['x']) el['x'].addEventListener('click', function () { cancelDialog(); });
         el.stop.addEventListener('click', function () { dialog.stop = true; });
+        if (el.mini) el.mini.addEventListener('click', function () { expandMinimized(); });
         /* The card is the description target of its own lead paragraph. */
         el.card = dialog.card;
         if (el.card.setAttribute) el.card.setAttribute('aria-describedby', 'm3d-focus-lead');
@@ -699,6 +732,12 @@
         el.go.disabled = !dialog.chosen;
         el.go.hidden = dialog.preparing;
         el.cancel.hidden = dialog.preparing;
+        /* Folded out of the pill, the × folds it back; otherwise it closes. */
+        if (el['x']) {
+            var xLabel = dialog.expandedFromMini ? t('minimize') : t('close');
+            el['x'].setAttribute('aria-label', xLabel);
+            el['x'].title = xLabel;
+        }
 
         if (!el.chips.childNodes.length) {
             [1, 2, 5, MAX_RADIUS_KM].filter(function (value, at, all) {
@@ -789,6 +828,15 @@
         dialog.preparing = false;
         dialog.stop = false;
         dialog.report = null;
+        /* A fresh showing is always the full card: whatever the window was
+         * folded into (the pill) is unfolded, never left painted alongside. */
+        dialog.minimized = false;
+        node.classList.remove('is-minimized');
+        if (dialog.card) dialog.card.hidden = false;
+        if (dialog.el.mini) {
+            dialog.el.mini.hidden = true;
+            dialog.el.mini.setAttribute('aria-expanded', 'false');
+        }
         refreshPlan({ restart: true });
         paintDialog();
         node.hidden = false;
@@ -806,22 +854,88 @@
     }
 
     function closeDialog() {
-        if (dialog.host) dialog.host.hidden = true;
+        if (dialog.host) {
+            dialog.host.hidden = true;
+            dialog.host.classList.remove('is-minimized');
+        }
         dialog.open = false;
+        dialog.minimized = false;
+        dialog.expandedFromMini = false;
         if (document.body && document.body.classList) document.body.classList.remove('m3d-focus-open');
     }
 
-    function settle(result) {
+    /* What the pill says: the window's title, then the decision it stands
+     * for — which layer, over what fetching distance, how many tiles were
+     * prepared for it. Repainted on language change like the card is. */
+    function paintMinimized() {
+        var el = dialog.el;
+        if (!el.mini) return;
+        el.mini.setAttribute('aria-label', t('expand'));
+        el.mini.setAttribute('title', t('expand'));
+        if (el.miniTitle) el.miniTitle.textContent = t('title');
+        var summary = dialog.miniSummary;
+        if (el.miniText) {
+            el.miniText.textContent = summary
+                ? [summary.label,
+                   summary.radiusKm + ' ' + t('km'),
+                   t('miniTiles', { tiles: summary.tiles })].filter(Boolean).join(' · ')
+                : '';
+        }
+    }
+
+    /* Fold the window into its pill. The host stays in the DOM and the card
+     * is hidden; the skin only paints the folded host while the 3D view is
+     * up (`body.is-3d`), so the pill appears as the 3D view is entered and
+     * leaves with it — it is chrome of the 3D view, not of the 2D map. */
+    function minimizeDialog() {
+        if (!dialog.host) return;
+        dialog.minimized = true;
+        dialog.expandedFromMini = false;
+        dialog.open = false;
+        if (dialog.card) dialog.card.hidden = true;
+        if (dialog.el.mini) {
+            dialog.el.mini.hidden = false;
+            dialog.el.mini.setAttribute('aria-expanded', 'false');
+        }
+        dialog.host.classList.add('is-minimized');
+        dialog.host.hidden = false;
+        if (document.body && document.body.classList) document.body.classList.remove('m3d-focus-open');
+        paintMinimized();
+    }
+
+    /* The arrow on the pill: expand the full window again, over whichever
+     * map is live. With 3D up it re-opens in live mode (confirming re-points
+     * the running view); without it, it prepares a new area and the confirm
+     * opens 3D on it — exactly what the 3D bar's “change” button does. */
+    function expandMinimized() {
+        if (!dialog.minimized) return;
+        dialog.expandedFromMini = true;
+        var api = viewer();
+        var wasOpen = !!(api && api.isOpen && api.isOpen());
+        showDialog({ mode: wasOpen ? 'live' : 'gate' }).then(function (result) {
+            if (!result || result.cancelled) return;
+            if (!wasOpen && api && typeof api.openWithoutGate === 'function') api.openWithoutGate();
+        });
+    }
+
+    function settle(result, options) {
         var deferred = dialog.deferred;
         dialog.deferred = null;
-        closeDialog();
+        /* A fetched disc settles into the pill rather than vanishing: the
+         * window stays reachable for as long as its 3D view is up. */
+        if (options && options.minimize) minimizeDialog();
+        else closeDialog();
         if (deferred && deferred.resolve) deferred.resolve(result || { cancelled: true });
     }
 
     function cancelDialog() {
         dialog.stop = true;
         endPick({});
-        settle({ cancelled: true });
+        /* Cancelling a window that was expanded from the pill folds it back
+         * into the pill — the prepared focus is still in the 3D view, so
+         * its window stays reachable. A fresh window cancels outright. */
+        if (dialog.expandedFromMini) settle({ cancelled: true }, { minimize: true });
+        else settle({ cancelled: true });
     }
 
     function pickFromDialog() {
@@ -1026,7 +1140,19 @@
          * 3D view uses, and that pipeline reads the disc from the focus. The
          * disc is also drawn in 2D now, so the user sees the exact area the
          * progress bar is talking about. */
-        applyFocus(plan.focus);
+        try {
+            applyFocus(plan.focus);
+        } catch (error) {
+            /* Nothing has been fetched yet, so the honest answer is the
+             * dialog back, with the reason — not a sheet frozen in its
+             * “preparing” state over a download that never started. */
+            dialog.preparing = false;
+            dialog.el.progress.hidden = true;
+            dialog.el.go.hidden = false;
+            dialog.el.cancel.hidden = false;
+            dialog.el.estimate.textContent = String((error && error.message) || error);
+            return;
+        }
 
         prepare(plan, {
             onProgress: function (report) { renderProgress(report); }
@@ -1039,18 +1165,43 @@
             focus.preparedTiles = prepared;
             focus.failedTiles = failed;
             focus.plan = { zoomFrom: plan.zoomFrom, zoomTo: plan.zoomTo, count: plan.count, route: plan.route };
-            /* Same disc, now with the numbers: sameFocus() keeps the 3D sources
-             * exactly where they are, and only the bar's line changes. */
-            applyFocus(focus);
-            renderProgress(report, { final: true });
+            /* The fetch is finished; everything from here is bookkeeping
+             * (the counted re-application, the “Done” line, the pill
+             * summary), and NONE of it may strand the entry: the gate is
+             * waiting on settle(), and a throw in a Leaflet restyle or a
+             * bar repaint used to leave the dialog sitting at “Done” with
+             * the gate unanswered — fetch finished, nothing else happens.
+             * The focus was already applied before the download, so the
+             * entry proceeds on it whatever the bookkeeping does. */
+            try {
+                /* Same disc, now with the numbers: sameFocus() keeps the 3D sources
+                 * exactly where they are, and only the bar's line changes. */
+                applyFocus(focus);
+                renderProgress(report, { final: true });
+                /* The pill this window is about to fold into stands for exactly
+                 * this disc: layer, fetching distance, tiles prepared. */
+                dialog.miniSummary = {
+                    label: dialog.chosen ? dialog.chosen.label : (focus.label || 'LiDAR'),
+                    radiusKm: focus.radiusKm,
+                    tiles: prepared
+                };
+            } catch (error) {
+                if (root.console && console.warn) {
+                    console.warn('[Lidar3D] the fetched disc is ready, but finishing the dialog failed: ' +
+                        ((error && error.message) || error));
+                }
+            }
             if (dialog.mode === 'gate') {
-                settle({ cancelled: false, focus: focus, report: report });
+                /* The gate settles and the 3D view is entered — the window
+                 * minimizes instead of closing, so it is already there,
+                 * folded, when the 3D view comes up. */
+                settle({ cancelled: false, focus: focus, report: report }, { minimize: true });
             } else {
                 /* Live re-focus: the running 3D view has just been re-pointed at
                  * the new disc, so let the “done” line be read for a moment
-                 * before the dialog steps out of the way. */
+                 * before the dialog folds into its pill. */
                 root.setTimeout(function () {
-                    settle({ cancelled: false, focus: focus, report: report });
+                    settle({ cancelled: false, focus: focus, report: report }, { minimize: true });
                 }, 700);
             }
         }, function (error) {
@@ -1131,6 +1282,9 @@
         var api = viewer();
         if (api && typeof api.clearLidarFocus === 'function') api.clearLidarFocus();
         clearDisc();
+        /* The focus the pill stood for is gone, so the folded window goes
+         * with it (a full dialog, if one is open, is left alone). */
+        if (dialog.minimized) closeDialog();
         if (api && typeof api.syncLayers === 'function') api.syncLayers();
     }
 
@@ -1151,6 +1305,7 @@
             }),
             dialog: {
                 open: dialog.open,
+                minimized: dialog.minimized,
                 mode: dialog.mode,
                 preparing: dialog.preparing,
                 chosen: dialog.chosen ? dialog.chosen.key : null,
@@ -1205,6 +1360,8 @@
         endPick: endPick,
         openDialog: function (options) { return showDialog(options || {}); },
         closeDialog: function () { cancelDialog(); },
+        minimizeDialog: minimizeDialog,
+        expandDialog: expandMinimized,
         install: install,
         isReady: ready,
         _copy: COPY,
@@ -1242,6 +1399,7 @@
         document.addEventListener('detectlab:map3d-lidar-clear', onBarClear);
         document.addEventListener('detectlab:langchange', function () {
             if (dialog.open) paintDialog();
+            if (dialog.minimized) paintMinimized();
         });
         /* A disc already decided (the 3D view restored it) is drawn in 2D too. */
         var restored = viewer().getLidarFocus && viewer().getLidarFocus();

@@ -48,8 +48,8 @@ const viewerSource = read('js/map3d-terrain.js');
 const focusSource = read('js/lidar-3d-focus.js');
 
 /* Every build that changes the LiDAR 3D focus path bumps its own tag. */
-const TAG = '20261016-lidar-3d-focus-fix';
-const TAG_VIEWER = '20261016-lidar-3d-tiles-fix';
+const TAG = '20261017-lidar-3d-entry-handover';
+const TAG_VIEWER = '20261017-lidar-3d-entry-handover';
 
 /* One real event-loop turn: the viewer runs its entry gate through a promise,
  * so the dialog is not in the DOM in the same tick as open(). */
@@ -332,9 +332,22 @@ const fakeCanvas = function () {
     ['#map3d-focus .m3d-focus-card', '#map3d-focus .m3d-focus-layers', '#map3d-focus .m3d-focus-radius',
      '#map3d-focus .m3d-focus-chips', '#map3d-focus .m3d-focus-point-block', '#map3d-focus .m3d-focus-actions',
      '#map3d-focus .m3d-focus-progress', '#map3d-focus .m3d-focus-x', '#map3d-bar .m3d-lidar',
+     '#map3d-focus .m3d-focus-mini', '#map3d-focus .m3d-focus-mini-arrow',
      '#detectlab-map.m3d-picking'].forEach(function (selector) {
         assert(skin.indexOf(selector) !== -1, 'the skin styles ' + selector);
     });
+
+    /* The folded window is chrome of the 3D view only: folded on the 2D map
+     * it must not paint (or take taps) — the skin gates it on body.is-3d,
+     * with an explicit [hidden] win, the banner lesson of §1 below. */
+    assert(/body:not\(\.is-3d\) #map3d-focus\.is-minimized \{\s*display: none;/.test(skin),
+        'the minimized window only paints while the 3D view is up');
+    assert(/#map3d-focus \.m3d-focus-mini\[hidden\] \{\s*display: none;/.test(skin) &&
+           /#map3d-focus\[hidden\] \{\s*display: none;/.test(skin),
+        'and the pill/host hidden attributes beat their author display');
+    assert(/minimizeDialog/.test(focusSource) && /expandMinimized/.test(focusSource) &&
+           /settle\(\{ cancelled: false, focus: focus, report: report \}, \{ minimize: true \}\)/.test(focusSource),
+        'a fetched disc settles into the minimized window, and the pill expands it again');
 
     /* The banner that told the user to tap the map is gone. It declared
      * `display: flex`, which beat the UA rule for [hidden], so it was never
@@ -916,6 +929,166 @@ function runViewerSuite() {
         assert(fetchCount === 0, 'a second prefetch over the same disc makes no request at all (it is all in memory)');
         assert(second.prepared === second.total, 'and it still reports every tile as prepared');
 
+        /* ── 4d-bis. Serving: what MapLibre is actually handed in 3D ─────
+         * The prefetch above only proves the tiles are IN memory. The disc
+         * the user sees is whatever the dl2d:// protocol handler answers
+         * when MapLibre asks, tile by tile, at the zooms the opening camera
+         * requests — so drive the real handler, exactly as MapLibre would,
+         * and require the prepared pixels (never the transparent
+         * placeholder, never a fresh download) for every tile of the disc. */
+        const protocols = {};
+        viewer._registerProtocols({
+            addProtocol: function (name, handler) { protocols[name] = handler; }
+        });
+        assert(typeof protocols.dl2d === 'function' && typeof protocols.dl3d === 'function',
+            'the dl2d:// and dl3d:// protocol handlers are registered');
+        fetchCount = 0;
+        const servedPlaceholder = mirror.disc.blankTile();
+        for (const item of entries) {
+            const answer = await protocols.dl2d(
+                { url: 'dl2d://2d.R1/' + item.z + '/' + item.x + '/' + item.y }, null);
+            assert(answer && answer.data && answer.data.byteLength > servedPlaceholder.byteLength,
+                'the tile ' + item.z + '/' + item.x + '/' + item.y +
+                ' is served its prepared pixels in 3D, not the transparent placeholder');
+        }
+        assert(fetchCount === 0,
+            'serving the prepared disc makes no request at all (it is all in memory)');
+
+        /* ── 4d-ter-0. A failed open must not wedge the viewer ────────────
+         * “Fetch finished, then nothing happens at all” has a state-machine
+         * form: an open that fails AFTER state.open was set (the no-WebGL
+         * report is the one path that did not clear it, unlike fail3D)
+         * leaves the viewer believing it is open, so every later tap on
+         * the 3D button returns “already open” and does nothing — no
+         * dialog, no veil, no map. The failed open must read as closed,
+         * and the next tap must really try again. */
+        {
+            viewer.setEntryGate(function () { return Promise.resolve(true); });
+            const refused = await viewer.open();
+            assert(refused === false && viewer.status().failed === true,
+                'the sandbox has no WebGL, so the open reports its failure');
+            assert(viewer.isOpen() === false,
+                'and the viewer reads as CLOSED after it — one more tap must retry, not no-op');
+            viewer.close();
+        }
+
+        /* ── 4d-ter. Entering 3D: the whole handoff, with a fake MapLibre ──
+         * “Fetches finished, 3D opened, base map there, LiDAR nowhere” is an
+         * integration symptom: it can live in the gate, the camera, the deck
+         * plan, the source spec or the serve path, and the unit sections
+         * above each clear their own stretch. So here the REAL flow runs end
+         * to end — viewer.open() → the real gate → the real dialog confirm →
+         * the real prefetch → openNow() against a recording MapLibre — and
+         * the map the user would see is inspected: the focused source must
+         * exist, bounded to the disc, stacked above the base map, and every
+         * tile MapLibre would ask for at the opening camera must come back
+         * as the prepared pixels. */
+        {
+            /* A GL-capable canvas while 3D opens (the webgl probe is the
+             * only thing that asks for one; everything else keeps the 2D
+             * stub), restored before the gate section below. */
+            const realCreateElement = doc.createElement;
+            doc.createElement = function (tag) {
+                if (tag === 'canvas') {
+                    const c = fakeCanvas();
+                    const ctx2d = c.getContext('2d');
+                    c.getContext = function (kind) {
+                        return kind === '2d' ? ctx2d : { getExtension: function () { return null; } };
+                    };
+                    return c;
+                }
+                return realCreateElement(tag);
+            };
+            const fakeSources = {};
+            const fakeLayers = {};
+            const fakeOrder = [];
+            class FakeMap {
+                constructor(options) {
+                    this.options = options;
+                    this._handlers = {};
+                    this.touchZoomRotate = { enableRotation: function () {} };
+                }
+                on(type, fn) { (this._handlers[type] = this._handlers[type] || []).push(fn); return this; }
+                fire(type, event) { (this._handlers[type] || []).slice().forEach(function (fn) { fn(event || {}); }); }
+                addControl() { return this; }
+                getCanvas() { return realCreateElement('div'); }
+                addSource(id, spec) { fakeSources[id] = Object.assign({ setData: function () {} }, spec); }
+                getSource(id) { return fakeSources[id] || null; }
+                removeSource(id) { delete fakeSources[id]; }
+                addLayer(spec) { if (!fakeLayers[spec.id]) fakeOrder.push(spec.id); fakeLayers[spec.id] = spec; }
+                getLayer(id) { return fakeLayers[id] || null; }
+                removeLayer(id) {
+                    delete fakeLayers[id];
+                    const at = fakeOrder.indexOf(id);
+                    if (at !== -1) fakeOrder.splice(at, 1);
+                }
+                moveLayer(id, beforeId) {
+                    const at = fakeOrder.indexOf(id);
+                    if (at !== -1) fakeOrder.splice(at, 1);
+                    const to = beforeId ? fakeOrder.indexOf(beforeId) : -1;
+                    if (to === -1) fakeOrder.push(id); else fakeOrder.splice(to, 0, id);
+                }
+                setPaintProperty() {}
+                getCenter() { return { lat: 45.5, lng: 25.0 }; }
+                getZoom() { return 12; }
+                getBearing() { return 0; }
+                getPitch() { return 60; }
+                loaded() { return true; }
+                remove() {}
+            }
+            let fakeMap = null;
+            windowStub.maplibregl = {
+                Map: function (options) { fakeMap = new FakeMap(options); return fakeMap; },
+                AttributionControl: class { constructor(o) { this.options = o; } },
+                ScaleControl: class { constructor(o) { this.options = o; } },
+                addProtocol: function () {}
+            };
+
+            viewer.setEntryGate(function () { return focus._gate(); });
+            const opening = viewer.open();
+            await tick(); await tick(); await tick();
+            const gateNode = doc.body.querySelector('#map3d-focus');
+            assert(gateNode && gateNode.hidden === false,
+                'entering 3D asks first — the gate dialog is up before any map exists');
+            assert(!fakeMap, 'and no 3D map has been created yet');
+            gateNode.querySelector('.m3d-focus-go').click();
+            const opened = await opening;
+            assert(opened === true && viewer.isOpen() === true,
+                'once the disc is prepared the gate lets 3D open');
+            assert(fakeMap, 'a MapLibre map was created for the 3D view');
+            fakeMap.fire('styledata');
+
+            const focusNow = viewer.getLidarFocus();
+            assert(focusNow && focusNow.key === '2d.R1', 'the focus survives the handoff');
+            const lidarSource = fakeSources['m3d-2d-2d.R1-src'];
+            assert(lidarSource, 'the focused LiDAR layer has a source on the 3D map');
+            assert(lidarSource.tiles && lidarSource.tiles[0] === 'dl2d://2d.R1/{z}/{x}/{y}',
+                'served from the live 2D layer through dl2d:// (' + (lidarSource.tiles || [])[0] + ')');
+            assert(JSON.stringify(lidarSource.bounds) === JSON.stringify(focusNow.bounds),
+                'and the source may only ask for tiles inside the prepared disc');
+            assert(fakeLayers['m3d-2d-2d.R1'], 'the focused LiDAR layer is on the 3D map');
+            assert(fakeOrder.indexOf('m3d-2d-2d.R1') > fakeOrder.indexOf('base.imagery'),
+                'stacked above the base map, not underneath it');
+            assert(viewer.status().lidar.drawn.some(function (d) { return d.id === 'm3d-2d-2d.R1'; }),
+                'status() reports the LiDAR layer as drawn');
+
+            /* The tiles of the disc, asked the way MapLibre asks them. */
+            fetchCount = 0;
+            for (const item of entries) {
+                const answer = await protocols.dl2d(
+                    { url: 'dl2d://2d.R1/' + item.z + '/' + item.x + '/' + item.y }, null);
+                assert(answer && answer.data && answer.data.byteLength > servedPlaceholder.byteLength,
+                    'on the opened map, tile ' + item.z + '/' + item.x + '/' + item.y +
+                    ' still serves its prepared pixels');
+            }
+            assert(fetchCount === 0, 'and the opened view downloads nothing for the disc');
+
+            viewer.close();
+            assert(viewer.isOpen() === false, 'closing returns to the 2D map');
+            doc.createElement = realCreateElement;
+            delete windowStub.maplibregl;
+        }
+
         /* ── 4e. The gate ───────────────────────────────────────────────── */
         let gateCalls = 0;
         viewer.setEntryGate(function () { gateCalls += 1; return Promise.resolve(false); });
@@ -942,8 +1115,10 @@ function runViewerSuite() {
          * view was allowed to open at all. */
         viewer.setEntryGate(function () { return Promise.resolve(true); });
         await viewer.open();
-        assert(viewer.isOpen() === true && doc.body.classList.contains('is-3d'),
+        assert(doc.body.classList.contains('is-3d'),
             'a gate that allows it lets open() reach the 3D surface');
+        assert(viewer.isOpen() === false,
+            'but with no WebGL the viewer reads as closed afterwards, so the next tap retries (see §4d-ter-0)');
         assert(viewer.status().failed === true && viewer.status().webgl.webgl === false,
             'the sandbox has no WebGL, so the view reports the missing context instead of a blank canvas');
         viewer.close();
@@ -974,6 +1149,151 @@ function runViewerSuite() {
 
         /* ── 4g. The dialog, end to end ─────────────────────────────────── */
         await dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, fetched, lidarGroup);
+
+        /* ── 4h. First entry with a canvas-drawn layer: the prefetch must
+         * prepare the disc it promises ───────────────────────────────────
+         * The country LiDAR products (AHN, Høydedata, NMT, …) draw their
+         * own tiles: the dialog's plan runs on the 'canvas' route and the
+         * viewer renders each tile through the live 2D layer, addressed by
+         * its mirror key. On a first entry the mirror has never collected
+         * (collecting is something the viewer does once 3D opens), so a
+         * prefetch that resolves the layer through the mirror's key table
+         * finds NOTHING there: every tile rejects, the report says they all
+         * failed, the dialog folds anyway — and 3D then depends on live
+         * per-tile requests racing MapLibre's aborts, which is how a
+         * “prepared” disc sometimes opens as base map alone. The layer
+         * below joins the 2D map only now, after every collect the suite
+         * has run, which is exactly the first-entry state. (The keepalive
+         * is harness plumbing: a rendered tile settles on the sandbox's
+         * unref'd timers, and Node would otherwise drain the loop and
+         * exit mid-section.) */
+        const keepalive = setInterval(function () {}, 25);
+        {
+            const canvasLayer = {
+                options: { name: 'Canvas LiDAR', pane: 'pane_lidar', opacity: 0.9, minZoom: 0, maxZoom: 18 },
+                _leaflet_id: 'C1',
+                _dlLidar: { key: 'lidar.canvas', label: 'Canvas LiDAR' },
+                getTileSize: function () { return { x: 256, y: 256 }; },
+                createTile: function (coords, done) {
+                    const tile = fakeCanvas();
+                    tile.width = 256;
+                    tile.height = 256;
+                    return tile;         /* canvas tiles settle on the returned canvas */
+                }
+            };
+            lidarGroup.addLayer(canvasLayer);
+            map.addLayer(canvasLayer);
+
+            const entryC = focus.activeLayers().filter(function (e) { return e.key === '2d.C1'; })[0];
+            assert(entryC, 'the canvas-drawn LiDAR layer is offered by the dialog');
+            const discC = { lat: 45.5, lng: 25.0, radiusKm: 2 };
+            const planC = focus.plan(discC,
+                { minZoom: 0, maxZoom: 18, tileSize: 256, budget: 260, viewport: { width: 1280, height: 800 } });
+            planC.route = 'canvas';
+            planC.layer = entryC;
+            planC.focus = { key: '2d.C1', lidarKey: 'lidar.canvas', defId: null,
+                label: 'Canvas LiDAR', lat: discC.lat, lng: discC.lng, radiusKm: discC.radiusKm };
+            viewer.setLidarFocus(planC.focus);
+            assert(mirror.layerByKey('2d.C1') === null,
+                'the mirror has never collected this layer — the first-entry state');
+            const entriesC = focus.planEntries(planC);
+            assert(entriesC.length > 0 && entriesC.every(function (e) { return e.route === 'canvas'; }),
+                'the plan runs on the canvas route (' + entriesC.length + ' tiles)');
+            const repC = await viewer.prefetchTiles(entriesC, { concurrency: 4 });
+            assert(repC.failed === 0 && repC.prepared === repC.total,
+                'the prefetch really renders every canvas tile of the disc (' +
+                repC.prepared + '/' + repC.total + ' prepared, ' + repC.failed + ' failed)');
+            const centreC = entriesC[Math.floor(entriesC.length / 2)];
+            const servedC = await protocols.dl2d(
+                { url: 'dl2d://2d.C1/' + centreC.z + '/' + centreC.x + '/' + centreC.y }, null);
+            assert(servedC && servedC.data && servedC.data.byteLength > servedPlaceholder.byteLength,
+                'and the opened view is handed the rendered tile, not the placeholder');
+
+            /* A def-backed canvas layer (the nine country products) is
+             * served in 3D through dl3d://<defId>, while its prefetch —
+             * the canvas route again — stores under the dl2d:// deck key.
+             * The prepared disc must still be what MapLibre is handed:
+             * asking dl3d for a prepared tile may not cost a request. */
+            windowStub.AhnLidar = {
+                tileUrl: function () { return ''; },
+                exportImageUrl: function (mode, bbox, size) {
+                    return 'https://ahn.example.org/export?bbox=' + bbox.join(',');
+                },
+                MODES: { dtm: {} },
+                modeKeys: function () { return ['dtm']; }
+            };
+            const defLayer = {
+                options: { name: 'AHN canvas', pane: 'pane_lidar', opacity: 0.9, minZoom: 8, maxZoom: 20 },
+                _leaflet_id: 'C2',
+                _dlDefId: 'lidar.nl-ahn',
+                _dlLidar: { key: 'lidar.nlAhn', label: 'AHN canvas' },
+                getTileSize: function () { return { x: 256, y: 256 }; },
+                createTile: function (coords, done) {
+                    const tile = fakeCanvas();
+                    tile.width = 256;
+                    tile.height = 256;
+                    return tile;
+                }
+            };
+            lidarGroup.addLayer(defLayer);
+            map.addLayer(defLayer);
+            const entryD = focus.activeLayers().filter(function (e) { return e.key === '2d.C2'; })[0];
+            assert(entryD && entryD.defId === 'lidar.nl-ahn', 'the def-backed canvas layer is offered');
+            const planD = focus.plan(discC,
+                { minZoom: 8, maxZoom: 20, tileSize: 256, budget: 260, viewport: { width: 1280, height: 800 } });
+            planD.route = 'canvas';
+            planD.layer = entryD;
+            planD.focus = { key: '2d.C2', lidarKey: 'lidar.nlAhn', defId: 'lidar.nl-ahn',
+                label: 'AHN canvas', lat: discC.lat, lng: discC.lng, radiusKm: discC.radiusKm };
+            viewer.setLidarFocus(planD.focus);
+            const entriesD = focus.planEntries(planD);
+            const repD = await viewer.prefetchTiles(entriesD, { concurrency: 4 });
+            assert(repD.failed === 0 && repD.prepared === repD.total,
+                'the def-backed disc is prepared too (' + repD.prepared + '/' + repD.total + ')');
+            fetchCount = 0;
+            const centreD = entriesD[Math.floor(entriesD.length / 2)];
+            const servedD = await protocols.dl3d(
+                { url: 'dl3d://lidar.nl-ahn/' + centreD.z + '/' + centreD.x + '/' + centreD.y }, null);
+            assert(servedD && servedD.data && servedD.data.byteLength > servedPlaceholder.byteLength,
+                'dl3d serves the tile the canvas prefetch prepared');
+            assert(fetchCount === 0,
+                'without asking the provider again — the prepared disc is the one that is drawn');
+            delete windowStub.AhnLidar;
+        }
+
+        /* ── 4i. “Done” must always hand over ──────────────────────────────
+         * The gate is answered by settle(), and settle() sits at the END of
+         * the fetch-finished bookkeeping (apply the counted focus, paint
+         * “Done”, write the pill summary). If any of that throws in a real
+         * browser — a Leaflet layer that will not restyle, a bar row that
+         * is mid-teardown — the dialog used to sit at “Done” forever: the
+         * fetch had finished, the gate was never answered, and nothing
+         * else happened. The entry must survive its own bookkeeping. */
+        {
+            const realSetFocus = viewer.setLidarFocus;
+            let applications = 0;
+            viewer.setLidarFocus = function (focusArg) {
+                applications += 1;
+                if (applications > 1) throw new Error('sabotaged second application');
+                return realSetFocus(focusArg);
+            };
+            const entryPromise = focus.openDialog({ mode: 'gate' });
+            const node = doc.body.querySelector('#map3d-focus');
+            assert(node && node.hidden === false, 'the dialog is up for the sabotaged entry');
+            node.querySelector('.m3d-focus-go').click();
+            const verdict = await Promise.race([
+                entryPromise.then(function (result) { return result; }),
+                wait(4000).then(function () { return 'never settled'; })
+            ]);
+            viewer.setLidarFocus = realSetFocus;
+            assert(verdict !== 'never settled',
+                'the gate is answered even when the post-fetch bookkeeping throws');
+            assert(verdict && verdict.cancelled === false,
+                'and the answer is still “enter 3D” — the disc was applied before the fetch');
+            assert(focus.status().dialog.minimized === true,
+                'the window still folds into its pill for the view that opens');
+        }
+        clearInterval(keepalive);
         console.log('\n✅ test-lidar-3d-focus.js passed all checks successfully.');
     })().catch(function (error) {
         console.error(error);
@@ -1104,8 +1424,23 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
         'the viewer is now focused on that layer and disc');
     assert(Math.abs(viewer.getLidarFocus().mask.radiusKm - result.focus.radiusKm) < 1e-9,
         'at the distance the user chose (' + result.focus.radiusKm + ' km)');
-    assert(node.hidden === true && doc.body.classList.contains('m3d-focus-open') === false,
-        'the dialog closes itself once the disc is ready');
+    assert(doc.body.classList.contains('m3d-focus-open') === false,
+        'the body marker goes with the card once the disc is ready');
+    /* …and the window itself does not vanish: fetched and on its way into
+     * the 3D view, it folds into its pill (layer · radius · tiles ready,
+     * expand arrow) so it stays reachable once 3D is up. */
+    assert(node.hidden === false && node.classList.contains('is-minimized') &&
+           node.querySelector('.m3d-focus-card').hidden === true &&
+           node.querySelector('.m3d-focus-mini').hidden === false,
+        'once the disc is ready the window minimizes into its pill instead of closing');
+    assert(focus.status().dialog.minimized === true && focus.status().dialog.open === false,
+        'status() reports the folded window');
+    const miniText = node.querySelector('.m3d-focus-mini-text').textContent;
+    assert(/km/.test(miniText) && /tile/i.test(miniText),
+        'the pill stands for the disc that was just fetched (' + miniText + ')');
+    assert(node.querySelector('.m3d-focus-mini-title').textContent.length > 0 &&
+           node.querySelector('.m3d-focus-mini-arrow').textContent.trim().length > 0,
+        'and it carries the window title plus an expand arrow');
     assert(node.querySelector('.m3d-focus-bar i').style.width === '100%', 'the progress bar finished at 100%');
     assert(/Gata|Done/.test(node.querySelector('.m3d-focus-progress-text').textContent),
         'and the last line says the disc is ready');
@@ -1117,14 +1452,47 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
     await tick();
     const again = doc.body.querySelector('#map3d-focus');
     assert(again.hidden === false, 'pressing 3D asks again, because a LiDAR layer is still on the 2D map');
+    assert(again.classList.contains('is-minimized') === false &&
+           again.querySelector('.m3d-focus-card').hidden === false &&
+           again.querySelector('.m3d-focus-mini').hidden === true,
+        'and the full card is back — asking again unfolds the pill');
     assert(again.querySelector('.m3d-focus-go').hidden === false && again.querySelector('.m3d-focus-go').disabled === false,
         'with both buttons back, and the go button live');
     again.querySelector('.m3d-focus-go').click();
     await openPromise;
     assert(fetched.length === alreadyDownloaded,
         'reopening 3D on the same disc downloads nothing — it is all in memory');
-    assert(viewer.isOpen() === true && doc.body.classList.contains('is-3d'),
-        'confirming the dialog lets open() through to the 3D view');
+    assert(doc.body.classList.contains('is-3d') && viewer.status().failed === true,
+        'confirming the dialog lets open() through to the 3D view (the sandbox then reports its missing WebGL)');
+    assert(viewer.isOpen() === false,
+        'and the failed open reads as closed, so a later tap retries instead of doing nothing');
+
+    /* The expand arrow: with the tiles fetched and 3D entered, the folded
+     * window reopens over the running view — and folds back on cancel. The
+     * sandbox has no WebGL, so the “running view” is faked from here on at
+     * the one seam the dialog consults — viewer.isOpen() — until the live
+     * sections below are done. */
+    const realIsOpen = viewer.isOpen;
+    viewer.isOpen = function () { return true; };
+    const pill = again.querySelector('.m3d-focus-mini');
+    assert(pill && pill.hidden === false && again.classList.contains('is-minimized'),
+        'the window auto-minimized when the 3D view was entered');
+    assert(/tile/i.test(pill.textContent),
+        'the pill names what was fetched (' + pill.textContent.trim().slice(0, 60) + '…)');
+    pill.click();
+    await tick();
+    assert(again.querySelector('.m3d-focus-card').hidden === false &&
+           again.classList.contains('is-minimized') === false &&
+           focus.status().dialog.open === true,
+        'tapping the expand arrow opens the full window again');
+    assert(focus.status().dialog.mode === 'live',
+        'expanded over a running 3D view, it prepares in live mode');
+    again.querySelector('.m3d-focus-cancel').click();
+    await tick();
+    assert(again.hidden === false && again.classList.contains('is-minimized') &&
+           again.querySelector('.m3d-focus-mini').hidden === false &&
+           focus.status().dialog.minimized === true,
+        'cancelling an expanded window folds it back into the pill instead of dismissing it');
     viewer.close();
 
     /* The bar's Change button while 3D is open is the “live” mode: the same
@@ -1132,7 +1500,7 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
      * reopened (it was never closed). */
     viewer.setEntryGate(function () { return Promise.resolve(true); });
     await viewer.open();
-    assert(viewer.isOpen() === true, '3D is open again');
+    assert(viewer.isOpen() === true, '3D is open again (the faked seam above)');
     doc.dispatch('detectlab:map3d-lidar-change');
     await tick();
     const liveBar = doc.body.querySelector('#map3d-focus');
@@ -1143,8 +1511,12 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
     await wait(900);
     assert(viewer.isOpen() === true && viewer.getLidarFocus() !== null,
         'confirming it keeps 3D open and re-points the focus');
-    assert(liveBar.hidden === true, 'and the dialog steps out of the way');
+    assert(liveBar.hidden === false && liveBar.classList.contains('is-minimized') &&
+           liveBar.querySelector('.m3d-focus-card').hidden === true &&
+           liveBar.querySelector('.m3d-focus-mini').hidden === false,
+        'and the window folds into its pill over the running 3D view');
     viewer.close();
+    viewer.isOpen = realIsOpen;
 
     /* cancel is the other half of the contract: nothing opens. */
     viewer.setEntryGate(function () { return focus._gate(); });
@@ -1171,7 +1543,8 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
     live.querySelector('.m3d-focus-go').click();
     await tick();
     await tick();
-    assert(viewer.isOpen() === true, 'confirming it opens 3D on the disc that was just prepared');
+    assert(doc.body.classList.contains('is-3d') && viewer.status().failed === true,
+        'confirming it opens 3D on the disc that was just prepared (openNow is reached; the sandbox then reports its missing WebGL)');
     viewer.close();
 
     doc.dispatch('detectlab:map3d-lidar-clear');
@@ -1186,7 +1559,7 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
     let asked = 0;
     viewer.setEntryGate(function () { asked += 1; return focus._gate(); });
     await viewer.open();
-    assert(asked === 1 && viewer.isOpen() === true,
+    assert(asked === 1 && doc.body.classList.contains('is-3d'),
         'the gate is asked once and lets 3D through (no dialog)');
     assert(doc.body.querySelector('#map3d-focus').hidden === true,
         'without a LiDAR layer on the 2D map there is nothing to prepare');

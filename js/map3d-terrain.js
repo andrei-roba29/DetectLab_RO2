@@ -873,6 +873,18 @@
 
     function prefetchTiles(list, options) {
         options = options || {};
+        /* The canvas route resolves each tile's layer through the mirror's
+         * key table (MIRROR.layerByKey), and the blend/clip signature is
+         * computed from that same layer — but the table is only filled by
+         * collect(), which the viewer otherwise runs once 3D is already
+         * opening. On a first entry the prefetch therefore found no layer
+         * behind any key: every canvas tile rejected (“the 2D layer did
+         * not finish drawing”), blended tiles were stored under a
+         * signature the serve path never asks for, and the dialog folded
+         * into 3D with a disc that existed only on paper — the view then
+         * depended on live per-tile requests, and sometimes showed the
+         * base map alone. Collect first, exactly as the view will see it. */
+        collectMirror();
         var entries = (list || []).slice();
         var total = entries.length;
         var report = {
@@ -940,7 +952,36 @@
                 if (!def) return Promise.reject(new Error('unknown layer ' + defId));
                 proxyUrl = REGISTRY.proxyTemplate(def, { time: REGISTRY.timeOf(def), mode: REGISTRY.modeOf(def, {}) });
             }
-            return fetchTile(entry.url, null, { proxyUrl: proxyUrl, preferProxy: preferProxy })
+            /* One tile, one deadline. The prefetch used to fetch with no
+             * timeout at all: a provider that accepts the connection and
+             * then stalls (the classic throttled-ArcGIS behaviour under a
+             * six-lane burst) parked a worker for good, the progress sat a
+             * tile short of done, and the entry never handed over — the
+             * fetch “finished” and nothing else happened. A timed-out tile
+             * simply counts as failed; 3D opens without it and asks again
+             * on demand. */
+            var abort = null;
+            var abortTimer = null;
+            var timeoutMs = options.tileTimeoutMs == null ? 45000 : Number(options.tileTimeoutMs);
+            if (timeoutMs > 0 && typeof root.AbortController === 'function') {
+                try {
+                    abort = new root.AbortController();
+                    abortTimer = root.setTimeout(function () {
+                        try { abort.abort(); } catch (e) { /* ignore */ }
+                    }, timeoutMs);
+                } catch (e) { abort = null; abortTimer = null; }
+            }
+            var request = fetchTile(entry.url, abort, { proxyUrl: proxyUrl, preferProxy: preferProxy });
+            if (abortTimer) {
+                request = request.then(function (value) {
+                    root.clearTimeout(abortTimer);
+                    return value;
+                }, function (error) {
+                    root.clearTimeout(abortTimer);
+                    throw error;
+                });
+            }
+            return request
                 .then(function (fetched) {
                     primedPut(entry.url, fetched.data, false);
                     report.bytes += primeBytesOf(fetched.data);
@@ -1121,6 +1162,20 @@
             var templateUrl = String(params.url);
             var prepared = primedOutput(templateUrl, pipelineSigFor('def:' + defId, templateUrl));
             if (prepared) return Promise.resolve({ data: prepared });
+            /* The country LiDAR products are def-backed (this source) but
+             * draw their own tiles, so the dialog prepared their disc on
+             * the canvas route — which stores under the dl2d:// deck key of
+             * the live layer, not under this dl3d:// template. Without this
+             * lookup the prepared disc was unreachable here: every tile was
+             * fetched again live, and any hiccup in that second fetch left
+             * the disc empty over the base map. The prepared bytes win;
+             * the live builder below stays the fallback. */
+            var focus = state.focus;
+            if (focus && focus.key && focus.defId && focus.defId === defId) {
+                var deckUrl = 'dl2d://' + focus.key + '/' + z + '/' + x + '/' + y;
+                var fromDisc = primedOutput(deckUrl, pipelineSigFor(focus.key, deckUrl));
+                if (fromDisc) return Promise.resolve({ data: fromDisc });
+            }
             if (focusExcludesTile('def:' + defId, z, x, y)) return Promise.resolve({ data: MIRROR.disc.blankTile() });
             var url = def ? REGISTRY.tileUrlAt(def, z, x, y) : '';
             if (!url) return Promise.reject(new Error('[Map3D] no per-tile URL for ' + match[1]));
@@ -2859,6 +2914,11 @@
         var detail = t('noWebglDetail') + (probe.error ? ' (' + probe.error + ')' : '');
         state.lastError = probe.error || 'no WebGL';
         state.failed = true;
+        /* Same contract as fail3D: the viewer reads as CLOSED, so the next
+         * tap on the 3D button retries. Leaving state.open set here made
+         * every later open() answer “already open” and do nothing at all —
+         * no dialog, no veil, no map. */
+        state.open = false;
         showVeil('error', t('noWebgl'), detail, t('retry'), t('back'));
         return false;
     }
@@ -3230,6 +3290,10 @@
             return state.primedOut[url].data || null;
         },
         _focusSig: function (key) { return focusSigFor(key); },
+        /* The dl2d:// / dl3d:// protocol handlers, registered without a map:
+         * the suite drives them exactly as MapLibre would, so “prepared in
+         * the dialog” and “served in 3D” cannot drift apart unnoticed. */
+        _registerProtocols: registerProtocols,
         _pipelineSig: function (key, url) { return pipelineSigFor(key, url); },
         _clipFocusedTile: clipFocusedTile,
         _focusExcludesTile: focusExcludesTile,

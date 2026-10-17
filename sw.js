@@ -523,7 +523,37 @@
 //   losing on-screen geometry, and the gate outline's zoom anchor follows
 //   Leaflet's bounds refresh exactly (js/globe-country-picker.js). See
 //   GLOBE_COUNTRY_GATE.md.
-const CACHE_NAME = 'detectlab-v221-rotated-vector-clip';
+// v222: an outline (re)drawn while a zoom animation is in flight no longer
+//   paints flat at the target frame (“border zooms in 2D”): a renderer born
+//   mid-flight never received the zoomanim, so it waits the animation out
+//   hidden and reappears at zoomend; the border stroke is stamped
+//   non-scaling-stroke so it keeps its width mid-zoom. See
+//   GLOBE_COUNTRY_GATE.md → “The outline while a zoom is already running”.
+// v223: the “LiDAR in 3D” window auto-minimizes into a pill (layer · radius ·
+//   tiles ready + expand arrow) once the tiles are fetched and the 3D view is
+//   entered, instead of closing; the arrow expands it again over the 3D view.
+//   See MAP_3D_TERRAIN.md §6.4.
+// v224: a first entry's LiDAR prefetch could prepare a disc that 3D never
+//   served (“fetches finished, only the base map”): prefetchTiles() resolves
+//   layers through the mirror's key table, which only a collect() fills —
+//   and collecting used to start with the 3D view itself — so canvas-route
+//   tiles all rejected and blended tiles were stored under a signature the
+//   serve path never asks for; and the def-backed country products, whose
+//   source is dl3d://, never looked at the dl2d:// key their canvas
+//   prefetch stored under. prefetchTiles() now collects first, and the
+//   dl3d handler honours the prepared dl2d disc of the focus. See
+//   MAP_3D_TERRAIN.md §6.4.
+// v225: “fetch finished, then nothing happens at all” — the handover from a
+//   finished fetch to the opened 3D view could die silently three ways: the
+//   no-WebGL report left state.open set, so every later open() answered
+//   “already open” and did nothing (reportNoWebgl now reads as closed, like
+//   fail3D); the dialog's settle() sat behind unguarded bookkeeping, so a
+//   throw after the fetch left it at “Done” with the gate unanswered (the
+//   bookkeeping is guarded and the gate is always answered); and a single
+//   stalled tile fetch parked the prefetch a tile short of done forever
+//   (prefetch fetches now carry a 45 s per-tile deadline). See
+//   MAP_3D_TERRAIN.md §6.4.
+const CACHE_NAME = 'detectlab-v225-lidar-3d-entry-handover';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -565,7 +595,7 @@ const PRECACHE_URLS = [
   'js/layer-registry.js',
   'js/hist-shift.js?v=20261014-hist-shift',
   'css/hist-shift.css?v=20261014-hist-shift',
-  'js/map3d-mirror.js?v=20261016-lidar-3d-focus-fix',
+  'js/map3d-mirror.js?v=20261017-lidar-3d-entry-handover',
   'js/map3d-mirror.js?v=20261014-lidar-3d-focus',
   'js/map3d-mirror.js?v=20261014-3d-vectors',
   'js/map-app.js?v=20261015-basemap-collapse',
@@ -577,15 +607,15 @@ const PRECACHE_URLS = [
   'js/roman-roads.js?v=20261015-roman-roads',
   'js/roman-roads-worker.js?v=20261015-roman-roads',
   /* LiDAR in the 3D view: the focus dialog, the prefetch and the entry gate. */
-  'js/lidar-3d-focus.js?v=20261016-lidar-3d-focus-fix',
+  'js/lidar-3d-focus.js?v=20261017-lidar-3d-entry-handover',
   'js/lidar-3d-focus.js',
   'js/lidar-scanner.js?v=20261014-lidar-3d-focus',
   'js/map3d-mirror.js?v=20261014-3d-blend',
   'js/map3d-mirror.js?v=20261013-3d-mobile',
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
-  'js/map3d-terrain.js?v=20261016-lidar-3d-tiles-fix',
-  'js/map3d-terrain.js?v=20261016-lidar-3d-tiles-fix',
+  'js/map3d-terrain.js?v=20261017-lidar-3d-entry-handover',
+  'js/map3d-terrain.js?v=20261017-lidar-3d-entry-handover',
   'js/map3d-terrain.js?v=20261014-lidar-3d-focus',
   'js/map3d-terrain.js?v=20261014-3d-clean-controls',
   'js/map3d-terrain.js?v=20261014-3d-desktop-controls',
@@ -599,7 +629,7 @@ const PRECACHE_URLS = [
   'js/maplibre-gl.js?v=20261013-3d-terrain',
   'js/maplibre-gl.js',
   'css/maplibre-gl.css?v=20261013-3d-terrain',
-  'css/map3d-terrain.css?v=20261016-lidar-3d-tiles-fix',
+  'css/map3d-terrain.css?v=20261017-lidar-3d-entry-handover',
   'css/map3d-terrain.css?v=20261014-lidar-3d-focus',
   'css/map3d-terrain.css?v=20261014-3d-clean-controls',
   'css/map3d-terrain.css?v=20261014-3d-pwa-controls',
@@ -1206,7 +1236,7 @@ const PRECACHE_URLS = [
   // the tile grid's compensation. The gate outline also re-captures its zoom
   // anchor only when Leaflet really recomputed the renderer bounds.
   'js/map-rotate.js?v=20261016-rotated-vector-clip',
-  'js/globe-country-picker.js?v=20261016-outline-anchor-guard',
+  'js/globe-country-picker.js?v=20261017-outline-zoom-settle',
   'js/globe-country-picker.js?v=20261014-country-exit-3d',
   'js/globe-country-picker.js?v=20261013-no-change-pill',
   'js/wms-health.js?v=20261014-provider-guard',

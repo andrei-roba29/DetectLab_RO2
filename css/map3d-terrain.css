@@ -644,6 +644,76 @@ body.is-pwa.is-3d #map3d-bar {
     min-height: 44px;
 }
 
+/* ── the folded window ─────────────────────────────────────────────────────
+ * Once the tiles are fetched and the 3D view is entered, the window folds
+ * into this pill instead of disappearing: title, the decision it stands for
+ * (layer · fetching distance · tiles prepared) and the expand arrow. It sits
+ * where the card sat, above the very bottom edge — below the 3D toggle,
+ * which lives 66px up at the same centre. The whole pill is the button, so
+ * the touch target is the pill, not just the arrow glyph. */
+#map3d-focus .m3d-focus-mini {
+    pointer-events: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 100%;
+    min-height: 44px;
+    padding: 8px 12px 8px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(200, 169, 110, 0.55);
+    background: rgba(6, 14, 30, 0.88);
+    box-shadow: 0 10px 28px rgba(2, 6, 14, 0.55);
+    color: rgba(245, 240, 235, 0.92);
+    font: inherit;
+    font-size: 0.74rem;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+}
+
+/* Author display must not beat the hidden attribute (the lesson of the
+ * tap-to-pick banner): a folded-away pill and a closed host stay gone. */
+#map3d-focus .m3d-focus-mini[hidden] { display: none; }
+#map3d-focus[hidden] { display: none; }
+
+#map3d-focus .m3d-focus-mini:hover { background: rgba(12, 26, 48, 0.94); border-color: rgba(200, 169, 110, 0.85); }
+
+#map3d-focus .m3d-focus-mini-title {
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 0.68rem;
+    color: rgba(200, 169, 110, 0.98);
+    white-space: nowrap;
+}
+
+#map3d-focus .m3d-focus-mini-text {
+    opacity: 0.85;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* The arrow is the affordance: it points the way the window unfolds. */
+#map3d-focus .m3d-focus-mini-arrow {
+    flex: 0 0 auto;
+    font-size: 0.8rem;
+    line-height: 1;
+    color: rgba(200, 169, 110, 0.98);
+    transition: transform 0.15s ease;
+}
+
+#map3d-focus .m3d-focus-mini:hover .m3d-focus-mini-arrow { transform: translateY(-2px); }
+
+/* The folded window belongs to the 3D view: it is painted only while 3D is
+ * up, so it arrives with the view it was minimized into and leaves with it,
+ * whatever the 2D map does afterwards. */
+body:not(.is-3d) #map3d-focus.is-minimized { display: none; }
+
+@media (max-width: 720px) {
+    #map3d-focus .m3d-focus-mini { font-size: 0.7rem; padding: 7px 10px 7px 12px; }
+    #map3d-focus .m3d-focus-mini-text { max-width: 46vw; }
+}
+
 /* Crosshair while picking: the next tap is the centre of the LiDAR area. */
 #detectlab-map.m3d-picking { cursor: crosshair; }
 #detectlab-map.m3d-picking * { cursor: crosshair !important; }
