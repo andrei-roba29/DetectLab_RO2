@@ -571,8 +571,10 @@
     function popupHtml(layer) {
         try {
             var popup = layer.getPopup && layer.getPopup();
-            if (!popup) return '';
-            var content = popup.getContent && popup.getContent();
+            var content = popup ? (popup.getContent ? popup.getContent() : popup._content) : (layer._popupContent || layer.popup || null);
+            if (typeof content === 'function') {
+                try { content = content(layer); } catch (e) { content = null; }
+            }
             if (content == null) return '';
             if (typeof content === 'string') return content;
             if (content.outerHTML) return content.outerHTML;
@@ -584,8 +586,10 @@
     function tooltipText(layer) {
         try {
             var tooltip = layer.getTooltip && layer.getTooltip();
-            if (!tooltip) return '';
-            var content = tooltip.getContent && tooltip.getContent();
+            var content = tooltip ? (tooltip.getContent ? tooltip.getContent() : tooltip._content) : (layer._tooltipContent || layer.tooltip || null);
+            if (typeof content === 'function') {
+                try { content = content(layer); } catch (e) { content = null; }
+            }
             if (content == null) return '';
             if (typeof content === 'string') return content;
             if (content.textContent) return content.textContent;
@@ -617,7 +621,14 @@
              * drawing a dot for it invents a pin 2D never shows. Any other
              * HTML (emoji/text badges) is kept verbatim for the renderer to
              * draw as a text symbol. */
-            var html = opts.html == null ? '' : String(opts.html);
+            var rawHtml = opts.html;
+            var html = '';
+            if (rawHtml != null) {
+                if (typeof rawHtml === 'string') html = rawHtml;
+                else if (typeof rawHtml.outerHTML === 'string') html = rawHtml.outerHTML;
+                else if (typeof rawHtml.textContent === 'string') html = rawHtml.textContent;
+                else html = String(rawHtml);
+            }
             if (!html.trim()) {
                 if (!spec.size[0] || !spec.size[1]) spec.labelOnly = true;
                 return spec.labelOnly ? spec : null;
@@ -1477,13 +1488,25 @@
                     });
                 }
             } catch (e) { /* plain vector geometry still mirrors */ }
+            var layerPopup = popupHtml(layer);
+            var layerTooltip = tooltipText(layer);
+            var layerLabel = plainText(layerTooltip);
+            if (layerPopup || layerTooltip || layerLabel) {
+                (fc.features || []).forEach(function (f) {
+                    if (!f) return;
+                    f.properties = f.properties || {};
+                    if (layerPopup && !f.properties.popup) f.properties.popup = layerPopup;
+                    if (layerTooltip && !f.properties.tooltip) f.properties.tooltip = layerTooltip;
+                    if (layerLabel && !f.properties.label) f.properties.label = layerLabel;
+                });
+            }
             return Object.assign(base, {
                 geojson: fc,
                 types: geometryTypes(gj),
                 paints: paints,
                 icons: base.icons || {},
-                popup: popupHtml(layer),
-                tooltip: tooltipText(layer),
+                popup: layerPopup,
+                tooltip: layerTooltip,
                 label: base.label || (layer.constructor && layer.constructor.name) || 'vector'
             });
         }
@@ -1514,9 +1537,7 @@
             opacity: item.opacity,
             paints: quantisePaints(item.paints),
             types: item.types || null,
-            perFeature: !!item.perFeature,
-            popup: item.popup || '',
-            tooltip: item.tooltip || ''
+            perFeature: !!item.perFeature
         });
     }
 

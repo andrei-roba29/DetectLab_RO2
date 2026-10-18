@@ -2109,7 +2109,8 @@
             });
             linePaint = Object.assign({}, paints.line, {
                 'line-color': ['coalesce', ['get', 'color'], paints.line['line-color'] || '#3388ff'],
-                'line-opacity': ['coalesce', ['get', 'opacity'], paints.line['line-opacity'] == null ? 1 : paints.line['line-opacity']]
+                'line-opacity': ['coalesce', ['get', 'opacity'], paints.line['line-opacity'] == null ? 1 : paints.line['line-opacity']],
+                'line-width': ['coalesce', ['get', 'weight'], paints.line['line-width'] == null ? 2 : paints.line['line-width']]
             });
             circlePaint = Object.assign({}, paints.circle, {
                 'circle-color': ['coalesce', ['get', 'fillColor'], ['get', 'color'], paints.circle['circle-color'] || '#3388ff'],
@@ -2376,13 +2377,39 @@
         } catch (e) { /* ignore */ }
     }
 
+    function pickInteractiveFeature(features) {
+        if (!features || !features.length) return null;
+        var withPopup = [];
+        for (var i = 0; i < features.length; i += 1) {
+            var p = (features[i] && features[i].properties) || {};
+            if (p.popup) withPopup.push(features[i]);
+        }
+        if (withPopup.length === 1) return withPopup[0];
+        if (withPopup.length > 1) {
+            withPopup.sort(function (a, b) {
+                var ra = Number(a.properties && a.properties.radiusM);
+                var rb = Number(b.properties && b.properties.radiusM);
+                if (isFinite(ra) && isFinite(rb) && ra !== rb) return ra - rb;
+                return 0;
+            });
+            return withPopup[0];
+        }
+        for (var j = 0; j < features.length; j += 1) {
+            var pj = (features[j] && features[j].properties) || {};
+            if (pj.kind !== 'radius' && pj.kind !== 'exclusion') return features[j];
+        }
+        return features[0];
+    }
+
     function bindInteractions(entry, rendered) {
         if (!rendered.interactive || !rendered.layerIds) return;
-        if (state.bound[entry.id] && state.bound[entry.id].join(',') === rendered.layerIds.join(',')) return;
+        var alreadyBound = state.bound[entry.id] || [];
+        if (alreadyBound.join(',') === rendered.layerIds.join(',')) return;
         state.bound[entry.id] = rendered.layerIds.slice();
         rendered.layerIds.forEach(function (layerId) {
+            if (alreadyBound.indexOf(layerId) !== -1) return;
             map.on('click', layerId, function (event) {
-                var feature = event.features && event.features[0];
+                var feature = pickInteractiveFeature(event && event.features);
                 if (!feature) return;
                 var props = feature.properties || {};
                 if (rendered.clustered && props.cluster) {
@@ -2408,7 +2435,8 @@
                 }
                 var popupPos = (feature.geometry && feature.geometry.type === 'Point' && Array.isArray(feature.geometry.coordinates))
                     ? feature.geometry.coordinates
-                    : event.lngLat;
+                    : (event.lngLat || (isFinite(Number(props.lng)) && isFinite(Number(props.lat))
+                        ? [Number(props.lng), Number(props.lat)] : null));
                 showPopup(html, popupPos);
             });
             map.on('mouseenter', layerId, function () { map.getCanvas().style.cursor = 'pointer'; });
