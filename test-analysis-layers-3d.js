@@ -143,7 +143,9 @@ function bubbleGroup(count) {
     return group;
 }
 
-/* The score raster the heatmap is built from (buildHeatRaster's contract). */
+/* The score raster the heatmap is built from (buildHeatRaster's contract):
+ * row 0 is the SOUTHERN edge (minLat), and bbox is the object form the real
+ * grid carries — {minLat, maxLat, minLng, maxLng}. */
 function heatRaster(cols, rows) {
     const values = new Float32Array(cols * rows);
     const valid = new Uint8Array(cols * rows);
@@ -152,7 +154,7 @@ function heatRaster(cols, rows) {
         valid[i] = (i % 3 === 0) ? 0 : 1;
     }
     return { cols: cols, rows: rows, values: values, base: values, valid: valid,
-             cellM: 180, bbox: [25.0, 45.4, 25.4, 45.8] };
+             cellM: 180, bbox: { minLat: 45.4, maxLat: 45.8, minLng: 25.0, maxLng: 25.4 } };
 }
 
 /* The real heatLayerProto contract from js/archeo-potential.js: an L.Layer
@@ -273,11 +275,13 @@ assert.deepStrictEqual(Object.keys(heatItem.heat.gradient).map(Number).sort((a, 
 ok('heatDescriptor(): ' + expectedPoints + ' weighted points from the score raster, ramp ' +
    JSON.stringify(heatItem.heat.gradient));
 
-/* The heat must land on the same cells the 2D canvas paints: row 0 is the TOP
- * of the grid, so the first point is near the bbox's north edge. */
+/* The heat must land on the same cells the 2D canvas paints: row 0 is the
+ * SOUTH edge of the grid (buildHeatRaster indexes row 0 at minLat), so the
+ * first point, from row 0, sits near the bbox's south edge — never the north. */
 const first = heatItem.geojson.features[0].geometry.coordinates;
-assert.ok(first[1] > 45.7, 'row 0 maps to the north edge of the grid bbox, got lat ' + first[1]);
-ok('heatDescriptor(): the grid is anchored the same way as the 2D raster (row 0 = north)');
+assert.ok(first[1] > 45.4 && first[1] < 45.45,
+    'row 0 maps to the south edge of the grid bbox, got lat ' + first[1]);
+ok('heatDescriptor(): the grid is anchored the same way as the 2D raster (row 0 = south)');
 
 /* Weights are normalised to 0..1 against the field peak. */
 const weights = heatItem.geojson.features.map((f) => f.properties.w);

@@ -2397,7 +2397,9 @@
                 var html = props.popup;
                 if (!html && props.icon && props.icon.html) html = props.icon.html;
                 if (!html) {
-                    if (props.kind === 'radius') return;
+                    /* 'radius' and 'exclusion' are shapes without a popup: the
+                     * heritage circles and the Archaeological Potential red mask. */
+                    if (props.kind === 'radius' || props.kind === 'exclusion') return;
                     var keys = Object.keys(props).filter(function (k) { return k !== 'popup' && k !== 'icon'; });
                     if (!keys.length) return;
                     html = '<div class="m3d-popup-body">' + keys.slice(0, 12).map(function (k) {

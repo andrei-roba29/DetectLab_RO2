@@ -220,6 +220,37 @@ reserved for exclusions — the score ramp ends in violet instead.
 
 ---
 
+## In the 3D view
+
+The layer is projected into the 3D terrain view (`js/map3d-terrain.js`, fed by
+`js/map3d-mirror.js`) in both output modes, plus the red exclusion mask. The 3D
+copy is built from the same field as the 2D one, so it follows the same mode
+switch, slider and on/off state.
+
+| What | 3D form | Layer name in the 3D panel |
+|---|---|---|
+| Bubbles (bubbles mode) | one 32-sided ground polygon per bubble, at the bubble's metre radius, coloured as in 2D; popup = the 2D star-rating popup | `Archeological Potential Sites` |
+| Heatmap (heatmap mode) | the score raster as a georeferenced PNG over the grid's bbox, north-up, opacity 0.82 (`heatLayerProto._dl3dImage()`, mirror kind `image`) | `Archeological Potential Sites — heatmap` |
+| Red mask (both modes) | ground polygons: the UAT built-up exclusion and the heritage protection circles (site radius + buffer, 700 m); no popup (`kind: 'exclusion'`) | `Archeological exclusion (red)` |
+
+Notes for whoever changes this:
+
+- **Radii are ground metres.** MapLibre's `circle-radius` is in screen pixels, so
+  the circles are built as ground rings (`groundRing3d`, `rectRing3d`) instead of
+  being passed as a circle paint. The rings match `L.circle` within about 1 %.
+- **Each feature reaches 3D once.** The layer group's own children are marked
+  `_dl3dSkip`, and the group supplies its features through `_dl3dFeatures()`
+  (`own3dFeatures`). Without this the mirror walked each bubble twice.
+- **The click-through canvas renderers are not mirrored.** A Leaflet renderer is
+  not a layer, so the mirror skips it (`isRenderer`). Otherwise the custom
+  `pane_archeo` canvas shows up as an unsupported layer.
+- **The heat image is north-up.** `buildHeatRaster` indexes row 0 at the southern
+  edge; the canvas flips it on draw. The point fallback in the mirror
+  (`rasterHeatPoints`) uses the same convention.
+
+Covered by `test-archeo-3d-projection.js` (contracts, metre radii, north-up
+picture, mode switching, off-state) and `test-analysis-layers-3d.js`.
+
 ## Map-side controls (distance mirror + action dock)
 
 `js/vertical-opacity-control.js` registers the analysis layers' distance/radius

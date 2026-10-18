@@ -562,7 +562,7 @@
 //   js/asig-albania-layers.config.js + js/asig-albania-layers.js,
 //   re-versioned layer-registry.js, translations.js, wms-health.js,
 //   map-app.js and styles.css so an installed PWA picks them up.
-const CACHE_NAME = 'detectlab-v226-albania-asig-layers';
+const CACHE_NAME = 'detectlab-v227-archeo-3d-projection';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -613,7 +613,7 @@ const PRECACHE_URLS = [
   'js/layer-registry.js',
   'js/hist-shift.js?v=20261014-hist-shift',
   'css/hist-shift.css?v=20261014-hist-shift',
-  'js/map3d-mirror.js?v=20261017-lidar-3d-entry-handover',
+  'js/map3d-mirror.js?v=20261017-archeo-3d-projection',
   'js/map3d-mirror.js?v=20261014-lidar-3d-focus',
   'js/map3d-mirror.js?v=20261014-3d-vectors',
   'js/map-app.js?v=20261015-basemap-collapse',
@@ -632,8 +632,8 @@ const PRECACHE_URLS = [
   'js/map3d-mirror.js?v=20261013-3d-mobile',
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
-  'js/map3d-terrain.js?v=20261017-lidar-3d-entry-handover',
-  'js/map3d-terrain.js?v=20261017-lidar-3d-entry-handover',
+  'js/map3d-terrain.js?v=20261017-archeo-3d-projection',
+  'js/map3d-terrain.js?v=20261017-archeo-3d-projection',
   'js/map3d-terrain.js?v=20261014-lidar-3d-focus',
   'js/map3d-terrain.js?v=20261014-3d-clean-controls',
   'js/map3d-terrain.js?v=20261014-3d-desktop-controls',
@@ -1186,7 +1186,7 @@ const PRECACHE_URLS = [
   'js/archeo-potential.js?v=20260922-distance-mirror-close',
   // v138: archeo potential canvas must not swallow detectorist pin taps after
   // the layer is switched off (click-through pane + renderer detach).
-  'js/archeo-potential.js?v=20261015-archeo-heat-3d',
+  'js/archeo-potential.js?v=20261017-archeo-3d-projection',
   'js/lidar-scanner.js?v=20260922-distance-mirror-close',
   'js/archeo-report.js?v=20260922-distance-mirror-close',
   // v130: caption chip (DISTANȚĂ / RAZĂ / ISTORIC) anchored to the card
