@@ -113,7 +113,7 @@
     /* Read at *runtime* by the proxy functions and in the audit; a layer is
      * only credential-gated when the deployment really needs a variable. */
     var CONFIG = {
-        version: '20261019-danish-v2',
+        version: '20261019-danish-v4',
 
         /* Country this group belongs to. Drives the country filter (rows are
          * shown when Denmark is the selected country) and the coverage check. */
@@ -134,6 +134,16 @@
                 'protected nature types (NBL § 3) and scheduled ancient monuments as overlays. ' +
                 'The required attribution appears on the map while a layer is on.'
         },
+
+        /* Free app layers; provider credentials are injected only by the proxy. */
+        panelGroups: [
+            { id: 'heritage', title: { da: 'Kulturarv', en: 'Heritage' },
+                layers: ['fortidsminder_punkt_ikkefredet', 'fortidsminder_punkt_fredet'] },
+            { id: 'historical', title: { da: 'Historiske kort', en: 'Historical maps' },
+                layers: ['topo4cm_1980_2001', 'topo4cm_1953_1976', 'hist_lave', 'hist_hoeje', 'hist_preussen'] },
+            { id: 'orthophoto', title: { da: 'Ortofoto', en: 'Ortophoto' },
+                layers: ['orto_sommer_2008', 'orto_sommer_2005', 'orto_sommer_2002', 'orto_sommer_1999'] }
+        ],
 
         /** @type {DanishLayer[]} */
         layers: [
@@ -441,9 +451,10 @@
              * the capabilities list 25832/CRS:84 as the native CRS. */
             {
                 id: 'fortidsminder_punkt_fredet',
+                panelGroup: 'heritage',
                 title: {
                     da: 'Danmark · Fredede fortidsminder (punkter)',
-                    en: 'Denmark · Protected ancient monuments (points)'
+                    en: 'Protected ancient monuments'
                 },
                 group: 'overlay',
                 type: 'wms',
@@ -483,9 +494,10 @@
             },
             {
                 id: 'fortidsminder_punkt_ikkefredet',
+                panelGroup: 'heritage',
                 title: {
                     da: 'Danmark · Ikke-fredede fortidsminder (punkter)',
-                    en: 'Denmark · Unprotected ancient monuments (points)'
+                    en: 'Not protected ancient monuments'
                 },
                 group: 'overlay',
                 type: 'wms',
@@ -615,7 +627,8 @@
             /* ── Historical maps (base) ──────────────────────────────────── */
             {
                 id: 'hist_hoeje',
-                title: { da: 'Høje målebordsblade', en: 'High measurement table sheets' },
+                panelGroup: 'historical',
+                title: { da: 'Høje målebordsblade', en: 'High measuring table leaves 1842-1899' },
                 group: 'base', type: 'wms',
                 url: '/api/geo/dk-dtk25?layer=hist_hoeje',
                 upstream: 'https://api.dataforsyningen.dk/topo20_hoeje_maalebordsblade_DAF',
@@ -634,7 +647,8 @@
             },
             {
                 id: 'hist_lave',
-                title: { da: 'Lave målebordsblade', en: 'Low measurement table sheets' },
+                panelGroup: 'historical',
+                title: { da: 'Lave målebordsblade', en: 'Low measuring table leaves 1901-1971' },
                 group: 'base', type: 'wms',
                 url: '/api/geo/dk-dtk25?layer=hist_lave',
                 upstream: 'https://api.dataforsyningen.dk/topo20_lave_maalebordsblade_DAF',
@@ -653,7 +667,8 @@
             },
             {
                 id: 'hist_preussen',
-                title: { da: 'Preussiske målebordsblade', en: 'Prussian measurement table sheets' },
+                panelGroup: 'historical',
+                title: { da: 'Preussiske målebordsblade', en: 'Prussian measuring table leaves 1877-1920' },
                 group: 'base', type: 'wms',
                 url: '/api/geo/dk-dtk25?layer=hist_preussen',
                 upstream: 'https://api.dataforsyningen.dk/topo25_preussen_maalebordsblade_DAF',
@@ -672,7 +687,8 @@
             },
             {
                 id: 'topo4cm_1953_1976',
-                title: { da: '4 cm kort 1953-1976', en: '4 cm map 1953-1976' },
+                panelGroup: 'historical',
+                title: { da: '4 cm kort 1953-1976', en: 'Topographic map 1953-1976' },
                 group: 'base', type: 'wms',
                 url: '/api/geo/dk-dtk25?layer=topo4cm_1953_1976',
                 upstream: 'https://api.dataforsyningen.dk/topo4cm_1953_1976_DAF',
@@ -691,7 +707,8 @@
             },
             {
                 id: 'topo4cm_1980_2001',
-                title: { da: '4 cm kort 1980-2001', en: '4 cm map 1980-2001' },
+                panelGroup: 'historical',
+                title: { da: '4 cm kort 1980-2001', en: 'Topographic map 1980-2001' },
                 group: 'base', type: 'wms',
                 url: '/api/geo/dk-dtk25?layer=topo4cm_1980_2001',
                 upstream: 'https://api.dataforsyningen.dk/topo4cm_1980_2001_DAF',
@@ -710,7 +727,8 @@
             },
             {
                 id: 'orto_sommer_1999',
-                title: { da: 'Sommerortofoto 1999', en: 'Summer orthophoto 1999' },
+                panelGroup: 'orthophoto',
+                title: { da: 'Sommerortofoto 1999', en: '1999' },
                 group: 'base', type: 'wms',
                 url: '/api/geo/dk-dtk25?layer=orto_sommer_1999',
                 upstream: 'https://api.dataforsyningen.dk/wms/orto_sommer_1999',
@@ -729,7 +747,8 @@
             },
             {
                 id: 'orto_sommer_2002',
-                title: { da: 'Sommerortofoto 2002', en: 'Summer orthophoto 2002' },
+                panelGroup: 'orthophoto',
+                title: { da: 'Sommerortofoto 2002', en: '2002' },
                 group: 'base', type: 'wms',
                 url: '/api/geo/dk-dtk25?layer=orto_sommer_2002',
                 upstream: 'https://api.dataforsyningen.dk/wms/orto_sommer_2002',
@@ -748,7 +767,8 @@
             },
             {
                 id: 'orto_sommer_2005',
-                title: { da: 'Sommerortofoto 2005', en: 'Summer orthophoto 2005' },
+                panelGroup: 'orthophoto',
+                title: { da: 'Sommerortofoto 2005', en: '2005' },
                 group: 'base', type: 'wms',
                 url: '/api/geo/dk-dtk25?layer=orto_sommer_2005',
                 upstream: 'https://api.dataforsyningen.dk/wms/orto_sommer_2005',
@@ -767,7 +787,8 @@
             },
             {
                 id: 'orto_sommer_2008',
-                title: { da: 'Sommerortofoto 2008', en: 'Summer orthophoto 2008' },
+                panelGroup: 'orthophoto',
+                title: { da: 'Sommerortofoto 2008', en: '2008' },
                 group: 'base', type: 'wms',
                 url: '/api/geo/dk-dtk25?layer=orto_sommer_2008',
                 upstream: 'https://api.dataforsyningen.dk/wms/orto_sommer_2008',

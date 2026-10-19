@@ -6,6 +6,21 @@ const CONFIG = require('./js/danish-layers.config.js');
     const lib = await import('./backend/src/lib/danish-layers.mjs');
     const tokenLayers = CONFIG.enabledLayers().filter((layer) => layer.auth === 'token');
     const basicLayers = CONFIG.enabledLayers().filter((layer) => layer.auth === 'basic');
+    const historical = [
+        ['hist_hoeje', 'topo20_hoeje_maalebordsblade_DAF', 'dtk_hoeje_maalebordsblade'],
+        ['hist_lave', 'topo20_lave_maalebordsblade_DAF', 'dtk_lave_maalebordsblade'],
+        ['hist_preussen', 'topo25_preussen_maalebordsblade_DAF', 'dtk_preussen_maalebordsblade'],
+        ['topo4cm_1953_1976', 'topo4cm_1953_1976_DAF', 'topo4cm_1953_1976'],
+        ['topo4cm_1980_2001', 'topo4cm_1980_2001_DAF', 'topo4cm_1980_2001']
+    ];
+    for (const [id, service, name] of historical) {
+        const layer = CONFIG.byId(id);
+        assert.equal(layer.upstream, `https://api.dataforsyningen.dk/${service}`);
+        assert.equal(layer.layers, name);
+        assert.equal(layer.auth, 'token');
+        assert.deepEqual(layer.requiresCredentials, ['DATAFORSYNINGEN_TOKEN']);
+        assert.equal(layer.panelGroup, 'historical');
+    }
     const lidar = [
         ['lidar_hillshade_historik', 'https://api.dataforsyningen.dk/dhm_historik_DAF', 'hillshade_1_6m'],
         ['lidar_quickdhm_exaggerated', 'https://api.dataforsyningen.dk/wms/dhm_temp', 'quickDHM_skyggekort_terraen_overdrevet'],
@@ -51,11 +66,12 @@ const CONFIG = require('./js/danish-layers.config.js');
     process.env.DATAFORDELER_PASSWORD = 'unit-test-service-password';
     delete process.env.DATAFORDELER_USER;
 
+
     const kvp = new URLSearchParams({
         SERVICE: 'WMS', VERSION: '1.3.0', REQUEST: 'GetMap', LAYERS: 'attacker-layer',
         STYLES: '', FORMAT: 'image/png', TRANSPARENT: 'TRUE', TILED: 'TRUE',
         WIDTH: '256', HEIGHT: '256', CRS: 'EPSG:3857', BBOX: '1133893,7588913,1137893,7592913',
-        token: 'attacker-token', username: 'attacker-user', password: 'attacker-password'
+        apikey: 'attacker-key', token: 'attacker-token', username: 'attacker-user', password: 'attacker-password'
     });
     for (const layer of tokenLayers) {
         const params = new URLSearchParams(kvp);
@@ -69,6 +85,7 @@ const CONFIG = require('./js/danish-layers.config.js');
         assert.equal(upstream.searchParams.get('CRS'), 'EPSG:3857');
         assert.equal(upstream.searchParams.get('VERSION'), '1.3.0');
         assert.equal(upstream.searchParams.get('token'), 'unit-test-only-token');
+        assert.equal(upstream.searchParams.get('apikey'), null);
         assert.equal(upstream.searchParams.get('username'), null);
         assert.equal(upstream.searchParams.get('password'), null);
     }
