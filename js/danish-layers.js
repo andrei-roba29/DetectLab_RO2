@@ -839,8 +839,8 @@
         if (!container) return;
         container.innerHTML = '';
         var sections = [
-            [tr(TEXT.base), PANEL_LAYERS.filter(function (l) { return l.group === 'base'; })],
-            [tr(TEXT.overlay), PANEL_LAYERS.filter(function (l) { return l.group !== 'base'; })]
+            [tr(TEXT.base), PANEL_LAYERS.filter(function (l) { return l.group === 'base' && !l.panelGroup; })],
+            [tr(TEXT.overlay), PANEL_LAYERS.filter(function (l) { return l.group !== 'base' && !l.panelGroup; })]
         ];
         sections.forEach(function (section, index) {
             if (!section[1].length && index !== 0) return;
@@ -850,6 +850,15 @@
                 if (yearControl) container.appendChild(yearControl);
             }
             section[1].forEach(function (layer) { container.appendChild(buildRow(layer)); });
+        });
+        (CONFIG.panelGroups || []).forEach(function (group) {
+            var details = el('details', { class: 'danish-layer-group', id: 'danishGroup_' + group.id });
+            details.appendChild(el('summary', { class: 'danish-layer-section', text: tr(group.title) }));
+            group.layers.forEach(function (id) {
+                var layer = CONFIG.byId(id);
+                if (layer && layer.enabled !== false) details.appendChild(buildRow(layer));
+            });
+            container.appendChild(details);
         });
         // Danish bases are intentionally NOT mirrored into the ArcGIS basemap control —
         // the control must only ever show Imagery (ArcGIS), Topographic (ArcGIS) and Terrain (ArcGIS).

@@ -8955,3 +8955,19 @@ a.dl-gmaps-directions-btn {
 
 /* DARE category badges provide their own circular SVG background. */
 .leaflet-div-icon.dare-icon-marker { background: transparent; border: 0; }
+
+/* Free Danish source groups, using native keyboard-accessible disclosure. */
+.danish-layer-group {
+    margin-top: 8px;
+    border-top: 1px solid rgba(214, 69, 80, 0.2);
+    padding: 6px 0;
+}
+.danish-layer-group > summary {
+    cursor: pointer;
+    padding: 6px 0;
+    opacity: 0.85;
+}
+.danish-layer-group > summary:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+}

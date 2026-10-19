@@ -1,3 +1,37 @@
+## Free Denmark-only source groups (October 2026)
+
+The Danish panel now includes three collapsible groups, with no premium gate:
+
+- **Heritage**: Not protected ancient monuments; Protected ancient monuments.
+  These reuse the official Kulturarv public WMS point layers (CC0).
+- **Historical maps**: Topographic map 1980–2001; Topographic map 1953–1976;
+  Low measuring table leaves 1901–1971; High measuring table leaves 1842–1899;
+  Prussian measuring table leaves 1877–1920.
+- **Ortophoto**: 2008, 2005, 2002, 1999.
+
+These groups inherit the Danish panel's country filter: selecting a country
+other than Denmark hides them. Historical maps and orthophotos retain the
+existing mutually exclusive base-map behavior; heritage overlays can be combined
+and have opacity sliders. Existing layer IDs/preferences are preserved.
+
+### Deployment
+
+Set **DATAFORSYNINGEN_TOKEN** on the backend/Netlify deployment for both the
+five historical maps and the summer orthophotos. Historical maps use the
+original Dataforsyningen `_DAF` WMS endpoints; **no Datafordeler API key is
+needed for these groups**. Free app access does not remove provider authentication.
+The token stays server-side and is never sent to browsers. Missing credentials
+produce the existing explicit unavailable status, not silent tiles.
+
+The supplied “2002” request actually points at 2008. The catalogue retains its
+separate `orto_sommer_2002` endpoint rather than mislabelling 2008 imagery.
+Live availability of that endpoint (and the other upstream services) must be
+checked in deployment; the sandbox cannot reach these provider hosts. WMS tiles
+continue to use the existing EPSG:3857 / WMS 1.3.0 integration, rather than copying
+a fixed EPSG:25832 viewport from a sample request.
+
+---
+
 # Denmark · Danish maps — how the layer group works
 
 *(README section for the Danish work; the machine-checked catalogue lives in

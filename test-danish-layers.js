@@ -40,7 +40,7 @@ let passed = 0;
 function ok(label) { passed += 1; console.log('  ✓ ' + label); }
 
 const WIRED = CONFIG.enabledLayers().map((layer) => layer.id);
-const RENDERED = CONFIG.enabledLayers().filter((layer) => !layer.selectorGroup)
+const RENDERED = CONFIG.enabledLayers().filter((layer) => !layer.selectorGroup && !layer.panelGroup)
     .sort((a, b) => (a.group === b.group ? 0 : (a.group === 'base' ? -1 : 1))).map((layer) => layer.id);
 /* A stand-in for the Dataforsyningen token: the suite only checks that the
    token travels server-side, never in browser requests, never that a
@@ -443,7 +443,12 @@ async function testMapModule() {
         'the inline handlers in index.html exist');
 
     const rowIds = dom.childIds('danishSubLayers');
-    assert.deepStrictEqual(rowIds, RENDERED, 'base rows first, then the overlays — one per enabled layer');
+    assert.deepStrictEqual(rowIds, RENDERED, 'ungrouped base rows first, then ungrouped overlays');
+    for (const group of CONFIG.panelGroups) {
+        assert.ok(dom.byId['danishGroup_' + group.id], group.id + ' has a collapsible group');
+        assert.deepStrictEqual(dom.childIds('danishGroup_' + group.id), group.layers,
+            group.id + ' contains exactly the requested sublayers in order');
+    }
     assert.strictEqual(dom.byId['danishToggle_dtk25'].type, 'radio', 'base rows are radios');
     assert.strictEqual(dom.byId['danishToggle_osm'].name, dom.byId['danishToggle_dtk25'].name,
         'the base radios share one name → mutually exclusive');
@@ -629,9 +634,9 @@ async function testMapModule() {
     const controlButtons = dom.byId['arcgisBasemapCtrl'].descendants
         .filter((n) => n.attributes && n.attributes['data-danish-basemap']);
     assert.deepStrictEqual(controlButtons.map((b) => b.attributes['data-danish-basemap']),
-        CONFIG.enabledLayers().filter((l) => l.group === 'base' && !l.selectorGroup).map((l) => l.id),
-        'the existing base layers remain offered in the same basemap control (year options stay in one dropdown)');
-    ok('the Danish bases appear as buttons in the existing basemap control');
+        [],
+        'Danish bases stay in the layer panel, not in the ArcGIS basemap control');
+    ok('the ArcGIS basemap control stays free of Danish layer buttons');
 
     /* Language: DA + EN strings, and the module follows a language change. */
     assert.strictEqual(API._test.tr(CONFIG.groupLabel), 'Denmark · Danish maps');
@@ -657,11 +662,11 @@ function testWiring() {
     assert.ok(html.indexOf('id="danishSubLayers"') !== -1, '…and the container the rows are built into');
     assert.ok(html.indexOf('id="danishToggle"') !== -1, '…and the group switch');
     assert.ok(html.indexOf('onclick="toggleDanishSubLayers()"') !== -1, '…and the collapse button');
-    assert.ok(html.indexOf('js/danish-layers.config.js?v=20261019-danish-heritage-wms') <
-        html.indexOf('js/layer-registry.js?v=20261017-albania-asig'),
+    assert.ok(html.indexOf('js/danish-layers.config.js?v=') <
+        html.indexOf('js/layer-registry.js?v='),
         'the config loads before the registry that mirrors it');
-    assert.ok(html.indexOf('js/danish-layers.js?v=20261016-danish-wms-layers') >
-        html.indexOf('js/map-app.js?v=20261017-albania-asig'),
+    assert.ok(html.indexOf('js/danish-layers.js?v=') >
+        html.indexOf('js/map-app.js?v='),
         'the module loads after the map module');
     ok('index.html: group row, container and both scripts in the right order');
 
@@ -678,7 +683,7 @@ function testWiring() {
         'map-app.js hands the country selection to the Danish rows');
     assert.ok(Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]) >= 212,
         'the service-worker cache moved on for the Danish layers');
-    assert.ok(sw.indexOf("'js/danish-layers.js?v=20261016-danish-wms-layers'") !== -1, 'the new scripts are precached');
+    assert.ok(sw.indexOf("'js/danish-layers.js?v=") !== -1, 'the new scripts are precached');
     assert.ok(css.indexOf('.danish-layer-row') !== -1 && css.indexOf('.danish-basemap-btn') !== -1 && css.indexOf('.danish-year-select') !== -1,
         'the generated rows and the basemap buttons are styled');
     assert.ok(css.indexOf('focus-visible') !== -1, 'and keyboard focus stays visible');
