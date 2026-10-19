@@ -587,7 +587,7 @@
 //   pinch OVERZOOMS the disc instead of asking for tiles nobody downloaded.
 //   Phones also keep a 160-tile MapLibre cache and a 48 MB primed disc now.
 //   Re-tags js/lidar-3d-focus.js and js/map3d-terrain.js.
-const CACHE_NAME = 'detectlab-v233-danish-token-maps';
+const CACHE_NAME = 'detectlab-v234-finland-filter';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -629,6 +629,11 @@ const PRECACHE_URLS = [
   'js/layer-registry.js?v=20261017-albania-asig',
   'js/translations.js?v=20261017-albania-asig',
   'js/wms-health.js?v=20261017-albania-asig',
+  'js/finland-tm35.js?v=20261019-finland-filter',
+  'js/finland-layers.config.js?v=20261019-finland-filter',
+  'js/finland-layers.js?v=20261019-finland-filter',
+  'js/layer-registry.js?v=20261019-finland-filter',
+  'js/map-app.js?v=20261019-finland-filter',
   'js/map-app.js?v=20261017-finland',
   'js/map-app.js?v=20261017-albania-asig',
   'css/styles.css?v=20261019-danish-free-groups',

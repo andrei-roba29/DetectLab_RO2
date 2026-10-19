@@ -2156,6 +2156,13 @@
     document.addEventListener('detectlab:langchange', function () {
         try { refreshTexts(); } catch (e) {}
     });
+    document.addEventListener('detectlab:country-selected', function (e) {
+        var iso = (e && e.detail && e.detail.iso) || window._detectlabSelectedCountry || '';
+        try { filterForCountry(iso); } catch (err) {}
+    });
+    document.addEventListener('detectlab:country-cleared', function () {
+        try { filterForCountry(null); } catch (err) {}
+    });
 
     function goToView() {
         var map = runtime.map || getMap();
