@@ -9,9 +9,10 @@ const CONFIG = require('./js/danish-layers.config.js');
     const lidar = [
         ['lidar_hillshade_historik', 'https://api.dataforsyningen.dk/dhm_historik_DAF', 'hillshade_1_6m'],
         ['lidar_quickdhm_exaggerated', 'https://api.dataforsyningen.dk/wms/dhm_temp', 'quickDHM_skyggekort_terraen_overdrevet'],
-        ['lidar_dhm_terrain_hillshade', 'https://api.dataforsyningen.dk/dhm_DAF', 'dhm_terraen_skyggekort']
+        ['lidar_dhm_terrain_hillshade', 'https://api.dataforsyningen.dk/dhm_DAF', 'dhm_terraen_skyggekort'],
+        ['lidar_dhm_surface_hillshade', 'https://api.dataforsyningen.dk/dhm_DAF', 'dhm_overflade_skyggekort']
     ];
-    assert.equal(lidar.length, 3);
+    assert.equal(lidar.length, 4);
     for (const [id, upstream, name] of lidar) {
         const layer = CONFIG.byId(id);
         assert.equal(layer.upstream, upstream, `${id} exact service path`);
@@ -24,7 +25,7 @@ const CONFIG = require('./js/danish-layers.config.js');
         assert.equal(layer.format, 'image/png');
         assert.equal(layer.auth, 'token');
     }
-    assert.equal(tokenLayers.length, 13, 'Dataforsyningen secured layers are all in one auth class');
+    assert.equal(tokenLayers.length, 14, 'Dataforsyningen secured layers are all in one auth class');
     assert.equal(basicLayers.length, 11, 'Datafordeler spring photos (including retained legacy base) share basic auth');
     assert.equal(CONFIG.layers.filter((layer) => layer.selectorGroup === 'spring-orthophoto').length, 10);
     const mismatched = lib.appendLayerAuth({ auth: 'token', upstream: 'https://example.com/wms', requiresCredentials: ['DATAFORSYNINGEN_TOKEN'] }, new URLSearchParams());
@@ -132,7 +133,7 @@ const CONFIG = require('./js/danish-layers.config.js');
     if (originalAllowedOrigins === undefined) delete process.env.DANISH_PROXY_ALLOWED_ORIGINS; else process.env.DANISH_PROXY_ALLOWED_ORIGINS = originalAllowedOrigins;
     global.fetch = originalFetch;
 
-    console.log(`Danish WMS proxy checks passed: ${tokenLayers.length} token layers, ${basicLayers.length} basic-auth layers, 3 LiDAR definitions.`);
+    console.log(`Danish WMS proxy checks passed: ${tokenLayers.length} token layers, ${basicLayers.length} basic-auth layers, 4 LiDAR definitions.`);
     console.log('Note: upstream fetch is stubbed here; this is not a provider HTTP 200 or visual-render test.');
 })().catch((error) => {
     console.error(error);

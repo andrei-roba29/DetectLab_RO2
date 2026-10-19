@@ -51,11 +51,11 @@ const TOKEN = 'test-token-not-a-credential';
  * 1. the config
  * ══════════════════════════════════════════════════════════════════════════ */
 {
-    assert.strictEqual(CONFIG.layers.length, 30, 'the existing Danish layers plus the requested LiDAR and historical layers are configured');
+    assert.strictEqual(CONFIG.layers.length, 33, 'the existing Danish layers plus the requested LiDAR, heritage and historical layers are configured');
     assert.strictEqual(CONFIG.country, 'DK');
     assert.deepStrictEqual(CONFIG.layers.slice(0, 6).map((l) => l.id),
         ['dtk25', 'orto', 'naturtyper', 'osm', 'historic-witx', 'fortidsminder']);
-    assert.strictEqual(CONFIG.layers.filter((l) => l.id.indexOf('lidar_') === 0).length, 3);
+    assert.strictEqual(CONFIG.layers.filter((l) => l.id.indexOf('lidar_') === 0).length, 4);
     assert.strictEqual(CONFIG.layers.filter((l) => l.id.indexOf('orto_foraar_') === 0).length, 10);
     assert.strictEqual(CONFIG.layers.filter((l) => l.id.indexOf('orto_sommer_') === 0).length, 4);
     assert.deepStrictEqual(CONFIG.enabledLayers().map((l) => l.id), WIRED);
@@ -138,6 +138,34 @@ const TOKEN = 'test-token-not-a-credential';
     assert.ok(heritage.wfs.maxFeatures >= 100 && heritage.wfs.maxFeatures <= 2000, 'a hard feature cap');
     assert.ok(/^CC0/.test(heritage.licence));
     ok('scheduled monuments: official CC0 WFS, minZoom gate, feature cap, readable style');
+
+    /* The two POINT layers of the same service are raster WMS read directly
+     * from the agency GeoServer: public, tokenless, EPSG:3857 (verified). */
+    ['fortidsminder_punkt_fredet', 'fortidsminder_punkt_ikkefredet'].forEach((id) => {
+        const points = CONFIG.byId(id);
+        assert.strictEqual(points.type, 'wms', id + ' is a WMS overlay');
+        assert.strictEqual(points.url, 'https://www.kulturarv.dk/ffgeoserver/public/wms');
+        assert.strictEqual(points.layers, 'fundogfortidsminder_' + id.replace('fortidsminder_punkt_', 'punkt_'),
+            id + ' requests the service layer of the same product');
+        assert.strictEqual(points.crs, 'EPSG:3857', id + ' asks for the map projection');
+        assert.strictEqual(points.transparent, true);
+        assert.strictEqual(points.auth, 'none');
+        assert.deepStrictEqual(points.requiresCredentials, [], id + ' needs no credential');
+        assert.ok(/^CC0/.test(points.licence));
+        assert.ok(!/witx/i.test(points.url), 'never the third-party mirror');
+    });
+    assert.ok(CONFIG.byId('fortidsminder_punkt_ikkefredet').minZoom >
+        CONFIG.byId('fortidsminder_punkt_fredet').minZoom,
+        'the dense unprotected-point layer starts one zoom later');
+    ok('heritage points: public CC0 WMS, EPSG:3857, no credential, sensible zoom gates');
+
+    const surface = CONFIG.byId('lidar_dhm_surface_hillshade');
+    assert.strictEqual(surface.group, 'overlay');
+    assert.strictEqual(surface.upstream, 'https://api.dataforsyningen.dk/dhm_DAF');
+    assert.strictEqual(surface.layers, 'dhm_overflade_skyggekort');
+    assert.ok(surface.url.indexOf('/api/geo/') === 0, 'token added server-side');
+    assert.deepStrictEqual(surface.requiresCredentials, ['DATAFORSYNINGEN_TOKEN']);
+    ok('surface hillshade: DHM overflade WMS through the token proxy');
 
     const witx = CONFIG.byId('historic-witx');
     assert.strictEqual(witx.permission.required, true);
@@ -629,7 +657,7 @@ function testWiring() {
     assert.ok(html.indexOf('id="danishSubLayers"') !== -1, '…and the container the rows are built into');
     assert.ok(html.indexOf('id="danishToggle"') !== -1, '…and the group switch');
     assert.ok(html.indexOf('onclick="toggleDanishSubLayers()"') !== -1, '…and the collapse button');
-    assert.ok(html.indexOf('js/danish-layers.config.js?v=20261016-danish-wms-layers') <
+    assert.ok(html.indexOf('js/danish-layers.config.js?v=20261019-danish-heritage-wms') <
         html.indexOf('js/layer-registry.js?v=20261017-albania-asig'),
         'the config loads before the registry that mirrors it');
     assert.ok(html.indexOf('js/danish-layers.js?v=20261016-danish-wms-layers') >

@@ -97,7 +97,7 @@
     /* Read at *runtime* by the proxy functions and in the audit; a layer is
      * only credential-gated when the deployment really needs a variable. */
     var CONFIG = {
-        version: '20261015-danish-v1',
+        version: '20261019-danish-v2',
 
         /* Country this group belongs to. Drives the country filter (rows are
          * shown when Denmark is the selected country) and the coverage check. */
@@ -415,6 +415,96 @@
                 },
                 permission: { required: false, note: '' }
             },
+            /* ── 6b. Fund og Fortidsminder — the two POINT layers (WMS) ──────
+             * The official service also publishes the monuments as WMS raster
+             * layers. They are read straight from the agency's GeoServer:
+             * public, tokenless, and Leaflet draws WMS tiles as plain <img>
+             * elements, which need no CORS (the host sends none). Requested in
+             * EPSG:3857 like every other layer — verified 2026-10-19 that the
+             * service answers 3857 GetMap for both point layers even though
+             * the capabilities list 25832/CRS:84 as the native CRS. */
+            {
+                id: 'fortidsminder_punkt_fredet',
+                title: {
+                    da: 'Danmark · Fredede fortidsminder (punkter)',
+                    en: 'Denmark · Protected ancient monuments (points)'
+                },
+                group: 'overlay',
+                type: 'wms',
+                url: 'https://www.kulturarv.dk/ffgeoserver/public/wms',
+                upstream: null,
+                layers: 'fundogfortidsminder_punkt_fredet',
+                crs: 'EPSG:3857',
+                format: 'image/png',
+                transparent: true,
+                tiled: true,
+                tileSize: 256,
+                version: '1.3.0',
+                /* Points stay readable from overview zoom: one symbol per
+                 * scheduled monument is what the layer is for. */
+                minZoom: 8,
+                maxZoom: 22,
+                maxNativeZoom: 19,
+                attribution: 'Fund og Fortidsminder © <a href="https://slks.dk/" target="_blank" ' +
+                    'rel="noopener">Slots- og Kulturstyrelsen</a> (CC0 1.0)',
+                opacity: 1,
+                defaultOn: false,
+                enabled: true,
+                requiresCredentials: [],
+                auth: 'none',
+                credentialsNote: { da: '', en: '' },
+                provider: 'Slots- og Kulturstyrelsen (Danish Agency for Culture and Palaces)',
+                licence: 'CC0 1.0',
+                licenceUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
+                sourcePage: 'https://slks.dk/omraader/kulturarv/databaserne/til-udviklere/webservices',
+                bounds: [[54.42, 7.99], [57.78, 15.6]],
+                notes: 'WMS twin of the WFS areas layer (same service, same licence). ' +
+                    'GetCapabilities lists fundogfortidsminder_punkt_fredet and ' +
+                    'fundogfortidsminder_punkt_ikkefredet (verified 2026-10-19). Use this raster ' +
+                    'overlay for the whole country; use the WFS row when you need clickable features.',
+                wfs: null,
+                permission: { required: false, note: '' }
+            },
+            {
+                id: 'fortidsminder_punkt_ikkefredet',
+                title: {
+                    da: 'Danmark · Ikke-fredede fortidsminder (punkter)',
+                    en: 'Denmark · Unprotected ancient monuments (points)'
+                },
+                group: 'overlay',
+                type: 'wms',
+                url: 'https://www.kulturarv.dk/ffgeoserver/public/wms',
+                upstream: null,
+                layers: 'fundogfortidsminder_punkt_ikkefredet',
+                crs: 'EPSG:3857',
+                format: 'image/png',
+                transparent: true,
+                tiled: true,
+                tileSize: 256,
+                version: '1.3.0',
+                /* ~150 000 registrations: the density is unreadable below z10,
+                 * and the service would render every one of them per tile. */
+                minZoom: 10,
+                maxZoom: 22,
+                maxNativeZoom: 19,
+                attribution: 'Fund og Fortidsminder © <a href="https://slks.dk/" target="_blank" ' +
+                    'rel="noopener">Slots- og Kulturstyrelsen</a> (CC0 1.0)',
+                opacity: 0.9,
+                defaultOn: false,
+                enabled: true,
+                requiresCredentials: [],
+                auth: 'none',
+                credentialsNote: { da: '', en: '' },
+                provider: 'Slots- og Kulturstyrelsen (Danish Agency for Culture and Palaces)',
+                licence: 'CC0 1.0',
+                licenceUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
+                sourcePage: 'https://slks.dk/omraader/kulturarv/databaserne/til-udviklere/webservices',
+                bounds: [[54.42, 7.99], [57.78, 15.6]],
+                notes: 'The “not protected” companion of fortidsminder_punkt_fredet; zooms from ' +
+                    'z10 because the dataset is very dense. Same public GeoServer, no credentials.',
+                wfs: null,
+                permission: { required: false, note: '' }
+            },
             /* ── LiDAR (terrain model / hillshade) overlays ─────────────── */
             {
                 id: 'lidar_hillshade_historik',
@@ -480,6 +570,30 @@
                 sourcePage: 'https://dataforsyningen.dk/',
                 bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
                 notes: 'LiDAR terrain hillshade (DHM).',
+                wfs: null, permission: { required: false, note: '' }
+            },
+            {
+                id: 'lidar_dhm_surface_hillshade',
+                title: { da: 'LiDAR overflade skyggekort (DHM)', en: 'LiDAR surface hillshade (DHM)' },
+                group: 'overlay',
+                type: 'wms',
+                url: '/api/geo/dk-dtk25?layer=lidar_dhm_surface_hillshade',
+                upstream: 'https://api.dataforsyningen.dk/dhm_DAF',
+                layers: 'dhm_overflade_skyggekort',
+                crs: 'EPSG:3857', format: 'image/png', transparent: true, tiled: true, tileSize: 256, version: '1.3.0',
+                minZoom: 0, maxZoom: 20, maxNativeZoom: 19,
+                attribution: 'Danmarks Højdemodel © <a href="https://klimadatastyrelsen.dk/" target="_blank" rel="noopener">Klimadatastyrelsen</a> (CC BY 4.0)',
+                opacity: 1, defaultOn: false, enabled: true,
+                requiresCredentials: ['DATAFORSYNINGEN_TOKEN'],
+                auth: 'token',
+                credentialsNote: { da: 'Kræver DATAFORSYNINGEN_TOKEN.', en: 'Requires DATAFORSYNINGEN_TOKEN.' },
+                provider: 'Klimadatastyrelsen, via Dataforsyningen',
+                licence: 'CC BY 4.0', licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                sourcePage: 'https://dataforsyningen.dk/',
+                bounds: [[54.4265, 7.99125], [57.7781, 15.5995]],
+                notes: 'The WMS twin of the “DHM Overflade” mode in js/dataforsyningen-dhm-layer.js: ' +
+                    'same dhm_DAF product, rendered on demand in EPSG:3857 instead of the reprojected ' +
+                    'View1 WMTS tiles. Layer name verified in the live GetCapabilities 2026-10-19.',
                 wfs: null, permission: { required: false, note: '' }
             },
             /* ── Historical maps (base) ──────────────────────────────────── */

@@ -87,6 +87,11 @@
          * with _detectlabNoGuard (js/danish-layers.js owns its row: a status
          * line under the switch instead of a flipped switch). */
         'arealeditering-dist-geo.miljoeportal.dk': 'Danmarks Miljøportal',
+        /* The two Danish heritage POINT overlays read this GeoServer directly
+         * (public, tokenless, plain <img> tiles need no CORS), exactly like the
+         * nature overlay above. Same contract: listed so an outage can be
+         * attributed, while the rows themselves own their status line. */
+        'www.kulturarv.dk': 'Slots- og Kulturstyrelsen (Fund og Fortidsminder)',
         /* The Albanian ASIG layers (js/asig-albania-layers.config.js) read
          * this state GeoServer directly: it is public, tokenless and its
          * raster tiles need no CORS. Listed here so the provider is named if

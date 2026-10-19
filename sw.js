@@ -587,7 +587,7 @@
 //   pinch OVERZOOMS the disc instead of asking for tiles nobody downloaded.
 //   Phones also keep a 160-tile MapLibre cache and a 48 MB primed disc now.
 //   Re-tags js/lidar-3d-focus.js and js/map3d-terrain.js.
-const CACHE_NAME = 'detectlab-v230-lidar-depth';
+const CACHE_NAME = 'detectlab-v231-danish-heritage';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -621,7 +621,7 @@ const PRECACHE_URLS = [
   // js/maplibre-gl.js is precached as well: opening 3D on a cold PWA offline
   // must not depend on the network.
   'js/layer-registry.js?v=20261015-danish-layers',
-  'js/danish-layers.config.js?v=20261016-danish-wms-layers',
+  'js/danish-layers.config.js?v=20261019-danish-heritage-wms',
   'js/asig-albania-layers.config.js',
   'js/asig-albania-layers.config.js?v=20261017-albania-asig',
   'js/asig-albania-layers.js',

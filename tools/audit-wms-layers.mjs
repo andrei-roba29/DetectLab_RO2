@@ -652,6 +652,20 @@ const SIGNATURES = [
       'so a tile-error burst can be attributed'
   },
   {
+    host: 'www.kulturarv.dk',
+    provider: 'Slots- og Kulturstyrelsen (Fund og Fortidsminder)',
+    request: 'WMS 1.3.0 GetMap (CRS=EPSG:3857, uppercase KVP), fundogfortidsminder_punkt_fredet / ' +
+      '_punkt_ikkefredet, PNG + transparent',
+    what: '200 + ServiceExceptionReport XML (GeoServer answers exceptions with 200) or an all-alpha tile. ' +
+      'The capabilities advertise EPSG:25832 and CRS:84 while GetMap serves EPSG:3857 normally ' +
+      '(verified 2026-10-19) — judge by the tile, not by the capabilities. A renamed layer answers ' +
+      '"Could not find layer …" the same way',
+    owner: 'external (the agency GeoServer)',
+    app: 'no guard row: js/danish-layers.js owns the switch and prints its own status line ' +
+      '(the layers opt out with _detectlabNoGuard); the host is still named in js/wms-health.js HOSTS ' +
+      'so a tile-error burst can be attributed'
+  },
+  {
     host: 'geoportal.asig.gov.al',
     provider: 'ASIG / geoportal.asig.gov.al',
     request: 'WMS 1.1.1 GetMap (SRS=EPSG:3857) per Leaflet tile for the nine Albanian layers ' +
