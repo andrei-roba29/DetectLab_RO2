@@ -4,9 +4,10 @@
 `WMS_WMTS_LAYER_AUDIT.md`, the licences and credentials in `DATA_SOURCES.md`,
 and the LiDAR/terrain companion in `DENMARK_LIDAR_DATAFORSYNINGEN.md`.)*
 
-Six Danish entries — three base maps, two overlays and one disabled placeholder
-— are described in **`js/danish-layers.config.js`** and drawn by
-**`js/danish-layers.js`**. They appear in the existing layer panel as one group,
+The Danish entries — topographic, orthophoto, LiDAR and heritage base maps and
+overlays, plus the permission-gated witx placeholders — are described in
+**`js/danish-layers.config.js`** and drawn by **`js/danish-layers.js`**. They
+appear in the existing layer panel as one group,
 *“Danmark · danske kort / Denmark · Danish maps”*, and the base maps also appear
 as buttons in the existing basemap control. Nothing about the existing layers,
 their controls, the projections or the default view changed.
@@ -51,10 +52,59 @@ a relative `import`/`require` that resolves outside `backend/`, and it runs the
 | `danish.osm` | base | XYZ | no | — (fallback base) |
 | `danish.naturtyper` | overlay | WMS 1.3.0 (direct) | no | — |
 | `danish.fortidsminder` | overlay | WFS 2.0.0 → GeoJSON | no | — |
+| `danish.fortidsminder_punkt_fredet` | overlay | WMS 1.3.0 (direct) | no | — |
+| `danish.fortidsminder_punkt_ikkefredet` | overlay | WMS 1.3.0 (direct, z10+) | no | — |
+| `danish.lidar_dhm_surface_hillshade` | overlay | WMS 1.3.0 | no | `DATAFORSYNINGEN_TOKEN` |
 | `danish.historic-witx` | base | XYZ | **disabled** | written permission from witx.dk |
 | `danish.witx_fundogfortidsminder_areal`, `danish.witx_fundogfortidsminder` | overlay | WFS | **disabled placeholders** | written permission from witx.dk |
 
-Details, licences and attribution text: `DATA_SOURCES.md`.
+The full list — historical maps, summer/spring orthophotos, the three other
+LiDAR overlays — is in `DATA_SOURCES.md`, which is the licence and attribution
+register.
+
+## Provider access: the Dataforsyningen token
+
+Everything the Danish group asks of
+`api.dataforsyningen.dk` is authenticated with one credential, the personal
+**token** in `DATAFORSYNINGEN_TOKEN`. Per Dataforsyningen's own *Log ind og Token*
+page (<https://confluence.kds.dk/display/MYD/Log+ind+og+Token>):
+
+* every request must be **HTTPS** (TLS ≥ 1.2); HTTP is not served, and a call
+  with no token or a wrong token fails — the service keeps no session, so the
+  token travels with **every** request;
+* the token is created and rotated by the account owner on
+  [dataforsyningen.dk](https://dataforsyningen.dk/user#token) (user icon →
+  *Administrer token til webservices og API'er* → *Opret ny token*), where it can
+  also be named and given an expiry date;
+* it may be sent **either** as the `token` HTTP header (what the docs recommend,
+  because a header stays out of access logs, browser history and `Referer`)
+  **or** as the `token` query parameter (what Dataforsyningen's own KVP examples
+  and this repo's proxy use; the KVP is what their WMS/WMTS documents show).
+
+This repo never puts the token in a browser: `js/danish-layers.config.js` points
+credentialed rows at the same-origin `/api/geo/…` routes, and
+`backend/src/lib/danish-layers.mjs` adds the KVP server-side. A token is
+account-wide, so exposing it client-side would hand the whole subscription to
+every visitor.
+
+Two things to check when copying request URLs out of a browser's Network tab:
+
+1. **The token in the copied URL is not yours.** Example requests in docs,
+   screenshots and other people's sites carry *their* token (and sometimes a
+   `9854…` sample). Replace it — pasting it into this repository would leak a
+   third party's credential and still fail if it was revoked.
+2. **`wms.datafordeler.dk` uses a different credential from
+   `api.dataforsyningen.dk`.** The Datafordeler WMS/WMTS answers to a service
+   user (`username`/`password`, what `DATAFORDELER_USERNAME` /
+   `DATAFORDELER_PASSWORD` are for) or to a Datafordeler **`apikey`** query
+   parameter. An `apikey=` copied from a Network tab is not the Dataforsyningen
+   token and cannot be swapped for it. This repo reaches the same historical
+   products through `api.dataforsyningen.dk/…_DAF` with the token instead, so
+   only one credential is needed for the Danish WMS group.
+
+`js/dataforsyningen-dhm-layer.js` is the one piece that uses the header form: it
+asks the same-origin `/api/geo/dk-dhm` route, which attaches `token` as a header
+when it talks to the WMTS.
 
 ## Environment variables
 
