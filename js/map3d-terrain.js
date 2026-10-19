@@ -196,7 +196,13 @@
              * instead of being created at ×3 and shrunk once it already exists
              * — by which point WebKit has already said no. */
             pixelRatio: p.mobilePixelRatio || 1,
-            maxTileCacheSize: p.mobileMaxTileCacheSize || 64,
+            /* 64 tiles was enough for a 2D-sized deck, not for a pitched disc:
+             * at z17+ the visible set (parents, children, the raster and the
+             * DEM around it) is well over a hundred, so the cache evicted
+             * tiles the user was looking at and every pinch re-requested them
+             * through dl2d://. 160 keeps a prepared disc resident while still
+             * well under the desktop's 320. */
+            maxTileCacheSize: Math.max(MOBILE_TILE_CACHE, Number(p.mobileMaxTileCacheSize) || 0),
             maxCanvasSize: (p.mobileMaxCanvas && p.mobileMaxCanvas.length === 2)
                 ? p.mobileMaxCanvas : [2048, 2048],
             canvasContextAttributes: {
@@ -249,6 +255,14 @@
             return result;
         }
     }
+
+    /* The registry's `perf.mobileMaxTileCacheSize` default (64) predates the
+     * LiDAR disc: it was sized for a phone-sized 2D deck. A pitched 3D view
+     * over a 1 km disc at z17 shows well over a hundred tiles — parents,
+     * children, the raster and the DEM — and at 64 MapLibre evicted tiles the
+     * user was looking at, so every pinch re-requested them through dl2d://.
+     * The profile raises it; a deployment may still ask for more. */
+    var MOBILE_TILE_CACHE = 160;
 
     /* window._currentLang is a FUNCTION installed by js/translations.js; reading
      * it as a string (which this used to do) silently landed on COPY.en, so the
@@ -539,7 +553,13 @@
      *  dropped tile by tile when the focus moves or closes.
      * ═══════════════════════════════════════════════════════════════════════ */
     var PRIME_DESKTOP = { entries: 2400, bytes: 96 * 1024 * 1024 };
-    var PRIME_MOBILE = { entries: 900, bytes: 28 * 1024 * 1024 };
+    /* A 1 km disc prepared to a z18 native maximum is ~480 tiles, and every
+     * one is held twice (the bytes the service sent + the clipped/repainted
+     * copy the deck is handed). 900/28 MB could not hold that: the oldest
+     * entries were evicted while the prefetch was still running, and a zoom
+     * back out or in re-requested them. 1400/48 MB holds the deepest disc a
+     * phone is likely to meet without approaching desktop's 96 MB. */
+    var PRIME_MOBILE = { entries: 1400, bytes: 48 * 1024 * 1024 };
 
     function primeBudget() { return isMobile() ? PRIME_MOBILE : PRIME_DESKTOP; }
 
@@ -1067,8 +1087,12 @@
         if (!a || !b) return !a && !b;
         function disc(f) {
             var m = f.mask || f;
+            /* The prepared ceiling is part of the identity: a source created
+             * for a z16 plan must be rebuilt (not silently kept) when the plan
+             * reaches z18, or the cap would still be the old one. */
+            var ceiling = f.plan && f.plan.zoomTo != null ? f.plan.zoomTo : '';
             return [f.key || '', f.lidarKey || '', f.defId || '',
-                Number(m.lat), Number(m.lng), Number(m.radiusKm)].join('|');
+                Number(m.lat), Number(m.lng), Number(m.radiusKm), ceiling].join('|');
         }
         return disc(a) === disc(b);
     }
@@ -1907,6 +1931,18 @@
          * rectangle are clipped pixel by pixel in the protocol handler. */
         var focused = !!(state.focus && focusMatches(item));
         if (focused && state.focus.bounds) spec.bounds = state.focus.bounds;
+        /* …and it stops at the deepest zoom the prefetch actually prepared.
+         * Without this the source kept the layer's native maximum, so pinching
+         * past the prepared ceiling made MapLibre request tiles that were
+         * never downloaded: each one went through dl2d:// into a live fetch
+         * that raced MapLibre's cancel-while-zooming, and a phone spent the
+         * pinch showing the base map. Capped here, the same pinch OVERZOOMS
+         * the prepared tiles (sharp down to ~0.5 m/px at z18): LiDAR stays on
+         * screen, no request is made, and the only thing lost is detail the
+         * prefetch never bought. */
+        if (focused && state.focus.plan && state.focus.plan.zoomTo != null) {
+            spec.maxzoom = Math.min(spec.maxzoom, Number(state.focus.plan.zoomTo));
+        }
         if (!map.getSource(sourceId)) {
             map.addSource(sourceId, spec);
         } else {
@@ -1986,6 +2022,11 @@
         });
         var focused = !!(state.focus && focusMatches({ defId: def.id, lidarKey: 'def:' + def.id }));
         if (focused && state.focus.bounds) spec.bounds = state.focus.bounds;
+        /* Same ceiling as the mirrored path: prepared up to plan.zoomTo, then
+         * overzoomed — never a zoom the prefetch did not buy. */
+        if (focused && state.focus.plan && state.focus.plan.zoomTo != null) {
+            spec.maxzoom = Math.min(Number(spec.maxzoom == null ? 22 : spec.maxzoom), Number(state.focus.plan.zoomTo));
+        }
         if (!spec.tiles || !spec.tiles.length) {
             state.status[entry.id] = { state: 'unsupported', reason: 'no tile template (module not loaded?)' };
             return null;

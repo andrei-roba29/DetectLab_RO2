@@ -423,11 +423,25 @@ now asks the gate first and only opens when it is answered with a prepared disc:
    `pane_lidar_3d_focus` (z 656, above every LiDAR pane), so the area being prepared is
    visible while it downloads.
 4. **The plan.** `planDisc()` resolves the zoom at which the disc fills the viewport
-   (`zFit`), takes one level below and two above it, clips that window to the layer's own
-   `minZoom`/`maxNativeZoom`, keeps only the tiles that really intersect the disc and stops
-   at a budget (`{url: 700, canvas: 260}`, `window.DETECTLAB_LIDAR_3D` overrides). Tiles are
-   ordered **centre-first**, and what the budget had to drop is reported (`plan.trimmed`),
-   never silently lost.
+   (`zFit`) and walks **whole zoom levels from `zFit - 2` to the layer's native
+   `maxNativeZoom`**, keeping only the tiles that really intersect the disc. The screen
+   decides where the camera *opens*; it does **not** decide how deep the prepared disc
+   goes. This is the mobile lesson of 2026-10-19: a phone frames the same disc one level
+   wider than a desktop, so the old fixed “two levels above `zFit`” stopped at z16 where a
+   desktop reached z17 — a 1 km disc had 50 prepared tiles on a phone and 140 on a desktop,
+   and pinching past z16 dropped every tile into a live per-tile fetch that raced
+   MapLibre's cancel-while-zooming, leaving the base map under the LiDAR. Both devices now
+   prepare to the native maximum (144 vs 140 tiles on a z17 pyramid).
+   A level is included only **whole**: the plan stops before the first level that does not
+   fit the budget (`{url: 360, canvas: 260}`, `window.DETECTLAB_LIDAR_3D` overrides) and
+   reports the tiles it did not buy (`plan.trimmed`) — a half-prepared level would be a
+   hole at the rim at exactly the zoom under the camera. Inside a level, tiles stay
+   **centre-first**. The viewer caps the focused raster source's `maxzoom` at
+   `plan.zoomTo` (`renderRaster()`), so beyond it MapLibre *overzooms* the prepared tiles
+   instead of asking for tiles nobody downloaded; the same cap is applied to the
+   registry-backed country modules in `renderRegistryRaster()`. Phones also keep a
+   160-tile MapLibre tile cache (was 64) and a 1 400-entry / 48 MB primed disc (was
+   900 / 28 MB), so the deeper plan stays resident through a pinch.
 5. **The prefetch runs through the same pipeline 3D draws with.** `prefetchTiles()` calls
    the viewer's own `fetchTile()` (so the CORS/proxy decision per host — including the WMS
    `preferProxy` rule — is the same one the deck makes), then the same `blendedTile()`
@@ -638,10 +652,12 @@ cache).
 * `node test-lidar-3d-focus.js` — LiDAR in 3D (§6.4): the wiring (`_dlLidar` tags, the
   scanner stand-down, the version tags), the disc maths (bounds, tile windows, the
   circle-vs-rectangle classification, the feathered rim, the blank tile), the planner (a
-  disc stays bounded, the zoom window respects the layer's own limits, the order is
-  centre-first at every level, trimming is reported and counted in the estimate, and a
-  5 km disc really does prepare two levels coarser — the reason the entry is fixed at
-  1 km) and the
+  disc stays bounded, the zoom window respects the layer's own limits, every level is
+  planned **whole**, the order is centre-first at every level, trimming is reported and
+  counted in the estimate, a 5 km disc really prepares two levels coarser — the reason
+  the entry is fixed at 1 km — and the **mobile depth regression**: a 390 × 844 phone and
+  a 1280 × 800 desktop prepare the same absolute zoom range to the layer's native maximum,
+  145 vs 144 tiles on a z17 pyramid, with no level left half-prepared at z18) and the
   viewer end-to-end in a headless sandbox: the mirror describes both tagged layers, the
   one-layer rule keeps exactly the focused layer and reports the rest (`focused`, `count`),
   a LiDAR layer with **no** prepared disc is draped by nobody and reported as

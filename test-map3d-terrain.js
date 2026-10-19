@@ -80,9 +80,9 @@ const skin = read('css/map3d-terrain.css');
 
 const TAG = '20261019-tile-order';              /* MapLibre itself (coveringTiles patch) */
 const TAG_3D = '20261017-archeo-3d-projection';    /* mirror                        */
-const TAG_VIEWER = '20261017-archeo-3d-projection'; /* viewer (js)                  */
-const TAG_CSS = '20261017-lidar-3d-entry-handover';    /* viewer skin (css, unchanged) */
-const TAG_FOCUS = '20261017-lidar-3d-entry-handover';  /* LiDAR focus (3D, one disc)   */
+const TAG_VIEWER = '20261019-lidar-depth'; /* viewer (js)                         */
+const TAG_CSS = '20261019-lidar-depth';    /* viewer skin (css)              */
+const TAG_FOCUS = '20261019-lidar-depth';  /* LiDAR focus (3D, one disc)     */
 const TAG_REGISTRY = '20261017-albania-asig';      /* shared registry (WMS audit)  */
 
 // ══════════════════════════════════════════════════════════════

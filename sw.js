@@ -576,7 +576,18 @@
 //   time — “You can enter the 3D view with only one LiDAR layer at a time.”)
 //   and where. window.DETECTLAB_LIDAR_3D.maxRadiusKm > 1 still brings the
 //   slider back. See MAP_3D_TERRAIN.md §6.4.
-const CACHE_NAME = 'detectlab-v229-lidar-1km';
+// v230: the 1 km disc is prepared to the LAYER's native maximum, not two
+//   levels above a zFit that the phone's small viewport pushes down. A phone
+//   used to prepare z13–z16 of a z17 pyramid (50 tiles vs the desktop's 140),
+//   so pinching to z17 left the prefetch and every tile became a live request
+//   racing MapLibre's cancel-while-zooming — the LiDAR disappeared under the
+//   base map. The plan now adds whole levels up to the native max (144 on a
+//   phone, 140 on a desktop), stops before the first level the budget cannot
+//   hold, and the raster source is capped at the prepared ceiling so a deeper
+//   pinch OVERZOOMS the disc instead of asking for tiles nobody downloaded.
+//   Phones also keep a 160-tile MapLibre cache and a 48 MB primed disc now.
+//   Re-tags js/lidar-3d-focus.js and js/map3d-terrain.js.
+const CACHE_NAME = 'detectlab-v230-lidar-depth';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -640,6 +651,7 @@ const PRECACHE_URLS = [
   'js/roman-roads.js?v=20261015-roman-roads',
   'js/roman-roads-worker.js?v=20261015-roman-roads',
   /* LiDAR in the 3D view: the focus dialog, the prefetch and the entry gate. */
+  'js/lidar-3d-focus.js?v=20261019-lidar-depth',
   'js/lidar-3d-focus.js?v=20261019-lidar-1km',
   'js/lidar-3d-focus.js?v=20261017-lidar-3d-entry-handover',
   'js/lidar-3d-focus.js',
@@ -648,7 +660,7 @@ const PRECACHE_URLS = [
   'js/map3d-mirror.js?v=20261013-3d-mobile',
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
-  'js/map3d-terrain.js?v=20261017-archeo-3d-projection',
+  'js/map3d-terrain.js?v=20261019-lidar-depth',
   'js/map3d-terrain.js?v=20261017-archeo-3d-projection',
   'js/map3d-terrain.js?v=20261014-lidar-3d-focus',
   'js/map3d-terrain.js?v=20261014-3d-clean-controls',
@@ -663,6 +675,7 @@ const PRECACHE_URLS = [
   'js/maplibre-gl.js?v=20261019-tile-order',
   'js/maplibre-gl.js',
   'css/maplibre-gl.css?v=20261013-3d-terrain',
+  'css/map3d-terrain.css?v=20261019-lidar-depth',
   'css/map3d-terrain.css?v=20261017-lidar-3d-entry-handover',
   'css/map3d-terrain.css?v=20261014-lidar-3d-focus',
   'css/map3d-terrain.css?v=20261014-3d-clean-controls',

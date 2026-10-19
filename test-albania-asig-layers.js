@@ -395,7 +395,7 @@ const EXPECTED_LAYERS = {
     ok('css/styles.css carries the row styles');
 
     const sw = read('sw.js');
-    assert.ok(sw.indexOf('detectlab-v229-lidar-1km') !== -1, 'the cache is bumped');
+    assert.ok(sw.indexOf('detectlab-v230-lidar-depth') !== -1, 'the cache is bumped');
     assert.ok(sw.indexOf("js/asig-albania-layers.config.js?v=20261017-albania-asig") !== -1 &&
         sw.indexOf("js/asig-albania-layers.js?v=20261017-albania-asig") !== -1,
         'both modules are precached');

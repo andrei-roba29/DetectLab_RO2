@@ -48,10 +48,10 @@ const viewerSource = read('js/map3d-terrain.js');
 const focusSource = read('js/lidar-3d-focus.js');
 
 /* Every build that changes the LiDAR 3D focus path bumps its own tag. */
-const TAG = '20261019-lidar-1km';
+const TAG = '20261019-lidar-depth';
 const TAG_MIRROR = '20261017-archeo-3d-projection';
-const TAG_VIEWER = '20261017-archeo-3d-projection';
-const TAG_CSS = '20261017-lidar-3d-entry-handover';
+const TAG_VIEWER = '20261019-lidar-depth';
+const TAG_CSS = '20261019-lidar-depth';
 
 /* One real event-loop turn: the viewer runs its entry gate through a promise,
  * so the dialog is not in the DOM in the same tick as open(). */
@@ -479,7 +479,19 @@ let FocusApi = null;
     }), 'and inside every zoom level it is ordered centre-first, so a trimmed download starts where the user looks');
     assert(plan.tiles.every((tile) => Disc.touchesTile(plan.disc, tile.z, tile.x, tile.y)),
         'every planned tile really intersects the disc (the rectangle is not the disc)');
-    assert(plan.trimmed === 0 && plan.count < plan.budget, 'a 10 km disc fits the budget');
+    /* Complete levels only: a level is planned whole or not at all, so a
+     * disc never has a hole at the rim at a zoom it claims to have prepared. */
+    assert(plan.levels.every(function (level) {
+        const expected = Disc.tileWindow(plan.disc, level.z);
+        let touching = 0;
+        for (let x = expected.x0; x <= expected.x1; x += 1) {
+            for (let y = expected.y0; y <= expected.y1; y += 1) {
+                if (Disc.touchesTile(plan.disc, level.z, x, y)) touching += 1;
+            }
+        }
+        return level.count === touching;
+    }), 'every planned level is complete over the whole disc (no hole in the rim)');
+    assert(plan.count <= plan.budget, 'a 10 km disc fits the budget');
     assert(plan.bytes === plan.count * 48 * 1024, 'the size estimate is the tile count × the assumption');
 
     const small = FocusApi.plan(
@@ -494,8 +506,14 @@ let FocusApi = null;
         { lat: 45.5, lng: 25.0, radiusKm: 10 },
         { minZoom: 0, maxZoom: 16, tileSize: 256, budget: 40, viewport: { width: 1280, height: 800 } }
     );
-    assert(trimmed.count === 40 && trimmed.trimmed > 0,
-        'a disc bigger than the budget is trimmed, and says by how much');
+    assert(trimmed.count <= 40 && trimmed.count > 0 && trimmed.trimmed > 0,
+        'a disc bigger than the budget stops at the last whole level and says what it left (' +
+        trimmed.count + ' kept, ' + trimmed.trimmed + ' not bought)');
+    assert(trimmed.zoomTo === trimmed.levels[trimmed.levels.length - 1].z,
+        'the reported ceiling is the deepest level actually prepared (z' + trimmed.zoomTo + ')');
+    assert(trimmed.levels.every(function (level, at, all) {
+        return at === 0 || all[at - 1].z < level.z;
+    }), 'the levels are still a walk from wide to detailed');
     const keptByLevel = {};
     trimmed.tiles.forEach(function (tile) {
         keptByLevel[tile.z] = keptByLevel[tile.z] || [];
@@ -503,7 +521,46 @@ let FocusApi = null;
     });
     assert(Object.keys(keptByLevel).every(function (z) {
         return keptByLevel[z].every(function (value, at, all) { return at === 0 || all[at - 1] <= value + 1e-6; });
-    }), 'the tiles kept are the ones nearest the centre');
+    }), 'and inside every level the tiles are still centre-first');
+
+    /* ── THE MOBILE REGRESSION (2026-10-19) ───────────────────────────────
+     * A phone frames the same disc one zoom level wider than a desktop, so
+     * its zFit is one lower. The plan used to stop two levels above zFit:
+     * a 1 km disc was prepared to z16 on a phone and z17 on a desktop (50
+     * vs 140 tiles), and pinching to z17 on the phone left the prefetch —
+     * every tile became a live per-tile fetch racing MapLibre's
+     * cancel-while-zooming, and the LiDAR vanished under the base map.
+     * The plan must reach the layer's native maximum on both devices. */
+    const phonePlan = FocusApi.plan(
+        { lat: 45.5, lng: 25.0, radiusKm: 1 },
+        { minZoom: 0, maxZoom: 17, tileSize: 256, viewport: { width: 390, height: 844 } }
+    );
+    const deskPlan = FocusApi.plan(
+        { lat: 45.5, lng: 25.0, radiusKm: 1 },
+        { minZoom: 0, maxZoom: 17, tileSize: 256, viewport: { width: 1280, height: 800 } }
+    );
+    assert(deskPlan.zFit === phonePlan.zFit + 1,
+        'a phone frames the disc one level wider (zFit ' + phonePlan.zFit + ' vs ' + deskPlan.zFit + ')');
+    assert(phonePlan.zoomTo === 17 && deskPlan.zoomTo === 17,
+        'but both prepare up to the layer native maximum (z' + phonePlan.zoomTo + ' / ' + deskPlan.zoomTo + ')');
+    assert(phonePlan.count >= 120,
+        'so the phone prepares the desktop-sized set, not a third of it (' +
+        phonePlan.count + ' vs ' + deskPlan.count + ' tiles)');
+    assert(Math.abs(phonePlan.count - deskPlan.count) <= 8,
+        'and the two devices are within one rim level of each other');
+    assert(phonePlan.levels[phonePlan.levels.length - 1].z === 17 && phonePlan.trimmed === 0,
+        'with the whole z17 level in it — the zoom the report pinched into');
+
+    /* Deeper pyramids stop at the last level the budget holds, whole. */
+    const deepPlan = FocusApi.plan(
+        { lat: 45.5, lng: 25.0, radiusKm: 1 },
+        { minZoom: 0, maxZoom: 18, tileSize: 256, viewport: { width: 390, height: 844 } }
+    );
+    assert(deepPlan.zoomTo === 17 && deepPlan.trimmed > 0,
+        'a z18 pyramid stops at the deepest whole level the budget holds (z' + deepPlan.zoomTo +
+        ', ' + deepPlan.trimmed + ' tiles not bought)');
+    assert(deepPlan.levels.every(function (level) { return level.count > 0; }),
+        'and it never reports a level it only half prepared');
 
     /* The entry rule: ONE disc, 1 km, whatever the dialog is told. A bigger
      * disc is not offered because the plan's level of detail is anchored on
@@ -1102,6 +1159,25 @@ function runViewerSuite() {
             }
             assert(fetchCount === 0, 'and the opened view downloads nothing for the disc');
 
+            /* THE ZOOM CEILING. The prepared plan says how deep the disc is
+             * ready; the raster source may not ask for more. Without this the
+             * source kept the layer's native maximum, a pinch past the plan
+             * asked dl2d:// for tiles nobody had downloaded, and on a phone
+             * that live fetch raced the pinch — the LiDAR vanished and the
+             * base map showed through. Capped, MapLibre overzooms instead. */
+            assert(lidarSource.maxzoom === 13,
+                'the focused source stops at the deepest prepared zoom (z' + lidarSource.maxzoom + ')');
+            viewer.setLidarFocus(Object.assign({}, focusNow, {
+                plan: { zoomFrom: 13, zoomTo: 12, count: 40, route: 'url' }
+            }));
+            const cappedSource = fakeSources['m3d-2d-2d.R1-src'];
+            assert(cappedSource && cappedSource.maxzoom === 12,
+                'a plan that stops at z12 caps the source there, so a deeper pinch overzooms the disc');
+            viewer.setLidarFocus(focusNow);
+            const restoredSource = fakeSources['m3d-2d-2d.R1-src'];
+            assert(restoredSource && restoredSource.maxzoom === 13,
+                'and pointing it back at the full plan restores the ceiling');
+
             viewer.close();
             assert(viewer.isOpen() === false, 'closing returns to the 2D map');
             doc.createElement = realCreateElement;
@@ -1446,6 +1522,9 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
     const result = await promise;
     assert(result && result.cancelled === false, 'the dialog resolves with the prepared focus');
     assert(result.focus && result.focus.key === '2d.R1', 'carrying the chosen layer and disc');
+    assert(result.focus.plan && result.focus.plan.zoomTo === ready.zoomTo,
+        'and the prepared ceiling (z' + (result.focus.plan && result.focus.plan.zoomTo) +
+        ') the 3D source must not ask past');
     assert(result.focus.preparedTiles === ready.count && result.focus.failedTiles === 0,
         'the focus remembers how many tiles it prepared and how many failed');
     assert(result.report && result.report.prepared === result.report.total && result.report.failed === 0,

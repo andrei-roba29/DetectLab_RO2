@@ -39,7 +39,7 @@ assert.doesNotMatch(styles, /atlas-primary|atlas-view|legacy-map-tab|atlas-mode-
  * drapes the historical layers over a DEM; see MAP_3D_TERRAIN.md. */
 assert.doesNotMatch(index, /leaflet-maplibre-gl|globe-base-layer/,
     'the retired MapLibre globe basemap is not loaded by the shell');
-assert(index.includes('js/map3d-terrain.js?v=20261017-archeo-3d-projection') &&
+assert(index.includes('js/map3d-terrain.js?v=20261019-lidar-depth') &&
        index.includes('js/layer-registry.js?v=20261017-albania-asig') &&
        index.includes('js/map3d-mirror.js?v=20261017-archeo-3d-projection'),
     'the 3D terrain viewer, its shared layer registry and the 2D→3D mirror are loaded');
@@ -145,7 +145,7 @@ assert(cacheVersion >= 187, 'the PWA shell version was bumped to v187 for the fl
 ].forEach((asset) => assert(sw.includes("'" + asset + "'"), 'PWA precaches ' + asset));
 assert.doesNotMatch(sw, /'js\/(?:leaflet-maplibre-gl|globe-base-layer)\.js/, 'PWA does not precache the retired globe modules');
 assert(sw.includes("'js/maplibre-gl.js?v=20261019-tile-order'") &&
-       sw.includes("'js/map3d-terrain.js?v=20261017-archeo-3d-projection'") &&
+       sw.includes("'js/map3d-terrain.js?v=20261019-lidar-depth'") &&
        sw.includes("'js/map3d-mirror.js?v=20261017-archeo-3d-projection'"),
     'PWA precaches the vendored 3D SDK and the terrain viewer');
 
