@@ -890,6 +890,17 @@ section('End-to-end analysis (runReport)');
     check('labels read "Result n/3" + score %',
         circles[0].tooltip.indexOf('Result 1/3') !== -1 && circles[2].tooltip.indexOf('Result 3/3') !== -1,
         circles[0].tooltip + ' || ' + circles[2].tooltip);
+    check('2D result circles are marked _dl3dSkip for 3D', circles.every(c => c._dl3dSkip === true));
+    check('result group exposes _dl3dFeatures() for 3D projection', !!(rendered && typeof rendered._dl3dFeatures === 'function'));
+    const virt3d = rendered && rendered._dl3dFeatures ? rendered._dl3dFeatures() : null;
+    const feats3d = (virt3d && virt3d.geojson && virt3d.geojson.features) || [];
+    const rings3d = feats3d.filter(f => f.geometry.type === 'Polygon' && f.properties.kind === 'result-ring');
+    const pts3d = feats3d.filter(f => f.geometry.type === 'Point' && f.properties.kind === 'result-point');
+    check('3D projection emits 3 ground polygon rings (180 m)', rings3d.length === 3 && rings3d.every(f => f.geometry.coordinates[0].length === 33 && f.properties.radiusM === CFG.RESULT_RADIUS_M), rings3d.length);
+    check('3D projection emits 3 result points with labels and popups',
+        pts3d.length === 3 && pts3d.every(f => f.properties.popup && f.properties.label && f.properties.label.indexOf('Result ') !== -1), pts3d.length);
+    check('3D result rings and points are clickable (popups bound)',
+        rings3d.every(f => !!f.properties.popup) && pts3d.every(f => !!f.properties.popup));
     check('results stay visible until the user opts out', fakeMap.hasLayer(rendered));
     const showBox = domNodes['archReportResultsToggle'];
     check('the "show results" checkbox has a change handler registered', !!(showBox._handlers.change || []).length);

@@ -404,6 +404,23 @@ function assert(cond, msg) {
     await new Promise(res => setTimeout(res, 20));
     assert(!tipEl.classList.contains('visible'), 'blur hides the bubble');
 
+    console.log('8b) 3D terrain projection (_dl3dFeatures + _dl3dSkip + click popups):');
+    assert(window._battlesGroup && typeof window._battlesGroup._dl3dFeatures === 'function',
+        '_battlesGroup exposes _dl3dFeatures() for the 3D mirror');
+    assert(circles.every(c => c._dl3dSkip === true), '2D battle circles are marked _dl3dSkip');
+    assert(markers.every(m => m._dl3dSkip === true), '2D battle label markers are marked _dl3dSkip');
+    const virt20 = window._battlesGroup._dl3dFeatures();
+    assert(virt20 && virt20.geojson && Array.isArray(virt20.geojson.features),
+        '_dl3dFeatures() returns a GeoJSON FeatureCollection');
+    const polys20 = virt20.geojson.features.filter(f => f.geometry && f.geometry.type === 'Polygon');
+    const labels20 = virt20.geojson.features.filter(f => f.geometry && f.geometry.type === 'Point');
+    assert(polys20.length === 26, 'century XX emits 26 ground polygons in 3D, got ' + polys20.length);
+    assert(labels20.length === 26, 'century XX emits 26 label points in 3D, got ' + labels20.length);
+    assert(polys20.every(f => f.geometry.coordinates[0].length === 33 && f.properties.popup && f.properties.popup.includes('battles-popup-inner')),
+        'every 3D battle polygon is a 32-segment closed ring with its popup HTML');
+    assert(labels20.every(f => f.properties.noDot === 1 && f.properties.label && f.properties.popup && f.properties.popup.includes('battles-popup-inner')),
+        'every 3D battle label point carries its title and popup HTML');
+
     console.log('9) Toggle off clears:');
     circles.length = 0;
     window.toggleBattlesLayer(false);

@@ -140,7 +140,8 @@
             map.getPane('pane_battles_labels').style.zIndex = 645; // etichetele, peste zone
         }
         if (!_group) {
-            _group = L.layerGroup([], { pane: 'pane_battles' });
+            _group = L.layerGroup([], { pane: 'pane_battles', name: 'Battles' });
+            own3dFeatures(_group, 'Battles', battlesFeatures3d);
             window._battlesGroup = _group;
         }
         // Etichetele sunt L.marker ancorați geografic pe marginea de sus a
@@ -421,10 +422,149 @@
     // întârzia, roti sau sări față de cerc.
     var EARTH_R = 6371000;      // L.CRS.Earth.R
     var RAD2DEG = 180 / Math.PI;
+    var CIRCLE_SEGMENTS_3D = 32;
+    var _renderSeq = 0;
 
     function circleTopLatLng(lat, lng, radiusMeters) {
         var latR = (radiusMeters / EARTH_R) * RAD2DEG;
         return L.latLng(lat + latR, lng);
+    }
+
+    // ── Proiecția 3D pe teren (MapLibre): cerc în metri → poligon pe sol ──
+    // L.circle.toGeoJSON() emite un Point, iar MapLibre interpretează raza ca
+    // pixeli de ecran. Convertim fiecare rază de bătălie (9 km / 26 km) într-un
+    // poligon geografic de 32 de segmente și atașăm popup-ul + eticheta pe
+    // fiecare feature, ca să fie proiectate pe relief și clickabile în 3D.
+    function groundRing3d(lat, lng, radiusM) {
+        var ring = [];
+        var latRad = lat * Math.PI / 180;
+        var dLat = radiusM / 111320;
+        var dLng = radiusM / (111320 * Math.max(Math.abs(Math.cos(latRad)), 0.2));
+        for (var i = 0; i < CIRCLE_SEGMENTS_3D; i++) {
+            var a = (i / CIRCLE_SEGMENTS_3D) * Math.PI * 2;
+            ring.push([lng + Math.sin(a) * dLng, lat + Math.cos(a) * dLat]);
+        }
+        ring.push(ring[0].slice());
+        return ring;
+    }
+
+    function own3dFeatures(group, name, build) {
+        if (!group) return;
+        if (typeof group.eachLayer === 'function') {
+            group.eachLayer(function (child) { child._dl3dSkip = true; });
+        } else if (typeof group.getLayers === 'function') {
+            (group.getLayers() || []).forEach(function (child) { if (child) child._dl3dSkip = true; });
+        }
+        group.options = group.options || {};
+        group.options.name = name;
+        var cache = { stamp: '', value: null };
+        group._dl3dFeatures = function () {
+            var built = build();
+            if (!built) return null;
+            if (cache.stamp === built.stamp && cache.value) return cache.value;
+            cache = { stamp: built.stamp || '', value: built };
+            return built;
+        };
+    }
+
+    function battlesFeatures3d() {
+        var events = eventsForPeriod();
+        var mapL = lang();
+        var features = [];
+        // Zonele aproximative (26 km) primele, ca razele de 9 km să se deseneze deasupra
+        var ordered = events.slice().sort(function (a, b) {
+            var ra = (a && a.zona_aprox === 1) ? 26000 : 9000;
+            var rb = (b && b.zona_aprox === 1) ? 26000 : 9000;
+            return rb - ra;
+        });
+        ordered.forEach(function (ev) {
+            if (!ev || ev.lat == null || ev.lng == null) return;
+            var isContext = ev.teritoriu !== 'da';
+            var color = epochColor(ev.secol_n);
+            var strokeColor = isContext ? '#dfe6ee' : color;
+            var radius = (ev.zona_aprox === 1) ? 26000 : 9000;
+            var txt = ev[mapL] || ev.ro || {};
+            var title = txt.titlu || '';
+            var popup = buildPopupContent(ev);
+            features.push({
+                type: 'Feature',
+                properties: {
+                    id: ev.id,
+                    kind: 'battle',
+                    color: strokeColor,
+                    fillColor: color,
+                    fillOpacity: isContext ? 0.12 : 0.30,
+                    opacity: 0.9,
+                    weight: isContext ? 1.4 : 2.2,
+                    radiusM: radius,
+                    lat: ev.lat,
+                    lng: ev.lng,
+                    title: title,
+                    label: title,
+                    popup: popup
+                },
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: [groundRing3d(ev.lat, ev.lng, radius)]
+                }
+            });
+            var top = circleTopLatLng(ev.lat, ev.lng, radius);
+            features.push({
+                type: 'Feature',
+                properties: {
+                    id: ev.id,
+                    kind: 'battle-label',
+                    color: strokeColor,
+                    fillColor: color,
+                    radius: 0,
+                    noDot: 1,
+                    title: title,
+                    label: title,
+                    tooltip: title,
+                    popup: popup
+                },
+                geometry: {
+                    type: 'Point',
+                    coordinates: [top.lng, top.lat]
+                }
+            });
+        });
+        var epochCol = epochColor(_period);
+        return {
+            geojson: { type: 'FeatureCollection', features: features },
+            paints: {
+                line: {
+                    'line-color': epochCol,
+                    'line-width': 2.2,
+                    'line-opacity': 0.9,
+                    'line-dasharray': [2, 2]
+                },
+                fill: {
+                    'line-color': epochCol,
+                    'fill-color': epochCol,
+                    'fill-opacity': 0.30
+                },
+                circle: {
+                    'circle-radius': 0,
+                    'circle-color': epochCol,
+                    'circle-stroke-color': '#ffffff',
+                    'circle-stroke-width': 0,
+                    'circle-opacity': 0
+                },
+                layout: {}
+            },
+            stamp: 'battles|' + _renderSeq + '|' + _period + '|' + mapL + '|' + events.length,
+            label: 'Battles'
+        };
+    }
+
+    function sync3dIfOpen() {
+        try {
+            var m3d = window.DetectLabMap3D;
+            if (m3d && typeof m3d.isOpen === 'function' && m3d.isOpen() && typeof m3d.syncLayers === 'function') {
+                m3d.syncLayers();
+            }
+        } catch (e) { /* ignore */ }
     }
 
     // Distanța fixă (px) dintre etichetă și contur, plus centrarea pe orizontală,
@@ -531,6 +671,8 @@
                 keyboard: false,          // ca înainte: eticheta nu e focusabilă
                 bubblingMouseEvents: false // click-ul pe etichetă nu „atinge” harta
             });
+            labelMarker._dl3dSkip = true;
+            circle._dl3dSkip = true;
             labelMarker.addTo(_group);
             _labelById[ev.id] = { el: el, marker: labelMarker, circle: circle, ev: ev };
 
@@ -539,7 +681,10 @@
             circle.addTo(_group);
         });
 
+        _renderSeq += 1;
+        own3dFeatures(_group, 'Battles', battlesFeatures3d);
         updatePanel();
+        sync3dIfOpen();
     }
 
     // Scoate etichetele de pe hartă (markerii ies din pane o dată cu iconul).
@@ -576,6 +721,7 @@
             if (_group) map.removeLayer(_group);
             removeLabels();
             _labelById = {};
+            sync3dIfOpen();
         }
     };
 
@@ -623,7 +769,9 @@
                 rec.el.title = txt.titlu;
             }
         });
+        _renderSeq += 1;
         updatePanel();
+        sync3dIfOpen();
     });
 
     // API-ul popup-ului: butonul „Detalii / Ascunde” din descriere este HTML

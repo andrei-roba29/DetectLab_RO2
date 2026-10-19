@@ -1858,6 +1858,226 @@
             '</div>';
     }
 
+    var CIRCLE_SEGMENTS_3D = 32;
+    var _renderSeq = 0;
+
+    function groundRing3d(lat, lng, radiusM) {
+        var ring = [];
+        var latRad = lat * Math.PI / 180;
+        var dLat = radiusM / 111320;
+        var dLng = radiusM / (111320 * Math.max(Math.abs(latRad ? Math.cos(latRad) : 1), 0.2));
+        for (var i = 0; i < CIRCLE_SEGMENTS_3D; i++) {
+            var a = (i / CIRCLE_SEGMENTS_3D) * Math.PI * 2;
+            ring.push([lng + Math.sin(a) * dLng, lat + Math.cos(a) * dLat]);
+        }
+        ring.push(ring[0].slice());
+        return ring;
+    }
+
+    function feature3d(geometry, properties) {
+        return { type: 'Feature', properties: properties, geometry: geometry };
+    }
+
+    function own3dFeatures(group, name, build) {
+        if (!group) return;
+        if (typeof group.eachLayer === 'function') {
+            group.eachLayer(function (child) { child._dl3dSkip = true; });
+        } else if (typeof group.getLayers === 'function') {
+            (group.getLayers() || []).forEach(function (child) { if (child) child._dl3dSkip = true; });
+        }
+        group.options = group.options || {};
+        group.options.name = name;
+        var cache = { stamp: '', value: null };
+        group._dl3dFeatures = function () {
+            var built = build();
+            if (!built) return null;
+            if (cache.stamp === built.stamp && cache.value) return cache.value;
+            cache = { stamp: built.stamp || '', value: built };
+            return built;
+        };
+    }
+
+    function sync3dIfOpen() {
+        try {
+            var m3d = window.DetectLabMap3D;
+            if (m3d && typeof m3d.isOpen === 'function' && m3d.isOpen() && typeof m3d.syncLayers === 'function') {
+                m3d.syncLayers();
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    function syncSearchCircle3dSkip() {
+        if (!_searchCircle) return;
+        var map = window._dlMap;
+        var hasVisibleResults = !!(_state.visible && _state.layerGroup &&
+            (!map || !map.hasLayer || map.hasLayer(_state.layerGroup)));
+        _searchCircle._dl3dSkip = hasVisibleResults;
+    }
+
+    function searchAreaFeatures3d() {
+        if (!_state.point || !isFinite(_state.point.lat) || !isFinite(_state.point.lng)) return null;
+        var radiusM = currentRadiusM();
+        var features = [
+            feature3d(
+                { type: 'Polygon', coordinates: [groundRing3d(_state.point.lat, _state.point.lng, radiusM)] },
+                {
+                    color: CIRCLE_STYLE_IDLE.color,
+                    fillColor: CIRCLE_STYLE_IDLE.fillColor,
+                    fillOpacity: CIRCLE_STYLE_IDLE.fillOpacity,
+                    opacity: CIRCLE_STYLE_IDLE.opacity,
+                    weight: CIRCLE_STYLE_IDLE.weight,
+                    kind: 'radius'
+                }
+            ),
+            feature3d(
+                { type: 'Point', coordinates: [_state.point.lng, _state.point.lat] },
+                {
+                    color: CIRCLE_STYLE_IDLE.color,
+                    fillColor: CIRCLE_STYLE_IDLE.fillColor,
+                    fillOpacity: 0.9,
+                    opacity: 1,
+                    radius: 4,
+                    kind: 'radius'
+                }
+            )
+        ];
+        return {
+            geojson: { type: 'FeatureCollection', features: features },
+            paints: {
+                line: {
+                    'line-color': CIRCLE_STYLE_IDLE.color,
+                    'line-width': CIRCLE_STYLE_IDLE.weight,
+                    'line-opacity': CIRCLE_STYLE_IDLE.opacity,
+                    'line-dasharray': [2, 2]
+                },
+                fill: {
+                    'line-color': CIRCLE_STYLE_IDLE.color,
+                    'fill-color': CIRCLE_STYLE_IDLE.fillColor,
+                    'fill-opacity': CIRCLE_STYLE_IDLE.fillOpacity
+                },
+                circle: {
+                    'circle-radius': 4,
+                    'circle-color': CIRCLE_STYLE_IDLE.fillColor,
+                    'circle-stroke-color': '#ffffff',
+                    'circle-stroke-width': 1.5,
+                    'circle-opacity': 0.9
+                },
+                layout: {}
+            },
+            stamp: 'arch_report_area|' + _state.point.lat.toFixed(6) + '|' + _state.point.lng.toFixed(6) + '|' + radiusM,
+            label: 'Archeological Report'
+        };
+    }
+
+    function reportResultsFeatures3d(model) {
+        if (!model) return null;
+        var features = [];
+        var center = (model.meta && model.meta.center) || _state.point;
+        var searchRadiusM = (model.meta && model.meta.radiusM) || currentRadiusM();
+        if (center && isFinite(center.lat) && isFinite(center.lng) && isFinite(searchRadiusM) && searchRadiusM > 0) {
+            features.push(feature3d(
+                { type: 'Polygon', coordinates: [groundRing3d(center.lat, center.lng, searchRadiusM)] },
+                {
+                    color: CIRCLE_STYLE_IDLE.color,
+                    fillColor: CIRCLE_STYLE_IDLE.fillColor,
+                    fillOpacity: CIRCLE_STYLE_IDLE.fillOpacity,
+                    opacity: CIRCLE_STYLE_IDLE.opacity,
+                    weight: CIRCLE_STYLE_IDLE.weight,
+                    kind: 'radius'
+                }
+            ));
+            features.push(feature3d(
+                { type: 'Point', coordinates: [center.lng, center.lat] },
+                {
+                    color: CIRCLE_STYLE_IDLE.color,
+                    fillColor: CIRCLE_STYLE_IDLE.fillColor,
+                    fillOpacity: 0.9,
+                    opacity: 1,
+                    radius: 4,
+                    kind: 'radius'
+                }
+            ));
+        }
+        var strokeColor = CONFIG.RENDER.COLOR || '#66c8ff';
+        var fillColor = CONFIG.RENDER.FILL || strokeColor;
+        var ringRadiusM = CONFIG.RESULT_RADIUS_M || 180;
+        var curLang = lang();
+        (model.results || []).forEach(function (res) {
+            if (!res || !isFinite(res.lat) || !isFinite(res.lng)) return;
+            var locRes = Object.assign({}, res, {
+                label: tr('arch_report_result') + ' ' + res.index + '/' + res.total,
+                classificationLabel: tr('arch_report_class_' + res.classification)
+            });
+            var popup = resultPopupHtml(locRes);
+            var tagText = locRes.label + ' · ' + res.scorePct + '%';
+            features.push(feature3d(
+                { type: 'Polygon', coordinates: [groundRing3d(res.lat, res.lng, ringRadiusM)] },
+                {
+                    index: res.index,
+                    kind: 'result-ring',
+                    color: strokeColor,
+                    fillColor: fillColor,
+                    fillOpacity: 0.22,
+                    opacity: 0.98,
+                    weight: 2,
+                    radiusM: ringRadiusM,
+                    lat: res.lat,
+                    lng: res.lng,
+                    score: res.score,
+                    scorePct: res.scorePct,
+                    label: tagText,
+                    popup: popup
+                }
+            ));
+            features.push(feature3d(
+                { type: 'Point', coordinates: [res.lng, res.lat] },
+                {
+                    index: res.index,
+                    kind: 'result-point',
+                    color: '#ffffff',
+                    fillColor: fillColor,
+                    fillOpacity: 0.95,
+                    opacity: 1,
+                    radius: 7,
+                    lat: res.lat,
+                    lng: res.lng,
+                    score: res.score,
+                    scorePct: res.scorePct,
+                    label: tagText,
+                    tooltip: tagText,
+                    popup: popup
+                }
+            ));
+        });
+        return {
+            geojson: { type: 'FeatureCollection', features: features },
+            paints: {
+                line: {
+                    'line-color': strokeColor,
+                    'line-width': 2,
+                    'line-opacity': 0.98,
+                    'line-dasharray': [2, 2]
+                },
+                fill: {
+                    'line-color': strokeColor,
+                    'fill-color': fillColor,
+                    'fill-opacity': 0.22
+                },
+                circle: {
+                    'circle-radius': 7,
+                    'circle-color': fillColor,
+                    'circle-stroke-color': '#ffffff',
+                    'circle-stroke-width': 2,
+                    'circle-stroke-opacity': 1,
+                    'circle-opacity': 0.95
+                },
+                layout: {}
+            },
+            stamp: 'arch_report|' + _renderSeq + '|' + curLang + '|' + ((model.results && model.results.length) || 0),
+            label: 'Archeological Report'
+        };
+    }
+
     function pctComp(v) {
         return (v === null || v === undefined) ? '—' : Math.round(v * 100) + '%';
     }
@@ -1868,6 +2088,8 @@
         _state.layerGroup = null;
         _state.results = [];
         _state.model = null;
+        syncSearchCircle3dSkip();
+        sync3dIfOpen();
     }
 
     function renderResults(model) {
@@ -1889,6 +2111,7 @@
                 fillColor: CONFIG.RENDER.FILL || CONFIG.RENDER.COLOR,
                 fillOpacity: 0.11, opacity: 0.98, interactive: true
             }, CONFIG.RENDER.PANE_SHAPES));
+            ring._dl3dSkip = true;
             ring.bindPopup(resultPopupHtml(res), { className: 'arch-report-popup', maxWidth: 320 });
             ring.bindTooltip(
                 '<span class="arch-report-tag"><b>' + esc(res.label) + '</b><br>' + res.scorePct + '%</span>',
@@ -1907,8 +2130,14 @@
             group.addLayer(ring);
         });
 
+        _renderSeq += 1;
+        own3dFeatures(group, 'Archeological Report', function () {
+            return reportResultsFeatures3d(model);
+        });
         if (_state.visible) group.addTo(map);
+        syncSearchCircle3dSkip();
         updateUi();
+        sync3dIfOpen();
     }
 
     function toggleResults(on) {
@@ -1917,6 +2146,8 @@
         if (!map || !_state.layerGroup) return;
         if (_state.visible) { if (!map.hasLayer(_state.layerGroup)) _state.layerGroup.addTo(map); }
         else if (map.hasLayer(_state.layerGroup)) map.removeLayer(_state.layerGroup);
+        syncSearchCircle3dSkip();
+        sync3dIfOpen();
     }
 
     function updateUi() {
@@ -2433,6 +2664,7 @@
         var map = window._dlMap;
         if (!_circleRenderer && map && typeof L !== 'undefined' && L.canvas) {
             _circleRenderer = L.canvas(assignPane({ padding: 0.3 }, CONFIG.RENDER.PANE_SHAPES));
+            _circleRenderer._dl3dSkip = true;
         }
         return _circleRenderer;
     }
@@ -2445,6 +2677,8 @@
             _searchCircle.setLatLng(latlng);
             _searchCircle.setRadius(radius);
             if (_searchCircle.setStyle) _searchCircle.setStyle(CIRCLE_STYLE_IDLE);
+            syncSearchCircle3dSkip();
+            sync3dIfOpen();
             return;
         }
         if (_searchCircle && map.removeLayer) map.removeLayer(_searchCircle);
@@ -2463,8 +2697,11 @@
         var renderer = circleRendererOption();
         if (renderer) circleOptions.renderer = renderer;
         _searchCircle = L.circle(latlng, circleOptions);
+        own3dFeatures(_searchCircle, 'Archeological Report', searchAreaFeatures3d);
+        syncSearchCircle3dSkip();
         if (_searchCircle.addTo) _searchCircle.addTo(map);
         else if (map.addLayer) map.addLayer(_searchCircle);
+        sync3dIfOpen();
     }
 
     function clearSearchCircle() {
@@ -2485,6 +2722,7 @@
             iconAnchor: [13, 13]
         });
         _pointMarker = L.marker(latlng, assignPane({ icon: icon, zIndexOffset: 2100, interactive: false }, CONFIG.RENDER.PANE_TAGS));
+        _pointMarker._dl3dSkip = true;
         _pointMarker.addTo(map);
         _pointMarker.bindTooltip(
             '<span class="arch-report-tag"><b>' + esc(tr('arch_report_point_title')) + '</b><br>' +
@@ -2764,6 +3002,10 @@
         resultPolygon: resultPolygon,
         polygonLatLngToLocal: polygonLatLngToLocal,
         resultPopupHtml: resultPopupHtml,
+        groundRing3d: groundRing3d,
+        reportResultsFeatures3d: reportResultsFeatures3d,
+        searchAreaFeatures3d: searchAreaFeatures3d,
+        renderResults: renderResults,
         captureFigure: captureFigure,
         captureFigures: captureFigures,
         makeProjector: makeProjector,
