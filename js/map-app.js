@@ -13862,6 +13862,15 @@
                         try { albaniaLayers.filterForCountry(iso); } catch (e) {}
                     }
 
+                    // The Finnish rows (js/finland-layers.js) are generated from
+                    // js/finland-layers.config.js, so they are not in `layerDefs`
+                    // above; the module applies the same country rule to its own
+                    // group row and sub-rows.
+                    var finlandLayers = window.FinlandLayers;
+                    if (finlandLayers && typeof finlandLayers.filterForCountry === 'function') {
+                        try { finlandLayers.filterForCountry(iso); } catch (e) {}
+                    }
+
                     var euCatalog = window.DetectLabEuMaps;
                     if (euCatalog && typeof euCatalog.filterForCountry === 'function') {
                         var countryExtent = null;
@@ -13916,6 +13925,10 @@
                     if (window.AsigAlbaniaLayers &&
                         typeof window.AsigAlbaniaLayers.filterForCountry === 'function') {
                         try { window.AsigAlbaniaLayers.filterForCountry(null); } catch (e) {}
+                    }
+                    if (window.FinlandLayers &&
+                        typeof window.FinlandLayers.filterForCountry === 'function') {
+                        try { window.FinlandLayers.filterForCountry(null); } catch (e) {}
                     }
                     layerDefs.concat(internationalLayerDefs).forEach(function (def) {
                         var row = null;

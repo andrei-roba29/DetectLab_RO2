@@ -253,6 +253,20 @@ node tools/sync-finland-config.mjs --check
   wrong hosts, cross-origin, missing key → the exact JSON error each time);
   upstream reachability needs a deployed run.
 
+**Panel not appearing (diagnosed 2026-10-19).** PR #308 was already merged
+(`aa45b06`, 2026-10-17) so the live HTML *does* include the Finland scripts.
+The rows still vanished after a country lock because `filterLayersForCountry`
+in `js/map-app.js` called the Danish and Albanian modules but never
+`window.FinlandLayers.filterForCountry`. Selecting Romania (or any non-FI
+country) marked every Finland row `country-layer-unavailable`; switching to
+Finland never cleared the class, and `#transpPanel.country-filter-active
+.country-layer-unavailable { display:none !important }` hid the whole group.
+Fix: wire Finland the same way as Denmark/Albania, listen for
+`detectlab:country-selected` / `detectlab:country-cleared`, bump the script
+query to `?v=20261019-finland-filter` and the PWA cache to
+`detectlab-v234-finland-filter` (the Finland JS files were also missing from
+`sw.js` PRECACHE).
+
 **Not verifiable from this sandbox** (no egress to the Finnish hosts; images
 return as opaque payloads to the page-fetcher): actually *seeing* tiles
 render. Run once in a browser over Finland:
@@ -278,7 +292,7 @@ render. Run once in a browser over Finland:
 | `js/finland-layers.js` | panel + Leaflet layers (canvas warp, MVT draw, WMS, WFS, ArcGIS, GeoJSON) |
 | `js/layer-registry.js` | mirrors `finland.*` entries + the `finland-raster` (z408) / `finland-vector` (z409) panes |
 | `js/wms-health.js` | the five Finnish hosts named for the provider-failure reporter |
-| `index.html` | the “Finland · Finnish maps” group row + script tags (`?v=20261017-finland`) |
+| `index.html` | the “Finland · Finnish maps” group row + script tags (`?v=20261019-finland-filter`) |
 | `js/translations.js` | `finland_group_title` / `finland_group_info` (en/ro/da) |
 | `css/styles.css` | `finland-*` panel + popup classes |
 | `backend/src/lib/finland-geo.mjs` | the proxy routing (allow-lists, key handling, caches) |

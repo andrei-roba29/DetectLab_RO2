@@ -5009,9 +5009,9 @@
          the pure EPSG:3067 (ETRS-TM35FIN) maths + MVT decoder both the
          registry audit and js/finland-layers.js (below, after map-app.js)
          depend on. -->
-    <script src="js/finland-tm35.js?v=20261017-finland"></script>
-    <script src="js/finland-layers.config.js?v=20261017-finland"></script>
-    <script src="js/layer-registry.js?v=20261017-finland"></script>
+    <script src="js/finland-tm35.js?v=20261019-finland-filter"></script>
+    <script src="js/finland-layers.config.js?v=20261019-finland-filter"></script>
+    <script src="js/layer-registry.js?v=20261019-finland-filter"></script>
     <!-- Roman roads („Drumuri romane”): the parser owns the record/geometry
          format, the layer paints the road network on canvas tiles, and the
          worker streams + parses the NDJSON off the main thread. map-app.js
@@ -5019,7 +5019,7 @@
          See ROMAN_ROADS_PERFORMANCE.md. -->
     <script src="js/roman-roads-parser.js?v=20261015-roman-roads"></script>
     <script src="js/roman-roads.js?v=20261015-roman-roads"></script>
-    <script src="js/map-app.js?v=20261017-finland"></script>
+    <script src="js/map-app.js?v=20261019-finland-filter"></script>
     <!-- Danish layers: panel rows, basemap-control buttons and the lazy
          Leaflet layers, all built from js/danish-layers.config.js. -->
     <script src="js/danish-layers.js?v=20261019-danish-free-groups"></script>
@@ -5030,7 +5030,7 @@
          reprojection from the ETRS-TM35FIN grid, MVT cadastral decoding,
          WMS tiles, debounced WFS, local GeoJSON — all built from
          js/finland-layers.config.js. -->
-    <script src="js/finland-layers.js?v=20261017-finland"></script>
+    <script src="js/finland-layers.js?v=20261019-finland-filter"></script>
     <script src="js/historical-eu-maps.js?v=20261013-flat-hist-maps"></script>
     <!-- 2D ⇄ 3D: MapLibre GL viewer draped over the DEM. The 3D deck is the
          mirror of the live 2D Leaflet map — raster, WMS/WMTS, image overlays,
