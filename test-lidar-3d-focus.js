@@ -11,7 +11,7 @@
 //   2. one LiDAR layer at a time. A second one on the 2D map is left out of the
 //      deck by decision, named in status().lidar — never silently dropped and
 //      never both draped;
-//   3. the disc is bounded and honest: 10 km radius maximum, a few hundred
+//   3. the disc is bounded and honest: one fixed 1 km radius, a few hundred
 //      tiles, every tile really intersecting the circle, the zoom window taken
 //      from the layer's own limits and reported;
 //   4. the tiles are prefetched through the SAME path 3D draws with (fetchTile →
@@ -33,7 +33,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-console.log('[Test] LiDAR in the 3D view — one layer, one prepared disc (10 km max)...');
+console.log('[Test] LiDAR in the 3D view — one layer, one prepared 1 km disc...');
 
 const read = function (p) { return fs.readFileSync(path.join(__dirname, p), 'utf8'); };
 
@@ -48,10 +48,10 @@ const viewerSource = read('js/map3d-terrain.js');
 const focusSource = read('js/lidar-3d-focus.js');
 
 /* Every build that changes the LiDAR 3D focus path bumps its own tag. */
-const TAG = '20261017-lidar-3d-entry-handover';
+const TAG = '20261019-lidar-depth';
 const TAG_MIRROR = '20261017-archeo-3d-projection';
-const TAG_VIEWER = '20261017-archeo-3d-projection';
-const TAG_CSS = '20261017-lidar-3d-entry-handover';
+const TAG_VIEWER = '20261019-lidar-depth';
+const TAG_CSS = '20261019-lidar-depth';
 
 /* One real event-loop turn: the viewer runs its entry gate through a promise,
  * so the dialog is not in the DOM in the same tick as open(). */
@@ -332,7 +332,8 @@ const fakeCanvas = function () {
     assert(/#map3d-focus \{[\s\S]*?z-index: 1400/.test(skin),
         'the dialog sits above the layer panel and the search bar (it decides what 3D may load)');
     ['#map3d-focus .m3d-focus-card', '#map3d-focus .m3d-focus-layers', '#map3d-focus .m3d-focus-radius',
-     '#map3d-focus .m3d-focus-chips', '#map3d-focus .m3d-focus-point-block', '#map3d-focus .m3d-focus-actions',
+     '#map3d-focus .m3d-focus-chips', '#map3d-focus .m3d-focus-fixed',
+     '#map3d-focus .m3d-focus-point-block', '#map3d-focus .m3d-focus-actions',
      '#map3d-focus .m3d-focus-progress', '#map3d-focus .m3d-focus-x', '#map3d-bar .m3d-lidar',
      '#map3d-focus .m3d-focus-mini', '#map3d-focus .m3d-focus-mini-arrow',
      '#detectlab-map.m3d-picking'].forEach(function (selector) {
@@ -478,7 +479,19 @@ let FocusApi = null;
     }), 'and inside every zoom level it is ordered centre-first, so a trimmed download starts where the user looks');
     assert(plan.tiles.every((tile) => Disc.touchesTile(plan.disc, tile.z, tile.x, tile.y)),
         'every planned tile really intersects the disc (the rectangle is not the disc)');
-    assert(plan.trimmed === 0 && plan.count < plan.budget, 'a 10 km disc fits the budget');
+    /* Complete levels only: a level is planned whole or not at all, so a
+     * disc never has a hole at the rim at a zoom it claims to have prepared. */
+    assert(plan.levels.every(function (level) {
+        const expected = Disc.tileWindow(plan.disc, level.z);
+        let touching = 0;
+        for (let x = expected.x0; x <= expected.x1; x += 1) {
+            for (let y = expected.y0; y <= expected.y1; y += 1) {
+                if (Disc.touchesTile(plan.disc, level.z, x, y)) touching += 1;
+            }
+        }
+        return level.count === touching;
+    }), 'every planned level is complete over the whole disc (no hole in the rim)');
+    assert(plan.count <= plan.budget, 'a 10 km disc fits the budget');
     assert(plan.bytes === plan.count * 48 * 1024, 'the size estimate is the tile count × the assumption');
 
     const small = FocusApi.plan(
@@ -493,8 +506,14 @@ let FocusApi = null;
         { lat: 45.5, lng: 25.0, radiusKm: 10 },
         { minZoom: 0, maxZoom: 16, tileSize: 256, budget: 40, viewport: { width: 1280, height: 800 } }
     );
-    assert(trimmed.count === 40 && trimmed.trimmed > 0,
-        'a disc bigger than the budget is trimmed, and says by how much');
+    assert(trimmed.count <= 40 && trimmed.count > 0 && trimmed.trimmed > 0,
+        'a disc bigger than the budget stops at the last whole level and says what it left (' +
+        trimmed.count + ' kept, ' + trimmed.trimmed + ' not bought)');
+    assert(trimmed.zoomTo === trimmed.levels[trimmed.levels.length - 1].z,
+        'the reported ceiling is the deepest level actually prepared (z' + trimmed.zoomTo + ')');
+    assert(trimmed.levels.every(function (level, at, all) {
+        return at === 0 || all[at - 1].z < level.z;
+    }), 'the levels are still a walk from wide to detailed');
     const keptByLevel = {};
     trimmed.tiles.forEach(function (tile) {
         keptByLevel[tile.z] = keptByLevel[tile.z] || [];
@@ -502,12 +521,66 @@ let FocusApi = null;
     });
     assert(Object.keys(keptByLevel).every(function (z) {
         return keptByLevel[z].every(function (value, at, all) { return at === 0 || all[at - 1] <= value + 1e-6; });
-    }), 'the tiles kept are the ones nearest the centre');
+    }), 'and inside every level the tiles are still centre-first');
 
-    /* The dialog cannot ask for more than the cap, whatever it is told. */
-    assert(FocusApi.MAX_RADIUS_KM === 10, 'the hard ceiling is 10 km');
-    assert(FocusApi._copy.ro.lead.indexOf('10 km') !== -1 && FocusApi._copy.en.lead.indexOf('10 km') !== -1,
-        'both copies state the 10 km limit');
+    /* ── THE MOBILE REGRESSION (2026-10-19) ───────────────────────────────
+     * A phone frames the same disc one zoom level wider than a desktop, so
+     * its zFit is one lower. The plan used to stop two levels above zFit:
+     * a 1 km disc was prepared to z16 on a phone and z17 on a desktop (50
+     * vs 140 tiles), and pinching to z17 on the phone left the prefetch —
+     * every tile became a live per-tile fetch racing MapLibre's
+     * cancel-while-zooming, and the LiDAR vanished under the base map.
+     * The plan must reach the layer's native maximum on both devices. */
+    const phonePlan = FocusApi.plan(
+        { lat: 45.5, lng: 25.0, radiusKm: 1 },
+        { minZoom: 0, maxZoom: 17, tileSize: 256, viewport: { width: 390, height: 844 } }
+    );
+    const deskPlan = FocusApi.plan(
+        { lat: 45.5, lng: 25.0, radiusKm: 1 },
+        { minZoom: 0, maxZoom: 17, tileSize: 256, viewport: { width: 1280, height: 800 } }
+    );
+    assert(deskPlan.zFit === phonePlan.zFit + 1,
+        'a phone frames the disc one level wider (zFit ' + phonePlan.zFit + ' vs ' + deskPlan.zFit + ')');
+    assert(phonePlan.zoomTo === 17 && deskPlan.zoomTo === 17,
+        'but both prepare up to the layer native maximum (z' + phonePlan.zoomTo + ' / ' + deskPlan.zoomTo + ')');
+    assert(phonePlan.count >= 120,
+        'so the phone prepares the desktop-sized set, not a third of it (' +
+        phonePlan.count + ' vs ' + deskPlan.count + ' tiles)');
+    assert(Math.abs(phonePlan.count - deskPlan.count) <= 8,
+        'and the two devices are within one rim level of each other');
+    assert(phonePlan.levels[phonePlan.levels.length - 1].z === 17 && phonePlan.trimmed === 0,
+        'with the whole z17 level in it — the zoom the report pinched into');
+
+    /* Deeper pyramids stop at the last level the budget holds, whole. */
+    const deepPlan = FocusApi.plan(
+        { lat: 45.5, lng: 25.0, radiusKm: 1 },
+        { minZoom: 0, maxZoom: 18, tileSize: 256, viewport: { width: 390, height: 844 } }
+    );
+    assert(deepPlan.zoomTo === 17 && deepPlan.trimmed > 0,
+        'a z18 pyramid stops at the deepest whole level the budget holds (z' + deepPlan.zoomTo +
+        ', ' + deepPlan.trimmed + ' tiles not bought)');
+    assert(deepPlan.levels.every(function (level) { return level.count > 0; }),
+        'and it never reports a level it only half prepared');
+
+    /* The entry rule: ONE disc, 1 km, whatever the dialog is told. A bigger
+     * disc is not offered because the plan's level of detail is anchored on
+     * the zoom that fits the disc — 5 km would prepare z14 where 1 km prepares
+     * z16, i.e. the bigger disc looked softer. */
+    assert(FocusApi.MAX_RADIUS_KM === 1, 'the shipped ceiling is one fixed 1 km disc');
+    assert(FocusApi.MIN_RADIUS_KM === 1 && FocusApi.DEFAULT_RADIUS_KM === 1,
+        'so 1 km is the only radius the entry can prepare (got ' +
+        FocusApi.MIN_RADIUS_KM + '–' + FocusApi.MAX_RADIUS_KM + ', default ' + FocusApi.DEFAULT_RADIUS_KM + ')');
+    assert(FocusApi._copy.ro.lead.indexOf('1 km') !== -1 && FocusApi._copy.en.lead.indexOf('1 km') !== -1,
+        'both copies state the 1 km radius');
+    assert(/one LiDAR layer at a time/i.test(FocusApi._copy.en.layerHint),
+        'and the layer list says 3D enters with one LiDAR layer at a time');
+    const plan5 = FocusApi.plan(
+        { lat: 45.5, lng: 25.0, radiusKm: 5 },
+        { minZoom: 0, maxZoom: 16, tileSize: 256, budget: 900, viewport: { width: 1280, height: 800 } }
+    );
+    assert(small.zFit === plan5.zFit + 2,
+        'the plane behind the old slider: 5 km would prepare two zoom levels coarser ' +
+        '(zFit ' + plan5.zFit + ' vs ' + small.zFit + ') — the “5 km looks softer” report');
     assert(FocusApi._copy.ro.progress.indexOf('{done}') !== -1 && FocusApi._copy.ro.progress.indexOf('{total}') !== -1,
         'the progress line is a template with both numbers');
     assert(FocusApi._copy.ro.lead !== FocusApi._copy.en.lead &&
@@ -812,12 +885,13 @@ function runViewerSuite() {
     /* Exactly what js/lidar-3d-focus.js hands to setLidarFocus(): the deck key
      * (what dl2d:// and the clip are addressed by) and the LiDAR family key the
      * mirror put on the item. */
+    /* The disc the entry rule prepares: 1 km (js/lidar-3d-focus.js). */
     const ro1mFocus = { key: '2d.R1', lidarKey: layers[0].lidarKey, defId: layers[0].defId,
-        label: 'Romania 1m/pixel agregare', lat: 45.5, lng: 25.0, radiusKm: 2 };
+        label: 'Romania 1m/pixel agregare', lat: 45.5, lng: 25.0, radiusKm: 1 };
     viewer.setLidarFocus(ro1mFocus);
     const applied = viewer.getLidarFocus();
-    assert(applied && applied.key === '2d.R1' && applied.mask && applied.mask.radiusKm === 2,
-        'setLidarFocus() applies the disc the user chose');
+    assert(applied && applied.key === '2d.R1' && applied.mask && applied.mask.radiusKm === 1,
+        'setLidarFocus() applies the disc the entry prepared');
     assert(Array.isArray(applied.bounds) && applied.bounds.length === 4,
         'and derives the rectangle MapLibre may ask for');
     const focusedKeep = viewer._lidarFilter();
@@ -839,21 +913,21 @@ function runViewerSuite() {
         'the tile under the centre of the disc is inside it');
     assert(viewer._focusExcludesTile('2d.A1', 10, 0, 0) === false,
         'a layer that is not focused is never clipped');
-    assert(viewer._focusSig('2d.R1').indexOf('@45.5,25,2') !== -1,
+    assert(viewer._focusSig('2d.R1').indexOf('@45.5,25,1') !== -1,
         'the focus signature pins the disc, so a moved disc cannot reuse the old tiles');
 
     /* ── 4d. Prefetch: the same path 3D draws with, and no second download ─ */
     return (async function () {
         const entry = layers.filter(function (item) { return item.key === '2d.R1'; })[0];
         const plan = focus.plan(
-            { lat: 45.5, lng: 25.0, radiusKm: 2 },
+            { lat: 45.5, lng: 25.0, radiusKm: 1 },
             { minZoom: entry.minzoom, maxZoom: entry.maxzoom, tileSize: entry.tileSize, budget: 700, viewport: { width: 1280, height: 800 } }
         );
-        assert(plan && plan.count > 0 && plan.count <= 700, 'the dialog’s plan for a 2 km disc is bounded (' + plan.count + ')');
+        assert(plan && plan.count > 0 && plan.count <= 700, 'the dialog’s plan for the 1 km disc is bounded (' + plan.count + ')');
         /* Exactly what refreshPlan() does before planEntries() is called. */
         plan.route = 'url';
         plan.layer = entry;
-        plan.focus = { key: entry.key, lidarKey: entry.lidarKey, defId: entry.defId, lat: 45.5, lng: 25.0, radiusKm: 2 };
+        plan.focus = { key: entry.key, lidarKey: entry.lidarKey, defId: entry.defId, lat: 45.5, lng: 25.0, radiusKm: 1 };
 
         const entries = focus.planEntries(plan);
         assert(entries.length === plan.count && entries.length > 0, 'the plan becomes fetch entries');
@@ -1084,6 +1158,25 @@ function runViewerSuite() {
                     ' still serves its prepared pixels');
             }
             assert(fetchCount === 0, 'and the opened view downloads nothing for the disc');
+
+            /* THE ZOOM CEILING. The prepared plan says how deep the disc is
+             * ready; the raster source may not ask for more. Without this the
+             * source kept the layer's native maximum, a pinch past the plan
+             * asked dl2d:// for tiles nobody had downloaded, and on a phone
+             * that live fetch raced the pinch — the LiDAR vanished and the
+             * base map showed through. Capped, MapLibre overzooms instead. */
+            assert(lidarSource.maxzoom === 13,
+                'the focused source stops at the deepest prepared zoom (z' + lidarSource.maxzoom + ')');
+            viewer.setLidarFocus(Object.assign({}, focusNow, {
+                plan: { zoomFrom: 13, zoomTo: 12, count: 40, route: 'url' }
+            }));
+            const cappedSource = fakeSources['m3d-2d-2d.R1-src'];
+            assert(cappedSource && cappedSource.maxzoom === 12,
+                'a plan that stops at z12 caps the source there, so a deeper pinch overzooms the disc');
+            viewer.setLidarFocus(focusNow);
+            const restoredSource = fakeSources['m3d-2d-2d.R1-src'];
+            assert(restoredSource && restoredSource.maxzoom === 13,
+                'and pointing it back at the full plan restores the ceiling');
 
             viewer.close();
             assert(viewer.isOpen() === false, 'closing returns to the 2D map');
@@ -1321,9 +1414,11 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
     const title = node.querySelector('#m3d-focus-title').textContent;
     assert(/LiDAR/.test(title), 'the dialog is titled (' + title + ')');
     const lead = node.querySelector('.m3d-focus-lead').textContent;
-    assert(/10 km/.test(lead), 'the lead states the 10 km maximum (' + lead.slice(0, 60) + '…)');
-    assert(/(punct|point)/i.test(lead) && /(distan|distance)/i.test(lead),
-        'and asks for the point and the fetching distance');
+    assert(/1 km/.test(lead), 'the lead states the fixed 1 km radius (' + lead.slice(0, 70) + '…)');
+    assert(/(punct|point)/i.test(lead), 'and asks for the point');
+    assert(!/(distan|distance)/i.test(node.querySelector('.m3d-focus-distance-label').textContent) ||
+           /(zon|area)/i.test(node.querySelector('.m3d-focus-distance-label').textContent),
+        'there is no fetching distance to choose any more');
 
     const rows = node.querySelectorAll('.m3d-focus-layer');
     assert(rows.length === 2, 'one row per LiDAR layer on the 2D map (' + rows.length + ')');
@@ -1332,15 +1427,20 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
     assert(radios.filter(function (input) { return input.checked; }).length === 1,
         'and exactly one is preselected');
 
-    const radius = node.querySelector('#m3d-focus-radius');
-    assert(Number(radius.getAttribute('min')) === 1 && Number(radius.getAttribute('max')) === 10,
-        'the distance slider cannot go past the 10 km the lead promises');
-    assert(/km/.test(node.querySelector('.m3d-focus-radius-val').textContent),
-        'the current distance is written next to the slider');
-    const chips = node.querySelectorAll('.m3d-focus-chips button');
-    assert(chips.length >= 3, 'quick distances are offered (' + chips.length + ')');
-    assert(chips.every(function (chip) { return Number(chip.getAttribute('data-radius')) <= 10; }),
-        'and none of them exceeds the cap either');
+    assert(node.querySelector('#m3d-focus-radius') === null,
+        'no distance slider: the entry always prepares the same disc');
+    assert(node.querySelectorAll('.m3d-focus-chips button').length === 0,
+        'and no quick distances to pick from');
+    assert(/1\s*km/.test(node.querySelector('.m3d-focus-radius-val').textContent),
+        'the area line still names the radius');
+    const fixed = node.querySelector('.m3d-focus-fixed').textContent;
+    assert(/1\s*km/.test(fixed) && /2\s*km/.test(fixed),
+        'the area block states the fixed 1 km radius, 2 km across (' + fixed.slice(0, 60) + '…)');
+    assert(focus.status().dialog.radiusKm === 1, 'the dialog state is that one radius');
+    assert(/one LiDAR layer at a time|un singur strat LiDAR/i.test(
+        node.querySelector('.m3d-focus-hintline').textContent),
+        'the layer block carries the one-layer-at-a-time message (' +
+        node.querySelector('.m3d-focus-hintline').textContent + ')');
     assert(node.querySelector('.m3d-focus-point-val').textContent.match(/[\d.]+/),
         'a default centre is offered, so the button is never dead');
     const estimate = node.querySelector('.m3d-focus-estimate').textContent;
@@ -1352,13 +1452,21 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
     assert(status.plan.prepared === status.plan.count && status.plan.pending === 0,
         'the tiles prepared in §4d are counted as already prepared (' + status.plan.prepared + '/' + status.plan.count + ')');
 
-    /* Changing the distance re-plans. */
+    /* The two things the window still asks: WHICH layer, and WHERE. Choosing a
+     * layer re-plans the same 1 km disc; there is no distance to get wrong. */
     const before = focus.status().plan.count;
-    chips[0].click();
-    const after = focus.status().plan.count;
-    assert(focus.status().dialog.radiusKm === Number(chips[0].getAttribute('data-radius')),
-        'a quick distance moves the slider and the dialog state');
-    assert(after !== before, 'and re-plans the disc (' + before + ' → ' + after + ' tiles)');
+    const radios2 = node.querySelectorAll('.m3d-focus-layer input[type="radio"]');
+    const other = radios2.filter(function (input) { return !input.checked; })[0];
+    other.checked = true;
+    other.dispatch('change');
+    assert(focus.status().dialog.radiusKm === 1,
+        'choosing another layer keeps the 1 km radius');
+    assert(focus.status().plan && focus.status().plan.count > 0,
+        'and re-plans the disc for it (' + before + ' → ' + focus.status().plan.count + ' tiles)');
+    const mine = radios2.filter(function (input) { return input.value === '2d.R1'; })[0];
+    mine.checked = true;
+    mine.dispatch('change');
+    assert(focus.status().dialog.chosen === '2d.R1', 'and the chosen layer is still exactly one');
 
     /* Picking: the card steps aside and the crosshair takes over. There is no
      * banner to ask for the tap — one used to sit over the card and swallow the
@@ -1414,6 +1522,9 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
     const result = await promise;
     assert(result && result.cancelled === false, 'the dialog resolves with the prepared focus');
     assert(result.focus && result.focus.key === '2d.R1', 'carrying the chosen layer and disc');
+    assert(result.focus.plan && result.focus.plan.zoomTo === ready.zoomTo,
+        'and the prepared ceiling (z' + (result.focus.plan && result.focus.plan.zoomTo) +
+        ') the 3D source must not ask past');
     assert(result.focus.preparedTiles === ready.count && result.focus.failedTiles === 0,
         'the focus remembers how many tiles it prepared and how many failed');
     assert(result.report && result.report.prepared === result.report.total && result.report.failed === 0,
@@ -1424,8 +1535,8 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
         'and every tile of it is kept in memory for the 3D view');
     assert(viewer.getLidarFocus() && viewer.getLidarFocus().key === result.focus.key,
         'the viewer is now focused on that layer and disc');
-    assert(Math.abs(viewer.getLidarFocus().mask.radiusKm - result.focus.radiusKm) < 1e-9,
-        'at the distance the user chose (' + result.focus.radiusKm + ' km)');
+    assert(result.focus.radiusKm === 1 && viewer.getLidarFocus().mask.radiusKm === 1,
+        'on the fixed 1 km disc (' + result.focus.radiusKm + ' km)');
     assert(doc.body.classList.contains('m3d-focus-open') === false,
         'the body marker goes with the card once the disc is ready');
     /* …and the window itself does not vanish: fetched and on its way into

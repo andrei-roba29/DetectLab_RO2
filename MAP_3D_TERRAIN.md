@@ -21,9 +21,9 @@ map: a MapLibre GL JS view in which every layer that is switched on in the 2D pa
 3D surface is simply drawn on top of it, and closing 3D removes it again.
 
 * **Toggle** – the “3D” button, or `window.DetectLabMap3D.toggle()`. With a **LiDAR**
-  layer switched on, the button first asks *which* layer, *where* and *how far* — LiDAR in
-  3D is limited to a **10 km radius per load** and one layer at a time, and the tiles of
-  that disc are downloaded and draped before the view opens (§6.4).
+  layer switched on, the button first asks *which* layer and *where* — LiDAR in 3D enters
+  on **one fixed 1 km disc** (≈2 km across), one layer at a time, and the tiles of that
+  disc are downloaded and draped before the view opens (§6.4).
 * **Camera** – opening 3D keeps the 2D centre/zoom (and Leaflet's bearing, if the
   rotation control was used); closing 3D writes the 3D camera back into Leaflet.
 * **Layers** – the *same* checkboxes decide what 3D draws. Switch a historical map on in
@@ -394,12 +394,24 @@ order of events. It installs itself as the viewer's **entry gate**
 (`DetectLabMap3D.setEntryGate`); the 3D button still calls `toggle()`/`open()`, but `open()`
 now asks the gate first and only opens when it is answered with a prepared disc:
 
-1. **The limit is stated, not implied.** A sheet over the 2D map says LiDAR in 3D loads at
-   most a **10 km radius at a time**, and asks for the point and the distance. The slider
-   is 1–10 km with 1/2/5/10 quick chips; nothing in the dialog, the plan or the viewer can
-   exceed `MAX_RADIUS_KM = 10`.
-2. **One LiDAR layer at a time.** The dialog lists every LiDAR layer the 2D map is
-   showing, as a radio group. The 2D map may stack as many as it likes (that is how the
+1. **One fixed disc, stated, not implied.** A sheet over the 2D map says LiDAR in 3D loads
+   on a **1 km radius** around a point, and asks for the point. There is no distance
+   slider and no quick chips: every entry prepares the same disc
+   (`MAX_RADIUS_KM = MIN_RADIUS_KM = DEFAULT_RADIUS_KM = 1`; `applyFocus()` clamps any
+   other caller, so an old saved focus cannot slip a bigger disc in).
+   **Why the distance choice went away** — the plan's zoom window is anchored on
+   `round(fitZoom(disc))`, the zoom at which the whole disc fills the screen, and that
+   zoom falls by one level for every doubling of the radius. A 5 km disc was therefore
+   prepared from levels two steps coarser than a 1 km disc (zFit 12 vs 14 on a phone),
+   so the larger disc looked soft — and its tile count jumped with the rounding (67 at
+   5 km, 50 at 1 km, 22 at 3 km on the same viewport), which is the “65 tiles at 5 km,
+   double that at 1–2 km, and sharper” report. At a fixed 1 km the opening view is always
+   prepared at the layer's native detail. `window.DETECTLAB_LIDAR_3D.maxRadiusKm > 1`
+   still raises the cap (and brings the slider back) for anyone who wants it.
+2. **One LiDAR layer at a time** — stated in the dialog exactly as the rule reads:
+   *“You can enter the 3D view with only one LiDAR layer at a time. The others stay on the
+   2D map.”* (`RO: „În vederea 3D poți intra cu un singur strat LiDAR o dată.”`). The
+   dialog lists every LiDAR layer the 2D map is showing, as a radio group. The 2D map may stack as many as it likes (that is how the
    products are compared); the 3D deck keeps exactly one, `status().lidar.drawn` names it
    and `status().lidar.notes` carries `{reason: 'focused', count, kept}` for the ones left
    out — the bar then adds “One LiDAR layer in 3D” so “my other layer is missing in 3D” is
@@ -411,11 +423,25 @@ now asks the gate first and only opens when it is answered with a prepared disc:
    `pane_lidar_3d_focus` (z 656, above every LiDAR pane), so the area being prepared is
    visible while it downloads.
 4. **The plan.** `planDisc()` resolves the zoom at which the disc fills the viewport
-   (`zFit`), takes one level below and two above it, clips that window to the layer's own
-   `minZoom`/`maxNativeZoom`, keeps only the tiles that really intersect the disc and stops
-   at a budget (`{url: 700, canvas: 260}`, `window.DETECTLAB_LIDAR_3D` overrides). Tiles are
-   ordered **centre-first**, and what the budget had to drop is reported (`plan.trimmed`),
-   never silently lost.
+   (`zFit`) and walks **whole zoom levels from `zFit - 2` to the layer's native
+   `maxNativeZoom`**, keeping only the tiles that really intersect the disc. The screen
+   decides where the camera *opens*; it does **not** decide how deep the prepared disc
+   goes. This is the mobile lesson of 2026-10-19: a phone frames the same disc one level
+   wider than a desktop, so the old fixed “two levels above `zFit`” stopped at z16 where a
+   desktop reached z17 — a 1 km disc had 50 prepared tiles on a phone and 140 on a desktop,
+   and pinching past z16 dropped every tile into a live per-tile fetch that raced
+   MapLibre's cancel-while-zooming, leaving the base map under the LiDAR. Both devices now
+   prepare to the native maximum (144 vs 140 tiles on a z17 pyramid).
+   A level is included only **whole**: the plan stops before the first level that does not
+   fit the budget (`{url: 360, canvas: 260}`, `window.DETECTLAB_LIDAR_3D` overrides) and
+   reports the tiles it did not buy (`plan.trimmed`) — a half-prepared level would be a
+   hole at the rim at exactly the zoom under the camera. Inside a level, tiles stay
+   **centre-first**. The viewer caps the focused raster source's `maxzoom` at
+   `plan.zoomTo` (`renderRaster()`), so beyond it MapLibre *overzooms* the prepared tiles
+   instead of asking for tiles nobody downloaded; the same cap is applied to the
+   registry-backed country modules in `renderRegistryRaster()`. Phones also keep a
+   160-tile MapLibre tile cache (was 64) and a 1 400-entry / 48 MB primed disc (was
+   900 / 28 MB), so the deeper plan stays resident through a pinch.
 5. **The prefetch runs through the same pipeline 3D draws with.** `prefetchTiles()` calls
    the viewer's own `fetchTile()` (so the CORS/proxy decision per host — including the WMS
    `preferProxy` rule — is the same one the deck makes), then the same `blendedTile()`
@@ -597,9 +623,21 @@ cache).
   (`s-maxage ≥ 604800`), so panning an area twice costs one upstream request. If you
   later enable a CORS header on a provider, flip its `cors` field in the registry to
   `'yes'` and its tiles go direct.
+* **Tile request order** is no longer MapLibre's mixed-zoom `coveringTiles()`
+  distance (which, on a pitched/terrain view, asked for coarse tiles in the
+  distance before the ones under the camera). The vendored build carries the
+  upstream fix, so every raster source — historical WMS sheets included —
+  requests the tiles under the point of view first. The cause, the patch, the
+  cache busting and the remaining phone work (512 px WMS tiles, centre-first
+  prefetch) are in **`MAP3D_TILE_ORDER.md`**.
 
 ## 9. Verification performed / how to verify
 
+* `node test-map3d-tile-order.js` — the order MapLibre asks for tiles in: the
+  patched `coveringTiles()` key is extracted from the shipped bundle and run
+  (a near z17 tile must sort before a far z13 one, and the order must be
+  monotonic in true distance across z12–z18), plus the SDK tag and shell-cache
+  bump. See `MAP3D_TILE_ORDER.md`.
 * `node test-map3d-mobile.js` — the phone/WebGL path: device profile, constructor options,
   safe-mode retry, failures that stay visible, touch targets, the context-loss watch.
 * `node test-map3d-terrain.js` — wiring, registry integrity, “defined once” guards, a
@@ -614,8 +652,12 @@ cache).
 * `node test-lidar-3d-focus.js` — LiDAR in 3D (§6.4): the wiring (`_dlLidar` tags, the
   scanner stand-down, the version tags), the disc maths (bounds, tile windows, the
   circle-vs-rectangle classification, the feathered rim, the blank tile), the planner (a
-  10 km disc stays bounded, the zoom window respects the layer's own limits, the order is
-  centre-first at every level, trimming is reported and counted in the estimate) and the
+  disc stays bounded, the zoom window respects the layer's own limits, every level is
+  planned **whole**, the order is centre-first at every level, trimming is reported and
+  counted in the estimate, a 5 km disc really prepares two levels coarser — the reason
+  the entry is fixed at 1 km — and the **mobile depth regression**: a 390 × 844 phone and
+  a 1280 × 800 desktop prepare the same absolute zoom range to the layer's native maximum,
+  145 vs 144 tiles on a z17 pyramid, with no level left half-prepared at z18) and the
   viewer end-to-end in a headless sandbox: the mirror describes both tagged layers, the
   one-layer rule keeps exactly the focused layer and reports the rest (`focused`, `count`),
   a LiDAR layer with **no** prepared disc is draped by nobody and reported as
@@ -623,7 +665,8 @@ cache).
   own layer, a prefetch over the plan makes **one request per tile and none on a second run**,
   `isPrepared()` answers, and the entry gate is honoured (refusal keeps 3D shut, a pending
   gate is shared, an allowed gate reaches the surface). The dialog is driven through a
-  minimal DOM: the 10 km limit and the radio group, the chips re-planning the disc, the
+  minimal DOM: the fixed 1 km area (no slider, no chips), the one-layer message and the
+  radio group (choosing a layer re-plans the same 1 km disc), the
   point pick (including Escape), the progress block, the 2D disc, the two ends of the
   gate — confirm opens, cancel does not — and the bar's own two buttons: **Change the
   area** reopening the dialog in gate mode when 3D is closed (then opening the view on the

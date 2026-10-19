@@ -16,11 +16,14 @@
  *   Pressing 3D with a LiDAR layer on no longer opens 3D straight away. The
  *   viewer's entry gate (DetectLabMap3D.setEntryGate) calls the dialog below:
  *
- *     1. it explains that LiDAR in 3D is limited to a 10 km radius per load,
- *     2. it asks for ONE LiDAR layer (only one may be draped at a time),
- *     3. it asks for a point on the map and a fetching distance (1–10 km),
- *     4. it plans the tiles of that disc — a bounded zoom window around the
- *        zoom at which the whole disc fits the screen (see planDisc below),
+ *     1. it explains that LiDAR in 3D is loaded over a fixed 1 km radius,
+ *     2. it asks for ONE LiDAR layer (“You can enter the 3D view with only one
+ *        LiDAR layer at a time.” — the others stay on the 2D map),
+ *     3. it asks for a point on the map (the centre of that 1 km disc),
+ *     4. it plans the tiles of that disc — from two levels below the zoom at
+ *        which the disc fits the screen ALL THE WAY to the layer's native
+ *        maximum (see planDisc below), so a pinch into the disc never leaves
+ *        the prefetch —
  *     5. it prefetches them through the very path the 3D view uses (same proxy
  *        decision, same CSS-blend repaint, same disc clip; the viewer keeps
  *        them in memory in `state.primed`),
@@ -43,7 +46,16 @@
  *   • ONE LiDAR layer at a time in 3D. The 2D map may stack as many as it likes
  *     (that is how you compare them); the deck draws only the chosen one, and
  *     the 3D bar names both the chosen layer and what it left out.
- *   • 10 km radius maximum, 1 km minimum. The dialog cannot ask for more.
+ *   • ONE fixed radius: 1 km (≈2 km across). WHY the distance choice went away
+ *     — the plan's zoom window is anchored on `round(fitZoom(disc))`, i.e. the
+ *     zoom at which the whole disc fills the screen, and that zoom falls by one
+ *     level for every doubling of the radius. A 5 km disc was therefore
+ *     prepared from zoom levels two steps coarser than a 1 km disc (z14 vs
+ *     z16 on a phone), so the bigger the disc the softer the very same view
+ *     looked, and the tile count jumped around with the rounding. At a fixed
+ *     1 km the opening view is always prepared at the layer's native detail.
+ *     `window.DETECTLAB_LIDAR_3D.maxRadiusKm` still raises the cap (= re-enables
+ *     the distance slider) for someone who really wants a bigger disc.
  *   • The LiDAR of that layer is drawn ONLY inside the disc. Every tile is
  *     clipped to the circle in the protocol handler (js/map3d-mirror.js →
  *     disc.maskTile) and the raster source is bounded to the disc's rectangle,
@@ -54,8 +66,8 @@
  *
  * CONFIGURATION (optional, read once at start)
  *   window.DETECTLAB_LIDAR_3D = {
- *     maxRadiusKm: 10,        // the hard ceiling (and the slider's maximum)
- *     defaultRadiusKm: 5,
+ *     maxRadiusKm: 1,         // the hard ceiling; >1 brings the slider back
+ *     defaultRadiusKm: 1,
  *     budget: { url: 700, canvas: 260 },   // tiles per prefetch
  *     concurrency: 0          // 0 = the viewer's own (6 desktop / 4 phone)
  *   };
@@ -75,13 +87,27 @@
 
     if (!root || !document) return;
 
-    var VERSION = '2026-10-14-lidar-3d-focus-v1';
+    var VERSION = '2026-10-19-lidar-3d-focus-depth';
     var LIMITS = root.DETECTLAB_LIDAR_3D || {};
-    var MAX_RADIUS_KM = Math.max(1, Math.min(50, Number(LIMITS.maxRadiusKm) || 10));
+    /* One fixed disc, 1 km (§“RULES THAT HOLD EVERYWHERE”): every 3D entry is
+     * prepared at the same ground resolution, so a smaller disc can no longer
+     * look sharper than a larger one. >1 (window.DETECTLAB_LIDAR_3D) brings the
+     * distance slider back; it is not offered by default. */
+    var MAX_RADIUS_KM = Math.max(1, Math.min(50, Number(LIMITS.maxRadiusKm) || 1));
     var MIN_RADIUS_KM = 1;
-    var DEFAULT_RADIUS_KM = Math.max(MIN_RADIUS_KM, Math.min(MAX_RADIUS_KM, Number(LIMITS.defaultRadiusKm) || 5));
+    var DEFAULT_RADIUS_KM = Math.max(MIN_RADIUS_KM, Math.min(MAX_RADIUS_KM, Number(LIMITS.defaultRadiusKm) || 1));
+    var RADIUS_CHOICE = MAX_RADIUS_KM > MIN_RADIUS_KM;
+    /* The prefetch budget is now a DEPTH budget: the plan adds whole zoom
+     * levels from zFit-1 upwards and stops before the first one that would not
+     * fit, so this number decides how deep a 1 km disc is prepared.
+     *   360  → a z17 pyramid is prepared whole (144 tiles: what a desktop
+     *          prepared all along at 140), a z18 one stops at z17 and lets
+     *          MapLibre overzoom the last level — no blank rim, no 500-tile
+     *          wait on a phone, and the same plan on both devices.
+     * The old flat 700 was never reached at 1 km (the window stopped at
+     * zFit+2); it is kept for the big discs `maxRadiusKm` can still ask for. */
     var BUDGET = {
-        url: Math.max(40, Number((LIMITS.budget && LIMITS.budget.url) || 700)),
+        url: Math.max(40, Number((LIMITS.budget && LIMITS.budget.url) || 360)),
         canvas: Math.max(20, Number((LIMITS.budget && LIMITS.budget.canvas) || 260))
     };
     /* The disc's diameter, in tiles, at the zoom the planner anchors on. 3.2
@@ -100,12 +126,18 @@
     var COPY = {
         ro: {
             title: 'LiDAR în 3D',
-            lead: 'În vederea 3D, LiDAR se poate încărca doar pe o rază de maximum ' + MAX_RADIUS_KM +
-                ' km o dată. Alege un punct pe hartă și distanța de descărcare: tile-urile zonei sunt ' +
-                'descărcate și modelate pe relief înainte de a intra în 3D.',
+            lead: RADIUS_CHOICE
+                ? 'În vederea 3D poți intra cu un singur strat LiDAR o dată, pe o rază de maximum ' +
+                  MAX_RADIUS_KM + ' km în jurul unui punct ales pe hartă. Tile-urile zonei sunt ' +
+                  'descărcate și modelate pe relief înainte de a intra în 3D.'
+                : 'În vederea 3D poți intra cu un singur strat LiDAR o dată, pe o rază fixă de ' +
+                  MAX_RADIUS_KM + ' km în jurul unui punct ales pe hartă. Tile-urile zonei sunt ' +
+                  'descărcate și modelate pe relief înainte de a intra în 3D.',
             layer: 'Strat LiDAR pentru 3D',
-            layerHint: 'Un singur strat LiDAR poate fi afișat în 3D. Celelalte rămân aprinse pe harta 2D.',
-            distance: 'Distanță de descărcare (rază)',
+            layerHint: 'În vederea 3D poți intra cu un singur strat LiDAR o dată. Celelalte rămân aprinse pe harta 2D.',
+            distance: RADIUS_CHOICE ? 'Distanță de descărcare (rază)' : 'Zonă descărcată',
+            fixedRadius: 'Rază fixă: {km} km ({diameter} km diametru)',
+            fixedNote: 'Centrul se alege pe hartă; tot ce e în afara discului rămâne harta de bază.',
             km: 'km',
             point: 'Centrul zonei',
             pick: 'Alege pe hartă',
@@ -115,7 +147,7 @@
             goLive: 'Descarcă și aplică',
             estimate: '≈ {tiles} tile-uri · ~{size} MB',
             estimateCanvas: '≈ {tiles} tile-uri (desenate de stratul 2D)',
-            estimateBig: 'Peste bugetul de {budget} tile-uri: se descarcă prioritar zona din mijloc.',
+            estimateBig: 'Buget de {budget} tile-uri atins: discul este pregătit până la z{z}; la zoom mai mare tile-urile se măresc.',
             progress: 'Se descarcă tile-urile zonei… {done}/{total}',
             preparing: 'Se modelează tile-urile pe relief…',
             prepared: 'Gata: {tiles} tile-uri pregătite pentru relief.',
@@ -129,16 +161,22 @@
             expand: 'Extinde fereastra LiDAR în 3D',
             miniTiles: '{tiles} tile-uri pregătite',
             minimize: 'Minimizează',
-            cap: 'maximum ' + MAX_RADIUS_KM + ' km'
+            cap: RADIUS_CHOICE ? 'maximum ' + MAX_RADIUS_KM + ' km' : ''
         },
         en: {
             title: 'LiDAR in 3D',
-            lead: 'In the 3D view, LiDAR can only be loaded over a maximum radius of ' + MAX_RADIUS_KM +
-                ' km at a time. Choose a point on the map and a fetching distance: the tiles of that ' +
-                'area are downloaded and moulded onto the relief before 3D opens.',
+            lead: RADIUS_CHOICE
+                ? 'You can enter the 3D view with only one LiDAR layer at a time, over a radius of at ' +
+                  'most ' + MAX_RADIUS_KM + ' km around a point you choose on the map. The tiles of that ' +
+                  'area are downloaded and moulded onto the relief before 3D opens.'
+                : 'You can enter the 3D view with only one LiDAR layer at a time, over a fixed ' +
+                  MAX_RADIUS_KM + ' km radius around a point you choose on the map. The tiles of that ' +
+                  'area are downloaded and moulded onto the relief before 3D opens.',
             layer: 'LiDAR layer for 3D',
-            layerHint: 'Only one LiDAR layer can be drawn in 3D. The others stay on the 2D map.',
-            distance: 'Fetching distance (radius)',
+            layerHint: 'You can enter the 3D view with only one LiDAR layer at a time. The others stay on the 2D map.',
+            distance: RADIUS_CHOICE ? 'Fetching distance (radius)' : 'Area downloaded',
+            fixedRadius: 'Fixed radius: {km} km ({diameter} km across)',
+            fixedNote: 'Pick the centre on the map; everything outside the disc stays the base map.',
             km: 'km',
             point: 'Centre of the area',
             pick: 'Choose on the map',
@@ -148,7 +186,7 @@
             goLive: 'Fetch and apply',
             estimate: '≈ {tiles} tiles · ~{size} MB',
             estimateCanvas: '≈ {tiles} tiles (drawn by the 2D layer itself)',
-            estimateBig: 'Above the {budget}-tile budget: the tiles nearest the centre go first.',
+            estimateBig: 'Budget of {budget} tiles reached: the disc is prepared up to z{z}; deeper zoom enlarges those tiles.',
             progress: 'Downloading the tiles of the area… {done}/{total}',
             preparing: 'Moulding the tiles onto the relief…',
             prepared: 'Done: {tiles} tiles ready to drape.',
@@ -162,7 +200,7 @@
             expand: 'Expand the LiDAR in 3D window',
             miniTiles: '{tiles} tiles ready',
             minimize: 'Minimize',
-            cap: 'maximum ' + MAX_RADIUS_KM + ' km'
+            cap: RADIUS_CHOICE ? 'maximum ' + MAX_RADIUS_KM + ' km' : ''
         }
     };
 
@@ -341,10 +379,21 @@
     /**
      * The prefetch plan of one disc.
      *
-     * opts: { minZoom, maxZoom, tileSize, budget, viewport, radiusKm }
+     * opts: { minZoom, maxZoom, tileSize, budget, viewport, radiusKm,
+     *         belowLevels, aboveLevels }
      * Returns { disc, zFit, zoomFrom, zoomTo, levels, tiles, count, budget,
-     *           trimmed, bytes, window } — `tiles` is what the download loop
+     *           trimmed, partial, bytes } — `tiles` is what the download loop
      *           consumes, in the order it should be attempted (centre first).
+     *
+     * The levels run from zFit-2 up to the LAYER's native maximum (bounded by
+     * `aboveLevels`, 24 levels by default and by the budget): the screen only
+     * decides where the camera opens. A level is included only WHOLE — the
+     * plan stops before the first one the budget cannot hold and reports the
+     * tiles it did not buy (`trimmed`), because a half-prepared level is a
+     * hole at the rim at exactly the zoom the user is looking at. `zoomTo` is
+     * therefore also the source ceiling in the 3D view (see renderRaster in
+     * js/map3d-terrain.js): past it MapLibre overzooms the prepared tiles
+     * instead of asking for tiles that were never downloaded.
      */
     function planDisc(focus, options) {
         options = options || {};
@@ -354,18 +403,38 @@
         var tileSize = Number(options.tileSize) || 256;
         var minZoom = Math.max(0, Math.min(22, Number(options.minZoom) || 0));
         var maxZoom = Math.max(minZoom, Math.min(22, Number(options.maxZoom) || 20));
-        var budget = Math.max(1, Number(options.budget) || BUDGET.url);
+        /* Capped: a configured budget is a depth budget, not a licence to
+         * enumerate a national pyramid level by level (a 22-level zoom over a
+         * 10 km disc is millions of tiles). 5 000 is already far past any
+         * prefetch a device should attempt. */
+        var budget = Math.max(1, Math.min(5000, Number(options.budget) || BUDGET.url));
         var view = options.viewport || viewportSize();
 
         var fractionalFit = fitZoom(disc, view, tileSize);
         var zFit = Math.max(minZoom, Math.min(maxZoom, Math.round(fractionalFit)));
-        var zoomFrom = Math.max(minZoom, zFit - (Number(options.belowLevels) || 1));
-        var zoomTo = Math.min(maxZoom, zFit + (Number(options.aboveLevels) || 2));
+        /* Two levels BELOW the fit, not one: coarse tiles are a handful
+         * (z12 over a 1 km disc is one tile), and they are what a zoom-out —
+         * the symmetrically broken gesture — needs to stay inside the
+         * prefetch instead of falling into a live per-tile fetch. */
+        var zoomFrom = Math.max(minZoom, zFit - (options.belowLevels == null ? 2 : Number(options.belowLevels) || 0));
+        /* HOW DEEP THE PREFETCH GOES — the whole point of the 1 km disc.
+         *
+         * This used to stop two levels above zFit, where zFit is the zoom at
+         * which the disc fits the SCREEN. On a phone that is two levels below
+         * a desktop's, so a 1 km disc was prepared to z16 on a phone and z17
+         * on a desktop (50 vs 140 tiles for a z17 pyramid) — and the moment
+         * the user pinched in to z17 on the phone, every tile was outside the
+         * prefetch: MapLibre asked the live protocol handler for them, the
+         * slow per-tile fetch raced the pinch (MapLibre cancels pending tile
+         * requests while zooming), and the disc fell back to the base map.
+         * The detail ceiling is therefore the LAYER's native maximum, not the
+         * screen's: a 1 km disc at z17/z18 is a few hundred tiles and fits the
+         * budget. The screen decides where the camera opens (focusFitZoom in
+         * js/map3d-terrain.js), never how deep the prepared disc goes. */
+        var aboveLevels = options.aboveLevels == null ? 24 : Math.max(0, Number(options.aboveLevels) || 0);
+        var zoomTo = Math.min(maxZoom, zFit + aboveLevels);
 
-        var levels = [];
-        var tiles = [];
-        var trimmed = 0;
-        for (var z = zoomFrom; z <= zoomTo; z += 1) {
+        function levelTiles(z) {
             var window = M.disc.tileWindow(disc, z);
             var list = [];
             for (var x = window.x0; x <= window.x1; x += 1) {
@@ -375,21 +444,50 @@
                 }
             }
             list.sort(function (a, b) { return a.distanceM - b.distanceM; });
-            var room = budget - tiles.length;
-            if (list.length > room) {
-                trimmed += list.length - Math.max(0, room);
-                list = room > 0 ? list.slice(0, room) : [];
-            }
-            levels.push({ z: z, count: list.length, window: window });
-            tiles = tiles.concat(list);
-            if (tiles.length >= budget) break;
+            return { window: window, list: list };
         }
+
+        var levels = [];
+        var tiles = [];
+        var trimmed = 0;
+        var partial = false;
+        for (var z = zoomFrom; z <= zoomTo; z += 1) {
+            var level = levelTiles(z);
+            if (tiles.length + level.list.length > budget) {
+                /* A level that cannot be prepared WHOLE is not prepared at
+                 * all. A partially primed level is a disc with a hole in its
+                 * rim at exactly the zoom the user is looking at — and the
+                 * source is capped at the prepared ceiling, so that hole
+                 * would show the base map under the LiDAR. Stop before it and
+                 * report the tiles of THAT level as the ones the budget did
+                 * not buy; the deeper levels were never attempted (and are
+                 * not enumerated — a z22 level over a wide disc is millions
+                 * of tiles nobody would fetch). */
+                trimmed += level.list.length;
+                break;
+            }
+            levels.push({ z: z, count: level.list.length, window: level.window });
+            tiles = tiles.concat(level.list);
+        }
+        if (!levels.length) {
+            /* Not even the widest level fits: prepare its centre, and say so.
+             * (A budget this small is a deliberate override, not a device.) */
+            var first = levelTiles(zoomFrom);
+            var room = Math.max(1, budget);
+            trimmed += Math.max(0, first.list.length - room);
+            var kept = first.list.slice(0, room);
+            levels.push({ z: zoomFrom, count: kept.length, window: first.window });
+            tiles = tiles.concat(kept);
+            partial = true;
+        }
+        zoomTo = levels[levels.length - 1].z;
         return {
             disc: disc,
             zFit: zFit,
             zFitExact: Math.round(fractionalFit * 100) / 100,
             zoomFrom: zoomFrom,
             zoomTo: zoomTo,
+            partial: partial,
             viewport: view,
             tileSize: tileSize,
             levels: levels,
@@ -611,12 +709,17 @@
             '<div class="m3d-focus-layers" role="radiogroup"></div>',
             '<p class="m3d-focus-hintline"></p>',
             '</div>',
-            '<div class="m3d-focus-block">',
+            '<div class="m3d-focus-block m3d-focus-area-block">',
             '<div class="m3d-focus-label"><span class="m3d-focus-distance-label"></span>',
             '<b class="m3d-focus-radius-val"></b></div>',
-            '<input id="m3d-focus-radius" class="m3d-focus-radius" type="range" min="' + MIN_RADIUS_KM +
-            '" max="' + MAX_RADIUS_KM + '" step="1" value="' + DEFAULT_RADIUS_KM + '">',
-            '<div class="m3d-focus-chips"></div>',
+            /* The radius is fixed (1 km) by default: no slider, no chips — just
+             * the area the entry will prepare. A configured cap > 1 km brings
+             * the control back (window.DETECTLAB_LIDAR_3D.maxRadiusKm). */
+            RADIUS_CHOICE
+                ? '<input id="m3d-focus-radius" class="m3d-focus-radius" type="range" min="' + MIN_RADIUS_KM +
+                  '" max="' + MAX_RADIUS_KM + '" step="1" value="' + DEFAULT_RADIUS_KM + '">' +
+                  '<div class="m3d-focus-chips"></div>'
+                : '<p class="m3d-focus-hintline m3d-focus-fixed"></p>',
             '</div>',
             '<div class="m3d-focus-block m3d-focus-point-block">',
             '<div class="m3d-focus-label"><span class="m3d-focus-point-label"></span>',
@@ -660,6 +763,7 @@
         el.radius = node.querySelector('#m3d-focus-radius');
         el.radiusValue = node.querySelector('.m3d-focus-radius-val');
         el.chips = node.querySelector('.m3d-focus-chips');
+        el.fixed = node.querySelector('.m3d-focus-fixed');
         el.pointLabel = node.querySelector('.m3d-focus-point-label');
         el.pointValue = node.querySelector('.m3d-focus-point-val');
         el.pick = node.querySelector('.m3d-focus-pick');
@@ -675,7 +779,7 @@
         el.miniText = node.querySelector('.m3d-focus-mini-text');
         el.miniArrow = node.querySelector('.m3d-focus-mini-arrow');
 
-        el.radius.addEventListener('input', function () {
+        if (el.radius) el.radius.addEventListener('input', function () {
             var value = Math.max(MIN_RADIUS_KM, Math.min(MAX_RADIUS_KM, Number(el.radius.value) || DEFAULT_RADIUS_KM));
             dialog.radiusKm = value;
             if (discState.preview && discState.preview.setRadius) discState.preview.setRadius(value * 1000);
@@ -687,7 +791,7 @@
             refreshPlan({ restart: true });
             paintDialog();
         });
-        el.chips.addEventListener('click', function (event) {
+        if (el.chips) el.chips.addEventListener('click', function (event) {
             var button = event.target && event.target.closest ? event.target.closest('button[data-radius]') : null;
             if (!button) return;
             el.radius.value = button.getAttribute('data-radius');
@@ -723,7 +827,11 @@
         el.cancel.textContent = t('cancel');
         el.stop.textContent = t('stopNow');
         el.radiusValue.textContent = dialog.radiusKm + ' ' + t('km');
-        el.radius.value = String(dialog.radiusKm);
+        if (el.radius) el.radius.value = String(dialog.radiusKm);
+        if (el.fixed) {
+            el.fixed.textContent = t('fixedRadius', { km: dialog.radiusKm, diameter: dialog.radiusKm * 2 }) +
+                ' ' + t('fixedNote');
+        }
         el.pick.textContent = dialog.point && dialog.point.picked ? t('move') : t('pick');
         el.pointValue.textContent = dialog.point
             ? formatPoint(dialog.point.lat, dialog.point.lng)
@@ -739,7 +847,7 @@
             el['x'].title = xLabel;
         }
 
-        if (!el.chips.childNodes.length) {
+        if (el.chips && !el.chips.childNodes.length) {
             [1, 2, 5, MAX_RADIUS_KM].filter(function (value, at, all) {
                 return all.indexOf(value) === at && value >= MIN_RADIUS_KM && value <= MAX_RADIUS_KM;
             }).forEach(function (value) {
@@ -750,7 +858,7 @@
                 el.chips.appendChild(button);
             });
         }
-        Array.prototype.forEach.call(el.chips.querySelectorAll('button[data-radius]'), function (button) {
+        if (el.chips) Array.prototype.forEach.call(el.chips.querySelectorAll('button[data-radius]'), function (button) {
             var on = Number(button.getAttribute('data-radius')) === dialog.radiusKm;
             button.classList.toggle('is-on', on);
             button.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -796,7 +904,7 @@
         } else {
             lines.push(t('estimate', { tiles: plan.count, size: humanSize(plan.bytes) }));
         }
-        if (plan.trimmed > 0) lines.push(t('estimateBig', { budget: plan.budget }));
+        if (plan.trimmed > 0) lines.push(t('estimateBig', { budget: plan.budget, z: plan.zoomTo }));
         lines.push('z' + plan.zoomFrom + '–' + plan.zoomTo);
         el.estimate.textContent = lines.join(' · ');
     }
@@ -987,6 +1095,11 @@
         plan.route = route;
         plan.layer = entry;
         plan.focus = focus;
+        /* The prepared ceiling goes WITH the focus: the viewer caps the raster
+         * source at it, so MapLibre can never ask for a zoom the prefetch did
+         * not buy — it overzooms the prepared tiles instead of showing the
+         * base map while the live fetch races the pinch. */
+        focus.plan = { zoomFrom: plan.zoomFrom, zoomTo: plan.zoomTo, count: plan.count, route: route };
         dialog.plan = plan;
         var prepared = countPrepared(plan);
         plan.prepared = prepared;
@@ -1117,6 +1230,12 @@
     function applyFocus(focus) {
         var api = viewer();
         if (!api || typeof api.setLidarFocus !== 'function') return null;
+        /* Whatever asks for a disc (the dialog, a restored focus, the 3D bar),
+         * it can never ask for more than the entry rule allows. */
+        if (focus) {
+            focus.radiusKm = Math.max(MIN_RADIUS_KM, Math.min(MAX_RADIUS_KM,
+                Number(focus.radiusKm) || DEFAULT_RADIUS_KM));
+        }
         var applied = api.setLidarFocus(focus);
         drawDisc(focus, { fill: true });
         return applied;
