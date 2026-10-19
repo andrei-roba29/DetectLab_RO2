@@ -535,6 +535,20 @@ body.is-pwa.is-3d #map3d-bar {
     opacity: 0.7;
 }
 
+/* The area block when the radius is fixed (1 km, the default): the disc is a
+ * decision of the entry rule, not a setting — so it reads as a sentence, with
+ * the note about what stays outside it, instead of a slider nobody may move. */
+#map3d-focus .m3d-focus-fixed {
+    margin: 4px 0 0;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(200, 169, 110, 0.28);
+    background: rgba(200, 169, 110, 0.08);
+    font-size: 0.72rem;
+    opacity: 1;
+    line-height: 1.35;
+}
+
 #map3d-focus .m3d-focus-radius {
     width: 100%;
     height: 24px;

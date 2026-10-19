@@ -562,7 +562,21 @@
 //   js/asig-albania-layers.config.js + js/asig-albania-layers.js,
 //   re-versioned layer-registry.js, translations.js, wms-health.js,
 //   map-app.js and styles.css so an installed PWA picks them up.
-const CACHE_NAME = 'detectlab-v227-archeo-3d-projection';
+// v228: 3D tile order — MapLibre's coveringTiles() sorted a pitched/terrain
+//   view (mixed zoom levels) by a distance measured against the wrong tile
+//   grid, so tiles in the distance — sometimes outside the point of view —
+//   were requested before the ones under the camera. The vendored SDK carries
+//   the upstream fix (#8494); the bundle is re-tagged so an installed PWA
+//   replaces it. See MAP3D_TILE_ORDER.md.
+// v229: LiDAR in 3D enters on ONE fixed 1 km disc (js/lidar-3d-focus.js). The
+//   distance slider is gone from the dialog: the plan's zoom window is anchored
+//   on the zoom that fits the disc on screen, so a 5 km disc was prepared two
+//   levels coarser than a 1 km one and looked softer (and its tile count jumped
+//   with the rounding). The dialog now asks only which LiDAR layer (one at a
+//   time — “You can enter the 3D view with only one LiDAR layer at a time.”)
+//   and where. window.DETECTLAB_LIDAR_3D.maxRadiusKm > 1 still brings the
+//   slider back. See MAP_3D_TERRAIN.md §6.4.
+const CACHE_NAME = 'detectlab-v229-lidar-1km';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -604,6 +618,7 @@ const PRECACHE_URLS = [
   'js/layer-registry.js?v=20261017-albania-asig',
   'js/translations.js?v=20261017-albania-asig',
   'js/wms-health.js?v=20261017-albania-asig',
+  'js/map-app.js?v=20261017-finland',
   'js/map-app.js?v=20261017-albania-asig',
   'css/styles.css?v=20261017-albania-asig',
   'js/danish-layers.js?v=20261016-danish-wms-layers',
@@ -625,6 +640,7 @@ const PRECACHE_URLS = [
   'js/roman-roads.js?v=20261015-roman-roads',
   'js/roman-roads-worker.js?v=20261015-roman-roads',
   /* LiDAR in the 3D view: the focus dialog, the prefetch and the entry gate. */
+  'js/lidar-3d-focus.js?v=20261019-lidar-1km',
   'js/lidar-3d-focus.js?v=20261017-lidar-3d-entry-handover',
   'js/lidar-3d-focus.js',
   'js/lidar-scanner.js?v=20261014-lidar-3d-focus',
@@ -644,7 +660,7 @@ const PRECACHE_URLS = [
   'js/map3d-terrain.js?v=20261013-3d-mobile',
   'js/map3d-terrain.js?v=20261013-3d-mirror',
   'js/map3d-terrain.js',
-  'js/maplibre-gl.js?v=20261013-3d-terrain',
+  'js/maplibre-gl.js?v=20261019-tile-order',
   'js/maplibre-gl.js',
   'css/maplibre-gl.css?v=20261013-3d-terrain',
   'css/map3d-terrain.css?v=20261017-lidar-3d-entry-handover',

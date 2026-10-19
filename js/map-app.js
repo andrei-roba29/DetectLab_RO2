@@ -7221,7 +7221,7 @@
                     /* LiDAR family + human name, for the 3D focus (js/lidar-3d-focus.js)
                      * and for the mirror (js/map3d-mirror.js → item.lidarKey): the 3D
                      * view drapes ONE LiDAR layer at a time, over one prepared disc of
-                     * at most 10 km radius, and it has to be able to name the layers it
+                     * 1 km radius, and it has to be able to name the layers it
                      * may choose from. Nothing here changes how the layer draws. */
                     lidarLayer._dlLidar = { key: 'lidar.' + key, label: (cfg && cfg.label) || key };
                 }

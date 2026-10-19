@@ -59,7 +59,7 @@
          * 3D view works offline and without a third-party CDN. Point these at
          * a CDN if you prefer: { maplibre: { js: 'https://…/maplibre-gl.js' } } */
         maplibre: {
-            js: 'js/maplibre-gl.js?v=20261013-3d-terrain',
+            js: 'js/maplibre-gl.js?v=20261019-tile-order',
             css: 'css/maplibre-gl.css?v=20261013-3d-terrain',
             namespace: 'maplibregl',
             timeoutMs: 15000,

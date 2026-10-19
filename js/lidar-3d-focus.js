@@ -16,9 +16,10 @@
  *   Pressing 3D with a LiDAR layer on no longer opens 3D straight away. The
  *   viewer's entry gate (DetectLabMap3D.setEntryGate) calls the dialog below:
  *
- *     1. it explains that LiDAR in 3D is limited to a 10 km radius per load,
- *     2. it asks for ONE LiDAR layer (only one may be draped at a time),
- *     3. it asks for a point on the map and a fetching distance (1–10 km),
+ *     1. it explains that LiDAR in 3D is loaded over a fixed 1 km radius,
+ *     2. it asks for ONE LiDAR layer (“You can enter the 3D view with only one
+ *        LiDAR layer at a time.” — the others stay on the 2D map),
+ *     3. it asks for a point on the map (the centre of that 1 km disc),
  *     4. it plans the tiles of that disc — a bounded zoom window around the
  *        zoom at which the whole disc fits the screen (see planDisc below),
  *     5. it prefetches them through the very path the 3D view uses (same proxy
@@ -43,7 +44,16 @@
  *   • ONE LiDAR layer at a time in 3D. The 2D map may stack as many as it likes
  *     (that is how you compare them); the deck draws only the chosen one, and
  *     the 3D bar names both the chosen layer and what it left out.
- *   • 10 km radius maximum, 1 km minimum. The dialog cannot ask for more.
+ *   • ONE fixed radius: 1 km (≈2 km across). WHY the distance choice went away
+ *     — the plan's zoom window is anchored on `round(fitZoom(disc))`, i.e. the
+ *     zoom at which the whole disc fills the screen, and that zoom falls by one
+ *     level for every doubling of the radius. A 5 km disc was therefore
+ *     prepared from zoom levels two steps coarser than a 1 km disc (z14 vs
+ *     z16 on a phone), so the bigger the disc the softer the very same view
+ *     looked, and the tile count jumped around with the rounding. At a fixed
+ *     1 km the opening view is always prepared at the layer's native detail.
+ *     `window.DETECTLAB_LIDAR_3D.maxRadiusKm` still raises the cap (= re-enables
+ *     the distance slider) for someone who really wants a bigger disc.
  *   • The LiDAR of that layer is drawn ONLY inside the disc. Every tile is
  *     clipped to the circle in the protocol handler (js/map3d-mirror.js →
  *     disc.maskTile) and the raster source is bounded to the disc's rectangle,
@@ -54,8 +64,8 @@
  *
  * CONFIGURATION (optional, read once at start)
  *   window.DETECTLAB_LIDAR_3D = {
- *     maxRadiusKm: 10,        // the hard ceiling (and the slider's maximum)
- *     defaultRadiusKm: 5,
+ *     maxRadiusKm: 1,         // the hard ceiling; >1 brings the slider back
+ *     defaultRadiusKm: 1,
  *     budget: { url: 700, canvas: 260 },   // tiles per prefetch
  *     concurrency: 0          // 0 = the viewer's own (6 desktop / 4 phone)
  *   };
@@ -75,11 +85,16 @@
 
     if (!root || !document) return;
 
-    var VERSION = '2026-10-14-lidar-3d-focus-v1';
+    var VERSION = '2026-10-19-lidar-3d-focus-1km';
     var LIMITS = root.DETECTLAB_LIDAR_3D || {};
-    var MAX_RADIUS_KM = Math.max(1, Math.min(50, Number(LIMITS.maxRadiusKm) || 10));
+    /* One fixed disc, 1 km (§“RULES THAT HOLD EVERYWHERE”): every 3D entry is
+     * prepared at the same ground resolution, so a smaller disc can no longer
+     * look sharper than a larger one. >1 (window.DETECTLAB_LIDAR_3D) brings the
+     * distance slider back; it is not offered by default. */
+    var MAX_RADIUS_KM = Math.max(1, Math.min(50, Number(LIMITS.maxRadiusKm) || 1));
     var MIN_RADIUS_KM = 1;
-    var DEFAULT_RADIUS_KM = Math.max(MIN_RADIUS_KM, Math.min(MAX_RADIUS_KM, Number(LIMITS.defaultRadiusKm) || 5));
+    var DEFAULT_RADIUS_KM = Math.max(MIN_RADIUS_KM, Math.min(MAX_RADIUS_KM, Number(LIMITS.defaultRadiusKm) || 1));
+    var RADIUS_CHOICE = MAX_RADIUS_KM > MIN_RADIUS_KM;
     var BUDGET = {
         url: Math.max(40, Number((LIMITS.budget && LIMITS.budget.url) || 700)),
         canvas: Math.max(20, Number((LIMITS.budget && LIMITS.budget.canvas) || 260))
@@ -100,12 +115,18 @@
     var COPY = {
         ro: {
             title: 'LiDAR în 3D',
-            lead: 'În vederea 3D, LiDAR se poate încărca doar pe o rază de maximum ' + MAX_RADIUS_KM +
-                ' km o dată. Alege un punct pe hartă și distanța de descărcare: tile-urile zonei sunt ' +
-                'descărcate și modelate pe relief înainte de a intra în 3D.',
+            lead: RADIUS_CHOICE
+                ? 'În vederea 3D poți intra cu un singur strat LiDAR o dată, pe o rază de maximum ' +
+                  MAX_RADIUS_KM + ' km în jurul unui punct ales pe hartă. Tile-urile zonei sunt ' +
+                  'descărcate și modelate pe relief înainte de a intra în 3D.'
+                : 'În vederea 3D poți intra cu un singur strat LiDAR o dată, pe o rază fixă de ' +
+                  MAX_RADIUS_KM + ' km în jurul unui punct ales pe hartă. Tile-urile zonei sunt ' +
+                  'descărcate și modelate pe relief înainte de a intra în 3D.',
             layer: 'Strat LiDAR pentru 3D',
-            layerHint: 'Un singur strat LiDAR poate fi afișat în 3D. Celelalte rămân aprinse pe harta 2D.',
-            distance: 'Distanță de descărcare (rază)',
+            layerHint: 'În vederea 3D poți intra cu un singur strat LiDAR o dată. Celelalte rămân aprinse pe harta 2D.',
+            distance: RADIUS_CHOICE ? 'Distanță de descărcare (rază)' : 'Zonă descărcată',
+            fixedRadius: 'Rază fixă: {km} km ({diameter} km diametru)',
+            fixedNote: 'Centrul se alege pe hartă; tot ce e în afara discului rămâne harta de bază.',
             km: 'km',
             point: 'Centrul zonei',
             pick: 'Alege pe hartă',
@@ -129,16 +150,22 @@
             expand: 'Extinde fereastra LiDAR în 3D',
             miniTiles: '{tiles} tile-uri pregătite',
             minimize: 'Minimizează',
-            cap: 'maximum ' + MAX_RADIUS_KM + ' km'
+            cap: RADIUS_CHOICE ? 'maximum ' + MAX_RADIUS_KM + ' km' : ''
         },
         en: {
             title: 'LiDAR in 3D',
-            lead: 'In the 3D view, LiDAR can only be loaded over a maximum radius of ' + MAX_RADIUS_KM +
-                ' km at a time. Choose a point on the map and a fetching distance: the tiles of that ' +
-                'area are downloaded and moulded onto the relief before 3D opens.',
+            lead: RADIUS_CHOICE
+                ? 'You can enter the 3D view with only one LiDAR layer at a time, over a radius of at ' +
+                  'most ' + MAX_RADIUS_KM + ' km around a point you choose on the map. The tiles of that ' +
+                  'area are downloaded and moulded onto the relief before 3D opens.'
+                : 'You can enter the 3D view with only one LiDAR layer at a time, over a fixed ' +
+                  MAX_RADIUS_KM + ' km radius around a point you choose on the map. The tiles of that ' +
+                  'area are downloaded and moulded onto the relief before 3D opens.',
             layer: 'LiDAR layer for 3D',
-            layerHint: 'Only one LiDAR layer can be drawn in 3D. The others stay on the 2D map.',
-            distance: 'Fetching distance (radius)',
+            layerHint: 'You can enter the 3D view with only one LiDAR layer at a time. The others stay on the 2D map.',
+            distance: RADIUS_CHOICE ? 'Fetching distance (radius)' : 'Area downloaded',
+            fixedRadius: 'Fixed radius: {km} km ({diameter} km across)',
+            fixedNote: 'Pick the centre on the map; everything outside the disc stays the base map.',
             km: 'km',
             point: 'Centre of the area',
             pick: 'Choose on the map',
@@ -162,7 +189,7 @@
             expand: 'Expand the LiDAR in 3D window',
             miniTiles: '{tiles} tiles ready',
             minimize: 'Minimize',
-            cap: 'maximum ' + MAX_RADIUS_KM + ' km'
+            cap: RADIUS_CHOICE ? 'maximum ' + MAX_RADIUS_KM + ' km' : ''
         }
     };
 
@@ -611,12 +638,17 @@
             '<div class="m3d-focus-layers" role="radiogroup"></div>',
             '<p class="m3d-focus-hintline"></p>',
             '</div>',
-            '<div class="m3d-focus-block">',
+            '<div class="m3d-focus-block m3d-focus-area-block">',
             '<div class="m3d-focus-label"><span class="m3d-focus-distance-label"></span>',
             '<b class="m3d-focus-radius-val"></b></div>',
-            '<input id="m3d-focus-radius" class="m3d-focus-radius" type="range" min="' + MIN_RADIUS_KM +
-            '" max="' + MAX_RADIUS_KM + '" step="1" value="' + DEFAULT_RADIUS_KM + '">',
-            '<div class="m3d-focus-chips"></div>',
+            /* The radius is fixed (1 km) by default: no slider, no chips — just
+             * the area the entry will prepare. A configured cap > 1 km brings
+             * the control back (window.DETECTLAB_LIDAR_3D.maxRadiusKm). */
+            RADIUS_CHOICE
+                ? '<input id="m3d-focus-radius" class="m3d-focus-radius" type="range" min="' + MIN_RADIUS_KM +
+                  '" max="' + MAX_RADIUS_KM + '" step="1" value="' + DEFAULT_RADIUS_KM + '">' +
+                  '<div class="m3d-focus-chips"></div>'
+                : '<p class="m3d-focus-hintline m3d-focus-fixed"></p>',
             '</div>',
             '<div class="m3d-focus-block m3d-focus-point-block">',
             '<div class="m3d-focus-label"><span class="m3d-focus-point-label"></span>',
@@ -660,6 +692,7 @@
         el.radius = node.querySelector('#m3d-focus-radius');
         el.radiusValue = node.querySelector('.m3d-focus-radius-val');
         el.chips = node.querySelector('.m3d-focus-chips');
+        el.fixed = node.querySelector('.m3d-focus-fixed');
         el.pointLabel = node.querySelector('.m3d-focus-point-label');
         el.pointValue = node.querySelector('.m3d-focus-point-val');
         el.pick = node.querySelector('.m3d-focus-pick');
@@ -675,7 +708,7 @@
         el.miniText = node.querySelector('.m3d-focus-mini-text');
         el.miniArrow = node.querySelector('.m3d-focus-mini-arrow');
 
-        el.radius.addEventListener('input', function () {
+        if (el.radius) el.radius.addEventListener('input', function () {
             var value = Math.max(MIN_RADIUS_KM, Math.min(MAX_RADIUS_KM, Number(el.radius.value) || DEFAULT_RADIUS_KM));
             dialog.radiusKm = value;
             if (discState.preview && discState.preview.setRadius) discState.preview.setRadius(value * 1000);
@@ -687,7 +720,7 @@
             refreshPlan({ restart: true });
             paintDialog();
         });
-        el.chips.addEventListener('click', function (event) {
+        if (el.chips) el.chips.addEventListener('click', function (event) {
             var button = event.target && event.target.closest ? event.target.closest('button[data-radius]') : null;
             if (!button) return;
             el.radius.value = button.getAttribute('data-radius');
@@ -723,7 +756,11 @@
         el.cancel.textContent = t('cancel');
         el.stop.textContent = t('stopNow');
         el.radiusValue.textContent = dialog.radiusKm + ' ' + t('km');
-        el.radius.value = String(dialog.radiusKm);
+        if (el.radius) el.radius.value = String(dialog.radiusKm);
+        if (el.fixed) {
+            el.fixed.textContent = t('fixedRadius', { km: dialog.radiusKm, diameter: dialog.radiusKm * 2 }) +
+                ' ' + t('fixedNote');
+        }
         el.pick.textContent = dialog.point && dialog.point.picked ? t('move') : t('pick');
         el.pointValue.textContent = dialog.point
             ? formatPoint(dialog.point.lat, dialog.point.lng)
@@ -739,7 +776,7 @@
             el['x'].title = xLabel;
         }
 
-        if (!el.chips.childNodes.length) {
+        if (el.chips && !el.chips.childNodes.length) {
             [1, 2, 5, MAX_RADIUS_KM].filter(function (value, at, all) {
                 return all.indexOf(value) === at && value >= MIN_RADIUS_KM && value <= MAX_RADIUS_KM;
             }).forEach(function (value) {
@@ -750,7 +787,7 @@
                 el.chips.appendChild(button);
             });
         }
-        Array.prototype.forEach.call(el.chips.querySelectorAll('button[data-radius]'), function (button) {
+        if (el.chips) Array.prototype.forEach.call(el.chips.querySelectorAll('button[data-radius]'), function (button) {
             var on = Number(button.getAttribute('data-radius')) === dialog.radiusKm;
             button.classList.toggle('is-on', on);
             button.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -1117,6 +1154,12 @@
     function applyFocus(focus) {
         var api = viewer();
         if (!api || typeof api.setLidarFocus !== 'function') return null;
+        /* Whatever asks for a disc (the dialog, a restored focus, the 3D bar),
+         * it can never ask for more than the entry rule allows. */
+        if (focus) {
+            focus.radiusKm = Math.max(MIN_RADIUS_KM, Math.min(MAX_RADIUS_KM,
+                Number(focus.radiusKm) || DEFAULT_RADIUS_KM));
+        }
         var applied = api.setLidarFocus(focus);
         drawDisc(focus, { fill: true });
         return applied;

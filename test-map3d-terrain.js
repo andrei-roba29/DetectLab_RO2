@@ -78,7 +78,7 @@ const registrySource = read('js/layer-registry.js');
 const mirrorSource = read('js/map3d-mirror.js');
 const skin = read('css/map3d-terrain.css');
 
-const TAG = '20261013-3d-terrain';             /* MapLibre itself (unchanged) */
+const TAG = '20261019-tile-order';              /* MapLibre itself (coveringTiles patch) */
 const TAG_3D = '20261017-archeo-3d-projection';    /* mirror                        */
 const TAG_VIEWER = '20261017-archeo-3d-projection'; /* viewer (js)                  */
 const TAG_CSS = '20261017-lidar-3d-entry-handover';    /* viewer skin (css, unchanged) */

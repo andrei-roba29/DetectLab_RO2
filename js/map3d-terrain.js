@@ -525,8 +525,9 @@
      *  the same tiles are what MapLibre decodes into a texture), so opening 3D
      *  over one used to show a half-drawn sheet while a pyramid of tiles the
      *  user may never look at was being fetched. js/lidar-3d-focus.js therefore
-     *  asks for a point and a distance, downloads exactly the tiles of that
-     *  disc (bounded by the 10 km radius), and only then lets 3D open.
+     *  asks for a point, downloads exactly the tiles of that disc (one fixed
+     *  1 km radius — see MAP_3D_TERRAIN.md §6.4 for why the distance choice
+     *  went away), and only then lets 3D open.
      *
      *  What is downloaded is kept HERE, in memory, keyed by upstream URL:
      *    state.primed[url]     – what the service sent (never re-downloaded)
@@ -857,8 +858,8 @@
     /* ═══════════════════════════════════════════════════════════════════════
      *  PREFETCH — “mold the disc onto the relief before entering 3D”
      * -----------------------------------------------------------------------
-     *  js/lidar-3d-focus.js plans the tiles (which zooms, which z/x/y, bounded
-     *  by the 10 km radius) and hands the list over. Every tile goes through
+     *  js/lidar-3d-focus.js plans the tiles (which zooms, which z/x/y, inside
+     *  the 1 km entry disc) and hands the list over. Every tile goes through
      *  the SAME path the 3D view would use — fetchTile (proxy/CORS decisions
      *  included), the CSS-blend repaint, the disc clip — so nothing can be
      *  prepared one way and drawn another. What comes out is in memory

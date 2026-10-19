@@ -144,7 +144,7 @@ assert(cacheVersion >= 187, 'the PWA shell version was bumped to v187 for the fl
   'data/countries-50m.json'
 ].forEach((asset) => assert(sw.includes("'" + asset + "'"), 'PWA precaches ' + asset));
 assert.doesNotMatch(sw, /'js\/(?:leaflet-maplibre-gl|globe-base-layer)\.js/, 'PWA does not precache the retired globe modules');
-assert(sw.includes("'js/maplibre-gl.js?v=20261013-3d-terrain'") &&
+assert(sw.includes("'js/maplibre-gl.js?v=20261019-tile-order'") &&
        sw.includes("'js/map3d-terrain.js?v=20261017-archeo-3d-projection'") &&
        sw.includes("'js/map3d-mirror.js?v=20261017-archeo-3d-projection'"),
     'PWA precaches the vendored 3D SDK and the terrain viewer');
