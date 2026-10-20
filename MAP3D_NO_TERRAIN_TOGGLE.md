@@ -53,9 +53,11 @@ exactly where the report came from.
 * **Terrain stays on.** The DEM is part of the style (`style.terrain =
   { source: 'detectlab-dem', exaggeration: … }` in `buildStyle`), not something
   the control switched on. Removing the button cannot flatten the 3D view.
-* **Exaggeration stays user-controlled.** The `#map3d-exag` slider in the 3D
-  bar keeps calling `map.setTerrain({ source, exaggeration })`, and
-  `style.terrain.exaggeration` follows `state.exaggeration`.
+* **Exaggeration stays user-controlled on web.** The `#map3d-exag` slider in
+  the 3D bar keeps calling `map.setTerrain({ source, exaggeration })`, and
+  `style.terrain.exaggeration` follows `state.exaggeration`. Follow-up: the
+  installed PWA hides this slider (v243) because changing DEM exaggeration can
+  crash the app; web controls remain unchanged.
 * **A DEM that cannot load is still handled.** `terrainSource().missingKey`
   warns once and the view runs flat; the `map.on('error')` handler and the
   veil/report diagnostics are untouched.

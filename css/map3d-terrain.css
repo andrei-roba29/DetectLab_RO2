@@ -33,9 +33,10 @@ body.is-3d #detectlab-map .leaflet-pane { visibility: hidden; }
  * Leaflet pins them at z-index 1000 — above this canvas. Hidden while 3D is
  * on, so nobody clicks a button that moves a map they cannot see; MapLibre
  * contributes a compact source-credit control and the scale, both bottom-left
- * (no navigation, no terrain toggle — the app's own bar drives the 3D camera
- * and exaggeration). The live location control that the PWA appends to its own
- * stack is hidden for the same reason (it moves the 2D camera). */
+ * (no navigation or terrain toggle — the 3D bar drives the camera, non-PWA
+ * terrain exaggeration and shared basemap selection). The live location
+ * control that the PWA appends to its own stack is hidden for the same reason
+ * (it moves the 2D camera). */
 body.is-3d #detectlab-map .leaflet-control-container,
 body.is-3d #pwa-br-stack .leaflet-control { visibility: hidden; }
 
@@ -126,32 +127,32 @@ body.is-pwa.is-3d #map3d-surface {
 #map3d-veil .m3d-veil-back:hover { background: rgba(200, 169, 110, 0.26); }
 #map3d-veil .m3d-veil-back:hover { background: rgba(184, 216, 240, 0.18); }
 
-/* ── the 2D/3D switch (visible in both modes) ──────────────────────────── */
-#map3d-toggle {
+/* ── the 2D/3D switch and nearby tile refresh action ─────────────────── */
+.m3d-toggle-group {
     /* Bottom-centre, 66px up: the top corners are taken by Leaflet's
-     * zoom/locate controls (topleft) and the measure control (topright), the
-     * search bar sits at the top centre, the opacity mirror and the layer panel
-     * on the right edge, and the country “Exit view” pill occupies the very
-     * bottom centre in the locked-country view (66px clears it, and stays under
-     * the “zoom in” hint at 96px). 960 keeps it clickable above that pill (950)
-     * while everything the user must keep reaching stays at 1000+.
-     *
-     * var(--layer-dock-clearance) is the same hook the APM20 / zoom-hint pills
-     * use (css/styles.css, `body.layer-dock-open`): when an analysis layer is
-     * selected its action button is docked at bottom-centre — LIDAR Scanner
-     * Scan, Archeological Detect, Report Generate — and that dock is ~54px tall
-     * sitting on an 18px offset, i.e. it reaches up to y≈72px and, at
-     * z-index 1000 over this button's 960, it covered the top of the 3D
-     * switch and swallowed taps on it. Adding the clearance lifts this pill
-     * above the dock instead of under it. */
+     * zoom/locate controls and the measure control, the search bar sits at the
+     * top centre, the opacity mirror and layer panel on the right, and the
+     * country “Exit view” pill occupies the very bottom centre. Keep the
+     * switch and refresh action in one group so the pair remains centred even
+     * when the refresh button is hidden in 2D mode. */
     position: absolute;
     bottom: calc(66px + var(--layer-dock-clearance, 0px));
     left: 50%;
     transform: translateX(-50%);
     z-index: 960;               /* above the 3D surface, below the app chrome */
-    display: inline-flex;
+    display: flex;
     align-items: center;
     gap: 6px;
+    pointer-events: none;
+}
+
+#map3d-toggle,
+#map3d-refresh {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 36px;
     padding: 6px 10px;
     border-radius: 8px;
     border: 1px solid rgba(184, 216, 240, 0.28);
@@ -162,11 +163,15 @@ body.is-pwa.is-3d #map3d-surface {
     font-weight: 600;
     letter-spacing: 0.03em;
     cursor: pointer;
+    pointer-events: auto;
     backdrop-filter: blur(4px);
     transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 
-#map3d-toggle:hover { background: rgba(12, 26, 48, 0.9); border-color: rgba(200, 169, 110, 0.6); }
+#map3d-toggle:hover,
+#map3d-refresh:hover { background: rgba(12, 26, 48, 0.9); border-color: rgba(200, 169, 110, 0.6); }
+#map3d-toggle:focus-visible,
+#map3d-refresh:focus-visible { outline: 2px solid #c8a96e; outline-offset: 2px; }
 #map3d-toggle .m3d-dot {
     width: 7px;
     height: 7px;
@@ -175,6 +180,25 @@ body.is-pwa.is-3d #map3d-surface {
 }
 body.is-3d #map3d-toggle .m3d-dot { background: #c8a96e; box-shadow: 0 0 8px rgba(200, 169, 110, 0.8); }
 #map3d-toggle[disabled] { opacity: 0.6; cursor: progress; }
+#map3d-refresh { display: none; min-width: 44px; }
+body.is-3d #map3d-refresh { display: inline-flex; }
+#map3d-refresh .m3d-refresh-icon { display: inline-block; font-size: 1.1rem; line-height: 1; }
+#map3d-refresh .m3d-refresh-count { font-size: 0.62rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#map3d-refresh.is-busy .m3d-refresh-icon { animation: map3d-spin 1s linear infinite; }
+#map3d-refresh.is-stopping .m3d-refresh-icon { animation: none; }
+#map3d-refresh.is-error { border-color: rgba(255, 125, 125, 0.6); }
+#map3d-refresh:disabled { opacity: 0.65; cursor: progress; }
+.m3d-refresh-status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
 
 /* ── the 3D control bar (only while 3D is on) ───────────────────────────── */
 #map3d-bar {
@@ -252,6 +276,24 @@ body.is-3d #map3d-bar { display: flex; }
     accent-color: #c8a96e;
     cursor: pointer;
 }
+#map3d-bar .m3d-basemap-select {
+    display: block;
+    width: 100%;
+    min-height: 36px;
+    margin: 0;
+    padding: 6px 8px;
+    border: 1px solid rgba(184, 216, 240, 0.24);
+    border-radius: 6px;
+    background: rgba(6, 14, 30, 0.86);
+    color: rgba(245, 240, 235, 0.94);
+    font: inherit;
+    cursor: pointer;
+}
+#map3d-bar .m3d-basemap-select:focus-visible {
+    outline: 2px solid #c8a96e;
+    outline-offset: 1px;
+}
+#map3d-bar .m3d-basemap-select option { background: #0a1526; color: #f5f0eb; }
 #map3d-bar .m3d-row:focus-within { border-color: #c8a96e; }
 #map3d-bar .m3d-head { text-shadow: 0 1px 3px #060e1e; }
 
@@ -301,8 +343,10 @@ body.is-3d #map3d-bar { display: flex; }
         font-size: 0.68rem;
         padding: 0;
     }
-    #map3d-toggle {
-        bottom: 58px;
+    .m3d-toggle-group { bottom: 58px; }
+    #map3d-toggle,
+    #map3d-refresh {
+        min-height: 44px;
         font-size: 0.68rem;
         padding: 5px 8px;
     }
@@ -343,7 +387,7 @@ body.is-pwa { --map3d-safe-area-bottom: env(safe-area-inset-bottom, 0px); }
 /* The pill uses 10px + its 44px touch height. Lift the PWA switch with the
  * same inset and keep a 10px gap so its higher-z-index hit area stays clear. */
 @media (max-width: 720px) {
-    body.is-pwa.is-3d #map3d-toggle {
+    body.is-pwa.is-3d .m3d-toggle-group {
         bottom: calc(64px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
     }
 }
@@ -384,14 +428,16 @@ body.is-pwa.is-3d #map3d-surface .maplibregl-ctrl-attrib {
     overflow-wrap: anywhere;
 }
 
-/* Installed PWA: only terrain exaggeration and the reset/north/flat actions.
- * The web layout retains its camera sliders. */
+/* Installed PWA: keep the basemap picker and reset/north/flat actions.
+ * Hide exaggeration and camera controls in this environment: changing the DEM
+ * exaggeration triggers a MapLibre terrain update that can crash the PWA. */
 body.is-pwa.is-3d #map3d-bar .m3d-head,
+body.is-pwa.is-3d #map3d-bar .m3d-exag-row,
 body.is-pwa.is-3d #map3d-bar .m3d-pitch-row,
 body.is-pwa.is-3d #map3d-bar .m3d-bearing-row { display: none; }
 
-/* Keep the controls visible even if the bar was collapsed before entering PWA. */
-body.is-pwa.is-3d #map3d-bar.collapsed .m3d-row:not(.m3d-pitch-row):not(.m3d-bearing-row),
+/* Keep safe controls visible even if the bar was collapsed before entering PWA. */
+body.is-pwa.is-3d #map3d-bar.collapsed .m3d-row:not(.m3d-exag-row):not(.m3d-pitch-row):not(.m3d-bearing-row),
 body.is-pwa.is-3d #map3d-bar.collapsed .m3d-actions { display: flex; }
 
 /* Centre the compact bar above the 2D/3D switch and bottom actions. Leave
