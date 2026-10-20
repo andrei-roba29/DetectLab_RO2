@@ -291,7 +291,7 @@ assert(shellVersion >= 196,
  * the smaller LiDAR focus dialog. */
 const TAGS = {
     'js/layer-registry.js': '20261020-albania-independent-rows',
-    'js/map3d-terrain.js': '20261020-3d-attribution-compact',
+    'js/map3d-terrain.js': '20261020-lidar-disc-route',
     'css/map3d-terrain.css': '20261020-pwa-lidar-pill-clearance',
     'js/danish-layers.config.js': '20261019-danish-token-maps',
     'js/danish-layers.js': '20261019-danish-free-groups'

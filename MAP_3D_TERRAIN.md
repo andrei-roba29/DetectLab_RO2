@@ -507,6 +507,55 @@ registry and the dialog agree on). `js/map-app.js` tags every LiDAR sub-layer it
 `_dlLidar = { key, label }` (next to the existing `_dlDefId`), which is where the dialog
 learns the label the user sees in the panel.
 
+### 6.4.1 One focused layer, one route (the 2026-10-20 report)
+
+The first-entry bridge above was necessary but not sufficient: the same report came back as
+*“when used multiple times … after the loading of tiles finished it loads only the base map
+in 3D, with no LiDAR — mostly in the PWA”*. The reason was that the deck and the prefetch
+were still allowed to draw the same layer from **two different routes**.
+
+A mirrored raster carries up to two: the live layer's own `dl2d://<deck key>` route (which
+is what `prefetchTiles()` fills — its URL builder, its `preferProxy`/healed-host decision,
+then `blendedTile()` and `clipFocusedTile()`), and the **registry template** the item's
+`defId` resolves to (`dl3d://…` for the bbox builders, `?layer=…` once `needsProxy()` is
+true, or the provider URL). `rasterTilesFor()` preferred the registry whenever a `defId`
+was present — true for exactly the nine country products — so a prepared disc was drawn
+from a source that has never heard of `state.primed`. Two consequences:
+
+* the prefetch heals a host that cannot answer with CORS by writing
+  `state.proxyHosts[host]`, and `rasterTilesFor()` passes `Object.keys(state.proxyHosts)`
+  to the registry — so the moment the download succeeded through the proxy, the 3D source
+  became a **live per-tile `?layer=` template**: the "ready" disc was downloaded again,
+  without a disc and without the preparation, and on a cold proxy it came back empty;
+* for the tile builders (swisstopo, EA, Dataforsyningen, Lantmäteriet, the French WMS) the
+  provider URL was fetched directly by MapLibre with `crossOrigin`, whatever the prefetch
+  had decided — a host that only renders in 3D through the proxy returned nothing.
+
+The repeat-use/PWA flavour follows from state, not from the service worker: the disc is
+applied *before* the download, so the live rebuild only starts when 3D opens (after the
+progress bar finished); `state.proxyHosts` is already populated from earlier tiles in the
+same session; and the per-tile re-requests are the ones that lose to MapLibre's
+cancel-while-zooming on a phone.
+
+**The rule now: the focused LiDAR layer always draws through `dl2d://`**, def-backed or not
+(`rasterTilesFor(item, focused)`; the single exception is a descriptor with
+`render: 'none'`, which has no per-tile route at all). Prepared bytes are answered from
+`state.primedOut`; anything the budget trimmed or that failed goes through the same
+`fetchTile()` proxy/CORS decision the download made and is clipped to the disc. The
+source's recorded `mode` is therefore `live 2D layer`, and `watchSourceHealth()` no longer
+applies its 7 s "no direct tile → flip the host to the proxy" guess to it. Three smaller
+defects on the same path were fixed with it: `maxzoom` is floored at the source's
+`minzoom`; `maskOf()` recognises the `def:` form of a registry id (a def-drawn LiDAR layer
+was bounded to the disc but never clipped to it); and the `dl3d` handler's prepared-disc
+lookup also accepts `focus.lidarKey === 'def:' + defId`. A focus that still cannot be
+drawn now writes one line per distinct reason into `status().errors` instead of leaving a
+silent base map.
+
+`LIDAR_3D_DISC_ROUTE.md` holds the long form; the regression is §4d-quater of
+`test-lidar-3d-focus.js` (a def-backed `AHN` layer must render from
+`dl2d://2d.C9/{z}/{x}/{y}`, bounded to the disc and capped at the plan — it fails on the
+old code with `dl3d://lidar.nl-ahn/{z}/{x}/{y}`).
+
 When the fetch finishes and the 3D view opens, the window does not disappear:
 it **folds itself into a slim pill** pinned to the bottom centre of the 3D view
 (the sheet's layer name, the radius, how many tiles are ready, and a ▴ arrow),
@@ -671,7 +720,11 @@ cache).
   gate — confirm opens, cancel does not — and the bar's own two buttons: **Change the
   area** reopening the dialog in gate mode when 3D is closed (then opening the view on the
   prepared disc) and in live mode when 3D is open (the view stays, the focus is
-  re-pointed), and **Remove** clearing the focus and the 2D disc.
+  re-pointed), and **Remove** clearing the focus and the 2D disc. §4d-quater pins the
+  route rule of §6.4.1: a def-backed (`_dlDefId` + `AhnLidar`) focused layer must be
+  drawn from `dl2d://2d.<stamp>/{z}/{x}/{y}`, bounded to the disc and capped at the
+  prepared plan — on the old code it was built from `dl3d://lidar.nl-ahn/…` and the
+  assertion fails.
 * `node tools/probe-3d-blend.js` — the same two mechanisms with the **real Leaflet**
   bundle and the numbers that justify the budgets: the `ro1m` descriptor and tile URL,
   a 200 000-polyline featureGroup (10 bundles, 200 000 features, ~1 s for the first pass,

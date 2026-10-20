@@ -48,9 +48,9 @@ const viewerSource = read('js/map3d-terrain.js');
 const focusSource = read('js/lidar-3d-focus.js');
 
 /* Every build that changes the LiDAR 3D focus path bumps its own tag. */
-const TAG = '20261019-lidar-depth';
+const TAG = '20261020-lidar-disc-route';
 const TAG_MIRROR = '20261020-3d-analysis-points';
-const TAG_VIEWER = '20261020-3d-attribution-compact';
+const TAG_VIEWER = '20261020-lidar-disc-route';
 const TAG_CSS = '20261020-pwa-lidar-pill-clearance';
 
 /* One real event-loop turn: the viewer runs its entry gate through a promise,
@@ -1191,6 +1191,68 @@ function runViewerSuite() {
             const restoredSource = fakeSources['m3d-2d-2d.R1-src'];
             assert(restoredSource && restoredSource.maxzoom === 13,
                 'and pointing it back at the full plan restores the ceiling');
+
+            /* ── 4d-quater. A DEF-BACKED LiDAR layer draws the prepared disc ──
+             * The nine country products carry a registry id (`_dlDefId`), so the
+             * deck built their raster source from the REGISTRY's template:
+             * dl3d:// for the bbox builders, and — the moment the prefetch
+             * healed the host (or the def reprojects) — the ?layer= proxy
+             * template instead. Neither route is the one the prefetch filled:
+             * a proxy/direct template never asks state.primed for anything, so
+             * every tile of a disc that was "prepared" became a live request
+             * again, and on a host that only answers through the proxy the
+             * whole sheet could come back empty over the base map — the fetch
+             * finishes, the dialog says N tiles ready, 3D opens on the base map
+             * alone. The focused layer must always be drawn from the route the
+             * prefetch stored it under: dl2d://<deck key>. */
+            {
+                windowStub.AhnLidar = {
+                    tileUrl: function () { return ''; },
+                    exportImageUrl: function (mode, bbox, size) {
+                        return 'https://ahn.example.org/export?bbox=' + bbox.join(',') + '&size=' + size;
+                    },
+                    MODES: { dtm: {} },
+                    modeKeys: function () { return ['dtm']; }
+                };
+                const defLayer = {
+                    options: { name: 'AHN LiDAR', pane: 'pane_lidar', opacity: 0.9, minZoom: 8, maxZoom: 20 },
+                    _leaflet_id: 'C9',
+                    _dlDefId: 'lidar.nl-ahn',
+                    _dlLidar: { key: 'lidar.nlAhn', label: 'AHN LiDAR' },
+                    getTileSize: function () { return { x: 256, y: 256 }; },
+                    createTile: function (coords, done) {
+                        const tile = fakeCanvas();
+                        tile.width = 256;
+                        tile.height = 256;
+                        return tile;
+                    }
+                };
+                lidarGroup.addLayer(defLayer);
+                map.addLayer(defLayer);
+                const entry = focus.activeLayers().filter(function (e) { return e.key === '2d.C9'; })[0];
+                assert(entry && entry.defId === 'lidar.nl-ahn',
+                    'the def-backed LiDAR layer is offered by the dialog');
+                viewer.setLidarFocus({
+                    key: entry.key, lidarKey: entry.lidarKey, defId: entry.defId,
+                    label: entry.label, lat: 45.5, lng: 25.0, radiusKm: 1,
+                    plan: { zoomFrom: 12, zoomTo: 18, count: 40, route: 'canvas' }
+                });
+                const defSource = fakeSources['m3d-2d-2d.C9-src'];
+                assert(defSource, 'the def-backed focused layer has a source on the 3D map');
+                assert(defSource.tiles && defSource.tiles[0] === 'dl2d://2d.C9/{z}/{x}/{y}',
+                    'and it is drawn from the prepared disc route (dl2d://), not the registry template (' +
+                    String((defSource.tiles || [])[0]) + ')');
+                assert(JSON.stringify(defSource.bounds) === JSON.stringify(viewer.getLidarFocus().bounds),
+                    'bounded to the prepared disc like every other focused layer');
+                assert(defSource.maxzoom === 18,
+                    'and capped at the prepared plan (z' + defSource.maxzoom + ')');
+                /* Put the world back the way the sections after this one expect it. */
+                viewer.setLidarFocus(focusNow);
+                lidarGroup.removeLayer(defLayer);
+                map.removeLayer(defLayer);
+                viewer.syncLayers();
+                delete windowStub.AhnLidar;
+            }
 
             viewer.close();
             assert(viewer.isOpen() === false, 'closing returns to the 2D map');
