@@ -572,6 +572,57 @@
         discState.circle = null;
         discState.dot = null;
         discState.preview = null;
+        discState.focus = null;
+    }
+
+    /* Keep the 2D disc and the 3D focus in sync with the actual LiDAR
+     * visibility. When the yellow point/disc was left over after LiDAR was
+     * disabled, or when the focused LiDAR layer itself was removed, the 2D
+     * marker must disappear and the 3D view must not teleport to the old disc. */
+    function syncDiscWithLidarState() {
+        var layers = activeLayers();
+        var api = viewer();
+        var focus = api && api.getLidarFocus ? api.getLidarFocus() : null;
+        var discFocus = discState.focus;
+
+        if (!layers.length) {
+            var hasDisc = !!(discState.circle || discState.dot || discState.preview || discFocus);
+            if (hasDisc) clearDisc();
+            if (focus && api && api.clearLidarFocus) {
+                try { api.clearLidarFocus(); } catch (e) {}
+            }
+            return;
+        }
+
+        var relevant = focus || discFocus;
+        if (!relevant) return;
+
+        var found = false;
+        for (var i = 0; i < layers.length; i++) {
+            var entry = layers[i];
+            if (relevant.key && (entry.key === relevant.key || entry.lidarKey === relevant.key)) found = true;
+            if (relevant.lidarKey && (entry.lidarKey === relevant.lidarKey || entry.key === relevant.lidarKey)) found = true;
+            if (relevant.defId && (entry.defId === relevant.defId || entry.lidarKey === 'def:' + relevant.defId)) found = true;
+            if (relevant.lidarKey && relevant.lidarKey === 'def:' + entry.defId) found = true;
+        }
+        if (!found) {
+            clearDisc();
+            if (api && api.clearLidarFocus) {
+                try { api.clearLidarFocus(); } catch (e2) {}
+            }
+        }
+    }
+
+    function attachLidarWatcher() {
+        var m = leafletMap();
+        if (!m || typeof m.on !== 'function') return false;
+        if (m._dlLidarDiscWatcher) return true;
+        m._dlLidarDiscWatcher = true;
+        try {
+            m.on('layeradd', syncDiscWithLidarState);
+            m.on('layerremove', syncDiscWithLidarState);
+        } catch (e2) {}
+        return true;
     }
 
     /* ═══════════════════════════════════════════════════════════════════════
@@ -1373,7 +1424,11 @@
         if (!ready()) return Promise.resolve(true);
         var layers = activeLayers();
         if (!layers.length) {
-            /* No LiDAR on the 2D map: 3D opens exactly as it always did. */
+            /* No LiDAR on the 2D map: 3D opens exactly as it always did.
+             * If a stale yellow point/disc was left over from an earlier LiDAR
+             * session, remove it now so the 3D camera does not teleport to it. */
+            try { if (api && api.getLidarFocus && api.getLidarFocus()) api.clearLidarFocus(); } catch (e2) {}
+            try { clearDisc(); } catch (e3) {}
             return Promise.resolve(true);
         }
         if (api.isOpen && api.isOpen()) return Promise.resolve(true);
@@ -1523,13 +1578,34 @@
         /* The 3D bar's buttons announce themselves; the dialog is ours. */
         document.addEventListener('detectlab:map3d-lidar-change', onBarChange);
         document.addEventListener('detectlab:map3d-lidar-clear', onBarClear);
+        document.addEventListener('detectlab:lidar-visibility-changed', syncDiscWithLidarState);
         document.addEventListener('detectlab:langchange', function () {
             if (dialog.open) paintDialog();
             if (dialog.minimized) paintMinimized();
         });
-        /* A disc already decided (the 3D view restored it) is drawn in 2D too. */
+        /* Keep the 2D disc in sync with the actual LiDAR visibility: if the
+         * yellow point was left over after LiDAR was disabled, it must disappear
+         * and the 3D view must not teleport to the old disc. */
+        attachLidarWatcher();
+        root.setTimeout(attachLidarWatcher, 800);
+        root.setTimeout(syncDiscWithLidarState, 600);
+        /* A disc already decided (the 3D view restored it) is drawn in 2D too,
+         * but only if that LiDAR layer is still active in 2D. */
         var restored = viewer().getLidarFocus && viewer().getLidarFocus();
-        if (restored) drawDisc(restored, { fill: true });
+        if (restored) {
+            var stillActive = activeLayers().some(function (entry) {
+                return (restored.key && (entry.key === restored.key || entry.lidarKey === restored.key)) ||
+                       (restored.lidarKey && (entry.lidarKey === restored.lidarKey || entry.key === restored.lidarKey)) ||
+                       (restored.defId && (entry.defId === restored.defId || entry.lidarKey === 'def:' + restored.defId));
+            });
+            if (stillActive) drawDisc(restored, { fill: true });
+            else {
+                /* Stale focus from a previous session whose LiDAR is no longer
+                 * on the 2D map: clear it so a new 3D entry at a different
+                 * location does not teleport back to the old disc. */
+                try { if (viewer().clearLidarFocus) viewer().clearLidarFocus(); } catch (e2) {}
+            }
+        }
     }
 
     if (document.readyState === 'loading') {

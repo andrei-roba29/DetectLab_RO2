@@ -7472,6 +7472,59 @@
             }
             map.on('zoomend', _updateLidarZoomGateMessage);
 
+            function _handleLidarVisibilityChange() {
+                try {
+                    var shouldClear = false;
+                    var focus = null;
+                    var _map3DKey = 'DetectLab' + 'Map3D';
+                    var _lidar3DKey = 'DetectLab' + 'Lidar3D';
+                    try {
+                        if (window[_map3DKey] && typeof window[_map3DKey].getLidarFocus === 'function') {
+                            focus = window[_map3DKey].getLidarFocus();
+                        }
+                    } catch (e) { focus = null; }
+                    if (!_lidarVisible) {
+                        shouldClear = true;
+                    } else if (focus) {
+                        var active = null;
+                        try {
+                            if (window[_lidar3DKey] && typeof window[_lidar3DKey].activeLayers === 'function') {
+                                active = window[_lidar3DKey].activeLayers();
+                            }
+                        } catch (e2) { active = null; }
+                        if (active && active.length > 0) {
+                            var found = false;
+                            for (var i = 0; i < active.length; i++) {
+                                var entry = active[i];
+                                if (focus.key && (entry.key === focus.key || entry.lidarKey === focus.key)) found = true;
+                                if (focus.lidarKey && (entry.lidarKey === focus.lidarKey || entry.key === focus.lidarKey)) found = true;
+                                if (focus.defId && (entry.defId === focus.defId || entry.lidarKey === 'def:' + focus.defId)) found = true;
+                                if (focus.lidarKey && focus.lidarKey === 'def:' + entry.defId) found = true;
+                            }
+                            if (!found) shouldClear = true;
+                        } else if (!active || active.length === 0) {
+                            shouldClear = true;
+                        }
+                    } else {
+                        try {
+                            if (window[_lidar3DKey] && typeof window[_lidar3DKey].activeLayers === 'function') {
+                                var a2 = window[_lidar3DKey].activeLayers();
+                                if (!a2 || a2.length === 0) {
+                                    if (window[_lidar3DKey] && typeof window[_lidar3DKey].clearDisc === 'function') {
+                                        window[_lidar3DKey].clearDisc();
+                                    }
+                                }
+                            }
+                        } catch (e3) {}
+                    }
+                    if (shouldClear) {
+                        try { if (window[_lidar3DKey] && typeof window[_lidar3DKey].clearDisc === 'function') window[_lidar3DKey].clearDisc(); } catch (e4) {}
+                        try { if (window[_map3DKey] && typeof window[_map3DKey].clearLidarFocus === 'function') window[_map3DKey].clearLidarFocus(); } catch (e5) {}
+                    }
+                } catch (e6) {}
+                try { document.dispatchEvent(new CustomEvent('detectlab:lidar-visibility-changed')); } catch (e7) {}
+            }
+
             // ── Public: master toggle ──
             window.toggleLidarLayer = function(on) {
                 _lidarVisible = on;
@@ -7498,6 +7551,7 @@
                         var countryToggle = document.getElementById(LIDAR_COUNTRY_TOGGLE_IDS[key] || '');
                         if (countryToggle) countryToggle.checked = false;
                     });
+                    _handleLidarVisibilityChange();
                 }
                 var subPanel = document.getElementById('lidarSubLayers');
                 var europeanPanel = document.getElementById('lidarEuropeanSubLayers');
@@ -7508,6 +7562,9 @@
                 if (window._updateGj917ZoomHint) window._updateGj917ZoomHint();
                 if (window._updateMh917ZoomHint) window._updateMh917ZoomHint();
                 _updateLidarZoomGateMessage();
+                if (on) {
+                    try { document.dispatchEvent(new CustomEvent('detectlab:lidar-visibility-changed')); } catch (e8) {}
+                }
             };
 
             // ── Public: toggle individual sub-layer ──
@@ -7527,6 +7584,7 @@
                     if (cfg.leafletLayer && _lidarGroup.hasLayer(cfg.leafletLayer)) {
                         _lidarGroup.removeLayer(cfg.leafletLayer);
                     }
+                    _handleLidarVisibilityChange();
                 }
                 if (key === 'cs917' && window._updateCs917ZoomHint) window._updateCs917ZoomHint();
                 if (key === 'dj917' && window._updateDj917ZoomHint) window._updateDj917ZoomHint();
@@ -7537,6 +7595,9 @@
                     window._setNorwayIdentifyEnabled(!!on && !!cfg.leafletLayer);
                 }
                 _updateLidarZoomGateMessage();
+                if (on) {
+                    try { document.dispatchEvent(new CustomEvent('detectlab:lidar-visibility-changed')); } catch (e8) {}
+                }
             };
 
             // ── European country controls ─────────────────────────────────
