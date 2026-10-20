@@ -83,7 +83,7 @@ const TAG_3D = '20261017-archeo-3d-projection';    /* mirror                    
 const TAG_VIEWER = '20261019-lidar-depth'; /* viewer (js)                         */
 const TAG_CSS = '20261019-lidar-depth';    /* viewer skin (css)              */
 const TAG_FOCUS = '20261019-lidar-depth';  /* LiDAR focus (3D, one disc)     */
-const TAG_REGISTRY = '20261017-albania-asig';      /* shared registry (WMS audit)  */
+const TAG_REGISTRY = '20261020-albania-independent-rows'; /* shared registry (WMS audit) */
 
 // ══════════════════════════════════════════════════════════════
 // 1. Static wiring — the viewer must be reachable in the app
@@ -101,7 +101,8 @@ const TAG_REGISTRY = '20261017-albania-asig';      /* shared registry (WMS audit
     assert(registryTag < histEuTag, 'the registry loads before the CENAGIS catalogue');
     assert(registryTag < mirrorTag && mirrorTag < viewerTag,
         'registry → mirror → viewer: the viewer reads both, and neither reads the viewer');
-    assert(indexHtml.includes('css/maplibre-gl.css?v=' + TAG) &&
+    const TAG_MAPLIBRE_CSS = '20261013-3d-terrain';
+    assert(indexHtml.includes('css/maplibre-gl.css?v=' + TAG_MAPLIBRE_CSS) &&
            indexHtml.includes('css/map3d-terrain.css?v=' + TAG_CSS),
         'index.html loads the MapLibre stylesheet and the 3D skin');
     assert(indexHtml.indexOf('css/maplibre-gl.css') < indexHtml.indexOf('css/map3d-terrain.css'),
@@ -111,7 +112,7 @@ const TAG_REGISTRY = '20261017-albania-asig';      /* shared registry (WMS audit
     // be bumped so an installed PWA picks the mirrored 3D view up.
     ['js/layer-registry.js?v=' + TAG_REGISTRY, 'js/map3d-mirror.js?v=' + TAG_3D,
      'js/map3d-terrain.js?v=' + TAG_VIEWER, 'js/maplibre-gl.js?v=' + TAG,
-     'css/map3d-terrain.css?v=' + TAG_CSS, 'css/maplibre-gl.css?v=' + TAG,
+     'css/map3d-terrain.css?v=' + TAG_CSS, 'css/maplibre-gl.css?v=20261013-3d-terrain',
      'js/lidar-3d-focus.js?v=' + TAG_FOCUS].forEach(function (asset) {
         assert(swJs.includes("'" + asset + "'"), 'sw.js precaches ' + asset);
     });

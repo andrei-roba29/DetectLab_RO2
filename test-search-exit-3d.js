@@ -38,7 +38,7 @@ function boot(mode) {
     const context = {
         events, state: { open: !['absent', 'closed'].includes(mode), failed: mode === 'failed', healthTimers: [] },
         map: leaflet, searchMarker: null, searchInput: elements.mapSearchInput,
-        selectedIndex: -1, searchDebounce: null,
+        selectedIndex: -1, searchDebounce: null, openGeneration: 0,
         coordinateSearchItem() { return context.coordinateItem || null; },
         setActive() {}, doSearch() { events.push('search'); },
         closeResults() { events.push('results-closed'); },
@@ -116,7 +116,7 @@ for (const coordinateItem of [null, { valid: false }]) {
     assert(pending.context.state.open && !pending.events.includes('fly'),
         'pending place lookup and invalid coordinates do not exit 3D');
 }
-const url = 'js/map-app.js?v=20261017-albania-asig';
+const url = 'js/map-app.js?v=20261020-albania-independent-rows';
 assert(read('index.html').includes(url) && read('sw.js').includes("'" + url + "'"));
 assert(Number(read('sw.js').match(/CACHE_NAME = 'detectlab-v(\d+)-/)[1]) >= 198);
 console.log('✓ lookup stays in 3D; updated app is cache-busted and precached');

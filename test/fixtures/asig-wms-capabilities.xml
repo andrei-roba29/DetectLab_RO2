@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Owner-supplied excerpt; not fetched by this test or the implementation. -->
+<WMS_Capabilities version="1.3.0" xmlns="http://www.opengis.net/wms">
+  <Service><Name>WMS</Name></Service>
+  <Capability>
+    <Request><GetMap>
+      <Format>image/png</Format>
+      <Format>image/jpeg</Format>
+    </GetMap></Request>
+    <Layer>
+      <CRS>EPSG:6870</CRS><CRS>EPSG:4326</CRS><CRS>EPSG:900913</CRS><CRS>CRS:84</CRS>
+      <Layer><Name>Topografike:50K_Topografike</Name><Style><Name></Name><Title>Default</Title></Style></Layer>
+      <Layer><Name>Orthophoto:Ortofoto_1999</Name><Style><Name></Name><Title>Default</Title></Style></Layer>
+      <Layer><Name>orthophoto_2015:OrthoImagery_20cm</Name><Style><Name></Name><Title>Default</Title></Style></Layer>
+      <Layer><Name>DSM:Dsm_Hill_Group</Name><Style><Name></Name><Title>Default</Title></Style></Layer>
+      <Layer><Name>Dtm_2015:Hillshade_2015_group</Name><Style><Name></Name><Title>Default</Title></Style></Layer>
+      <Layer><Name>iktk:zonatembrojturatetrashegimisekulturore22_07_2026</Name><Style><Name></Name><Title>Default</Title></Style></Layer>
+      <Layer><Name>akzm:zonat_mbrojtura_081124</Name><Style><Name></Name><Title>Default</Title></Style></Layer>
+      <Layer><Name>iktk:zonatembrojturatetrashegimisekulturore_pike13_05_2026</Name><Style><Name></Name><Title>Default</Title></Style></Layer>
+      <Layer><Name>akzm:monumentet_natyrore_07032023</Name><Style><Name></Name><Title>Default</Title></Style></Layer>
+    </Layer>
+  </Capability>
+</WMS_Capabilities>

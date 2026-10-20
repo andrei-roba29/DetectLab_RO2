@@ -13825,17 +13825,21 @@
                         try { row = def.getRow(); } catch (e) {}
                         if (!row) return;
                         var available = true;
-                        var list = curatedCountriesFor(def);
-                        if (list) {
-                            available = isoInList(list, iso);
-                            if (!available && SHARED_PREMIUM_CATALOG_KEYS[def.key] &&
-                                !CURATED_COVERAGE_COUNTRIES[iso] && def.bounds && countryBounds) {
-                                // Country outside the curated analysis (e.g.
-                                // Italy): fall back to the sheet's own extent.
+                        // ASIG exposes globally selectable rows in the app's
+                        // existing sections. The WMS request bbox is clipped
+                        // to Albania; selection of another country must not hide
+                        // those rows.
+                        if (!def.countryIndependent) {
+                            var list = curatedCountriesFor(def);
+                            if (list) {
+                                available = isoInList(list, iso);
+                                if (!available && SHARED_PREMIUM_CATALOG_KEYS[def.key] &&
+                                    !CURATED_COVERAGE_COUNTRIES[iso] && def.bounds && countryBounds) {
+                                    available = coversSubstantially(countryBounds, def.bounds);
+                                }
+                            } else if (countryBounds && def.bounds) {
                                 available = coversSubstantially(countryBounds, def.bounds);
                             }
-                        } else if (countryBounds && def.bounds) {
-                            available = coversSubstantially(countryBounds, def.bounds);
                         }
                         // Rows without a bounds record AND without country
                         // attribution are left untouched (live/API layers that
@@ -13853,14 +13857,8 @@
                         try { danishLayers.filterForCountry(iso); } catch (e) {}
                     }
 
-                    // The Albanian rows (js/asig-albania-layers.js) are also
-                    // generated from their own config (asig-albania-layers.config.js),
-                    // so the module applies the same country rule to its own
-                    // group row and sub-rows.
-                    var albaniaLayers = window.AsigAlbaniaLayers;
-                    if (albaniaLayers && typeof albaniaLayers.filterForCountry === 'function') {
-                        try { albaniaLayers.filterForCountry(iso); } catch (e) {}
-                    }
+                    // Albania ASIG registry definitions mark their rows
+                    // countryIndependent; do not apply the legacy group filter.
 
                     // The Finnish rows (js/finland-layers.js) are generated from
                     // js/finland-layers.config.js, so they are not in `layerDefs`
@@ -13921,10 +13919,6 @@
                     if (window.DetectLabDanishLayers &&
                         typeof window.DetectLabDanishLayers.filterForCountry === 'function') {
                         try { window.DetectLabDanishLayers.filterForCountry(null); } catch (e) {}
-                    }
-                    if (window.AsigAlbaniaLayers &&
-                        typeof window.AsigAlbaniaLayers.filterForCountry === 'function') {
-                        try { window.AsigAlbaniaLayers.filterForCountry(null); } catch (e) {}
                     }
                     if (window.FinlandLayers &&
                         typeof window.FinlandLayers.filterForCountry === 'function') {

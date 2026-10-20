@@ -103,12 +103,12 @@ console.log('  ✓ worker/canvas road loading and visible progress preserved');
 assert(subscriptions.includes("'toggleRomanSub'"), 'Roman sublayer API is premium-gated');
 assert(subscriptions.includes("'toggleRomanDareCategories'"), 'DARE All/None API is premium-gated');
 assert(subscriptions.includes('euMaps.toggleCenagisLayer = function (mapKey, on)'), 'CENAGIS catalog toggle is premium-gated');
-assert(html.includes('js/map-app.js?v=20261017-albania-asig'), 'index.html loads the 2D compatibility map-app script');
-assert(sw.includes('js/map-app.js?v=20261017-albania-asig'), 'current map-app script is in the service-worker cache');
+assert(html.includes('js/map-app.js?v=20261020-albania-independent-rows'), 'index.html loads the 2D compatibility map-app script');
+assert(sw.includes('js/map-app.js?v=20261020-albania-independent-rows'), 'current map-app script is in the service-worker cache');
 assert(html.includes('js/roman-roads.js?v=20261015-roman-roads'), 'index.html loads the Roman-roads canvas layer');
 assert(sw.includes('js/roman-roads.js?v=20261015-roman-roads'), 'the Roman-roads layer is in the service-worker cache');
 assert(sw.includes('js/subscriptions.js?v=20261008-premium-roman-guard'), 'premium guard script is in the service-worker cache');
-assert(sw.includes('css/styles.css?v=20261017-albania-asig'), 'DARE marker CSS is in the service-worker cache');
+assert(sw.includes('css/styles.css?v=20261020-albania-independent-rows'), 'DARE marker CSS is in the service-worker cache');
 console.log('  ✓ Premium guards and PWA asset versions verified');
 
 console.log('✅ test-roman-reference-layer.js passed all checks successfully.');

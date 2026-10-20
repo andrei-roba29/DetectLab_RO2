@@ -149,7 +149,7 @@ assert.deepStrictEqual(Array.from(options).map((b) => b.getAttribute('data-arcgi
  *    the list is folded. */
 const caption = header.querySelector('.arcgis-basemap-header-label');
 assert.ok(caption, 'the header carries a caption');
-assert.strictEqual(caption.textContent, 'Imagery (ArcGIS)', 'the caption names the active base map');
+assert.strictEqual(caption.textContent, 'Imagery ArcGIS', 'the caption names the active base map');
 
 /* 3. The header unfolds and refolds the list. */
 press(header);
@@ -164,7 +164,7 @@ press(header);
 options[1].dispatchEvent(new win.MouseEvent('click', { bubbles: true, cancelable: true }));
 assert.deepStrictEqual(applied, ['topographic'], 'the picked base map is applied');
 assert.strictEqual(isOpen(), false, 'a chosen base map folds the list again');
-assert.strictEqual(caption.textContent, 'Topographic (ArcGIS)',
+assert.strictEqual(caption.textContent, 'Topographic ArcGIS',
     'the retracted header now names the base map that was just chosen');
 assert.ok(options[1].classList.contains('active'), 'the chosen option is marked active');
 
@@ -187,20 +187,14 @@ assert.strictEqual(isOpen(), true, 'setArcgisBasemapListOpen(true) unfolds the l
 win.setArcgisBasemapListOpen(false);
 assert.strictEqual(isOpen(), false, 'setArcgisBasemapListOpen(false) folds the list');
 
-/* 8. The Danish base maps (js/danish-layers.js) are mirrored into the same
- *    control — they must land INSIDE the foldable list, right above the
- *    hillshade row, not next to the header. */
-assert.ok(/anchor\.parentNode\.insertBefore\(button, anchor\)/.test(danishJs),
-    'the Danish bases are inserted next to the hillshade row (inside the list)');
-assert.ok(/var anchor = control\.querySelector\('\.arcgis-basemap-hs'\)/.test(danishJs),
-    'the Danish bases use the hillshade row as their anchor');
-const danishControl = danishJs.slice(danishJs.indexOf('function buildPanel()'));
-assert.ok(danishControl.indexOf('anchor.parentNode.insertBefore') !== -1,
-    '…and the anchor is resolved on its own parent, so the row may live inside the list');
-const hsAnchor = ctrl.querySelector('.arcgis-basemap-hs');
-assert.ok(hsAnchor, 'the control has the hillshade row');
-assert.strictEqual(hsAnchor.closest('.arcgis-basemap-list'), list,
-    'the hillshade row — the Danish anchor — sits inside the foldable list');
+/* 8. Denmark has its own themed panel rows; its module must not inject base
+ *    maps into the unrelated global ArcGIS switcher. */
+assert.ok(!/arcgis-basemap/.test(danishJs),
+    'the Danish layer module stays independent of the ArcGIS basemap control');
+assert.ok(danishJs.includes("var GROUP_ROW_ID = 'danishRow'"),
+    'the Danish layers keep their own country group row');
+assert.ok(indexHtml.includes('id="danishRow"') && indexHtml.includes('id="danishSubLayers"'),
+    'the independent Danish panel mount points remain in index.html');
 
 /* 9. The list is styled as a foldable block: hidden by default, shown when
  *    the control carries the open state. */

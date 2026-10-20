@@ -14,6 +14,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { execFileSync } = require('child_process');
 
 console.log('[Test] WMS / WMTS layer audit (registry → real requests)...');
@@ -25,10 +26,12 @@ const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 // 1. The tool runs, and finds no hard error
 // ══════════════════════════════════════════════════════════════
 let report;
+const auditJson = path.join(os.tmpdir(), 'detectlab-wms-audit-' + process.pid + '.json');
 try {
-    const out = execFileSync(process.execPath, [path.join('tools', 'audit-wms-layers.mjs'), '--json'],
+    execFileSync(process.execPath, [path.join('tools', 'audit-wms-layers.mjs'), '--json-file=' + auditJson],
         { cwd: root, encoding: 'utf8' });
-    report = JSON.parse(out);
+    report = JSON.parse(fs.readFileSync(auditJson, 'utf8'));
+    fs.unlinkSync(auditJson);
 } catch (err) {
     // A non-zero exit still prints the JSON report on stdout — show why.
     let parsed = null;
@@ -80,6 +83,34 @@ expect('vegfp.ppi', 'watch', 'VITO');
 });
 console.log('  ✓ every family names its provider (CENAGIS, eHarta, IGN, Copernicus, CAST, VITO, …)');
 
+// ASIG's nine exact registry names stay in the existing thematic groups. This
+// is an offline URL audit only; production status is established by the probe.
+const ASIG_NAMES = [
+    'Topografike:50K_Topografike', 'Orthophoto:Ortofoto_1999',
+    'orthophoto_2015:OrthoImagery_20cm', 'DSM:Dsm_Hill_Group',
+    'Dtm_2015:Hillshade_2015_group',
+    'iktk:zonatembrojturatetrashegimisekulturore22_07_2026',
+    'akzm:zonat_mbrojtura_081124',
+    'iktk:zonatembrojturatetrashegimisekulturore_pike13_05_2026',
+    'akzm:monumentet_natyrore_07032023'
+];
+const asig = report.layers.filter((l) => l.id.startsWith('albania.'));
+const layerRegistry = require('./js/layer-registry.js');
+assert.strictEqual(asig.length, 9, 'the audit contains all nine ASIG registry rows');
+assert.deepStrictEqual(asig.map((l) => l.layer).sort(), ASIG_NAMES.slice().sort(), 'ASIG WMS Names remain exact');
+assert(asig.every((l) => { const def = layerRegistry.get(l.id); return def && def.countryIndependent === true && def.selfGuarded === true && def.guard === false && def.selfGuardedReason; }),
+    'all ASIG registry rows remain country-independent and self-guarded');
+assert(asig.every((l) => l.sampleTile === '12/2273/1530 (Tirana)'), 'ASIG offline samples use Tirana tile 12/2273/1530');
+assert(asig.every((l) => l.sample2d.includes('STYLES=&') && /crs=EPSG%3A3857/i.test(l.sample2d)),
+    'offline WMS URL construction preserves empty style and the existing 3857 path');
+assert(asig.every((l) => /^\/api\/map3d\/tile\?layer=albania\./.test(l.sample3d) && /z=12&x=2273&y=1530/.test(l.sample3d)),
+    'the audit maps each ASIG registry ID to the same-origin tile proxy at Tirana');
+assert(!layerRegistry.GROUPS['albania-raster'] && !layerRegistry.GROUPS['albania-overlay'], 'no Albania-wide registry group remains');
+assert(report.warnings.length === 0 && report.errors.length === 0, 'offline audit remains clean: 0 errors, 0 warnings');
+assert(/offline URL construction does not verify production acceptance/.test(asig[0].findings.map((f) => f.message).join(' ')),
+    'audit explicitly distinguishes URL construction from live verification');
+console.log('  ✓ nine exact ASIG Names, Tirana sample, thematic groups and proxy/self-guard invariants');
+
 // ══════════════════════════════════════════════════════════════
 // 3. The sample requests are real requests
 // ══════════════════════════════════════════════════════════════
@@ -90,7 +121,7 @@ report.layers.forEach(function (l) {
     assert(/service=WMS/i.test(url) && /request=GetMap/i.test(url), l.id + ': GetMap KVP present');
     assert(new RegExp('layers=' + encodeURIComponent(l.layer).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(url),
         l.id + ': the URL asks for its own LAYERS');
-    assert(/[?&]bbox=[-\d.]+,[-\d.]+,[-\d.]+,[-\d.]+/.test(url), l.id + ': a real bbox is requested');
+    assert(/[?&]bbox=[-\d.]+,[-\d.]+,[-\d.]+,[-\d.]+/i.test(url), l.id + ': a real bbox is requested');
     const versionedCrs = /version=1\.1\.(0|1)/.test(url) ? /[?&]srs=EPSG%3A3857/i.test(url)
         : /[?&]crs=EPSG%3A3857/i.test(url);
     const wgs84 = /(srs|crs)=EPSG%3A4326/i.test(url);

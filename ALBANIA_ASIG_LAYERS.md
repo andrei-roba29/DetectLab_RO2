@@ -1,136 +1,101 @@
-# Albania — ASIG geoportal layers (geoportal.asig.gov.al)
+# Albania ASIG layers — independent rows in the existing map sections
 
-Added 2026-10-17. Nine layers from **ASIG — Autoriteti Shtetëror për Informacionin
-Gjeohapësinor** (the Albanian State Authority for Geospatial Information), streamed
-live from the state geoportal — nothing is downloaded or pre-generated, no key, no
-token, HTTPS only.
+The nine public WMS products below are described once in
+`js/asig-albania-layers.config.js` and rendered as separate Free-tab rows. They
+are placed in the existing **Historical Maps**, **Satellite**, **LiDAR**, and
+**Heritage Sites** sections; there is no Albania-wide master switch or separate
+Albania panel group. Every row has its own checkbox, opacity control, information
+popup, Tirana button, and failure status. ASIG attribution is attached to every
+layer.
 
-| Panel row | ASIG catalogue (`LAYERS`) | Notes |
-|---|---|---|
-| Topographic map 1:50k | `Topografike:50K_Topografike` | opaque PNG basemap-style raster |
-| Orthophoto 1999 | `Orthophoto:Ortofoto_1999` | opaque PNG |
-| Orthophoto 1994 | `orthophoto_2015:OrthoImagery_20cm` | opaque **JPEG** — see §Labels |
-| DSM (hillshade) | `DSM:Dsm_Hill_Group` | transparent PNG, 60 % by default |
-| LiDAR | `Dtm_2015:Hillshade_2015_group` | transparent PNG, **50 %** by default |
-| **Protected Sites ›** Heritage Sites | `iktk:zonatembrojturatetrashegimisekulturore22_07_2026` | transparent overlay |
-| Natural Protected Sites | `akzm:zonat_mbrojtura_081124` | transparent overlay |
-| Cultural Protected Sites | `iktk:zonatembrojturatetrashegimisekulturore_pike13_05_2026` | transparent overlay |
-| Environment: Natural monument | `akzm:monumentet_natyrore_07032023` | transparent overlay |
+| Existing section | Row label | Registry ID | Exact ASIG WMS `Name` | Format | Snapshot/date notes |
+|---|---|---|---|---|---|
+| Historical Maps | Topographic map 1:50k | `albania.topo50k` | `Topografike:50K_Topografike` | PNG | — |
+| Satellite | Orthophoto 1999 | `albania.ortho1999` | `Orthophoto:Ortofoto_1999` | PNG | — |
+| Satellite | Orthophoto 20 cm (2015) | `albania.ortho1994` | `orthophoto_2015:OrthoImagery_20cm` | JPEG | Catalogued 2015 20 cm product; the row no longer calls it 1994 |
+| LiDAR | DSM hillshade | `albania.dsm` | `DSM:Dsm_Hill_Group` | PNG | 60% initial opacity |
+| LiDAR | LiDAR hillshade | `albania.lidar` | `Dtm_2015:Hillshade_2015_group` | PNG | Hillshade derived from 2015 DTM; 50% initial opacity |
+| Heritage Sites | Heritage Sites | `albania.heritage` | `iktk:zonatembrojturatetrashegimisekulturore22_07_2026` | PNG | Snapshot: 22 July 2026 (`_22_07_2026`) |
+| Heritage Sites | Natural Protected Sites | `albania.natural` | `akzm:zonat_mbrojtura_081124` | PNG | Snapshot: 8 November 2024 (`_081124`) |
+| Heritage Sites | Cultural Protected Sites | `albania.cultural` | `iktk:zonatembrojturatetrashegimisekulturore_pike13_05_2026` | PNG | Snapshot: 13 May 2026 (`_13_05_2026`) |
+| Heritage Sites | Natural monuments | `albania.monument` | `akzm:monumentet_natyrore_07032023` | PNG | Snapshot: 7 March 2023 (`_07032023`) |
 
-Draw order (bottom → top), exactly as the integration brief asks: topographic map,
-orthophotos, DSM hillshade, LiDAR hillshade (~50 %), then the Protected Sites
-(transparent vector overlays), below every app-wide pane (LiDAR z610, heritage
-z620, historical z640+). Panes: `pane_albania_raster` (405),
-`pane_albania_protected` (407).
+The four date-bearing names are provider snapshots, not timeless identifiers.
+If one stops drawing, re-check the provider capabilities and update the config;
+do not silently rename a layer. The exact strings above are regression-tested.
 
-Attribution shown on the map while a layer is on:
-*“Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)”.*
+## Capabilities evidence and request CRS
 
-## Where everything lives
+The capabilities facts below were supplied by the owner. They are documented in
+`test/fixtures/asig-wms-capabilities.xml`; this fixture is explicitly an
+owner-supplied excerpt, **not an agent-fetched live response**:
 
-- **`js/asig-albania-layers.config.js`** — the single description of the nine layers
-  (titles RO+EN, `LAYERS`, format, transparency, zoom limits, opacity, draw order).
-  A renamed layer — the protected-sites names carry **publication snapshot dates**,
-  see below — is a change to this file only.
-- **`js/asig-albania-layers.js`** — renders the panel rows into `#albaniaSubLayers`
-  and builds the Leaflet tile layers from the config (nothing is requested before a
-  row is switched on; the choice persists in `localStorage`).
-- `index.html` — the group row (`#albaniaRow`, Free tab), master switch, expand
-  chevron, go-to-Tirana button; script tags.
-- `js/layer-registry.js` — mirrors the config into the shared catalogue
-  (`albania.<id>`, groups `albania-raster` 405 / `albania-overlay` 407) so the
-  diagnostics, the 3D status report and `tools/audit-wms-layers.mjs` see the same
-  definitions.
-- `js/wms-health.js` — the host is named in `HOSTS`; the rows self-handle failures
-  (see §Failure handling).
-- `js/map-app.js` — the country filter hooks: the group shows only for **AL** (or no
-  country selected).
-- `test-albania-asig-layers.js` — 26 offline checks. `WMS_WMTS_LAYER_AUDIT.md` is
-  regenerated from the registry.
+- WMS version 1.3.0; GetMap formats `image/png` and `image/jpeg`.
+- Root CRS values `EPSG:6870`, `EPSG:4326`, `EPSG:900913`, and `CRS:84`.
+- Each of the nine layers has an empty default style name, so requests use
+  `STYLES=`.
+- EPSG:6870 is the native CRS / WMTS matrix set. No hand-built EPSG:6870 XYZ
+  grid is inferred.
+- EPSG:900913 is the advertised Web-Mercator alias. EPSG:3857 is not literally
+  listed in this excerpt, so the excerpt alone does **not** establish that the
+  service accepts EPSG:3857.
 
-## Projection strategy: WMS 1.1.1 in EPSG:3857 (not the native WMTS)
+The 2D layer keeps its existing EPSG:3857 first-request path and switches to
+EPSG:4326 after six tile errors. WMS 1.3.0 uses latitude/longitude BBOX axis
+order for EPSG:4326; the renderer handles that fallback ordering. Acceptance of
+the retained EPSG:3857 path is established only by the production proxy probe,
+not by offline URL construction or by the supplied capabilities excerpt.
 
-ASIG's native CRS is **EPSG:6870** (ETRS89 / Albania TM 2010). The raster products
-are confirmed as **WMTS** on the `EPSG:6870` tile matrix set (a non-power-of-two
-grid: level 0 is 2×2 tiles, level 7 ≈ 490×499), with a second EPSG:4326 set. This
-map — like every other national layer on it — is Web Mercator, so the native tiles
-cannot be addressed as XYZ.
+## Coverage, visibility, and panel placement
 
-The module instead issues **one WMS 1.1.1 GetMap per Leaflet tile**, `SRS=EPSG:3857`,
-with the tile's own projected bbox — the same approach as the Polish GUGiK layer
-(`js/geoportal-nmt-layer.js`). GeoServer reprojects server-side, so the rasters line
-up with OSM, the European LiDAR rows, CORONA and the historical maps with zero
-client projection work. If a layer ever starts refusing EPSG:3857, it falls back per
-tile to `SRS=EPSG:4326` (lon,lat axis order in 1.1.1) after 6 consecutive tile
-errors.
+The WMS BBOX is clipped to the ASIG footprint: longitude 18.773–21.179 and
+latitude 39.538–42.758. Tirana is `[41.3275, 19.8187]`, zoom 9. Each layer's
+Tirana button uses that view. The rows are country-independent: selecting another
+country does not hide them; the request bounds keep their image requests within
+Albania.
 
-If a dedicated EPSG:6870 map (OpenLayers) is ever built, the WMTS endpoint, matrix
-set and `style=default` note are recorded in `endpoints` in the config, and the
-brief's verified reference tiles are:
+Config metadata supplies the existing panel section and registry group/z-order:
+Historical Maps → `hist-free`, Satellite → `sat-hist`, LiDAR → `lidar`, and
+Heritage Sites → `patrimoniu`. The country filter respects the registry's
+`countryIndependent` flag. Registry definitions retain `guard:false`,
+`selfGuarded:true`, and an explicit explanation because this module owns the
+per-row fallback and status rather than allowing the global guard to flip a
+control.
 
-- LiDAR `EPSG:6870:6` col 65 row 83, HTTP 200 image/png
-- DSM `EPSG:6870:5` col 28 row 30
-- Orthophoto 1999 `EPSG:6870:4` col 18 row 12
-- Orthophoto (2015, 20 cm) `EPSG:6870:3` col 2 row 9, image/jpeg
-- Topographic 1:50k `EPSG:6870:4` col 12 row 31
+## Failure behavior
 
-Coverage (WGS84): lon 18.773 → 21.179, lat 39.538 → 42.758 (all of Albania); the
-Leaflet layers are bounded to it.
+- Failed image loads, including HTTP-200 XML/HTML or bodies the browser cannot
+  decode as images, become Leaflet tile errors.
+- After six EPSG:3857 tile errors, that layer redraws with EPSG:4326.
+- If the fallback also has a persistent error burst, that row reports
+  **“the source is not answering”** (or its Romanian equivalent).
+- Console output is limited to one concise warning per layer.
 
-## Labels (confirmed with the site owner, 2026-10-17)
+The same-origin map tile proxy also rejects successful upstream responses that
+are not `image/*` or contain fewer than 32 bytes, and marks upstream failures in
+`X-Map3D-Upstream`. The production probe treats those markers as failures.
 
-- **“LiDAR”** is kept as the row label even though the product is a *hillshade
-  derived from the 2015 DTM*, not a point cloud. The row's ⓘ popup says so.
-- **“Orthophoto 1994”** is the label the owner asked for. The capabilities publish
-  no 1994 layer; the row is wired to `orthophoto_2015:OrthoImagery_20cm` (the 2015
-  national orthophoto at 20 cm, JPEG-only). The ⓘ popup names the real product, so
-  the provenance is never hidden. If a 1994 mosaic appears in the catalogue later,
-  repoint `ortho1994.layers` in the config — nothing else changes.
+## Offline checks versus live production results
 
-## The Protected Sites names are snapshots — re-check before editing
+The offline audit rebuilds request URLs and verifies repository invariants only;
+it makes no HTTP request and does not claim that ASIG or the production proxy
+returned a tile. Its Tirana sample for all nine Albania entries is
+`12/2273/1530`. The former sample `12/2345/1480` is Bucharest, not Albania.
 
-`zonatembrojturatetrashegimisekulturore22_07_2026`, `zonat_mbrojtura_081124`,
-`zonatembrojturatetrashegimisekulturore_pike13_05_2026`,
-`monumentet_natyrore_07032023` embed publication dates; ASIG may publish new
-versions under new names. When one of these rows stops drawing, re-check
+Run the same-origin production gate with:
 
-```
-https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&REQUEST=GetCapabilities
+```sh
+node tools/probe-asig-production.mjs --origin=https://detectlab.eu --tile=12/2273/1530
 ```
 
-and update **only** `js/asig-albania-layers.config.js` (search “snapshot”). The test
-asserts the exact strings so an accidental edit is loud, not silent.
+It requests all nine registry IDs through
+`/api/map3d/tile?layer=albania.<id>&z=12&x=2273&y=1530` and prints HTTP status,
+Content-Type, body size, and `X-Map3D-Upstream` for every layer. A pass requires
+HTTP 200, an `image/*` response of at least 32 bytes, no XML/HTML exception body,
+and no upstream failure marker. The test `test-asig-production-probe.mjs` is
+mock-only and does not contact production. Do not represent its results—or the
+offline audit—as live verification.
 
-## Failure handling (government host, no SLA)
-
-- a failed tile degrades to a transparent pixel (`errorTileUrl`), one console warning
-  per layer at most;
-- repeated failures flip the layer to EPSG:4326 requests once;
-- failures continuing after that put **“the source is not answering”** in the row's
-  status line — never a silent blank map;
-- the layers opt out of the global availability guard (`_detectlabNoGuard`,
-  `guard:false` + `selfGuardedReason` in the registry) because the module owns its
-  rows; the host is still named in `js/wms-health.js` so a tile-error burst can be
-  attributed. `tools/audit-wms-layers.mjs` records the failure signature.
-
-## What is verified — and what still needs a live check
-
-Offline (this repo): config contract, request shape (WMS 1.1.1, SRS/BBOX/axis
-order/formats), registry mirror, panel DOM, toggles/opacity/master switch/fallback,
-country filter, guard wiring, audit invariants — `node test-albania-asig-layers.js`
-(26 checks) plus `test-wms-health.js`, `test-wms-layer-audit.js` and
-`node tools/audit-wms-layers.mjs` (0 errors, 106 layers).
-
-Live, on the next deploy — the sandbox could not reach geoportal.asig.gov.al:
-
-1. `curl -sI` one built GetMap per layer (sample URLs:
-   `node tools/audit-wms-layers.mjs --layer=albania.lidar --urls`) and confirm
-   `200 image/png|jpeg`, no `ServiceExceptionReport` — this also confirms the
-   server accepts `SRS=EPSG:3857` for these catalogue names (GeoServer does by
-   default; the EPSG:4326 fallback covers the opposite).
-2. CORS: tiles are plain `<img>`, so drawing works either way; only canvas reads
-   would need `Access-Control-Allow-Origin`. If a 3D drape ever needs pixels,
-   route through the existing `/api/map3d/tile` proxy — the registry entries are
-   already `proxy: 'auto'`.
-3. ASIG's terms of use for web redistribution are not stated in the capabilities —
-   verify before commercial promotion; keep the attribution visible.
+Attribution: Data: ASIG, Albanian State Authority for Geospatial Information
+(geoportal.asig.gov.al). Terms for commercial redistribution are not stated in
+the supplied capabilities excerpt; verify them before commercial promotion.
