@@ -621,7 +621,13 @@
 // v245: settle Leaflet's pending CSS zoom before the 3D camera hand-off. Its
 //   delayed transition-end callback could otherwise restore an old view during
 //   search and make the selected-country outline jump.
-const CACHE_NAME = 'detectlab-v245-outline-camera-handoff';
+// v246: the iOS install walkthrough (steps + demo video) now opens on EVERY
+//   device, iPhone/iPad Safari included. That path used to show a one-line
+//   toast instead of the modal, so the install video was visible only from a
+//   laptop/PC and never on a phone. On ≤860px the video is ordered first in the
+//   stacked modal so it is on screen without scrolling past the steps. See
+//   IOS_INSTALL_VIDEO_MOBILE.md.
+const CACHE_NAME = 'detectlab-v246-ios-install-video-mobile';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';

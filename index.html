@@ -4248,7 +4248,7 @@
         </div>
     </section>
 
-    <!-- iOS install walkthrough modal (desktop): steps + demo video -->
+    <!-- iOS install walkthrough modal (every device, phones included): steps + demo video -->
     <div id="ios-install-modal" class="ios-modal" role="dialog" aria-modal="true" aria-labelledby="iosInstallModalTitle">
         <div class="ios-modal-backdrop" onclick="closeIOSInstallModal()"></div>
         <div class="ios-modal-card">
@@ -4261,8 +4261,15 @@
                     <p class="ios-modal-tip"></p>
                 </div>
                 <div class="ios-modal-video">
-                    <video id="iosInstallVideo" controls playsinline preload="metadata"
+                    <video id="iosInstallVideo" controls playsinline webkit-playsinline x5-playsinline
+                        preload="metadata" controlslist="nodownload"
                         src="https://pub-638f9319d3994d9ba6b7c4ce178867fd.r2.dev/WhatsApp%20Video%202026-09-24%20at%2008.39.01.mp4"></video>
+                    <!-- Fallback for the rare phone browser that refuses inline
+                         MP4 playback: the same clip opens full-screen in its own
+                         tab, where the native player always takes over. -->
+                    <a class="ios-modal-video-link"
+                        href="https://pub-638f9319d3994d9ba6b7c4ce178867fd.r2.dev/WhatsApp%20Video%202026-09-24%20at%2008.39.01.mp4"
+                        target="_blank" rel="noopener">Deschide videoclipul / Open the video ↗</a>
                 </div>
             </div>
         </div>
@@ -4273,7 +4280,8 @@
         .ios-modal.visible { display: flex; }
         .ios-modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px); }
         .ios-modal-card {
-            position: relative; z-index: 1; width: min(980px, 100%); max-height: 88vh; overflow: auto;
+            position: relative; z-index: 1; width: min(980px, 100%); max-height: 88vh; max-height: 88dvh; overflow: auto;
+            -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
             background: #14151a; border: 1px solid rgba(255,255,255,0.14); border-radius: 14px;
             box-shadow: 0 24px 70px rgba(0,0,0,0.6); padding: 26px 26px 22px;
         }
@@ -4287,6 +4295,11 @@
         .ios-modal-text { flex: 1 1 48%; min-width: 0; color: rgba(245,240,235,0.85); }
         .ios-modal-video { flex: 1 1 52%; min-width: 0; }
         .ios-modal-video video { width: 100%; max-height: 70vh; border-radius: 10px; background: #000; display: block; }
+        .ios-modal-video-link {
+            display: inline-block; margin-top: 8px; font-size: 0.78rem; line-height: 1.4;
+            color: rgba(184,216,240,0.75); text-decoration: underline; text-underline-offset: 2px;
+        }
+        .ios-modal-video-link:hover { color: #f5d98a; }
         .ios-modal-title { margin: 0 0 10px; font-size: 1.25rem; color: #f5f0eb; }
         .ios-modal-desc { margin: 0 0 12px; font-size: 0.92rem; line-height: 1.5; }
         .ios-modal-steps { margin: 0 0 12px; padding-left: 20px; font-size: 0.92rem; line-height: 1.6; }
@@ -4294,9 +4307,23 @@
         .ios-modal-tip { margin: 0; font-size: 0.82rem; opacity: 0.75; line-height: 1.5; }
         .ios-modal-tip:empty { display: none; }
         @media (max-width: 860px) {
-            .ios-modal { padding: 12px; }
+            .ios-modal {
+                padding-top: calc(12px + env(safe-area-inset-top, 0px));
+                padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+                padding-left: calc(12px + env(safe-area-inset-left, 0px));
+                padding-right: calc(12px + env(safe-area-inset-right, 0px));
+            }
             .ios-modal-card { padding: 20px 16px 16px; }
+            /* Phones stack the walkthrough. The video goes FIRST: the steps run
+               long, and with the old text-then-video order the clip sat below
+               the fold of the scrollable card, so on a phone the install video
+               looked like it was missing. */
             .ios-modal-body { flex-direction: column; gap: 16px; }
+            .ios-modal-video { order: -1; width: 100%; }
+            .ios-modal-video video { max-height: 46vh; max-height: 46dvh; }
+            .ios-modal-title { font-size: 1.05rem; padding-right: 34px; }
+            .ios-modal-desc,
+            .ios-modal-steps { font-size: 0.88rem; }
         }
     </style>
 
@@ -4651,26 +4678,22 @@
 
             const isRo = (typeof currentLang !== 'undefined' ? currentLang : 'ro') === 'ro';
 
-            let msg = '';
-            if (isIOS && isSafari) {
-                msg = isRo
-                    ? 'Apasă pe Distribuire &rarr; Adaugă pe ecranul principal'
-                    : 'Tap Share &rarr; Add to Home Screen';
-            } else {
-                msg = isRo
-                    ? 'Pentru aplicația mobilă, deschide această pagină în Safari'
-                    : 'For mobile app, open this page in Safari';
+            // The walkthrough modal (steps + demo video) is shown on EVERY
+            // device, iPhone/iPad Safari included. A real iPhone used to get a
+            // one-line toast instead, so the install video — the whole point of
+            // the walkthrough — never appeared on a phone: it could only be
+            // seen from a laptop/PC. The modal is the single source of truth;
+            // on a phone the video is listed FIRST (see the .ios-modal-video
+            // order rule below) so it is visible without scrolling past the
+            // text. The toast is kept only as a fallback when the modal markup
+            // is missing for some reason.
+            if (!openIOSInstallModal()) {
+                showPWAToast(isIOS && isSafari
+                    ? (isRo ? 'Apasă pe Distribuire &rarr; Adaugă pe ecranul principal'
+                            : 'Tap Share &rarr; Add to Home Screen')
+                    : (isRo ? 'Pentru aplicația mobilă, deschide această pagină în Safari'
+                            : 'For mobile app, open this page in Safari'));
             }
-
-            // On a real iPhone/iPad in Safari the steps are one tap away —
-            // keep the lightweight toast there. Everywhere else (desktop, other
-            // browsers) open the walkthrough modal with the demo video.
-            if (isIOS && isSafari) {
-                showPWAToast(msg);
-                return;
-            }
-
-            openIOSInstallModal();
         }
 
         /* ── iOS install walkthrough modal (instructions + demo video) ── */
@@ -4704,9 +4727,10 @@
 
         function openIOSInstallModal() {
             var modal = renderIOSInstallModal();
-            if (!modal) return;
+            if (!modal) return null;
             modal.classList.add('visible');
             document.addEventListener('keydown', iosInstallModalKeyHandler);
+            return modal;
         }
 
         function closeIOSInstallModal() {
