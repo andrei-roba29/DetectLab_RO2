@@ -1736,6 +1736,25 @@
     function focusCamera(cam) {
         var focus = state.focus;
         if (!focus || !focus.mask) return cam;
+        if (state.lidarOff) return cam;
+        // If the LiDAR layer the focus was prepared for is no longer active in 2D,
+        // do not teleport to the stale disc — the user disabled that LiDAR layer
+        // (or the whole LiDAR group) and is now trying to view a different location.
+        if (root.DetectLabLidar3D && typeof root.DetectLabLidar3D.activeLayers === 'function') {
+            try {
+                var activeForFocus = root.DetectLabLidar3D.activeLayers();
+                if (!activeForFocus || activeForFocus.length === 0) return cam;
+                var stillThere = false;
+                for (var fi = 0; fi < activeForFocus.length; fi++) {
+                    var ent = activeForFocus[fi];
+                    if (focus.key && (ent.key === focus.key || ent.lidarKey === focus.key)) stillThere = true;
+                    if (focus.lidarKey && (ent.lidarKey === focus.lidarKey || ent.key === focus.lidarKey)) stillThere = true;
+                    if (focus.defId && (ent.defId === focus.defId || ent.lidarKey === 'def:' + focus.defId)) stillThere = true;
+                    if (focus.lidarKey && focus.lidarKey === 'def:' + ent.defId) stillThere = true;
+                }
+                if (!stillThere) return cam;
+            } catch (e8) {}
+        }
         var fit = focusFitZoom(focus);
         if (fit == null) return cam;
         var lmap = leafletMap();
