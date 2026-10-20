@@ -602,7 +602,14 @@
 //   focused LiDAR layer now always draws through dl2d:// — prepared bytes
 //   first, the same fetchTile/proxy policy after, disc clip included. See
 //   MAP_3D_TERRAIN.md §6.4.
-const CACHE_NAME = 'detectlab-v240-lidar-disc-route';
+// v241: „Mută harta istorică" nu mai moare când sliderul stratului e
+//   adăugat pe ecranul principal. isUiTarget() din js/hist-shift.js potrivea
+//   cu closest() clasele de stare de pe <body> (vo-josephine-docked pus de
+//   oglinda verticală Josephine, layer-dock-open, transp-panel-open), deci
+//   orice apăsare pe hartă era clasificată drept UI și long-press-ul nu mai
+//   pornea. Căutarea țintei UI se oprește acum la containerul hărții. Vezi
+//   HIST_SHIFT_DOCKED_SLIDER.md.
+const CACHE_NAME = 'detectlab-v241-hist-shift-docked-slider';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -663,6 +670,7 @@ const PRECACHE_URLS = [
   'js/layer-registry.js?v=20261013-3d-mobile',
   'js/layer-registry.js?v=20261013-3d-mirror',
   'js/layer-registry.js',
+  'js/hist-shift.js?v=20261020-hist-shift-docked-slider',
   'js/hist-shift.js?v=20261014-hist-shift',
   'css/hist-shift.css?v=20261014-hist-shift',
   'js/map3d-mirror.js?v=20261017-archeo-3d-projection',

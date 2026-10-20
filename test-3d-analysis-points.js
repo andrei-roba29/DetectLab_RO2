@@ -327,8 +327,9 @@ function viewerChecks() {
     assert.ok(index.includes('js/map3d-terrain.js?v=' + VIEWER_TAG) &&
         sw.includes("'js/map3d-terrain.js?v=" + VIEWER_TAG + "'"),
         'the updated terrain viewer has its own cache-busting tag');
-    assert.ok(/CACHE_NAME = 'detectlab-v240-lidar-disc-route'/.test(sw), 'the shell cache is v240');
-    ok('cache: changed assets re-tagged and pre-cached, shell cache v240');
+    assert.ok(Number((sw.match(/CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]) >= 240,
+        'the shell cache is v240 or later (bumped again since — currently v241 hist-shift)');
+    ok('cache: changed assets re-tagged and pre-cached, shell cache v240+');
 }
 
 (async () => {

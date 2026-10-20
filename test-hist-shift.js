@@ -10,6 +10,9 @@ const read = p => fs.readFileSync(path.join(__dirname, p), 'utf8');
 class FakeEl {
     constructor(tag) {
         this.tagName = String(tag || 'div').toUpperCase();
+        this.nodeType = 1;
+        this.id = '';
+        this.parentElement = null;
         this.children = [];
         this.style = {};
         this._listeners = {};
@@ -23,15 +26,34 @@ class FakeEl {
             contains(c) { return self._classes.has(c); }
         };
     }
+    get className() { return [...this._classes].join(' '); }
+    set className(v) { this._classes = new Set(String(v || '').split(/\s+/).filter(Boolean)); }
     set innerHTML(v) { this._html = v; if (v === '') this.children = []; }
     get innerHTML() { return this._html || ''; }
-    appendChild(c) { this.children.push(c); return c; }
+    appendChild(c) { c.parentElement = this; this.children.push(c); return c; }
     addEventListener(type, fn) { (this._listeners[type] = this._listeners[type] || []).push(fn); }
     querySelector(sel) {
         if (!this._qs[sel]) this._qs[sel] = new FakeEl(sel.includes('select') ? 'select' : sel.includes('input') || sel.includes('toggle') ? 'input' : 'div');
         return this._qs[sel];
     }
-    closest() { return null; }
+    /* Enough of matches()/closest() for the selector shapes hist-shift uses:
+       tag, .class, #id, [class*="…"], [id*="…"], comma lists. */
+    matches(sel) {
+        return String(sel).split(',').some(part => {
+            const s = part.trim();
+            if (!s) return false;
+            if (s[0] === '.') return this._classes.has(s.slice(1));
+            if (s[0] === '#') return this.id === s.slice(1);
+            const m = s.match(/^\[(class|id)\*="([^"]*)"\]$/);
+            if (m) return (m[1] === 'class' ? this.className : String(this.id)).includes(m[2]);
+            return this.tagName === s.toUpperCase();
+        });
+    }
+    closest(sel) {
+        let n = this;
+        while (n) { if (typeof n.matches === 'function' && n.matches(sel)) return n; n = n.parentElement; }
+        return null;
+    }
     fire(type, ev) { (this._listeners[type] || []).slice().forEach(fn => fn(ev)); }
 }
 const documentFake = {
@@ -153,11 +175,66 @@ assert.ok(HS, 'DetectLabHistShift exported');
     assert.strictEqual(JSON.stringify(HS.getOffset(HS._state.selectedPane)), JSON.stringify({ x: 0, y: 0 }), 'reset returns to true position');
     console.log('  ✓ lock keeps position; reset restores true position');
 
+    // ── Regression: the layer's slider added on the main screen ──
+    // js/vertical-opacity-control.js puts state classes on <body> while a
+    // mirror is on screen — `vo-josephine-docked` when the Josephine
+    // historical map's slider is docked, `layer-dock-open` for a distance
+    // dock — and js/map-app.js adds `transp-panel-open`. isUiTarget() used
+    // to run an unbounded closest('[class*="dock"], [class*="panel"], …'),
+    // which matched <body> itself for every map target: with the slider on
+    // screen the long-press never started, the „Mută harta istorică" panel
+    // never appeared, and move-mode drags never began. The UI test must
+    // stop at the map container.
+    if (HS._state.press) container.fire('pointerup', { pointerId: HS._state.press.id });
+    assert.ok(!HS._state.press, 'no stale press entering the docked-slider scenario');
+    const bodyEl = new FakeEl('body');
+    const frameEl = new FakeEl('div'); frameEl.className = 'map-frame';
+    bodyEl.appendChild(frameEl); frameEl.appendChild(container);
+    const tileInMap = new FakeEl('div'); container.appendChild(tileInMap);
+    for (const cls of ['vo-josephine-docked', 'vo-josephine-docked-secondary', 'layer-dock-open', 'transp-panel-open']) {
+        bodyEl.className = 'is-pwa ' + cls;
+        HS.hidePanel();
+        container.fire('pointerdown', { isPrimary: true, pointerId: 10, clientX: 50, clientY: 50, target: tileInMap });
+        assert.ok(HS._state.press, 'long-press starts with body.' + cls + ' (slider on the main screen)');
+        container.fire('pointerup', { pointerId: 10 });
+        assert.ok(!HS._state.press, 'press cleared on pointerup');
+    }
+    // …and the panel really appears on hold while the Josephine slider class is set
+    bodyEl.className = 'is-pwa vo-josephine-docked';
+    HS.hidePanel();
+    container.fire('pointerdown', { isPrimary: true, pointerId: 11, clientX: 50, clientY: 50, target: tileInMap });
+    await new Promise(r => setTimeout(r, HS.LONG_PRESS_MS + 80));
+    assert.ok(HS._state.panel && HS._state.panel.style.display !== 'none',
+        'long-press reveals the panel while the historical slider is on screen');
+    container.fire('pointerup', { pointerId: 11 });
+    // Genuine UI inside the map still blocks the gesture
+    const controlEl = new FakeEl('div'); controlEl.className = 'leaflet-control'; container.appendChild(controlEl);
+    const innerPanelEl = new FakeEl('div'); innerPanelEl.className = 'some-panel'; container.appendChild(innerPanelEl);
+    const buttonEl = new FakeEl('button'); container.appendChild(buttonEl);
+    HS.hidePanel();
+    for (const uiEl of [controlEl, innerPanelEl, buttonEl]) {
+        container.fire('pointerdown', { isPrimary: true, pointerId: 12, clientX: 50, clientY: 50, target: uiEl });
+        assert.ok(!HS._state.press, 'press on in-map UI (' + (uiEl.className || uiEl.tagName) + ') does not start a long-press');
+    }
+    // Move-mode drag works with the docked body class, but not from a control
+    HS.reset(HS._state.selectedPane);
+    assert.strictEqual(HS.setEnabled(true), true);
+    container.fire('pointerdown', { isPrimary: true, pointerId: 13, clientX: 100, clientY: 100, target: tileInMap });
+    container.fire('pointermove', { pointerId: 13, clientX: 105, clientY: 100 });
+    container.fire('pointerup', { pointerId: 13 });
+    const dragged = HS.getOffset(HS._state.selectedPane);
+    assert.ok(Math.abs(dragged.x - 5 * mpp) < 0.01 && Math.abs(dragged.y) < 0.01,
+        'move-mode drag shifts the map with the slider on screen: ' + JSON.stringify(dragged));
+    container.fire('pointerdown', { isPrimary: true, pointerId: 14, clientX: 100, clientY: 100, target: controlEl });
+    assert.ok(!HS._state.drag, 'drag does not start from an in-map control');
+    HS.setEnabled(false);
+    console.log('  ✓ slider on the main screen (body *-docked / *-panel-open classes) no longer kills long-press or drag; in-map UI still blocks');
+
     // Static wiring
     const index = read('index.html'), sw = read('sw.js'), css = read('css/hist-shift.css');
-    assert.ok(index.includes('js/hist-shift.js?v=20261014-hist-shift'), 'index loads hist-shift');
+    assert.ok(index.includes('js/hist-shift.js?v=20261020-hist-shift-docked-slider'), 'index loads hist-shift');
     assert.ok(index.includes('css/hist-shift.css?v=20261014-hist-shift'), 'index loads hist-shift css');
-    assert.ok(sw.includes("'js/hist-shift.js?v=20261014-hist-shift'"), 'sw precaches hist-shift');
+    assert.ok(sw.includes("'js/hist-shift.js?v=20261020-hist-shift-docked-slider'"), 'sw precaches hist-shift');
     assert.ok(css.includes('.hist-shift-panel'), 'panel styles present');
     console.log('  ✓ wiring (index / service worker / css)');
     console.log('✅ test-hist-shift.js passed');

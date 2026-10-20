@@ -38,3 +38,10 @@ isEnabled/getOffset/setOffset/reset/showPanel`, `MAX_OFFSET_M = 300`.
 Regresie: `node test-hist-shift.js` (descoperire gratuit+premium, clamp,
 persistență, long-press, drag, lock, reset). Asset-uri versionate
 `20261014-hist-shift`, cache SW `v205-hist-shift`.
+
+**Corecție (2026-10-20):** mutarea nu funcționa deloc dacă sliderul
+stratului era adăugat pe ecranul principal — `isUiTarget()` potrivea cu
+`closest()` clasele de stare `*docked*`/`*panel*` puse pe `<body>` de
+oglinzile verticale, deci orice apăsare pe hartă era tratată drept UI.
+Vezi `HIST_SHIFT_DOCKED_SLIDER.md` (asset
+`20261020-hist-shift-docked-slider`, cache SW `v241`).

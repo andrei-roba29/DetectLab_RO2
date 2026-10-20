@@ -310,11 +310,43 @@
     function isEnabled() { return state.enabled; }
 
     /* ── gestures: long-press to reveal/lock, drag to shift ──────────────── */
+    var UI_TARGET_SELECTOR = 'button, a, input, select, textarea, label, .leaflet-control, ' +
+        '.leaflet-marker-icon, .leaflet-popup, .leaflet-bar, #histShiftPanel, ' +
+        '[class*="panel"], [class*="dock"], [id*="Panel"], [id*="panel"]';
+
+    /* O apăsare e „pe UI" doar dacă elementul interactiv e ÎN containerul
+     * hărții (controale Leaflet, markere, popup-uri, propriul panou).
+     * Căutarea se oprește la container: clasele de stare puse pe <body> de
+     * oglinzile de pe ecranul principal — `vo-josephine-docked` (sliderul
+     * Hărții Iosefine adăugat pe ecran), `layer-dock-open` (dock-ul unui
+     * slider de distanță), `transp-panel-open` (panoul de straturi deschis)
+     * — conțin „dock"/„panel", deci un closest() nelegat le potrivea pe
+     * <body> pentru ORICE țintă din hartă și long-press-ul (și drag-ul din
+     * modul mutare) nu mai pornea deloc cât timp sliderul era pe ecran.
+     * Vezi HIST_SHIFT_DOCKED_SLIDER.md. */
     function isUiTarget(el) {
-        if (!el || !el.closest) return false;
-        return !!el.closest('button, a, input, select, textarea, label, .leaflet-control, ' +
-            '.leaflet-marker-icon, .leaflet-popup, .leaflet-bar, #histShiftPanel, ' +
-            '[class*="panel"], [class*="dock"], [id*="Panel"], [id*="panel"]');
+        if (!el) return false;
+        var node = el.nodeType === 1 ? el : (el.parentElement || null);
+        if (!node) return false;
+        var container = null;
+        try {
+            container = state.map && typeof state.map.getContainer === 'function'
+                ? state.map.getContainer() : null;
+        } catch (e) { container = null; }
+        while (node) {
+            if (typeof node.matches === 'function') {
+                try { if (node.matches(UI_TARGET_SELECTOR)) return true; }
+                catch (e) { /* selector neacceptat de motor: continuă urcarea */ }
+            }
+            if (container && node === container) break;
+            node = node.parentElement || null;
+            /* Fără container cunoscut, closest() clasic rămâne rezerva:
+             * urcarea din nod în nod s-a terminat fără potrivire. */
+            if (!node && !container && typeof el.closest === 'function') {
+                try { return !!el.closest(UI_TARGET_SELECTOR); } catch (e) { return false; }
+            }
+        }
+        return false;
     }
 
     function cancelPress() {
@@ -393,7 +425,7 @@
     }
 
     var api = {
-        VERSION: '2026-10-14-hist-shift-v1',
+        VERSION: '2026-10-20-hist-shift-v2',
         MAX_OFFSET_M: MAX_OFFSET_M,
         LONG_PRESS_MS: LONG_PRESS_MS,
         attach: attach,
