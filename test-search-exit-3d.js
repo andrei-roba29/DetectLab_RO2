@@ -15,6 +15,7 @@ function grab(source, pattern) {
 }
 const select = grab(app, /function selectResult\(item\) \{[\s\S]*?\n {12}\}/);
 const close = grab(viewer, /function close\(\) \{[\s\S]*?\n {4}\}/);
+const settleMotion = grab(viewer, /function settleLeafletMotion\(lmap\) \{[\s\S]*?\n {4}\}/);
 const camera = grab(viewer, /function cameraTo2D\(\) \{[\s\S]*?\n {4}\}/);
 const keyboard = grab(app, /searchInput\.addEventListener\('keydown', function \(e\) \{[\s\S]*?\n {16}\}\);/);
 const display = grab(app, /function displaySearchResults\(data, searchTerm\) \{[\s\S]*?\n {12}\}/);
@@ -28,10 +29,22 @@ function boot(mode) {
     };
     const leaflet = {
         destination: null, zoom: null,
+        _animatingZoom: mode === 'open',
+        stop() { events.push('leaflet-stop'); },
+        _onZoomTransitionEnd() {
+            // Match Leaflet 1.9's delayed CSS-zoom cleanup: if still active,
+            // it commits the old target camera and clears the animation flag.
+            if (!this._animatingZoom) return;
+            events.push('old-zoom-transition-end');
+            this._animatingZoom = false;
+            this.destination = { lat: 40, lng: 10 };
+            this.zoom = 5;
+        },
         setView(latlng, zoom) { events.push('handoff'); this.destination = latlng; this.zoom = zoom; },
         setBearing() {},
         flyTo(latlng, zoom) {
             assert(!context.state.open, '3D is closed before search flies to the result');
+            assert(!this._animatingZoom, 'the previous Leaflet CSS zoom is settled before search starts');
             events.push('fly'); this.destination = latlng; this.zoom = zoom;
         }
     };
@@ -72,7 +85,7 @@ function boot(mode) {
     // refers to MapLibre, while selectResult's `map` refers to Leaflet.
     vm.runInContext(`DetectLabMap3D = (function () {
         var map = threeDMap, popup = null;
-        ${camera}\n${close}
+        ${settleMotion}\n${camera}\n${close}
         return { isOpen: function () { return state.open; }, close: function () { events.push('close'); return close(); } };
     })();\n${select}\n${display}\n${keyboard}`, context);
     if (mode === 'absent') delete context.DetectLabMap3D;
@@ -96,7 +109,19 @@ for (const mode of ['absent', 'closed', 'open', 'loading', 'failed']) {
         else {
             assert(b.events.indexOf('close') < b.events.indexOf('fly'), 'close precedes fly');
             assert(b.events.includes('body-remove:is-3d'), '2D controls are restored');
-            if (mode === 'open') assert(b.events.indexOf('handoff') < b.events.indexOf('fly'), 'old camera cannot overwrite destination');
+            if (mode === 'open') {
+                assert(b.events.indexOf('leaflet-stop') < b.events.indexOf('old-zoom-transition-end'),
+                    'close settles any in-flight Leaflet motion before replacing its camera');
+                assert(b.events.indexOf('old-zoom-transition-end') < b.events.indexOf('handoff'),
+                    'the delayed CSS zoom is finalized before the 3D camera is handed back');
+                assert(b.events.indexOf('handoff') < b.events.indexOf('fly'),
+                    'the 3D camera hand-off precedes the searched destination');
+                const endCount = b.events.filter(event => event === 'old-zoom-transition-end').length;
+                b.leaflet._onZoomTransitionEnd(); // simulate Leaflet's old 250 ms callback
+                assert.strictEqual(b.events.filter(event => event === 'old-zoom-transition-end').length, endCount,
+                    'the stale transition callback cannot reset the searched destination');
+                assert.deepStrictEqual(b.leaflet.destination, { lat: 51.5719, lng: -0.7769 });
+            }
         }
         let activation;
         b.context._iosFreeActivateSearch = (...args) => { activation = args; };
@@ -105,6 +130,21 @@ for (const mode of ['absent', 'closed', 'open', 'loading', 'failed']) {
     }
     console.log('✓ click, Enter and coordinates with 3D ' + mode);
 }
+// Reproduce the reported sequence: a 2D CSS zoom is still finishing when the
+// user switches out of 3D, then searches after the 2D map is visible again.
+const manualSwitch = boot('open');
+manualSwitch.context.DetectLabMap3D.close();
+assert(!manualSwitch.context.state.open, 'manual 3D → 2D switch closes the viewer');
+manualSwitch.context.displaySearchResults([place], 'Marlow');
+manualSwitch.results[0].click();
+assert.deepStrictEqual(manualSwitch.leaflet.destination, { lat: 51.5719, lng: -0.7769 });
+const settledEndCount = manualSwitch.events.filter(event => event === 'old-zoom-transition-end').length;
+manualSwitch.leaflet._onZoomTransitionEnd(); // delayed callback from the pre-switch CSS zoom
+assert.strictEqual(manualSwitch.events.filter(event => event === 'old-zoom-transition-end').length, settledEndCount);
+assert.deepStrictEqual(manualSwitch.leaflet.destination, { lat: 51.5719, lng: -0.7769 },
+    'a late pre-switch zoom callback cannot move the searched camera or country outline');
+console.log('✓ switch 3D → 2D, then search: no stale Leaflet zoom can move the destination');
+
 // Typing/looking up a place must not close the current 3D view prematurely.
 const b = boot('open');
 b.context.displaySearchResults([place], 'Marlow');
@@ -116,7 +156,8 @@ for (const coordinateItem of [null, { valid: false }]) {
     assert(pending.context.state.open && !pending.events.includes('fly'),
         'pending place lookup and invalid coordinates do not exit 3D');
 }
-const url = 'js/map-app.js?v=20261020-albania-independent-rows';
-assert(read('index.html').includes(url) && read('sw.js').includes("'" + url + "'"));
-assert(Number(read('sw.js').match(/CACHE_NAME = 'detectlab-v(\d+)-/)[1]) >= 198);
-console.log('✓ lookup stays in 3D; updated app is cache-busted and precached');
+const viewerUrl = 'js/map3d-terrain.js?v=20261020-outline-camera-handoff';
+assert(read('index.html').includes(viewerUrl) && read('sw.js').includes("'" + viewerUrl + "'"),
+    'the 3D camera hand-off fix is cache-busted and precached');
+assert(Number(read('sw.js').match(/CACHE_NAME = 'detectlab-v(\d+)-/)[1]) >= 245);
+console.log('✓ lookup stays in 3D; the camera hand-off settles Leaflet before search');

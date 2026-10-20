@@ -318,7 +318,7 @@ function viewerChecks() {
     const index = read('index.html');
     const sw = read('sw.js');
     const TAG = '20261020-3d-analysis-points';
-    const VIEWER_TAG = '20261020-1km-raster-refresh';
+    const VIEWER_TAG = '20261020-outline-camera-handoff';
     ['js/map3d-mirror.js', 'js/lidar-scanner.js',
         'js/archeo-potential.js', 'js/archeo-report.js', 'js/battles-layer.js'].forEach((file) => {
         assert.ok(index.includes(file + '?v=' + TAG), 'index.html loads ' + file + ' at the analysis-points tag');
