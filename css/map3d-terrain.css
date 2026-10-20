@@ -32,9 +32,9 @@ body.is-3d #detectlab-map .leaflet-pane { visibility: hidden; }
 /* Leaflet's own controls (zoom, locate, measure) drive the *2D* map, and
  * Leaflet pins them at z-index 1000 — above this canvas. Hidden while 3D is
  * on, so nobody clicks a button that moves a map they cannot see; MapLibre
- * contributes only the source credits and the scale, both bottom-left (no
- * navigation, no terrain toggle — the app's own bar drives the 3D camera and
- * the exaggeration). The live location control that the PWA appends to its own
+ * contributes a compact source-credit control and the scale, both bottom-left
+ * (no navigation, no terrain toggle — the app's own bar drives the 3D camera
+ * and exaggeration). The live location control that the PWA appends to its own
  * stack is hidden for the same reason (it moves the 2D camera). */
 body.is-3d #detectlab-map .leaflet-control-container,
 body.is-3d #pwa-br-stack .leaflet-control { visibility: hidden; }
@@ -271,11 +271,12 @@ body.is-3d #map3d-bar { display: flex; }
 .m3d-actions button:hover { background: rgba(184, 216, 240, 0.18); }
 
 /* MapLibre's own controls inside the surface */
-/* Everything MapLibre adds is at bottom-left: the source credits and the scale.
- * The top-right corner belongs to the app's own help button alone — the terrain
- * toggle that used to be parked under it (a `.maplibregl-ctrl-group` button
- * group) is gone from the viewer, and with it the row reservation, the phone
- * `display: none` and the group/icon skin that only that button needed. */
+/* Everything MapLibre adds is at bottom-left: the compact source-credit
+ * button and the scale. The top-right corner belongs to the app's own help
+ * button alone — the terrain toggle that used to be parked under it (a
+ * `.maplibregl-ctrl-group` button group) is gone from the viewer, and with it
+ * the row reservation, the phone `display: none` and the group/icon skin that
+ * only that button needed. */
 
 #map3d-surface .maplibregl-ctrl-attrib {
     background: rgba(6, 14, 30, 0.72);
@@ -283,6 +284,10 @@ body.is-3d #map3d-bar { display: flex; }
     font-size: 0.62rem;
 }
 #map3d-surface .maplibregl-ctrl-attrib a { color: rgba(200, 169, 110, 0.95); }
+#map3d-surface .maplibregl-ctrl-attrib-button {
+    background-color: rgba(245, 240, 235, 0.92);
+    border-radius: 50%;
+}
 #map3d-surface .maplibregl-ctrl-scale {
     background: rgba(6, 14, 30, 0.6);
     color: rgba(245, 240, 235, 0.85);
@@ -310,7 +315,7 @@ body.is-3d #map3d-bar { display: flex; }
         bottom: auto;
         max-height: calc(100% - 92px);
     }
-    /* Hide the scale widget on phones, not the source credits. */
+    /* Hide the scale widget on phones, not the compact source-credit button. */
     #map3d-surface .maplibregl-ctrl-bottom-left .maplibregl-ctrl-scale { display: none; }
     #map3d-surface .maplibregl-ctrl-bottom-left,
     #map3d-surface .maplibregl-ctrl-bottom-right { font-size: 0.6rem; }
@@ -327,6 +332,19 @@ body.is-3d #map3d-bar { display: flex; }
         flex: 1 1 8rem;
         padding: 10px 16px;
         font-size: 0.82rem;
+    }
+}
+
+/* One safe-area value keeps the PWA switch and the bottom-anchored LiDAR pill
+ * in step; exposing it as a custom property also lets layout tests simulate
+ * the home-indicator inset. */
+body.is-pwa { --map3d-safe-area-bottom: env(safe-area-inset-bottom, 0px); }
+
+/* The pill uses 10px + its 44px touch height. Lift the PWA switch with the
+ * same inset and keep a 10px gap so its higher-z-index hit area stays clear. */
+@media (max-width: 720px) {
+    body.is-pwa.is-3d #map3d-toggle {
+        bottom: calc(64px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
     }
 }
 
@@ -354,8 +372,8 @@ body.is-3d #map3d-bar { display: flex; }
 #map3d-surface .maplibregl-popup.m3d-popup .m3d-popup-body b { color: rgba(245, 240, 235, 0.9); }
 
 
-/* Keep required 3D source credits readable but out of the PWA's bottom-right
- * action stack and above the home indicator; long lists can scroll in place. */
+/* Keep the compact 3D source-credit control clear of the PWA's bottom-right
+ * action stack and above the home indicator. If opened, long credits can scroll. */
 body.is-pwa.is-3d #map3d-surface .maplibregl-ctrl-bottom-left {
     bottom: env(safe-area-inset-bottom, 0px);
     max-width: 42%;
@@ -383,10 +401,10 @@ body.is-pwa.is-3d #map3d-bar {
     right: auto;
     left: 50%;
     transform: translateX(-50%);
-    bottom: calc(108px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(108px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
     width: 280px;
     max-width: calc(100% - 100px);
-    max-height: calc(100% - 168px - env(safe-area-inset-bottom, 0px));
+    max-height: calc(100% - 168px - var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
     overflow-y: auto;
     scrollbar-width: thin;
 }
@@ -418,16 +436,17 @@ body.is-pwa.is-3d #map3d-bar {
 
 #map3d-focus .m3d-focus-card {
     pointer-events: auto;
-    width: min(460px, 100%);
-    max-height: calc(100% - 24px);
+    box-sizing: border-box;
+    width: min(400px, calc(100% - 16px));
+    max-height: min(76vh, 620px);
     overflow-y: auto;
     background: rgba(6, 14, 30, 0.94);
     border: 1px solid rgba(200, 169, 110, 0.42);
     border-radius: 12px;
-    padding: 14px 16px 16px;
+    padding: 11px 13px 13px;
     box-shadow: 0 18px 44px rgba(2, 6, 14, 0.6);
-    font-size: 0.82rem;
-    line-height: 1.35;
+    font-size: 0.78rem;
+    line-height: 1.3;
 }
 
 #map3d-focus .m3d-focus-card[hidden] { display: none; }
@@ -437,12 +456,12 @@ body.is-pwa.is-3d #map3d-bar {
     align-items: flex-start;
     justify-content: space-between;
     gap: 10px;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 }
 
 #map3d-focus h2 {
     margin: 0;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 700;
     letter-spacing: 0.03em;
     text-transform: uppercase;
@@ -472,25 +491,25 @@ body.is-pwa.is-3d #map3d-bar {
 #map3d-focus .m3d-focus-x:hover { background: rgba(184, 216, 240, 0.14); }
 
 #map3d-focus .m3d-focus-lead {
-    margin: 0 0 12px;
+    margin: 0 0 8px;
     color: rgba(245, 240, 235, 0.78);
-    font-size: 0.78rem;
+    font-size: 0.74rem;
 }
 
 #map3d-focus .m3d-focus-block {
     border-top: 1px solid rgba(184, 216, 240, 0.14);
-    padding-top: 10px;
-    margin-top: 10px;
+    padding-top: 8px;
+    margin-top: 8px;
 }
 
 #map3d-focus .m3d-focus-label {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 8px;
+    gap: 6px;
     font-weight: 600;
     letter-spacing: 0.02em;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 }
 
 #map3d-focus .m3d-focus-cap {
@@ -503,7 +522,7 @@ body.is-pwa.is-3d #map3d-bar {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    max-height: 132px;
+    max-height: 112px;
     overflow-y: auto;
 }
 
@@ -539,8 +558,8 @@ body.is-pwa.is-3d #map3d-bar {
  * decision of the entry rule, not a setting — so it reads as a sentence, with
  * the note about what stays outside it, instead of a slider nobody may move. */
 #map3d-focus .m3d-focus-fixed {
-    margin: 4px 0 0;
-    padding: 8px 10px;
+    margin: 3px 0 0;
+    padding: 6px 8px;
     border-radius: 8px;
     border: 1px solid rgba(200, 169, 110, 0.28);
     background: rgba(200, 169, 110, 0.08);
@@ -590,20 +609,20 @@ body.is-pwa.is-3d #map3d-bar {
 #map3d-focus .m3d-focus-point-block .m3d-focus-pick:hover { background: rgba(200, 169, 110, 0.18); }
 
 #map3d-focus .m3d-focus-estimate {
-    margin: 12px 0 0;
-    font-size: 0.72rem;
+    margin: 8px 0 0;
+    font-size: 0.68rem;
     color: rgba(200, 169, 110, 0.9);
 }
 
 #map3d-focus .m3d-focus-actions {
     display: flex;
-    gap: 8px;
-    margin-top: 12px;
+    gap: 6px;
+    margin-top: 8px;
 }
 
 #map3d-focus .m3d-focus-actions button {
     flex: 1 1 auto;
-    padding: 11px 12px;
+    padding: 8px 10px;
     border-radius: 8px;
     border: 1px solid rgba(184, 216, 240, 0.24);
     background: rgba(184, 216, 240, 0.08);
@@ -621,7 +640,7 @@ body.is-pwa.is-3d #map3d-bar {
 
 #map3d-focus .m3d-focus-go:disabled { opacity: 0.45; cursor: default; }
 
-#map3d-focus .m3d-focus-progress { margin-top: 12px; }
+#map3d-focus .m3d-focus-progress { margin-top: 8px; }
 
 #map3d-focus .m3d-focus-bar {
     height: 8px;
@@ -646,9 +665,9 @@ body.is-pwa.is-3d #map3d-bar {
 }
 
 #map3d-focus .m3d-focus-stop {
-    margin-top: 10px;
+    margin-top: 8px;
     width: 100%;
-    padding: 10px;
+    padding: 8px;
     border-radius: 8px;
     border: 1px solid rgba(184, 216, 240, 0.24);
     background: rgba(184, 216, 240, 0.08);
@@ -663,8 +682,10 @@ body.is-pwa.is-3d #map3d-bar {
  * into this pill instead of disappearing: title, the decision it stands for
  * (layer · fetching distance · tiles prepared) and the expand arrow. It sits
  * where the card sat, above the very bottom edge — below the 3D toggle,
- * which lives 66px up at the same centre. The whole pill is the button, so
- * the touch target is the pill, not just the arrow glyph. */
+ * which lives 66px up (58px on phones) at the same centre. In the installed
+ * PWA the toggle also follows the safe-area inset, preserving a clear gap.
+ * The whole pill is the button, so the touch target is the pill, not just the
+ * arrow glyph. */
 #map3d-focus .m3d-focus-mini {
     pointer-events: auto;
     display: inline-flex;
@@ -766,7 +787,11 @@ body:not(.is-3d) #map3d-focus.is-minimized { display: none; }
 #map3d-bar .m3d-lidar-actions button:hover { background: rgba(200, 169, 110, 0.26); }
 
 @media (max-width: 720px) {
-    #map3d-focus { padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px)); }
-    #map3d-focus .m3d-focus-card { padding: 12px 12px 14px; max-height: calc(100% - 16px); }
-    #map3d-focus .m3d-focus-layers { max-height: 108px; }
+    #map3d-focus { padding: 10px 10px calc(10px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px))); }
+    #map3d-focus .m3d-focus-card {
+        width: min(360px, calc(100% - 16px));
+        max-height: min(76vh, 560px);
+        padding: 10px 11px 12px;
+    }
+    #map3d-focus .m3d-focus-layers { max-height: 88px; }
 }

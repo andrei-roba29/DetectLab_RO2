@@ -24,17 +24,47 @@ for (const field of ['exag', 'pitch', 'bearing']) {
 assert(!viewer.includes('new maplibre.NavigationControl'), 'no duplicate MapLibre +/-, compass buttons in either layout');
 for (const pwa of [false, true]) {
     const controls = [];
+    const classes = new Set(pwa ? [] : ['maplibregl-compact', 'maplibregl-compact-show']);
+    const listeners = {};
+    let isOpen = !pwa;
+    const inner = { textContent: pwa ? '' : 'Map data attribution' };
+    const attributionNode = {
+        classList: {
+            contains(name) { return classes.has(name); },
+            remove(name) { classes.delete(name); },
+            add(name) { classes.add(name); }
+        },
+        querySelector(selector) {
+            return selector === '.maplibregl-ctrl-attrib-inner' ? inner : null;
+        },
+        removeAttribute(name) { if (name === 'open') isOpen = false; }
+    };
     const document = { body: { classList: { contains: name => name === 'is-pwa' && pwa } } };
-    const context = { document,
+    const context = { document, surface: { querySelector: () => attributionNode },
         maplibre: { AttributionControl: function (options) { this.options = options; } },
-        map: { addControl(control, corner) { controls.push({ control, corner }); } }
+        map: {
+            addControl(control, corner) { controls.push({ control, corner }); },
+            on(event, fn) { listeners[event] = fn; },
+            off(event, fn) { if (listeners[event] === fn) delete listeners[event]; }
+        }
     };
     vm.runInNewContext(credits, context);
-    assert.strictEqual(controls.length, 1, 'both layouts show a credit strip');
+    assert.strictEqual(controls.length, 1, 'both layouts keep attribution available');
     assert.strictEqual(controls[0].corner, 'bottom-left');
-    assert.strictEqual(controls[0].control.options.compact, false, 'credits are text, not an info button');
+    assert.strictEqual(controls[0].control.options.compact, true, 'credits use a compact info button');
+    if (pwa) {
+        assert.strictEqual(Object.keys(listeners).length, 3, 'the collapse waits while source metadata is not ready');
+        inner.textContent = 'Map data attribution';
+        classes.add('maplibregl-compact');
+        classes.add('maplibregl-compact-show');
+        isOpen = true;
+        listeners.sourcedata();
+    }
+    assert.strictEqual(classes.has('maplibregl-compact-show'), false, 'the long source window starts collapsed');
+    assert.strictEqual(isOpen, false, 'the initial expanded details panel is closed');
+    assert.strictEqual(Object.keys(listeners).length, 0, 'initial-collapse listeners are removed after credits load');
     assert.strictEqual(vm.runInNewContext(attributionOption, context), false,
-        'no default bottom-right attribution control in either layout');
+        'no duplicate default bottom-right attribution control in either layout');
 }
 assert(ensureBar.includes('m3d-pitch-row') && ensureBar.includes('m3d-bearing-row'), 'camera rows can be hidden independently');
 assert(/body\.is-pwa\.is-3d #map3d-bar \.m3d-pitch-row,[\s\S]*?\.m3d-bearing-row \{ display: none; \}/.test(skin), 'PWA hides camera sliders only');
@@ -46,13 +76,13 @@ assert(/body\.is-pwa\.is-3d #map3d-surface \.maplibregl-ctrl-bottom-left\s*\{[^}
 for (const action of ['reset', 'north', 'flat']) {
     assert(ensureBar.includes('m3d-' + action), 'retained action: ' + action);
 }
-const SLIDER_TAGS = { 'js/map3d-terrain.js': '20261020-3d-analysis-points', 'css/map3d-terrain.css': '20261019-lidar-depth' };
+const SLIDER_TAGS = { 'js/map3d-terrain.js': '20261020-3d-attribution-compact', 'css/map3d-terrain.css': '20261020-pwa-lidar-pill-clearance' };
 for (const file of ['js/map3d-terrain.js', 'css/map3d-terrain.css']) {
     const url = file + '?v=' + SLIDER_TAGS[file];
     assert(html.includes(url) && sw.includes("'" + url + "'"), 'updated asset cache wiring: ' + file);
 }
 assert(Number(sw.match(/CACHE_NAME = 'detectlab-v(\d+)-/)[1]) >= 200);
-console.log('✓ PWA compact controls, visible credits without duplicate buttons, and cache wiring');
+console.log('✓ PWA controls, collapsed source credits, and cache wiring');
 
 async function browserChecks() {
     if (!process.env.PUPPETEER_MODULE_DIR) {
@@ -72,14 +102,16 @@ async function browserChecks() {
                 .map(file => `<style>${read(file)}</style>`).join('');
             await page.setContent(`${sheets}<style>
                 body { margin:0; } .map-frame, .map-wrapper { position:relative; width:100%; height:100dvh; border:0; margin:0; }
-                </style><body class="is-3d ${pwa ? 'is-pwa' : ''}"><div class="map-frame"><div class="map-wrapper">
+                </style><body class="is-3d ${pwa ? 'is-pwa' : ''}" ${pwa ? 'style="--map3d-safe-area-bottom: 34px"' : ''}><div class="map-frame"><div class="map-wrapper">
                 <div id="map3d-surface"></div><button id="map3d-toggle">2D</button>
+                <div id="map3d-focus" class="is-minimized"><button id="map3d-focus-mini" class="m3d-focus-mini">LiDAR in 3D</button></div>
                 </div><button class="map-help-btn" id="mapHelpBtn">?</button></div></body>`);
             await page.addScriptTag({ path: path.join(__dirname, 'js/maplibre-gl.js') });
             // Use the production bar and desktop attribution placement.
             // A tiny camera stub avoids remote tiles/WebGL while testing UI.
             await page.addScriptTag({ content: `
                 var bar = null, state = { exaggeration: 1.4 };
+                var surface = document.getElementById('map3d-surface');
                 var CONFIG = { terrain: { minExaggeration: 0.5, maxExaggeration: 4 }, camera: { maxPitch: 80 } };
                 function wrapper() { return document.querySelector('.map-wrapper'); }
                 function t(key) { return ({ title:'3D View', exaggeration:'Terrain exaggeration', pitch:'Pitch', bearing:'Bearing', reset:'Reset view' })[key] || key; }
@@ -92,11 +124,22 @@ async function browserChecks() {
                     getZoom() { return this.zoom; }, getMinZoom() { return 0; }, getMaxZoom() { return 20; },
                     zoomIn() { this.zoom++; }, zoomOut() { this.zoom--; }, on() {}, off() {}, _getUIString(k) { return k; },
                     addControl(control, corner) { var el = document.createElement('div'); el.className = 'maplibregl-ctrl-' + corner;
-                        el.appendChild(control.onAdd(this)); document.getElementById('map3d-surface').appendChild(el); } };
+                        el.appendChild(control.onAdd(this)); surface.appendChild(el); } };
                 var maplibre = { AttributionControl: class {
                     constructor(options) { this.options = options; }
-                    onAdd() { var el = document.createElement('div'); el.className = 'maplibregl-ctrl maplibregl-ctrl-attrib';
-                        el.textContent = 'Map data attribution'; return el; }
+                    onAdd() {
+                        var el = document.createElement('details');
+                        el.className = 'maplibregl-ctrl maplibregl-ctrl-attrib maplibregl-compact maplibregl-compact-show';
+                        el.setAttribute('open', '');
+                        var button = document.createElement('summary');
+                        button.className = 'maplibregl-ctrl-attrib-button';
+                        button.addEventListener('click', function (event) {
+                            event.preventDefault(); el.classList.add('maplibregl-compact-show');
+                        });
+                        var inner = document.createElement('div');
+                        inner.className = 'maplibregl-ctrl-attrib-inner'; inner.textContent = 'Map data attribution';
+                        el.appendChild(button); el.appendChild(inner); return el;
+                    }
                 } };
                 ${ensureBar}
                 ensureBar();
@@ -106,12 +149,20 @@ async function browserChecks() {
                 const box = el => { const r = el.getBoundingClientRect(); return { left:r.left, right:r.right, top:r.top, bottom:r.bottom, width:r.width, height:r.height }; };
                 const bar = document.getElementById('map3d-bar');
                 const rows = [...bar.querySelectorAll('.m3d-row')];
-                return { bar:box(bar), rows:rows.map(box), help:box(document.getElementById('mapHelpBtn')),
+                const toggle = document.getElementById('map3d-toggle');
+                const toggleRect = toggle.getBoundingClientRect();
+                const toggleHit = document.elementFromPoint(toggleRect.left + toggleRect.width / 2,
+                    toggleRect.top + toggleRect.height / 2);
+                return { bar:box(bar), rows:rows.map(box), toggle:box(toggle),
+                    mini:box(document.getElementById('map3d-focus-mini')),
+                    toggleHit:toggleHit && toggleHit.id, help:box(document.getElementById('mapHelpBtn')),
                     zoom:document.querySelector('.maplibregl-ctrl-zoom-in') ? box(document.querySelector('.maplibregl-ctrl-zoom-in')) : null,
                     compass:!!document.querySelector('.maplibregl-ctrl-compass'),
-                    info:[...document.querySelectorAll('.maplibregl-ctrl-attrib-button')].some(el => getComputedStyle(el).display !== 'none'),
-                    credits:(() => { const el = document.querySelector('.maplibregl-ctrl-bottom-left .maplibregl-ctrl-attrib');
-                        return !!el && el.getBoundingClientRect().height > 0 && getComputedStyle(el).display !== 'none'; })(),
+                    info:(() => { const el = document.querySelector('.maplibregl-ctrl-attrib-button');
+                        return !!el && getComputedStyle(el).display !== 'none'; })(),
+                    credits:(() => { const el = document.querySelector('.maplibregl-ctrl-attrib-inner');
+                        return !!el && getComputedStyle(el).display !== 'none'; })(),
+                    creditControl:!!document.querySelector('.maplibregl-ctrl-bottom-left .maplibregl-ctrl-attrib'),
                     bg:getComputedStyle(bar).backgroundColor, filter:getComputedStyle(bar).backdropFilter,
                     alpha:rows.map(el => getComputedStyle(el).backgroundColor),
                     visibleRows:rows.filter(el => getComputedStyle(el).display !== 'none').length,
@@ -133,6 +184,12 @@ async function browserChecks() {
                 assert(Math.abs((geometry.bar.left + geometry.bar.right) / 2 - width / 2) < 1, 'PWA bar is centred');
                 assert(geometry.bar.top >= 56, 'PWA bar clears the top map controls');
                 assert(geometry.bar.bottom < height - 80, 'bar clears bottom toggle/actions');
+                if (width <= 720) {
+                    assert(geometry.toggle.bottom <= geometry.mini.top - 8,
+                        'the PWA 2D/3D switch clears the minimized LiDAR pill with a 10px safe-area gap');
+                    assert.strictEqual(geometry.toggleHit, 'map3d-toggle',
+                        'the switch itself receives a tap at its centre rather than the higher-z-index pill');
+                }
                 if (geometry.scroll) {
                     assert.strictEqual(geometry.overflow, 'auto', 'short-screen controls can scroll');
                     await page.mouse.move(width / 2, geometry.bar.top + 10);
@@ -142,8 +199,12 @@ async function browserChecks() {
             } else {
                 assert.strictEqual(geometry.visibleRows, 3, 'web keeps all three sliders');
             }
-            assert.strictEqual(geometry.info, false, 'neither layout has a bottom-right info button');
-            assert.strictEqual(geometry.credits, true, 'required credits remain visible at bottom left');
+            assert.strictEqual(geometry.info, true, 'the compact source-credit button remains available');
+            assert.strictEqual(geometry.creditControl, true, 'the compact attribution control stays bottom-left');
+            assert.strictEqual(geometry.credits, false, 'the long attribution window is hidden on entry');
+            await page.evaluate(() => document.querySelector('.maplibregl-ctrl-attrib-button').click());
+            assert(await page.evaluate(() => getComputedStyle(document.querySelector('.maplibregl-ctrl-attrib-inner')).display !== 'none'),
+                'source credits remain accessible from the compact button');
             // Range callbacks and the retained actions must still drive the camera.
             const values = await page.evaluate(() => {
                 const update = (selector, value) => { const el = document.querySelector(selector); el.value = value; el.dispatchEvent(new Event('input')); };

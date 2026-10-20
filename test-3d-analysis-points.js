@@ -318,13 +318,17 @@ function viewerChecks() {
     const index = read('index.html');
     const sw = read('sw.js');
     const TAG = '20261020-3d-analysis-points';
-    ['js/map3d-mirror.js', 'js/map3d-terrain.js', 'js/lidar-scanner.js',
+    const VIEWER_TAG = '20261020-3d-attribution-compact';
+    ['js/map3d-mirror.js', 'js/lidar-scanner.js',
         'js/archeo-potential.js', 'js/archeo-report.js', 'js/battles-layer.js'].forEach((file) => {
-        assert.ok(index.includes(file + '?v=' + TAG), 'index.html loads ' + file + ' at the new tag');
-        assert.ok(sw.includes("'" + file + '?v=' + TAG + "'"), 'sw.js pre-caches ' + file + ' at the new tag');
+        assert.ok(index.includes(file + '?v=' + TAG), 'index.html loads ' + file + ' at the analysis-points tag');
+        assert.ok(sw.includes("'" + file + '?v=' + TAG + "'"), 'sw.js pre-caches ' + file + ' at the analysis-points tag');
     });
-    assert.ok(/CACHE_NAME = 'detectlab-v236-3d-analysis-points'/.test(sw), 'the shell cache is v236');
-    ok('cache: changed assets re-tagged and pre-cached, shell cache v236');
+    assert.ok(index.includes('js/map3d-terrain.js?v=' + VIEWER_TAG) &&
+        sw.includes("'js/map3d-terrain.js?v=" + VIEWER_TAG + "'"),
+        'the updated terrain viewer has its own cache-busting tag');
+    assert.ok(/CACHE_NAME = 'detectlab-v239-pwa-lidar-pill-clearance'/.test(sw), 'the shell cache is v239');
+    ok('cache: changed assets re-tagged and pre-cached, shell cache v239');
 }
 
 (async () => {

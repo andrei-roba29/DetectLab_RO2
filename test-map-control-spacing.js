@@ -24,7 +24,7 @@ assert(!/#map3d-surface \.maplibregl-ctrl-group[^{]*\{/.test(skin),
 assert(!/new maplibre\.TerrainControl/.test(viewer),
     'the 3D viewer does not build MapLibre’s TerrainControl (the “Disable terrain” button)');
 assert.strictEqual((viewer.match(/map\.addControl\(/g) || []).length, 2,
-    'the surface adds exactly two MapLibre controls: the credits and the scale, both bottom-left');
+    'the surface adds exactly two MapLibre controls: compact credits and scale, both bottom-left');
 assert(/style\.terrain = \{ source: ts\.id/.test(viewer),
     'the deck is still draped over the DEM by the style, with no toggle to switch it off');
 assert(/maplibre\.ScaleControl/.test(viewer) && /maplibre\.AttributionControl/.test(viewer),
@@ -32,10 +32,10 @@ assert(/maplibre\.ScaleControl/.test(viewer) && /maplibre\.AttributionControl/.t
 assert(/body:not\(\.is-pwa\) \.map-frame\.is-fullscreen #detectlab-map \.leaflet-left \.leaflet-control-zoom\s*\{\s*margin-left: calc\(18px \+ env\(safe-area-inset-left, 0px\)\)/.test(styles),
     'mobile web fullscreen notch inset respects the left safe area');
 for (const file of ['css/styles.css', 'css/map3d-terrain.css']) {
-    /* Each asset carries the tag of whatever last changed it: the sheet by the
-     * Danish layers block at its end, the terrain skin by the terrain-toggle
-     * removal. */
-    const tag = file === 'css/styles.css' ? '20261020-albania-independent-rows' : '20261019-lidar-depth';
+    /* Each asset carries the tag of whatever last changed it: styles.css by
+     * the Danish layers block, and the terrain skin by the smaller LiDAR focus
+     * dialog. */
+    const tag = file === 'css/styles.css' ? '20261020-albania-independent-rows' : '20261020-pwa-lidar-pill-clearance';
     const url = file + '?v=' + tag;
     assert(html.includes(url) && sw.includes("'" + url + "'"), 'cache-busted and precached: ' + file);
 }
