@@ -76,7 +76,7 @@ assert(/body\.is-pwa\.is-3d #map3d-surface \.maplibregl-ctrl-bottom-left\s*\{[^}
 for (const action of ['reset', 'north', 'flat']) {
     assert(ensureBar.includes('m3d-' + action), 'retained action: ' + action);
 }
-const SLIDER_TAGS = { 'js/map3d-terrain.js': '20261020-3d-attribution-compact', 'css/map3d-terrain.css': '20261020-pwa-lidar-pill-clearance' };
+const SLIDER_TAGS = { 'js/map3d-terrain.js': '20261020-lidar-disc-route', 'css/map3d-terrain.css': '20261020-pwa-lidar-pill-clearance' };
 for (const file of ['js/map3d-terrain.js', 'css/map3d-terrain.css']) {
     const url = file + '?v=' + SLIDER_TAGS[file];
     assert(html.includes(url) && sw.includes("'" + url + "'"), 'updated asset cache wiring: ' + file);

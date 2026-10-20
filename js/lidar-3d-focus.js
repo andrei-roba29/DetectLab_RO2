@@ -1156,6 +1156,13 @@
         plan.tiles.forEach(function (tile) {
             var url = '';
             try { url = M.tileUrlFor(layer, tile.z, tile.x, tile.y); } catch (e) { url = ''; }
+            /* A canvas-route tile (the country products draw their own pixels)
+             * has no URL of its own: the prefetch stores it under the deck key
+             * dl2d://<key>/z/x/y — the very URL the 3D view will ask for. Asking
+             * the cache with the un-substituted template ({z}/{x}/{y} still in
+             * it) never matched anything, so these discs always reported “0
+             * prepared” and the dialog offered a download it never needed. */
+            if (!url && entry.key) url = 'dl2d://' + entry.key + '/' + tile.z + '/' + tile.x + '/' + tile.y;
             if (isPrepared(url || template, entry.key)) prepared += 1;
         });
         return prepared;

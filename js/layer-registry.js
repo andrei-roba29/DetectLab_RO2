@@ -1650,7 +1650,18 @@
     /** Tile templates for the 3D raster source of `def`. */
     function map3dTiles(def, opts) {
         opts = opts || {};
-        var resolved = resolveDef(def, opts.modules) || def;
+        var resolved = resolveDef(def, opts.modules);
+        if (!resolved) {
+            /* A dynamic definition whose browser module is not loaded. `def.url`
+             * is the SERVICE endpoint, not a tile template: handing it to
+             * MapLibre makes every tile of the layer request that one
+             * un-substituted URL, fail, and leave nothing but the base map —
+             * the exact “prepared, but only the base map is there” picture.
+             * No template is the honest answer; both callers already handle it
+             * (the mirror falls back to the live layer's own dl2d:// route, the
+             * registry caller reports `unsupported: no tile template`). */
+            return [];
+        }
         var proxied = needsProxy(resolved, opts);
         var template;
         if (resolved.perTile && !proxied) {

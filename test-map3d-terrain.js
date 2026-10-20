@@ -80,9 +80,9 @@ const skin = read('css/map3d-terrain.css');
 
 const TAG = '20261019-tile-order';              /* MapLibre itself (coveringTiles patch) */
 const TAG_3D = '20261020-3d-analysis-points';    /* mirror                        */
-const TAG_VIEWER = '20261020-3d-attribution-compact'; /* viewer (js)                         */
+const TAG_VIEWER = '20261020-lidar-disc-route'; /* viewer (js)                         */
 const TAG_CSS = '20261020-pwa-lidar-pill-clearance';    /* viewer skin (css)              */
-const TAG_FOCUS = '20261019-lidar-depth';  /* LiDAR focus (3D, one disc)     */
+const TAG_FOCUS = '20261020-lidar-disc-route';  /* LiDAR focus (3D, one disc)     */
 const TAG_REGISTRY = '20261020-albania-independent-rows'; /* shared registry (WMS audit) */
 
 // ══════════════════════════════════════════════════════════════
@@ -188,6 +188,18 @@ const TAG_REGISTRY = '20261020-albania-independent-rows'; /* shared registry (WM
     assert(diag.terrain.provider === 'aws-terrarium' && /elevation-tiles-prod/.test(diag.terrain.tiles[0]),
         'the default DEM is the keyless AWS Terrarium source');
     assert(R.verify2d().ok, 'the registry agrees with the live 2D layers');
+
+    /* A dynamic layer whose browser module is not loaded has NO tile template.
+     * `def.url` is the service endpoint, not a `{z}/{x}/{y}` template: emitting
+     * it made MapLibre request that one un-substituted URL for every tile, so
+     * the layer failed 100% of its tiles under a silent blank — "prepared, but
+     * only the base map". No template makes the caller report `unsupported`. */
+    const ahn = R.get('lidar.nl-ahn');
+    assert(ahn && ahn.kind === 'dynamic' && ahn.builder && ahn.builder.module === 'AhnLidar',
+        'the AHN LiDAR layer is still a module-backed dynamic definition');
+    assert(JSON.stringify(R.rasterSource(ahn).tiles) === '[]',
+        'without its module a dynamic layer has no 3D tile template (never the service URL)');
+
     console.log('  ✓ the registry describes ' + layers.length + ' layers, orders them and routes their hosts');
 }
 

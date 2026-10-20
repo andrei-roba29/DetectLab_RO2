@@ -48,7 +48,7 @@ async function testCountryRace() {
         webglProbe: () => ({ webgl2: true }), loadMapLibre: () => sdk,
         registerProtocols: noop, REGISTRY: { config: () => ({}) },
         focusCamera: x => x, cameraFrom2D: noop, deviceProfile: () => ({}),
-        buildMapOptions: noop, watchContextLoss: noop, refreshBarCopy: noop, root: { setTimeout: () => 1 },
+        buildMapOptions: noop, watchContextLoss: noop, watchResume: noop, refreshBarCopy: noop, root: { setTimeout: () => 1 },
         fail3D() { failures++; }, console });
     const start = source.indexOf('    function openNow()');
     vm.runInContext(source.slice(start, source.indexOf('\n    /**', start)), ctx);

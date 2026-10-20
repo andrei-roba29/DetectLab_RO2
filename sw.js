@@ -590,7 +590,19 @@
 //   scrollable and touch-friendly on smaller screens.
 // v239: keep the PWA 2D/3D switch clear of the minimized LiDAR pill, including
 //   the iOS safe area.
-const CACHE_NAME = 'detectlab-v239-pwa-lidar-pill-clearance';
+// v240: “tiles finished, 3D shows only the base map” — on repeat entries, and
+//   mostly in the installed PWA. The nine country LiDAR products carry a
+//   registry id, so the 3D deck built their raster source from the REGISTRY's
+//   template (dl3d:// for the bbox builders, and ?layer=… the moment the
+//   prefetch healed the host) instead of the dl2d:// route the disc was
+//   prepared through. That route never reads the prepared tiles and makes its
+//   own CORS/proxy decision: a disc the dialog had just reported as ready was
+//   rebuilt tile by tile from the network, and where the prefetch had healed
+//   the host to the proxy the sheet came back empty over the base map. A
+//   focused LiDAR layer now always draws through dl2d:// — prepared bytes
+//   first, the same fetchTile/proxy policy after, disc clip included. See
+//   MAP_3D_TERRAIN.md §6.4.
+const CACHE_NAME = 'detectlab-v240-lidar-disc-route';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -666,6 +678,7 @@ const PRECACHE_URLS = [
   'js/roman-roads.js?v=20261015-roman-roads',
   'js/roman-roads-worker.js?v=20261015-roman-roads',
   /* LiDAR in the 3D view: the focus dialog, the prefetch and the entry gate. */
+  'js/lidar-3d-focus.js?v=20261020-lidar-disc-route',
   'js/lidar-3d-focus.js?v=20261019-lidar-depth',
   'js/lidar-3d-focus.js?v=20261019-lidar-1km',
   'js/lidar-3d-focus.js?v=20261017-lidar-3d-entry-handover',
@@ -675,6 +688,7 @@ const PRECACHE_URLS = [
   'js/map3d-mirror.js?v=20261013-3d-mobile',
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
+  'js/map3d-terrain.js?v=20261020-lidar-disc-route',
   'js/map3d-terrain.js?v=20261020-3d-attribution-compact',
   'js/map3d-terrain.js?v=20261019-lidar-depth',
   'js/map3d-terrain.js?v=20261020-3d-analysis-points',

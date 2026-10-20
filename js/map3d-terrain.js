@@ -106,6 +106,7 @@
         focus: null,                     /* { key, defId, label, lat, lng, radiusKm, bounds, mask, tiles } */
         lidarOff: false,                 /* LiDAR deliberately not drawn in 3D     */
         lidarNotes: [],                  /* what had to be left out, and why       */
+        focusWarned: null,                /* the focus-not-drawn reason already reported */
         primed: {},                      /* url → raw bytes the prefetch downloaded */
         primedOut: {},                   /* url → { sig, data } after blend + clip  */
         primedLayer: {},                 /* url → the layer key it was prepared for */
@@ -128,6 +129,7 @@
         failed: false,                   /* last open() ended in an error        */
         safeMode: false,                 /* first GL context was refused         */
         contextLost: false,              /* GPU context reclaimed by the system  */
+        resumeWatched: false,            /* visibilitychange/pageshow wired once */
         lastError: '',                   /* exact message, for the user to quote */
         probe: null                      /* memoised webglProbe() result         */
     };
@@ -786,6 +788,12 @@
          * what the dialog, the mirror item and the registry agree on. A focus
          * carries both, and either may be the one that names this item. */
         if (item.lidarKey && (item.lidarKey === f.key || item.lidarKey === f.lidarKey)) return true;
+        /* The deck key itself: a focus is built FROM the live layer of that key
+         * (js/lidar-3d-focus.js → activeLayers()), so a layer that lost its
+         * family tag — a `window._lidarGroup` member rebuilt by a country
+         * module, a layer added after the dialog was opened — still matches the
+         * disc the user prepared instead of being dropped as "missing". */
+        if (item.key && f.key && item.key === f.key) return true;
         if (item.defId && f.defId && item.defId === f.defId) return true;
         return false;
     }
@@ -799,7 +807,15 @@
     function maskOf(key) {
         var f = state.focus;
         if (!f || !key) return null;
-        if (key === f.key || key === f.lidarKey || (f.defId && key === f.defId)) return f.mask || f;
+        /* Four spellings of the same layer meet here: the deck key of the live
+         * 2D layer (`2d.<stamp>`), the family key (`lidar.ro1m`), the registry
+         * id as a focus stores it (`lidar.fr-mnh`) and the registry id as the
+         * deck addresses it (`def:lidar.fr-mnh`). A disc belongs to the layer,
+         * whichever of them names it — the def: form used to fall through, so
+         * a registry-drawn LiDAR layer was bounded to the disc but never
+         * clipped to it. */
+        if (key === f.key || key === f.lidarKey) return f.mask || f;
+        if (f.defId && (key === f.defId || key === 'def:' + f.defId)) return f.mask || f;
         return null;
     }
     function focusMaskFor(key) { return maskOf(key); }
@@ -1196,7 +1212,13 @@
              * the disc empty over the base map. The prepared bytes win;
              * the live builder below stays the fallback. */
             var focus = state.focus;
-            if (focus && focus.key && focus.defId && focus.defId === defId) {
+            /* The definition may be named by the focus as its id (`lidar.fr-mnh`,
+             * which is what `_dlDefId` carries) or as the registry key the deck
+             * uses (`def:lidar.fr-mnh`, which is what `_dlLidar` carries for a
+             * module-built layer) — either way it is the same layer, and its
+             * prepared disc is under the deck key. */
+            var focusDef = focus && (focus.defId === defId || focus.lidarKey === 'def:' + defId);
+            if (focus && focus.key && focusDef) {
                 var deckUrl = 'dl2d://' + focus.key + '/' + z + '/' + x + '/' + y;
                 var fromDisc = primedOutput(deckUrl, pipelineSigFor(focus.key, deckUrl));
                 if (fromDisc) return Promise.resolve({ data: fromDisc });
@@ -1936,7 +1958,13 @@
     function renderRaster(entry) {
         var item = entry.item;
         var sourceId = entry.id + '-src';
-        var tiles = rasterTilesFor(item);
+        /* One focused layer has ONE route (see rasterTilesFor). The flag has to
+         * be known before the template is chosen: a def-backed LiDAR layer must
+         * not fall back to the registry's own renderer, because that renderer
+         * is a different tile source with a different CORS/proxy policy and no
+         * knowledge of the disc the user prepared. */
+        var focused = !!(state.focus && focusMatches(item));
+        var tiles = rasterTilesFor(item, focused);
         var spec = {
             type: 'raster',
             tiles: tiles,
@@ -1952,7 +1980,6 @@
          * the difference between a few hundred prepared tiles and a national
          * pyramid nobody asked for. The tiles that only graze the disc's
          * rectangle are clipped pixel by pixel in the protocol handler. */
-        var focused = !!(state.focus && focusMatches(item));
         if (focused && state.focus.bounds) spec.bounds = state.focus.bounds;
         /* …and it stops at the deepest zoom the prefetch actually prepared.
          * Without this the source kept the layer's native maximum, so pinching
@@ -1964,7 +1991,11 @@
          * screen, no request is made, and the only thing lost is detail the
          * prefetch never bought. */
         if (focused && state.focus.plan && state.focus.plan.zoomTo != null) {
-            spec.maxzoom = Math.min(spec.maxzoom, Number(state.focus.plan.zoomTo));
+            /* Never below the source's own floor: a maxzoom under minzoom is a
+             * source MapLibre can only draw nothing for, which is one more way
+             * a "prepared" disc ends up as the base map alone. */
+            spec.maxzoom = Math.max(Number(spec.minzoom) || 0,
+                Math.min(Number(spec.maxzoom), Number(state.focus.plan.zoomTo)));
         }
         if (!map.getSource(sourceId)) {
             map.addSource(sourceId, spec);
@@ -2016,9 +2047,28 @@
      * `dl2d://` protocol: the layer's own getTileUrl() builds the request, so
      * its LAYERS / FORMAT / VERSION / STYLE / TIME parameters cannot drift from
      * what the 2D map asks for.
+     *
+     * THE FOCUSED LiDAR LAYER IS THE EXCEPTION, AND ALWAYS TAKES THE dl2d://
+     * ROUTE — def-backed or not. js/lidar-3d-focus.js prepares the disc through
+     * that very route: the live layer's own URL, the viewer's own CORS/proxy
+     * decision (`preferProxy` for the WMS products, the healed-host rule for
+     * the rest) and the disc clip. A registry template is a *different* renderer
+     * with a different policy — `dl3d://` for the bbox builders, `?layer=…` the
+     * moment the prefetch healed the host, or the provider URL for the tile
+     * builders — and none of them asks the prepared cache for anything. So a
+     * disc the dialog had just reported as ready was rebuilt tile by tile from
+     * the network, and on a host that only answers through the proxy the whole
+     * sheet came back empty over the base map: “the fetch finishes, the tiles
+     * are ready, and 3D shows only the base map”. One focused layer, one route.
      */
-    function rasterTilesFor(item) {
-        if (item.defId) {
+    function rasterTilesFor(item, focused) {
+        /* `render: 'none'` is the one mirrored raster with no per-tile route at
+         * all (no getTileUrl, no createTile): the dl2d handler could not build
+         * a single one of its tiles, so it keeps the registry's template. A
+         * focused item whose live layer is gone (the descriptor outlived it)
+         * keeps it too — a registry template that still works beats a key the
+         * dl2d handler can only reject. */
+        if ((!focused || item.render === 'none' || !item.layer) && item.defId) {
             var def = REGISTRY.get(item.defId);
             if (def) {
                 var spec = REGISTRY.rasterSource(def, {
@@ -2048,7 +2098,9 @@
         /* Same ceiling as the mirrored path: prepared up to plan.zoomTo, then
          * overzoomed — never a zoom the prefetch did not buy. */
         if (focused && state.focus.plan && state.focus.plan.zoomTo != null) {
-            spec.maxzoom = Math.min(Number(spec.maxzoom == null ? 22 : spec.maxzoom), Number(state.focus.plan.zoomTo));
+            /* Floored at the source's own minzoom — see renderRaster(). */
+            spec.maxzoom = Math.max(Number(spec.minzoom) || 0,
+                Math.min(Number(spec.maxzoom == null ? 22 : spec.maxzoom), Number(state.focus.plan.zoomTo)));
         }
         if (!spec.tiles || !spec.tiles.length) {
             state.status[entry.id] = { state: 'unsupported', reason: 'no tile template (module not loaded?)' };
@@ -2590,6 +2642,29 @@
             }
         });
 
+        /* A focus the deck could not draw is the “prepared disc, base map only”
+         * report in its generic form. The bar still names the focus (it is
+         * state the user chose), so without this line the only evidence was an
+         * empty 3D view. Say it once per distinct reason, with the reason the
+         * renderer recorded. */
+        if (state.focus && !state.lidarOff) {
+            var drawnFocus = Object.keys(state.status).some(function (id) {
+                return !!(state.status[id] && state.status[id].focused);
+            });
+            if (!drawnFocus) {
+                var note = (state.lidarNotes || [])[0];
+                var why = (note && note.reason) || 'no matching 2D layer';
+                var detail = (state.status['m3d-2d-' + state.focus.key] || {}).reason || '';
+                if (state.focusWarned !== why) {
+                    state.focusWarned = why;
+                    pushError('LiDAR focus “' + (state.focus.label || state.focus.key || state.focus.defId) +
+                        '” is not on the 3D deck (' + why + (detail ? ': ' + detail : '') + ')');
+                }
+            } else {
+                state.focusWarned = null;
+            }
+        }
+
         applyDeck(p);
         watchSourceHealth();
         syncAttribution();
@@ -2982,6 +3057,9 @@
              * runs short; MapLibre then renders a black canvas with no visible
              * reason. Say so, and redraw as soon as it comes back. */
             watchContextLoss();
+            /* Requests killed while the app was in the background are never
+             * re-asked on their own; a resume redraws the deck. */
+            watchResume();
 
             /* The deck is not gated on a single event: 'load' waits for the DEM,
              * so a slow/unreachable elevation model would hide every layer.
@@ -3083,6 +3161,35 @@
             state.firstSyncDone = false;
             scheduleSync();
         }, false);
+    }
+
+    /**
+     * Coming back from the background (the installed PWA, mostly).
+     *
+     * A backgrounded phone kills the tile requests that were in flight; the
+     * canvas, the style and `state.rendered` all survive, so nothing ever asks
+     * for those tiles again — the deck keeps what had arrived, which is
+     * frequently the base map alone while the LiDAR source is still “open”.
+     * A resume is also the only moment a resize is due: iOS reports the new
+     * viewport a tick after `visibilitychange`, and MapLibre keeps rendering at
+     * the old one until it is told.
+     *
+     * Guarded and idempotent: the listeners are added once, and a resume while
+     * the view is closed is a no-op.
+     */
+    function watchResume() {
+        if (state.resumeWatched) return;
+        var doc = root.document;
+        if (!doc || !doc.addEventListener) return;
+        state.resumeWatched = true;
+        function resume() {
+            if (!state.open || !map) return;
+            if (doc.hidden) return;
+            try { map.resize(); } catch (e) { /* ignore */ }
+            scheduleSync();
+        }
+        doc.addEventListener('visibilitychange', resume);
+        root.addEventListener('pageshow', resume);
     }
 
     function close() {
