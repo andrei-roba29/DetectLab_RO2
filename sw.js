@@ -553,15 +553,8 @@
 //   stalled tile fetch parked the prefetch a tile short of done forever
 //   (prefetch fetches now carry a 45 s per-tile deadline). See
 //   MAP_3D_TERRAIN.md §6.4.
-// v226: Albania joins the catalogue - nine live layers from the ASIG
-//   geoportal (geoportal.asig.gov.al): DTM-2015 LiDAR hillshade, DSM
-//   hillshade, Orthophoto 1999, Orthophoto 1994 (the 20 cm 2015
-//   product), the 1:50k topographic map and four dated protected-sites
-//   overlays, one collapsed group in the Free tab, country-filtered to
-//   Albania (ALBANIA_ASIG_LAYERS.md). New modules
-//   js/asig-albania-layers.config.js + js/asig-albania-layers.js,
-//   re-versioned layer-registry.js, translations.js, wms-health.js,
-//   map-app.js and styles.css so an installed PWA picks them up.
+// v226: initial Albania ASIG catalogue integration. See v235 for the
+//   independent-row layout and updated production verification contract.
 // v228: 3D tile order — MapLibre's coveringTiles() sorted a pitched/terrain
 //   view (mixed zoom levels) by a distance measured against the wrong tile
 //   grid, so tiles in the distance — sometimes outside the point of view —
@@ -587,7 +580,11 @@
 //   pinch OVERZOOMS the disc instead of asking for tiles nobody downloaded.
 //   Phones also keep a 160-tile MapLibre cache and a 48 MB primed disc now.
 //   Re-tags js/lidar-3d-focus.js and js/map3d-terrain.js.
-const CACHE_NAME = 'detectlab-v234-finland-filter';
+// v235: ASIG's nine WMS layers now render as independent rows in the existing
+//   Historical Maps, Satellite, LiDAR and Heritage Sites sections. Requests
+//   are clipped to Albania, rows remain available in all country views, and
+//   the layer renderer detects failed image decodes before switching CRS.
+const CACHE_NAME = 'detectlab-v235-albania-independent-rows';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -626,17 +623,23 @@ const PRECACHE_URLS = [
   'js/asig-albania-layers.config.js?v=20261017-albania-asig',
   'js/asig-albania-layers.js',
   'js/asig-albania-layers.js?v=20261017-albania-asig',
+  'js/asig-albania-layers.config.js?v=20261020-albania-independent-rows',
+  'js/asig-albania-layers.js?v=20261020-albania-independent-rows',
   'js/layer-registry.js?v=20261017-albania-asig',
   'js/translations.js?v=20261017-albania-asig',
   'js/wms-health.js?v=20261017-albania-asig',
+  'js/wms-health.js?v=20261020-albania-independent-rows',
   'js/finland-tm35.js?v=20261019-finland-filter',
   'js/finland-layers.config.js?v=20261019-finland-filter',
   'js/finland-layers.js?v=20261019-finland-filter',
   'js/layer-registry.js?v=20261019-finland-filter',
+  'js/layer-registry.js?v=20261020-albania-independent-rows',
   'js/map-app.js?v=20261019-finland-filter',
+  'js/map-app.js?v=20261020-albania-independent-rows',
   'js/map-app.js?v=20261017-finland',
   'js/map-app.js?v=20261017-albania-asig',
   'css/styles.css?v=20261019-danish-free-groups',
+  'css/styles.css?v=20261020-albania-independent-rows',
   'js/danish-layers.js?v=20261019-danish-free-groups',
   'js/layer-registry.js?v=20261014-wms-audit',
   'js/layer-registry.js?v=20261013-3d-mobile',

@@ -290,11 +290,11 @@ assert(shellVersion >= 196,
  * WMS/WMTS audit, the viewer and sheet by the compact PWA
  * 3D controls. */
 const TAGS = {
-    'js/layer-registry.js': '20261017-albania-asig',
+    'js/layer-registry.js': '20261020-albania-independent-rows',
     'js/map3d-terrain.js': '20261019-lidar-depth',
-    'css/map3d-terrain.css': '20261017-lidar-3d-entry-handover',
-    'js/danish-layers.config.js': '20261016-danish-wms-layers',
-    'js/danish-layers.js': '20261016-danish-wms-layers'
+    'css/map3d-terrain.css': '20261019-lidar-depth',
+    'js/danish-layers.config.js': '20261019-danish-token-maps',
+    'js/danish-layers.js': '20261019-danish-free-groups'
 };
 ['js/map3d-terrain.js', 'js/layer-registry.js', 'css/map3d-terrain.css',
     'js/danish-layers.config.js', 'js/danish-layers.js'].forEach(function (asset) {

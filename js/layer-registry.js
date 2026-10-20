@@ -222,22 +222,14 @@
          * data pane keeps painting over the Danish ones. */
         'danish-base': { label: { ro: 'Danemarca · hărți de bază', en: 'Denmark · base maps' }, z: 399, base: true },
         'danish-overlay': { label: { ro: 'Danemarca · tematice', en: 'Denmark · overlays' }, z: 406 },
-        /* The Albanian layers (Albania, ASIG geoportal) — described in
-         * js/asig-albania-layers.config.js and drawn by
-         * js/asig-albania-layers.js. The panes themselves are created by that
-         * module (rasters 405, protected-sites vector overlays 407), above
-         * the app's own basemap stack on pane_satellite (398), below every
-         * existing app-wide data pane (LiDAR 610, heritage 620, …). */
-        'albania-raster': { label: { ro: 'Albania · raster', en: 'Albania · raster' }, z: 405 },
-        'albania-overlay': { label: { ro: 'Albania · arii protejate', en: 'Albania · protected sites' }, z: 407 },
         /* The Finnish layers (Finland: MML terrain + cadastral, Museovirasto
          * registers, SYKE, Åland, local conversions) — described in
          * js/finland-layers.config.js and drawn by js/finland-layers.js.
          * The panes themselves are created by that module (rasters — the
          * reprojected TM35FIN canvases, the SYKE/Åland tiles — at 408; the
          * vector overlays — WFS families, MVT cadastral, local GeoJSON — at
-         * 409), above the Albanian (405/407) and Danish (399/406) stacks
-         * (the countries never overlap), below every app-wide data pane. */
+         * 409), above the Danish (399/406) stacks. Albania ASIG entries reuse
+         * their existing thematic groups (sat-hist, lidar, patrimoniu, hist-free). */
         'finland-raster': { label: { ro: 'Finlanda · raster', en: 'Finland · raster' }, z: 408 },
         'finland-vector': { label: { ro: 'Finlanda · vectori', en: 'Finland · vectors' }, z: 409 }
     };
@@ -2173,22 +2165,12 @@
         verify2d: verify2d
     };
     /* ═══════════════════════════════════════════════════════════════════════
-     *  ALBANIAN LAYERS (Albania · ASIG geoportal) — mirrored from
-     *  js/asig-albania-layers.config.js
-     * ───────────────────────────────────────────────────────────────────────
-     * The config is the single description of every Albanian layer; this
-     * block only copies the enabled ones into the shared catalogue, so the
-     * 2D map's diagnostics, the 3D status report and the offline audit
-     * (tools/audit-wms-layers.mjs) treat them like any other layer. It runs
-     * in the browser (the config is a plain script loaded first) and in Node
-     * (the tools require() the config), and it does nothing when the config
-     * is not there — every other page keeps working unchanged.
-     *
-     * `guard:false` + `selfGuarded` is deliberate: js/asig-albania-layers.js
-     * owns those rows (per-tile EPSG:4326 fallback after repeated errors, a
-     * transparent pixel for a failed tile and a row-level "source is not
-     * answering" notice), so the availability guard must not switch a layer
-     * off behind the visitor's back.                                       */
+     *  ALBANIA ASIG LAYERS — mirrored from the single ASIG config.
+     *  Each layer uses the app's existing Historical, Satellite, LiDAR or
+     *  Heritage registry group/z-order; there is no Albania-wide group.
+     *  The renderer owns CRS fallback and per-row failure reporting, so the
+     *  global availability guard must not flip these independent switches.
+     * ═══════════════════════════════════════════════════════════════════════ */
     (function registerAlbaniaLayers() {
         var cfg = null;
         try {
@@ -2196,19 +2178,17 @@
             if (!cfg && typeof require === 'function') cfg = require('./asig-albania-layers.config.js');
         } catch (e) { cfg = null; }
         if (!cfg || typeof cfg.enabledLayers !== 'function') return;
-        var SELF_GUARD = 'js/asig-albania-layers.js owns this row: after repeated tile errors it falls ' +
-            'back from EPSG:3857 to per-tile EPSG:4326 requests, a failed tile degrades to a transparent ' +
-            'pixel and a persistent failure is reported in the row — the switch must stay under the ' +
-            'visitor\\u2019s control.';
+        var SELF_GUARD = 'js/asig-albania-layers.js detects image decode/tile errors, retries EPSG:4326 after ' +
+            'the configured EPSG:3857 error burst, and reports persistent fallback failures on that layer row; ' +
+            'the global guard must not toggle its independent control.';
         try {
             cfg.enabledLayers().forEach(function (layer) {
                 var id = 'albania.' + layer.id;
                 if (BY_ID[id]) return;
-                var isProtected = layer.group === 'protected';
                 API.register({
                     id: id,
-                    group: isProtected ? 'albania-overlay' : 'albania-raster',
-                    z: isProtected ? 407 : 405,
+                    group: layer.registryGroup,
+                    z: layer.registryZ,
                     kind: 'wms',
                     title: { ro: layer.title.ro, en: layer.title.en, sq: layer.title.en },
                     url: (cfg.wms && cfg.wms.url) || (cfg.endpoints && cfg.endpoints.wms),
@@ -2216,7 +2196,7 @@
                     layer: layer.layers,
                     format: layer.format,
                     transparent: !!layer.transparent,
-                    version: (cfg.wms && cfg.wms.version) || '1.1.1',
+                    version: (cfg.wms && cfg.wms.version) || '1.3.0',
                     crs: (cfg.wms && cfg.wms.crs) || 'EPSG:3857',
                     tileSize: (cfg.wms && cfg.wms.tileSize) || 256,
                     minZoom: layer.minZoom,
@@ -2224,12 +2204,13 @@
                     maxNativeZoom: layer.maxNativeZoom,
                     opacity: layer.opacity,
                     bounds: cfg.countryBounds,
+                    countryIndependent: true,
                     attribution: cfg.attribution,
                     provider: cfg.provider,
                     licence: cfg.licence,
                     requiresCredentials: [],
                     cors: 'unknown',
-                    proxy: 'auto',
+                    proxy: 'always',
                     guard: false,
                     selfGuarded: true,
                     selfGuardedReason: SELF_GUARD,
@@ -2239,7 +2220,8 @@
                         slider: 'albaniaOpacity_' + layer.id,
                         pct: 'albaniaPct_' + layer.id,
                         selfGuarded: true,
-                        configId: layer.id
+                        configId: layer.id,
+                        section: layer.section
                     }
                 });
             });

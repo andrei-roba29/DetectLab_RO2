@@ -21,8 +21,7 @@
  *     parameters the service needs;
  *   • routing policy — a host documented as “no CORS” must be routed through
  *     the same-origin proxy in 3D, and a same-origin endpoint must not be;
- *   • availability guard coverage — which layers the silent-failure guard
- *     (js/wms-health.js) already protects, and which ones only fail silently.
+ *   • availability guard coverage — and the ASIG self-guarded row contract.
  *
  * It prints one line per layer, the concrete request URL for a sample tile
  * (copy/paste it into curl to test the service live) and exits non-zero when a
@@ -56,6 +55,7 @@ function arg(name, fallback) {
   return hit ? hit.slice(name.length + 3) : fallback;
 }
 const asJson = process.argv.includes('--json');
+const jsonFile = arg('json-file', '');
 const urlsOnly = process.argv.includes('--urls');
 const writeDoc = arg('write', '');
 const onlyLayer = arg('layer', '');
@@ -130,6 +130,7 @@ function hostOfUrl(url) {
  *    exactly as the browser loads them (they own their URL builders).
  * ══════════════════════════════════════════════════════════════════════════ */
 const MODULE_FILES = {
+  AsigAlbaniaLayers: 'js/asig-albania-layers.js',
   AhnLidar: 'js/ahn-layer.js',
   Hoydedata: 'js/hoydedata-layer.js',
   GeoportalNMT: 'js/geoportal-nmt-layer.js',
@@ -208,8 +209,10 @@ const moduleSandbox = (() => {
   sandbox.self = sandbox;
   sandbox.globalThis = sandbox;
   sandbox.window.L = sandbox.L = makeLeafletStub();
+  sandbox.ASIG_ALBANIA_CONFIG = require(path.join(repoRoot, 'js/asig-albania-layers.config.js'));
+  sandbox.window.ASIG_ALBANIA_CONFIG = sandbox.ASIG_ALBANIA_CONFIG;
   sandbox.document = {
-    readyState: 'complete', body: null,
+    readyState: 'loading', body: null,
     createElement: () => ({ style: {}, setAttribute() {}, appendChild() {}, addEventListener() {}, removeChild() {} }),
     addEventListener() {}, getElementById: () => null, querySelector: () => null,
     querySelectorAll: () => [], documentElement: { lang: 'ro' }
@@ -292,7 +295,8 @@ function wmsSampleUrl(def, z, x, y) {
 /** WMTS KVP GetTile URL for one tile (registry template). */
 function wmtsSampleUrl(def, z, x, y) {
   return DL.wmtsTemplate(def, {})
-    .replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y));
+    .replace(/\{z\}/g, String(z)).replace(/\{x\}/g, String(x)).replace(/\{y\}/g, String(y))
+    .replace(/\{row\}/g, String(y)).replace(/\{col\}/g, String(x));
 }
 
 function dynamicSampleUrl(def, z, x, y) {
@@ -317,6 +321,17 @@ function dynamicSampleUrl(def, z, x, y) {
   }
 }
 
+/* ASIG's regression tile is fixed on Tirana, not the Romanian audit default.
+ * Build it through the renderer's own request builder (including bbox clip). */
+const ASIG_SAMPLE_TILE = { z: 12, x: 2273, y: 1530 };
+function asigSampleUrl(def) {
+  const api = moduleSandbox.AsigAlbaniaLayers;
+  if (!api || typeof api.tileUrl !== 'function') return '';
+  const tile = ASIG_SAMPLE_TILE;
+  return api.tileUrl(def.id.replace(/^albania\./, ''),
+    DL.tileBounds3857At(tile.z, tile.x, tile.y), def.tileSize || 256, def.crs || 'EPSG:3857');
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
  * 4. Checks
  * ══════════════════════════════════════════════════════════════════════════ */
@@ -331,6 +346,9 @@ function auditWms(def) {
     err('W_URL', 'endpoint is neither https:// nor same-origin: ' + def.url);
   }
   if (!DL.layerOf(def)) err('W_LAYERS', 'no LAYERS value — GetMap would be answered with an exception');
+  if (String(def.id || '').startsWith('albania.')) {
+    info('ASIG_OFFLINE_ONLY', 'owner-supplied capabilities advertise EPSG:900913, not EPSG:3857; this offline URL construction does not verify production acceptance');
+  }
   if (!WMS_VERSIONS.has(version)) warn('W_VERSION', 'unusual WMS version "' + version + '"');
   if (!TILE_FORMATS.has(String(def.format || '').toLowerCase())) {
     warn('W_FORMAT', 'format "' + def.format + '" is not a raster format the browser decodes directly');
@@ -402,7 +420,9 @@ function auditWmts(def) {
     'TILECOL={x}', 'STYLE='].forEach((needle) => {
     if (template.indexOf(needle) === -1) err('M_KVP', 'WMTS KVP is missing ' + needle);
   });
-  if (!def.layer) err('M_LAYER', 'no LAYER value');
+  const restLayer = String(def.url || '').match(/\/(?:wmts\/)?(?:1\.0\.0\/)?([^/?{}]+)\/default\//i);
+  const layerIdentity = def.layer || paramFrom(def.url, 'layer') || (restLayer && restLayer[1]);
+  if (!layerIdentity) err('M_LAYER', 'no LAYER value in the definition or WMTS REST path');
   if (def.layer && String(def.layer).indexOf('{') !== -1) {
     warn('M_LAYER_TEMPLATE', 'LAYER contains a placeholder: ' + def.layer);
   }
@@ -555,7 +575,7 @@ for (const def of DL.ordered()) {
   try {
     if (def.kind === 'wms') {
       findings = auditWms(def);
-      url = wmsSampleUrl(def, sampleZ, sampleX, sampleY);
+      url = String(def.id).startsWith('albania.') ? asigSampleUrl(def) : wmsSampleUrl(def, sampleZ, sampleX, sampleY);
     } else if (def.kind === 'wmts') {
       findings = auditWmts(def);
       url = wmtsSampleUrl(def, sampleZ, sampleX, sampleY);
@@ -564,7 +584,12 @@ for (const def of DL.ordered()) {
       url = dynamicSampleUrl(def, sampleZ, sampleX, sampleY);
     }
     findings = findings.concat(auditDeadMosaics(def));
-    try { url3d = (DL.map3dTiles(def, { modules: moduleSandbox })[0]) || ''; } catch (e) { url3d = ''; }
+    try {
+      url3d = (DL.map3dTiles(def, { modules: moduleSandbox })[0]) || '';
+      if (String(def.id).startsWith('albania.')) {
+        url3d = url3d.replace(/\{z\}/g, String(ASIG_SAMPLE_TILE.z)).replace(/\{x\}/g, String(ASIG_SAMPLE_TILE.x)).replace(/\{y\}/g, String(ASIG_SAMPLE_TILE.y));
+      }
+    } catch (e) { url3d = ''; }
     if (def.reproject && url3d && url3d.indexOf('{bbox-epsg-3857}') !== -1) {
       findings.push({ level: 'error', code: 'W_REPROJECT_DIRECT',
         message: 'native CRS ' + def.crs + ' asked for directly on the tile grid — the bbox would be in Web ' +
@@ -591,6 +616,7 @@ for (const def of DL.ordered()) {
     provider: guardLabel(def.url),
     sample2d: url,
     sample3d: url3d,
+    sampleTile: String(def.id).startsWith('albania.') ? '12/2273/1530 (Tirana)' : undefined,
     findings
   });
 }
@@ -668,20 +694,55 @@ const SIGNATURES = [
   {
     host: 'geoportal.asig.gov.al',
     provider: 'ASIG / geoportal.asig.gov.al',
-    request: 'WMS 1.1.1 GetMap (SRS=EPSG:3857) per Leaflet tile for the nine Albanian layers ' +
-      '(Dtm_2015:Hillshade_2015_group, DSM:Dsm_Hill_Group, Orthophoto:Ortofoto_1999, ' +
-      'orthophoto_2015:OrthoImagery_20cm — JPEG, Topografike:50K_Topografike and the four dated ' +
-      'iktk:/akzm: protected-sites overlays); the identical rasters exist as WMTS on the national ' +
-      'EPSG:6870 grid',
-    what: '200 + ServiceExceptionReport XML (GeoServer answers exceptions with 200), or an all-alpha / ' +
-      'empty tile past the Albanian coverage; a renamed protected-sites snapshot answers ' +
-      '"Could not find layer …" the same way — re-check the names in GetCapabilities before editing ' +
-      'js/asig-albania-layers.config.js',
+    request: 'WMS 1.3.0 GetMap (CRS=EPSG:3857, STYLES=) for the nine exact Names: ' +
+      'Topografike:50K_Topografike, Orthophoto:Ortofoto_1999, orthophoto_2015:OrthoImagery_20cm, ' +
+      'DSM:Dsm_Hill_Group, Dtm_2015:Hillshade_2015_group, iktk:zonatembrojturatetrashegimisekulturore22_07_2026, ' +
+      'akzm:zonat_mbrojtura_081124, iktk:zonatembrojturatetrashegimisekulturore_pike13_05_2026, ' +
+      'akzm:monumentet_natyrore_07032023',
+    what: 'HTTP 200 with XML/HTML or a body that is not a decodable image is a tile error; the same-origin ' +
+      'production probe separately requires HTTP 200, image/*, at least 32 bytes, no exception body and no ' +
+      'X-Map3D-Upstream failure marker. EPSG:3857 is retained as the request path but is not listed literally ' +
+      'in the owner-supplied capabilities excerpt (which advertises EPSG:900913).',
     owner: 'external (the agency GeoServer; government host, no SLA)',
-    app: 'no guard row: js/asig-albania-layers.js owns the switch and prints its own status line ' +
-      '(the layers opt out with _detectlabNoGuard; repeated tile errors first retry in EPSG:4326, ' +
-      'then the row says the source is not answering); the host is still named in js/wms-health.js ' +
-      'HOSTS so a tile-error burst can be attributed'
+    app: 'rows are rendered individually in the existing Historical Maps, Satellite, LiDAR and Heritage Sites ' +
+      'sections; renderer owns error handling, retries EPSG:4326 after the configured EPSG:3857 error burst, ' +
+      'then reports a persistent fallback failure on that layer row'
+  },
+  {
+    host: 'paikkatiedot.ymparisto.fi', provider: 'SYKE / Finnish Environment Institute',
+    request: 'GeoServer WMS/WFS for Finnish protected-site layers',
+    what: 'HTTP 200 ServiceException XML/HTML, a WFS JSON exception, or an empty image outside coverage',
+    owner: 'external (SYKE)', app: 'self-guarded Finland row reports failed tiles and retries through the Finland proxy'
+  },
+  {
+    host: 'kartor.regeringen.ax', provider: 'Ålands landskapsregering',
+    request: 'ArcGIS REST export / query for Åland heritage layers',
+    what: 'HTTP 200 JSON error or an image response without usable map pixels',
+    owner: 'external (Åland)', app: 'self-guarded Finland row reports failed tiles and retries through the Finland proxy'
+  },
+  {
+    host: 'karttamoottori.maanmittauslaitos.fi', provider: 'Maanmittauslaitos',
+    request: 'ETRS-TM35FIN WMTS REST tile',
+    what: 'HTTP 403/5xx or an XML/HTML access/error page instead of a tile',
+    owner: 'external (MML)', app: 'self-guarded Finland row reports failed tiles and uses the configured same-origin fallback'
+  },
+  {
+    host: 'kartta.museoverkko.fi', provider: 'Museovirasto / Museoverkko',
+    request: 'WMTS GetLayerTile or WFS endpoint',
+    what: 'HTTP 200 JSON error (including a problematic-response message) or XML/HTML in place of an image',
+    owner: 'external (Museovirasto)', app: 'self-guarded Finland row displays its error status and retries'
+  },
+  {
+    host: 'hkp.maanmittauslaitos.fi', provider: 'Maanmittauslaitos / kiinteistötietojen karttapalvelu',
+    request: 'Finnish cadastral MVT/WMTS tile endpoint',
+    what: 'HTTP 403/5xx, malformed vector tile, or an HTML/JSON body instead of a tile',
+    owner: 'external (MML)', app: 'self-guarded Finland row reports tile failures'
+  },
+  {
+    host: 'dacboefvooxgsngxkavx.supabase.co', provider: 'DetectLab hosted Finnish layer data (Supabase)',
+    request: 'Static GeoJSON object from the project storage bucket',
+    what: 'HTTP 404/5xx or a JSON error body in place of the configured data object',
+    owner: 'DetectLab deployment and storage configuration', app: 'self-guarded Finland data rows surface load errors'
   },
   {
     host: 'data.geopf.fr',
@@ -1069,12 +1130,13 @@ function markdownReport() {
   out.push('');
   out.push('## Sample request URLs');
   out.push('');
-  out.push('One concrete tile per layer, built by the same code the map runs (sample tile ' +
-    `${sampleZ}/${sampleX}/${sampleY} — Bucharest). Paste one into \`curl -I\` to test a service live.`);
+  out.push('One offline-built tile URL per layer. Albania uses `12/2273/1530` (Tirana); the other catalogue rows use ' +
+    `the selected audit tile ${sampleZ}/${sampleX}/${sampleY}. These URLs do not prove live service or proxy behavior.`);
   out.push('');
   for (const r of rows) {
     out.push('```');
     out.push('# ' + r.id + ' — ' + r.title);
+    out.push('sample tile ' + r.sampleTile);
     out.push('2D ' + (r.sample2d || '(built at runtime)'));
     if (r.sample3d && r.sample3d !== r.sample2d) out.push('3D ' + r.sample3d);
     out.push('```');
@@ -1091,8 +1153,9 @@ function markdownReport() {
   out.push('```');
   out.push('');
   out.push('The tool never talks to the network: it checks the requests the app *would* send.');
-  out.push('A live check is one `curl` of any URL in the section above — a service that cannot');
-  out.push('render answers with text/XML/JSON under an HTTP 200, and `curl -I` shows it.');
+  out.push('Live results are deliberately separate. Albania requires the same-origin proxy probe:');
+  out.push('`node tools/probe-asig-production.mjs --origin=https://detectlab.eu --tile=12/2273/1530`.');
+  out.push('No live production result is implied by this offline audit.');
   out.push('');
   out.push('## What to do when one of them breaks');
   out.push('');
@@ -1110,8 +1173,8 @@ function markdownReport() {
   return out.join('\n');
 }
 
-if (asJson) {
-  console.log(JSON.stringify({
+if (asJson || jsonFile) {
+  const jsonOutput = JSON.stringify({
     generatedFor: { tile: `${sampleZ}/${sampleX}/${sampleY}` },
     totals: {
       layers: rows.length,
@@ -1126,7 +1189,9 @@ if (asJson) {
     layers: rows,
     errors,
     warnings
-  }, null, 2));
+  });
+  if (jsonFile) fs.writeFileSync(path.resolve(jsonFile), jsonOutput, 'utf8');
+  else console.log(jsonOutput);
 } else if (writeDoc) {
   fs.writeFileSync(path.join(repoRoot, writeDoc), markdownReport(), 'utf8');
   console.log('wrote ' + writeDoc + ' (' + rows.length + ' layers, ' + errors.length + ' error(s))');

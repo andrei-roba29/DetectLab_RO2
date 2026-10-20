@@ -111,21 +111,38 @@ until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one
 | `danish.orto_foraar_2024` | wms | same-origin | geodanmark_2024_12_5cm | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `danish.orto_foraar_2025` | wms | same-origin | geodanmark_2025_12_5cm | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `sat.vhr-2012` | wms | copernicus.discomap.eea.europa.eu | Image | 1.1.1 | image/jpeg | no | always | probe · Copernicus Land / EEA discomap |
+| `albania.ortho1999` | wms | geoportal.asig.gov.al | Orthophoto:Ortofoto_1999 | 1.3.0 | image/png | unknown | always | probe · ASIG / geoportal.asig.gov.al |
 | `sat.vhr-2018` | wms | image.discomap.eea.europa.eu | VHR_2018_WM | 1.1.1 | image/jpeg | no | always | probe · Copernicus Land / EEA discomap |
+| `albania.ortho1994` | wms | geoportal.asig.gov.al | orthophoto_2015:OrthoImagery_20cm | 1.3.0 | image/jpeg | unknown | always | probe · ASIG / geoportal.asig.gov.al |
 | `sat.vhr-2021` | wms | image.discomap.eea.europa.eu | VHR_2021_LAEA | 1.1.1 | image/jpeg | no | always | probe · Copernicus Land / EEA discomap |
-| `albania.topo50k` | wms | geoportal.asig.gov.al | Topografike:50K_Topografike | 1.1.1 | image/png | unknown | auto | probe · ASIG / geoportal.asig.gov.al |
-| `albania.ortho1999` | wms | geoportal.asig.gov.al | Orthophoto:Ortofoto_1999 | 1.1.1 | image/png | unknown | auto | probe · ASIG / geoportal.asig.gov.al |
-| `albania.ortho1994` | wms | geoportal.asig.gov.al | orthophoto_2015:OrthoImagery_20cm | 1.1.1 | image/jpeg | unknown | auto | probe · ASIG / geoportal.asig.gov.al |
-| `albania.dsm` | wms | geoportal.asig.gov.al | DSM:Dsm_Hill_Group | 1.1.1 | image/png | unknown | auto | probe · ASIG / geoportal.asig.gov.al |
-| `albania.lidar` | wms | geoportal.asig.gov.al | Dtm_2015:Hillshade_2015_group | 1.1.1 | image/png | unknown | auto | probe · ASIG / geoportal.asig.gov.al |
 | `danish.naturtyper` | wms | arealeditering-dist-geo.miljoeportal.dk | dai:bes_naturtyper | 1.3.0 | image/png | unknown | auto | probe · Danmarks Miljøportal |
+| `danish.fortidsminder_punkt_fredet` | wms | www.kulturarv.dk | fundogfortidsminder_punkt_fredet | 1.3.0 | image/png | unknown | auto | probe · Slots- og Kulturstyrelsen (Fund og Fortidsminder) |
+| `danish.fortidsminder_punkt_ikkefredet` | wms | www.kulturarv.dk | fundogfortidsminder_punkt_ikkefredet | 1.3.0 | image/png | unknown | auto | probe · Slots- og Kulturstyrelsen (Fund og Fortidsminder) |
 | `danish.lidar_hillshade_historik` | wms | same-origin | hillshade_1_6m | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `danish.lidar_quickdhm_exaggerated` | wms | same-origin | quickDHM_skyggekort_terraen_overdrevet | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `danish.lidar_dhm_terrain_hillshade` | wms | same-origin | dhm_terraen_skyggekort | 1.3.0 | image/png | unknown | auto | — same-origin |
-| `albania.heritage` | wms | geoportal.asig.gov.al | iktk:zonatembrojturatetrashegimisekulturo… | 1.1.1 | image/png | unknown | auto | probe · ASIG / geoportal.asig.gov.al |
-| `albania.natural` | wms | geoportal.asig.gov.al | akzm:zonat_mbrojtura_081124 | 1.1.1 | image/png | unknown | auto | probe · ASIG / geoportal.asig.gov.al |
-| `albania.cultural` | wms | geoportal.asig.gov.al | iktk:zonatembrojturatetrashegimisekulturo… | 1.1.1 | image/png | unknown | auto | probe · ASIG / geoportal.asig.gov.al |
-| `albania.monument` | wms | geoportal.asig.gov.al | akzm:monumentet_natyrore_07032023 | 1.1.1 | image/png | unknown | auto | probe · ASIG / geoportal.asig.gov.al |
+| `danish.lidar_dhm_surface_hillshade` | wms | same-origin | dhm_overflade_skyggekort | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `finland.mml-hillshade` | wmts | karttamoottori.maanmittauslaitos.fi |  | 1.0.0 | image/png | unknown | auto | watch · Maanmittauslaitos (karttamoottori) |
+| `finland.maastokartta` | wmts | kartta.museoverkko.fi |  | 1.0.0 | image/png | unknown | auto | watch · Museovirasto (museoverkko) |
+| `finland.syke-rakennussuojelu-kohde` | wms | paikkatiedot.ymparisto.fi | Rakennussuojelukohteet | 1.1.1 | image/png | unknown | auto | probe · SYKE / paikkatiedot.ymparisto.fi |
+| `finland.syke-rakennussuojelu-alue` | wms | paikkatiedot.ymparisto.fi | Rakennussuojelualueet | 1.1.1 | image/png | unknown | auto | probe · SYKE / paikkatiedot.ymparisto.fi |
+| `finland.syke-ps-eramaa` | wms | paikkatiedot.ymparisto.fi | PS.ProtectedSitesEramaaAlueEramaa | 1.1.1 | image/png | unknown | auto | probe · SYKE / paikkatiedot.ymparisto.fi |
+| `finland.syke-ps-valtion-luonnonsuojelu` | wms | paikkatiedot.ymparisto.fi | PS.ProtectedSitesValtionOmistamaLuonnonsu… | 1.1.1 | image/png | unknown | auto | probe · SYKE / paikkatiedot.ymparisto.fi |
+| `finland.syke-ps-yksityismaiden-luonnonsuojelu` | wms | paikkatiedot.ymparisto.fi | PS.ProtectedSitesYksityistenMaillaOlevaLu… | 1.1.1 | image/png | unknown | auto | probe · SYKE / paikkatiedot.ymparisto.fi |
+| `finland.syke-ps-natura-sci` | wms | paikkatiedot.ymparisto.fi | PS.ProtectedSitesProposedSiteOfCommunityI… | 1.1.1 | image/png | unknown | auto | probe · SYKE / paikkatiedot.ymparisto.fi |
+| `finland.syke-ps-natura-sac` | wms | paikkatiedot.ymparisto.fi | PS.ProtectedSitesSpecialAreaOfConservation | 1.1.1 | image/png | unknown | auto | probe · SYKE / paikkatiedot.ymparisto.fi |
+| `finland.syke-ps-natura-spa` | wms | paikkatiedot.ymparisto.fi | PS.ProtectedSitesSpecialProtectionArea | 1.1.1 | image/png | unknown | auto | probe · SYKE / paikkatiedot.ymparisto.fi |
+| `finland.syke-ps-asetus-valtion` | wms | paikkatiedot.ymparisto.fi | PS.ProtectedSitesAsetusValtionOmistamienR… | 1.1.1 | image/png | unknown | auto | probe · SYKE / paikkatiedot.ymparisto.fi |
+| `finland.syke-ps-asetus-valtion-alue` | wms | paikkatiedot.ymparisto.fi | PS.ProtectedSitesAsetusValtionOmistamienR… | 1.1.1 | image/png | unknown | auto | probe · SYKE / paikkatiedot.ymparisto.fi |
+| `finland.syke-ps-kirkkolaki` | wms | paikkatiedot.ymparisto.fi | PS.ProtectedSitesKirkkolaillaSuojellutKoh… | 1.1.1 | image/png | unknown | auto | probe · SYKE / paikkatiedot.ymparisto.fi |
+| `finland.syke-ps-ortodoksikirkko` | wms | paikkatiedot.ymparisto.fi | PS.ProtectedSitesLaillaOrtodoksisestaKirk… | 1.1.1 | image/png | unknown | auto | probe · SYKE / paikkatiedot.ymparisto.fi |
+| `finland.syke-ps-rakennusperintolaki` | wms | paikkatiedot.ymparisto.fi | PS.ProtectedSitesLaillaRakennusperinnonSu… | 1.1.1 | image/png | unknown | auto | probe · SYKE / paikkatiedot.ymparisto.fi |
+| `finland.syke-ps-rakennusperintolaki-alue` | wms | paikkatiedot.ymparisto.fi | PS.ProtectedSitesLaillaRakennusperinnonSu… | 1.1.1 | image/png | unknown | auto | probe · SYKE / paikkatiedot.ymparisto.fi |
+| `finland.local-rky-alue` | dynamic | dacboefvooxgsngxkavx.supabase.co |  |  |  | unknown | auto | watch · DetectLab hosted Finnish layer data (Supabase) |
+| `finland.local-rky-piste` | dynamic | dacboefvooxgsngxkavx.supabase.co |  |  |  | unknown | auto | watch · DetectLab hosted Finnish layer data (Supabase) |
+| `finland.local-rky-viiva` | dynamic | dacboefvooxgsngxkavx.supabase.co |  |  |  | unknown | auto | watch · DetectLab hosted Finnish layer data (Supabase) |
+| `finland.local-vark-alue` | dynamic | dacboefvooxgsngxkavx.supabase.co |  |  |  | unknown | auto | watch · DetectLab hosted Finnish layer data (Supabase) |
+| `finland.local-vark-piste` | dynamic | dacboefvooxgsngxkavx.supabase.co |  |  |  | unknown | auto | watch · DetectLab hosted Finnish layer data (Supabase) |
 | `lidar.nl-ahn` | dynamic | ahn.arcgisonline.nl | exportImage |  | image/png | yes | auto | watch · AHN / Esri Nederland |
 | `lidar.no-hoydedata` | dynamic | hoydedata.no | exportImage |  | image/png | yes | auto | watch · Kartverket (høydedata.no) |
 | `lidar.pl-nmt` | dynamic | mapy.geoportal.gov.pl | Raster | 1.3.0 | image/png | unknown | auto | watch · GUGiK / geoportal.gov.pl |
@@ -135,10 +152,16 @@ until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one
 | `lidar.dk-dhm` | dynamic | same-origin | dhm |  | image/png | yes | never | — same-origin |
 | `lidar.se-lantmateriet` | dynamic | same-origin |  |  | image/png | yes | never | — same-origin |
 | `lidar.fr-mnh` | wms | data.geopf.fr | IGNF_LIDAR-HD_MNT_ELEVATION.ELEVATIONGRID… | 1.3.0 | image/png | unknown | auto | probe · IGN France / Géoplateforme |
+| `albania.dsm` | wms | geoportal.asig.gov.al | DSM:Dsm_Hill_Group | 1.3.0 | image/png | unknown | always | probe · ASIG / geoportal.asig.gov.al |
+| `albania.lidar` | wms | geoportal.asig.gov.al | Dtm_2015:Hillshade_2015_group | 1.3.0 | image/png | unknown | always | probe · ASIG / geoportal.asig.gov.al |
 | `vegfp.ppi` | wmts | phenology.hrvpp2.vgt.vito.be | CLMS_HRVPP_ST_PPI_10M | 1.0.0 | image/png | unknown | auto | watch · VITO / Copernicus HR-VPP |
 | `vegfp.smx` | wmts | phenology.hrvpp2.vgt.vito.be | CLMS_HRVPP_VPP_MAXV_SEASON1_10M | 1.0.0 | image/png | unknown | auto | watch · VITO / Copernicus HR-VPP |
 | `vegfp.sgu` | wmts | phenology.hrvpp2.vgt.vito.be | CLMS_HRVPP_VPP_LSLOPE_SEASON1_10M | 1.0.0 | image/png | unknown | auto | watch · VITO / Copernicus HR-VPP |
 | `vegfp.sgd` | wmts | phenology.hrvpp2.vgt.vito.be | CLMS_HRVPP_VPP_RSLOPE_SEASON1_10M | 1.0.0 | image/png | unknown | auto | watch · VITO / Copernicus HR-VPP |
+| `albania.heritage` | wms | geoportal.asig.gov.al | iktk:zonatembrojturatetrashegimisekulturo… | 1.3.0 | image/png | unknown | always | probe · ASIG / geoportal.asig.gov.al |
+| `albania.natural` | wms | geoportal.asig.gov.al | akzm:zonat_mbrojtura_081124 | 1.3.0 | image/png | unknown | always | probe · ASIG / geoportal.asig.gov.al |
+| `albania.cultural` | wms | geoportal.asig.gov.al | iktk:zonatembrojturatetrashegimisekulturo… | 1.3.0 | image/png | unknown | always | probe · ASIG / geoportal.asig.gov.al |
+| `albania.monument` | wms | geoportal.asig.gov.al | akzm:monumentet_natyrore_07032023 | 1.3.0 | image/png | unknown | always | probe · ASIG / geoportal.asig.gov.al |
 | `overlay.image-overlays` | dynamic | same-origin |  |  |  | yes | never | — runtime |
 | `cenagis.wig25k` | wms | pastmaps.cenagis.edu.pl | ihpan:wig25k_3857 | 1.3.0 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `cenagis.wig100k` | wms | pastmaps.cenagis.edu.pl | ihpan:wig100k_3857 | 1.3.0 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
@@ -186,6 +209,7 @@ until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one
 | `cenagis.city_warszawa_1822` | wms | pastmaps.cenagis.edu.pl | ihpan:warszawaOKI_2180 | 1.3.0 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `cenagis.city_praga_1796` | wms | pastmaps.cenagis.edu.pl | ihpan:rauch_2180 | 1.3.0 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `hist.austrian` | wms | services.geo-spatial.org | eharta:mozaic_austrian_200k | 1.1.0 | image/png | unknown | auto | probe · geo-spatial.org (eHarta) |
+| `albania.topo50k` | wms | geoportal.asig.gov.al | Topografike:50K_Topografike | 1.3.0 | image/png | unknown | always | probe · ASIG / geoportal.asig.gov.al |
 | `hist.firing-plans` | wms | services.geo-spatial.org | eharta:mozaic_planuri_tragere_20k | 1.1.0 | image/png | unknown | auto | probe · geo-spatial.org (eHarta) |
 | `hist.soviet-1970` | wms | services.geo-spatial.org | eharta:mozaic_soviet100k | 1.1.0 | image/png | unknown | auto | probe · geo-spatial.org (eHarta) |
 | `sat.corona-60s` | dynamic | geoserve.cast.uark.edu | corona:<product> | 1.1.1 | image/png | no | always | watch · CAST / University of Arkansas (CORONA) |
@@ -196,7 +220,7 @@ until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one
 | `premium.kdr-gb` | wms | pastmaps.cenagis.edu.pl | ihpan:kdr_gb_3857 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `premium.wig-100k` | wms | pastmaps.cenagis.edu.pl | ihpan:wig100k_3857 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 
-**79/79 third-party layers guarded** (68 probed, 11 watched); 0 self-handled + 26 same-origin, 1 runtime. 0 error(s), 0 warning(s).
+**102/102 third-party layers guarded** (84 probed, 18 watched); 0 self-handled + 27 same-origin, 1 runtime. 0 error(s), 0 warning(s).
 
 ### Small print
 
@@ -232,7 +256,14 @@ None — every checked invariant holds.
 | **Copernicus Land / EEA discomap** (`copernicus.discomap.eea.europa.eu`) | ArcGIS MapServer/WMSServer GetMap, WMS 1.1.1, JPEG (transparent=false) | 200 + an ArcGIS JSON error, or a blank JPEG outside the VHR footprint of that year | external | probe; the 3D view always goes through the same-origin proxy because the host sends no CORS headers |
 | **Copernicus Land / EEA discomap** (`image.discomap.eea.europa.eu`) | ArcGIS ImageServer/WMSServer GetMap, WMS 1.1.1, JPEG | 200 + an ArcGIS JSON error, or a blank JPEG where the LAEA-native mosaic has no data | external | probe; 3D through the proxy for the same reason |
 | **Danmarks Miljøportal** (`arealeditering-dist-geo.miljoeportal.dk`) | WMS 1.3.0 GetMap (CRS=EPSG:3857, uppercase KVP), dai:bes_naturtyper, PNG + transparent | 200 + ServiceExceptionReport XML (GeoServer answers exceptions with 200), or an all-alpha tile where the layer has no polygons. The capabilities advertise only EPSG:25832/CRS:84 while GetMap serves 3857 normally — judge by the tile, not by the capabilities | external (the agency GeoServer) | no guard row: js/danish-layers.js owns the switch and prints its own status line (the layer opts out with _detectlabNoGuard); the host is still named in js/wms-health.js HOSTS so a tile-error burst can be attributed |
-| **ASIG / geoportal.asig.gov.al** (`geoportal.asig.gov.al`) | WMS 1.1.1 GetMap (SRS=EPSG:3857) per Leaflet tile for the nine Albanian layers (Dtm_2015:Hillshade_2015_group, DSM:Dsm_Hill_Group, Orthophoto:Ortofoto_1999, orthophoto_2015:OrthoImagery_20cm — JPEG, Topografike:50K_Topografike and the four dated iktk:/akzm: protected-sites overlays); the identical rasters exist as WMTS on the national EPSG:6870 grid | 200 + ServiceExceptionReport XML (GeoServer answers exceptions with 200), or an all-alpha / empty tile past the Albanian coverage; a renamed protected-sites snapshot answers "Could not find layer …" the same way — re-check the names in GetCapabilities before editing js/asig-albania-layers.config.js | external (the agency GeoServer; government host, no SLA) | no guard row: js/asig-albania-layers.js owns the switch and prints its own status line (the layers opt out with _detectlabNoGuard; repeated tile errors first retry in EPSG:4326, then the row says the source is not answering); the host is still named in js/wms-health.js HOSTS so a tile-error burst can be attributed |
+| **Slots- og Kulturstyrelsen (Fund og Fortidsminder)** (`www.kulturarv.dk`) | WMS 1.3.0 GetMap (CRS=EPSG:3857, uppercase KVP), fundogfortidsminder_punkt_fredet / _punkt_ikkefredet, PNG + transparent | 200 + ServiceExceptionReport XML (GeoServer answers exceptions with 200) or an all-alpha tile. The capabilities advertise EPSG:25832 and CRS:84 while GetMap serves EPSG:3857 normally (verified 2026-10-19) — judge by the tile, not by the capabilities. A renamed layer answers "Could not find layer …" the same way | external (the agency GeoServer) | no guard row: js/danish-layers.js owns the switch and prints its own status line (the layers opt out with _detectlabNoGuard); the host is still named in js/wms-health.js HOSTS so a tile-error burst can be attributed |
+| **ASIG / geoportal.asig.gov.al** (`geoportal.asig.gov.al`) | WMS 1.3.0 GetMap (CRS=EPSG:3857, STYLES=) for the nine exact Names: Topografike:50K_Topografike, Orthophoto:Ortofoto_1999, orthophoto_2015:OrthoImagery_20cm, DSM:Dsm_Hill_Group, Dtm_2015:Hillshade_2015_group, iktk:zonatembrojturatetrashegimisekulturore22_07_2026, akzm:zonat_mbrojtura_081124, iktk:zonatembrojturatetrashegimisekulturore_pike13_05_2026, akzm:monumentet_natyrore_07032023 | HTTP 200 with XML/HTML or a body that is not a decodable image is a tile error; the same-origin production probe separately requires HTTP 200, image/*, at least 32 bytes, no exception body and no X-Map3D-Upstream failure marker. EPSG:3857 is retained as the request path but is not listed literally in the owner-supplied capabilities excerpt (which advertises EPSG:900913). | external (the agency GeoServer; government host, no SLA) | rows are rendered individually in the existing Historical Maps, Satellite, LiDAR and Heritage Sites sections; renderer owns error handling, retries EPSG:4326 after the configured EPSG:3857 error burst, then reports a persistent fallback failure on that layer row |
+| **SYKE / Finnish Environment Institute** (`paikkatiedot.ymparisto.fi`) | GeoServer WMS/WFS for Finnish protected-site layers | HTTP 200 ServiceException XML/HTML, a WFS JSON exception, or an empty image outside coverage | external (SYKE) | self-guarded Finland row reports failed tiles and retries through the Finland proxy |
+| **Ålands landskapsregering** (`kartor.regeringen.ax`) | ArcGIS REST export / query for Åland heritage layers | HTTP 200 JSON error or an image response without usable map pixels | external (Åland) | self-guarded Finland row reports failed tiles and retries through the Finland proxy |
+| **Maanmittauslaitos** (`karttamoottori.maanmittauslaitos.fi`) | ETRS-TM35FIN WMTS REST tile | HTTP 403/5xx or an XML/HTML access/error page instead of a tile | external (MML) | self-guarded Finland row reports failed tiles and uses the configured same-origin fallback |
+| **Museovirasto / Museoverkko** (`kartta.museoverkko.fi`) | WMTS GetLayerTile or WFS endpoint | HTTP 200 JSON error (including a problematic-response message) or XML/HTML in place of an image | external (Museovirasto) | self-guarded Finland row displays its error status and retries |
+| **Maanmittauslaitos / kiinteistötietojen karttapalvelu** (`hkp.maanmittauslaitos.fi`) | Finnish cadastral MVT/WMTS tile endpoint | HTTP 403/5xx, malformed vector tile, or an HTML/JSON body instead of a tile | external (MML) | self-guarded Finland row reports tile failures |
+| **DetectLab hosted Finnish layer data (Supabase)** (`dacboefvooxgsngxkavx.supabase.co`) | Static GeoJSON object from the project storage bucket | HTTP 404/5xx or a JSON error body in place of the configured data object | DetectLab deployment and storage configuration | self-guarded Finland data rows surface load errors |
 | **IGN France / Géoplateforme** (`data.geopf.fr`) | WMS 1.3.0 GetMap (CRS=EPSG:3857), IGNF_LIDAR-HD_* | 200 + ServiceExceptionReport XML, or 400 for an unknown LAYERS/CRS pair | external | probe before the layer is added |
 | **swisstopo** (`wmts.geo.admin.ch`) | WMTS KVP GetTile (ch.swisstopo.swisssurface3d-relief) | 200 + WMTS ServiceException XML, or swisstopo's standard no-data tile beyond the modelled area | external | adopted by the guard when it goes on the map, then watched: three failed tiles in a row remove the layer and explain the provider (no probe — the host publishes dozens of products) |
 | **Environment Agency (England)** (`environment.data.gov.uk`) | WMTS KVP GetTile, TILEMATRIXSET=WebMercatorQuad | 200 + XML ServiceException for a tile outside the published limits | external | adopted and watched for tile errors; the module itself clips its bounds and asks for transparent tiles past maxNativeZoom |
@@ -259,534 +290,784 @@ Every one of these arrives as **HTTP 200**: the failure is in the body, which is
 
 ## Sample request URLs
 
-One concrete tile per layer, built by the same code the map runs (sample tile 12/2345/1480 — Bucharest). Paste one into `curl -I` to test a service live.
+One offline-built tile URL per layer. Albania uses `12/2273/1530` (Tirana); the other catalogue rows use the selected audit tile 12/2345/1480. These URLs do not prove live service or proxy behavior.
 
 ```
 # danish.dtk25 — Denmark · DTK25 topographic map (1:25,000)
+sample tile undefined
 2D https://api.dataforsyningen.dk/dtk_25_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dtk25_2023&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-dtk25?service=WMS&request=GetMap&version=1.3.0&layers=dtk25_2023&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # danish.orto — Denmark · GeoDanmark orthophoto (spring)
+sample tile undefined
 2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2025_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-orto?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2025_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
-# danish.hist_hoeje — High measurement table sheets
+# danish.hist_hoeje — High measuring table leaves 1842-1899
+sample tile undefined
 2D https://api.dataforsyningen.dk/topo20_hoeje_maalebordsblade_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dtk_hoeje_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-dtk25?layer=hist_hoeje&service=WMS&request=GetMap&version=1.3.0&layers=dtk_hoeje_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
-# danish.hist_lave — Low measurement table sheets
+# danish.hist_lave — Low measuring table leaves 1901-1971
+sample tile undefined
 2D https://api.dataforsyningen.dk/topo20_lave_maalebordsblade_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dtk_lave_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-dtk25?layer=hist_lave&service=WMS&request=GetMap&version=1.3.0&layers=dtk_lave_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
-# danish.hist_preussen — Prussian measurement table sheets
+# danish.hist_preussen — Prussian measuring table leaves 1877-1920
+sample tile undefined
 2D https://api.dataforsyningen.dk/topo25_preussen_maalebordsblade_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dtk_preussen_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-dtk25?layer=hist_preussen&service=WMS&request=GetMap&version=1.3.0&layers=dtk_preussen_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
-# danish.topo4cm_1953_1976 — 4 cm map 1953-1976
+# danish.topo4cm_1953_1976 — Topographic map 1953-1976
+sample tile undefined
 2D https://api.dataforsyningen.dk/topo4cm_1953_1976_DAF?service=WMS&request=GetMap&version=1.3.0&layers=topo4cm_1953_1976&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-dtk25?layer=topo4cm_1953_1976&service=WMS&request=GetMap&version=1.3.0&layers=topo4cm_1953_1976&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
-# danish.topo4cm_1980_2001 — 4 cm map 1980-2001
+# danish.topo4cm_1980_2001 — Topographic map 1980-2001
+sample tile undefined
 2D https://api.dataforsyningen.dk/topo4cm_1980_2001_DAF?service=WMS&request=GetMap&version=1.3.0&layers=topo4cm_1980_2001&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-dtk25?layer=topo4cm_1980_2001&service=WMS&request=GetMap&version=1.3.0&layers=topo4cm_1980_2001&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
-# danish.orto_sommer_1999 — Summer orthophoto 1999
+# danish.orto_sommer_1999 — 1999
+sample tile undefined
 2D https://api.dataforsyningen.dk/wms/orto_sommer_1999?service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_1999&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-dtk25?layer=orto_sommer_1999&service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_1999&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
-# danish.orto_sommer_2002 — Summer orthophoto 2002
+# danish.orto_sommer_2002 — 2002
+sample tile undefined
 2D https://api.dataforsyningen.dk/wms/orto_sommer_2002?service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2002&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-dtk25?layer=orto_sommer_2002&service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2002&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
-# danish.orto_sommer_2005 — Summer orthophoto 2005
+# danish.orto_sommer_2005 — 2005
+sample tile undefined
 2D https://api.dataforsyningen.dk/wms/orto_sommer_2005?service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2005&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-dtk25?layer=orto_sommer_2005&service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2005&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
-# danish.orto_sommer_2008 — Summer orthophoto 2008
+# danish.orto_sommer_2008 — 2008
+sample tile undefined
 2D https://api.dataforsyningen.dk/wms/orto_sommer_2008?service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2008&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-dtk25?layer=orto_sommer_2008&service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2008&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # danish.orto_foraar_2016 — Spring orthophoto 2016
+sample tile undefined
 2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2016_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-orto?layer=orto_foraar_2016&service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2016_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # danish.orto_foraar_2017 — Spring orthophoto 2017
+sample tile undefined
 2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2017_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-orto?layer=orto_foraar_2017&service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2017_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # danish.orto_foraar_2018 — Spring orthophoto 2018
+sample tile undefined
 2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2018_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-orto?layer=orto_foraar_2018&service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2018_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # danish.orto_foraar_2019 — Spring orthophoto 2019
+sample tile undefined
 2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2019_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-orto?layer=orto_foraar_2019&service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2019_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # danish.orto_foraar_2020 — Spring orthophoto 2020
+sample tile undefined
 2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2020_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-orto?layer=orto_foraar_2020&service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2020_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # danish.orto_foraar_2021 — Spring orthophoto 2021
+sample tile undefined
 2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2021_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-orto?layer=orto_foraar_2021&service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2021_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # danish.orto_foraar_2022 — Spring orthophoto 2022
+sample tile undefined
 2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2022_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-orto?layer=orto_foraar_2022&service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2022_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # danish.orto_foraar_2023 — Spring orthophoto 2023
+sample tile undefined
 2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2023_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-orto?layer=orto_foraar_2023&service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2023_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # danish.orto_foraar_2024 — Spring orthophoto 2024
+sample tile undefined
 2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2024_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-orto?layer=orto_foraar_2024&service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2024_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # danish.orto_foraar_2025 — Spring orthophoto 2025
+sample tile undefined
 2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2025_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-orto?layer=orto_foraar_2025&service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2025_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # sat.vhr-2012 — Satellite 2012 (Copernicus VHR)
+sample tile undefined
 2D https://copernicus.discomap.eea.europa.eu/arcgis/services/GioLand/VeryHighResolution2012/MapServer/WMSServer?service=WMS&request=GetMap&version=1.1.1&layers=Image&styles=&format=image%2Fjpeg&transparent=false&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/map3d/tile?layer=sat.vhr-2012&z={z}&x={x}&y={y}
 ```
 ```
+# albania.ortho1999 — Orthophoto 1999
+sample tile 12/2273/1530 (Tirana)
+2D https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=Orthophoto%3AOrtofoto_1999&STYLES=&CRS=EPSG%3A3857&BBOX=2201386.4146,5058296.7838,2211170.3542,5068080.7234&WIDTH=256&HEIGHT=256&FORMAT=image%2Fpng&TRANSPARENT=FALSE
+3D /api/map3d/tile?layer=albania.ortho1999&z=12&x=2273&y=1530
+```
+```
 # sat.vhr-2018 — Satellite 2018 (Copernicus VHR)
+sample tile undefined
 2D https://image.discomap.eea.europa.eu/arcgis/services/GioLand/VHR_2018_WM/ImageServer/WMSServer?service=WMS&request=GetMap&version=1.1.1&layers=VHR_2018_WM&styles=&format=image%2Fjpeg&transparent=false&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/map3d/tile?layer=sat.vhr-2018&z={z}&x={x}&y={y}
 ```
 ```
+# albania.ortho1994 — Orthophoto 20 cm (2015)
+sample tile 12/2273/1530 (Tirana)
+2D https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=orthophoto_2015%3AOrthoImagery_20cm&STYLES=&CRS=EPSG%3A3857&BBOX=2201386.4146,5058296.7838,2211170.3542,5068080.7234&WIDTH=256&HEIGHT=256&FORMAT=image%2Fjpeg&TRANSPARENT=FALSE
+3D /api/map3d/tile?layer=albania.ortho1994&z=12&x=2273&y=1530
+```
+```
 # sat.vhr-2021 — Satellite 2021 (Copernicus VHR)
+sample tile undefined
 2D https://image.discomap.eea.europa.eu/arcgis/services/GioLand/VHR_2021_LAEA/ImageServer/WMSServer?service=WMS&request=GetMap&version=1.1.1&layers=VHR_2021_LAEA&styles=&format=image%2Fjpeg&transparent=false&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/map3d/tile?layer=sat.vhr-2021&z={z}&x={x}&y={y}
 ```
 ```
-# albania.topo50k — Topographic map 1:50k
-2D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=Topografike%3A50K_Topografike&styles=&format=image%2Fpng&transparent=false&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=Topografike%3A50K_Topografike&styles=&format=image%2Fpng&transparent=false&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
-```
-```
-# albania.ortho1999 — Orthophoto 1999
-2D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=Orthophoto%3AOrtofoto_1999&styles=&format=image%2Fpng&transparent=false&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=Orthophoto%3AOrtofoto_1999&styles=&format=image%2Fpng&transparent=false&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
-```
-```
-# albania.ortho1994 — Orthophoto 1994
-2D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=orthophoto_2015%3AOrthoImagery_20cm&styles=&format=image%2Fjpeg&transparent=false&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=orthophoto_2015%3AOrthoImagery_20cm&styles=&format=image%2Fjpeg&transparent=false&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
-```
-```
-# albania.dsm — DSM (hillshade)
-2D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=DSM%3ADsm_Hill_Group&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=DSM%3ADsm_Hill_Group&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
-```
-```
-# albania.lidar — LiDAR
-2D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=Dtm_2015%3AHillshade_2015_group&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=Dtm_2015%3AHillshade_2015_group&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
-```
-```
 # danish.naturtyper — Denmark · Protected nature types (NBL § 3)
+sample tile undefined
 2D https://arealeditering-dist-geo.miljoeportal.dk/geoserver/wms?service=WMS&request=GetMap&version=1.3.0&layers=dai%3Abes_naturtyper&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://arealeditering-dist-geo.miljoeportal.dk/geoserver/wms?service=WMS&request=GetMap&version=1.3.0&layers=dai%3Abes_naturtyper&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
+# danish.fortidsminder_punkt_fredet — Protected ancient monuments
+sample tile undefined
+2D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_punkt_fredet&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_punkt_fredet&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.fortidsminder_punkt_ikkefredet — Not protected ancient monuments
+sample tile undefined
+2D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_punkt_ikkefredet&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_punkt_ikkefredet&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
 # danish.lidar_hillshade_historik — LiDAR hillshade 1.6 m (DHM historik)
+sample tile undefined
 2D https://api.dataforsyningen.dk/dhm_historik_DAF?service=WMS&request=GetMap&version=1.3.0&layers=hillshade_1_6m&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-dtk25?layer=lidar_hillshade_historik&service=WMS&request=GetMap&version=1.3.0&layers=hillshade_1_6m&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # danish.lidar_quickdhm_exaggerated — LiDAR hillshade, exaggerated terrain (quickDHM)
+sample tile undefined
 2D https://api.dataforsyningen.dk/wms/dhm_temp?service=WMS&request=GetMap&version=1.3.0&layers=quickDHM_skyggekort_terraen_overdrevet&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-dtk25?layer=lidar_quickdhm_exaggerated&service=WMS&request=GetMap&version=1.3.0&layers=quickDHM_skyggekort_terraen_overdrevet&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # danish.lidar_dhm_terrain_hillshade — LiDAR terrain hillshade (DHM)
+sample tile undefined
 2D https://api.dataforsyningen.dk/dhm_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dhm_terraen_skyggekort&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-dtk25?layer=lidar_dhm_terrain_hillshade&service=WMS&request=GetMap&version=1.3.0&layers=dhm_terraen_skyggekort&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
-# albania.heritage — Heritage Sites
-2D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=iktk%3Azonatembrojturatetrashegimisekulturore22_07_2026&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=iktk%3Azonatembrojturatetrashegimisekulturore22_07_2026&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+# danish.lidar_dhm_surface_hillshade — LiDAR surface hillshade (DHM)
+sample tile undefined
+2D https://api.dataforsyningen.dk/dhm_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dhm_overflade_skyggekort&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=lidar_dhm_surface_hillshade&service=WMS&request=GetMap&version=1.3.0&layers=dhm_overflade_skyggekort&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
-# albania.natural — Natural Protected Sites
-2D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=akzm%3Azonat_mbrojtura_081124&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=akzm%3Azonat_mbrojtura_081124&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+# finland.mml-hillshade — Finland · MML LiDAR hillshade
+sample tile undefined
+2D https://karttamoottori.maanmittauslaitos.fi/maasto/wmts/1.0.0/korkeusmalli_vinovalo/default/ETRS-TM35FIN/12/1480/2345.png?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=&STYLE=&FORMAT=image%2Fpng&TILEMATRIXSET=EPSG%3A3067&TILEMATRIX=EPSG%3A3067%3A12&TILEROW=1480&TILECOL=2345
+3D https://karttamoottori.maanmittauslaitos.fi/maasto/wmts/1.0.0/korkeusmalli_vinovalo/default/ETRS-TM35FIN/{z}/{row}/{col}.png?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=&STYLE=&FORMAT=image%2Fpng&TILEMATRIXSET=EPSG%3A3067&TILEMATRIX=EPSG%3A3067%3A{z}&TILEROW={y}&TILECOL={x}
 ```
 ```
-# albania.cultural — Cultural Protected Sites
-2D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=iktk%3Azonatembrojturatetrashegimisekulturore_pike13_05_2026&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=iktk%3Azonatembrojturatetrashegimisekulturore_pike13_05_2026&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+# finland.maastokartta — Finland · topographic map (maastokartta)
+sample tile undefined
+2D https://kartta.museoverkko.fi/action?action_route=GetLayerTile&id=17&layer=maastokartta&style=default&tilematrixset=ETRS-TM35FIN&Service=WMTS&Request=GetTile&Version=1.0.0&Format=image%2Fpng&TileMatrix=12&TileCol=2345&TileRow=1480&SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=&STYLE=&FORMAT=image%2Fpng&TILEMATRIXSET=EPSG%3A3067&TILEMATRIX=EPSG%3A3067%3A12&TILEROW=1480&TILECOL=2345
+3D https://kartta.museoverkko.fi/action?action_route=GetLayerTile&id=17&layer=maastokartta&style=default&tilematrixset=ETRS-TM35FIN&Service=WMTS&Request=GetTile&Version=1.0.0&Format=image%2Fpng&TileMatrix={z}&TileCol={col}&TileRow={row}&SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=&STYLE=&FORMAT=image%2Fpng&TILEMATRIXSET=EPSG%3A3067&TILEMATRIX=EPSG%3A3067%3A{z}&TILEROW={y}&TILECOL={x}
 ```
 ```
-# albania.monument — Environment: Natural monument
-2D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=akzm%3Amonumentet_natyrore_07032023&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D https://geoportal.asig.gov.al/service/wms?service=WMS&request=GetMap&version=1.1.1&layers=akzm%3Amonumentet_natyrore_07032023&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+# finland.syke-rakennussuojelu-kohde — Finland · protected built heritage, sites (SYKE)
+sample tile undefined
+2D https://paikkatiedot.ymparisto.fi/geoserver/syke_rakennussuojelukohteet/wms?service=WMS&request=GetMap&version=1.1.1&layers=Rakennussuojelukohteet&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://paikkatiedot.ymparisto.fi/geoserver/syke_rakennussuojelukohteet/wms?service=WMS&request=GetMap&version=1.1.1&layers=Rakennussuojelukohteet&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# finland.syke-rakennussuojelu-alue — Finland · protected built heritage, areas (SYKE)
+sample tile undefined
+2D https://paikkatiedot.ymparisto.fi/geoserver/syke_rakennussuojelukohteet/wms?service=WMS&request=GetMap&version=1.1.1&layers=Rakennussuojelualueet&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://paikkatiedot.ymparisto.fi/geoserver/syke_rakennussuojelukohteet/wms?service=WMS&request=GetMap&version=1.1.1&layers=Rakennussuojelualueet&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# finland.syke-ps-eramaa — Finland · wilderness areas (SYKE INSPIRE)
+sample tile undefined
+2D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesEramaaAlueEramaa&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesEramaaAlueEramaa&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# finland.syke-ps-valtion-luonnonsuojelu — Finland · state-owned nature conservation areas (SYKE INSPIRE)
+sample tile undefined
+2D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesValtionOmistamaLuonnonsuojelualue&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesValtionOmistamaLuonnonsuojelualue&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# finland.syke-ps-yksityismaiden-luonnonsuojelu — Finland · private-land nature conservation areas (SYKE INSPIRE)
+sample tile undefined
+2D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesYksityistenMaillaOlevaLuonnonsuojelualue&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesYksityistenMaillaOlevaLuonnonsuojelualue&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# finland.syke-ps-natura-sci — Finland · Natura 2000 proposed Sites of Community Importance (SYKE)
+sample tile undefined
+2D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesProposedSiteOfCommunityImportance&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesProposedSiteOfCommunityImportance&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# finland.syke-ps-natura-sac — Finland · Natura 2000 Special Areas of Conservation (SYKE)
+sample tile undefined
+2D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesSpecialAreaOfConservation&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesSpecialAreaOfConservation&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# finland.syke-ps-natura-spa — Finland · Natura 2000 Special Protection Areas (SYKE)
+sample tile undefined
+2D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesSpecialProtectionArea&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesSpecialProtectionArea&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# finland.syke-ps-asetus-valtion — Finland · state-owned protected buildings, sites (SYKE INSPIRE)
+sample tile undefined
+2D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesAsetusValtionOmistamienRakennustenSuojelusta&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesAsetusValtionOmistamienRakennustenSuojelusta&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# finland.syke-ps-asetus-valtion-alue — Finland · state-owned protected buildings, areas (SYKE INSPIRE)
+sample tile undefined
+2D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesAsetusValtionOmistamienRakennustenSuojelustaPolygons&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesAsetusValtionOmistamienRakennustenSuojelustaPolygons&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# finland.syke-ps-kirkkolaki — Finland · Church Act protected sites (SYKE INSPIRE)
+sample tile undefined
+2D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesKirkkolaillaSuojellutKohteet&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesKirkkolaillaSuojellutKohteet&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# finland.syke-ps-ortodoksikirkko — Finland · Orthodox Church Act protected sites (SYKE INSPIRE)
+sample tile undefined
+2D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesLaillaOrtodoksisestaKirkoistaSuojellutKohteet&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesLaillaOrtodoksisestaKirkoistaSuojellutKohteet&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# finland.syke-ps-rakennusperintolaki — Finland · Building Protection Act sites (SYKE INSPIRE)
+sample tile undefined
+2D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesLaillaRakennusperinnonSuojelemisestaSuojeltuKohde&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesLaillaRakennusperinnonSuojelemisestaSuojeltuKohde&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# finland.syke-ps-rakennusperintolaki-alue — Finland · Building Protection Act areas (SYKE INSPIRE)
+sample tile undefined
+2D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesLaillaRakennusperinnonSuojelemisestaSuojeltuKohdePolygons&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://paikkatiedot.ymparisto.fi/geoserver/inspire_ps/wms?service=WMS&request=GetMap&version=1.1.1&layers=PS.ProtectedSitesLaillaRakennusperinnonSuojelemisestaSuojeltuKohdePolygons&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# finland.local-rky-alue — Finland · RKY built environments of national significance · areas (local file)
+sample tile undefined
+2D (built at runtime)
+3D https://dacboefvooxgsngxkavx.supabase.co/storage/v1/object/public/Harti/Finlanda/converted/rky_inspire_alue.geojson
+```
+```
+# finland.local-rky-piste — Finland · RKY sites (local file)
+sample tile undefined
+2D (built at runtime)
+3D https://dacboefvooxgsngxkavx.supabase.co/storage/v1/object/public/Harti/Finlanda/converted/rky_piste.geojson
+```
+```
+# finland.local-rky-viiva — Finland · RKY lines (local file)
+sample tile undefined
+2D (built at runtime)
+3D https://dacboefvooxgsngxkavx.supabase.co/storage/v1/object/public/Harti/Finlanda/converted/rky_viiva.geojson
+```
+```
+# finland.local-vark-alue — Finland · VARK archaeological cultural environments · areas (local file)
+sample tile undefined
+2D (built at runtime)
+3D https://dacboefvooxgsngxkavx.supabase.co/storage/v1/object/public/Harti/Finlanda/converted/VARK_aluerajaukset.geojson
+```
+```
+# finland.local-vark-piste — Finland · VARK centroids (local file)
+sample tile undefined
+2D (built at runtime)
+3D https://dacboefvooxgsngxkavx.supabase.co/storage/v1/object/public/Harti/Finlanda/converted/VARK_keskipisteet.geojson
 ```
 ```
 # lidar.nl-ahn — Netherlands · AHN (DTM/DSM)
+sample tile undefined
 2D https://ahn.arcgisonline.nl/arcgis/rest/services/Hoogtebestand/AHN4_DTM_50cm/ImageServer/exportImage?f=image&format=png32&bbox=2905830.067289,5547493.764825,2915614.00691,5557277.704445&bboxSR=3857&imageSR=3857&size=256,256&transparent=true&adjustAspectRatio=false&interpolation=RSP_BilinearInterpolation&renderingRule=%7B%22rasterFunction%22%3A%22AHN%20-%20Hillshade%20(Multidirectionaal)%22%7D
 3D dl3d://lidar.nl-ahn/{z}/{x}/{y}
 ```
 ```
 # lidar.no-hoydedata — Norway · Kartverket Høydedata
+sample tile undefined
 2D https://hoydedata.no/arcgis/rest/services/NHM_DTM_25833/ImageServer/exportImage?f=image&format=png32&bbox=2905830.067289,5547493.764825,2915614.00691,5557277.704445&bboxSR=3857&imageSR=3857&size=256,256&transparent=true&interpolation=RSP_BilinearInterpolation&renderingRule=%7B%22rasterFunction%22%3A%22skyggerelieff%22%7D
 3D dl3d://lidar.no-hoydedata/{z}/{x}/{y}
 ```
 ```
 # lidar.pl-nmt — Poland · GUGiK NMT (shading/hypsometry)
+sample tile undefined
 2D https://mapy.geoportal.gov.pl/wss/service/PZGIK/NMT/GRID1/WMS/ShadedRelief?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=Raster&STYLES=&CRS=EPSG%3A3857&BBOX=2905830.0673,5547493.7648,2915614.0069,5557277.7044&WIDTH=256&HEIGHT=256&FORMAT=image%2Fpng&TRANSPARENT=TRUE
 3D dl3d://lidar.pl-nmt/{z}/{x}/{y}
 ```
 ```
 # lidar.es-mdt — Spain · IGN MDT/LiDAR
+sample tile undefined
 2D https://wms-mapa-lidar.idee.es/lidar?SERVICE=WMS&REQUEST=GetMap&LAYERS=EL.GridCoverage&STYLES=&FORMAT=image%2Fpng&TRANSPARENT=true&VERSION=1.1.1&CONTINUOUSWORLD=true&TILED=true&INFO_FORMAT=text%2Fxml&WIDTH=256&HEIGHT=256&SRS=EPSG%3A3857&BBOX=2905830.0673,5547493.7648,2915614.0069,5557277.7044
 3D dl3d://lidar.es-mdt/{z}/{x}/{y}
 ```
 ```
 # lidar.ch-swisstopo — Switzerland · swisstopo relief
+sample tile undefined
 2D https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissalti3d-reliefschattierung/default/current/3857/12/2345/1480.png
 3D https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissalti3d-reliefschattierung/default/current/3857/{z}/{x}/{y}.png
 ```
 ```
 # lidar.uk-ea — UK · Environment Agency LiDAR
+sample tile undefined
 2D https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wmts?service=WMTS&request=GetTile&version=1.0.0&layer=Lidar_Composite_Hillshade_DTM_1m&style=hillshade&tileMatrixSet=WebMercatorQuad&format=image%2Fpng&transparent=true&tileMatrix=12&tileRow=1480&tileCol=2345
 3D https://environment.data.gov.uk/spatialdata/lidar-composite-digital-terrain-model-dtm-1m/wmts?service=WMTS&request=GetTile&version=1.0.0&layer=Lidar_Composite_Hillshade_DTM_1m&style=hillshade&tileMatrixSet=WebMercatorQuad&format=image%2Fpng&transparent=true&tileMatrix={z}&tileRow={y}&tileCol={x}
 ```
 ```
 # lidar.dk-dhm — Denmark · Dataforsyningen DHM
+sample tile undefined
 2D /api/geo/dk-dhm?service=WMTS&request=GetTile&version=1.0.0&layer=dhm_terraen_skyggekort&style=default&tilematrixset=View1&format=image%2Fjpeg&TileMatrix=12&TileCol=2345&TileRow=1480
 3D /api/geo/dk-dhm?service=WMTS&request=GetTile&version=1.0.0&layer=dhm_terraen_skyggekort&style=default&tilematrixset=View1&format=image%2Fjpeg&TileMatrix={z}&TileCol={x}&TileRow={y}
 ```
 ```
 # lidar.se-lantmateriet — Sweden · Lantmäteriet höjdmodell
+sample tile undefined
 2D /api/geo/se-hojdmodell?SERVICE=WMS&REQUEST=GetMap&VERSION=1.1.1&LAYERS=terrangskuggning&STYLES=&SRS=EPSG%3A3857&BBOX=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455&WIDTH=256&HEIGHT=256&FORMAT=image%2Fpng&TRANSPARENT=true&TILED=true
 3D dl3d://lidar.se-lantmateriet/{z}/{x}/{y}
 ```
 ```
 # lidar.fr-mnh — France · IGN LiDAR HD (DTM/DSM/CHM)
+sample tile undefined
 2D https://data.geopf.fr/wms-r/wms?service=WMS&request=GetMap&version=1.3.0&layers=IGNF_LIDAR-HD_MNT_ELEVATION.ELEVATIONGRIDCOVERAGE.SHADOW&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://data.geopf.fr/wms-r/wms?service=WMS&request=GetMap&version=1.3.0&layers=IGNF_LIDAR-HD_MNT_ELEVATION.ELEVATIONGRIDCOVERAGE.SHADOW&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
+# albania.dsm — DSM (hillshade)
+sample tile 12/2273/1530 (Tirana)
+2D https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=DSM%3ADsm_Hill_Group&STYLES=&CRS=EPSG%3A3857&BBOX=2201386.4146,5058296.7838,2211170.3542,5068080.7234&WIDTH=256&HEIGHT=256&FORMAT=image%2Fpng&TRANSPARENT=TRUE
+3D /api/map3d/tile?layer=albania.dsm&z=12&x=2273&y=1530
+```
+```
+# albania.lidar — LiDAR
+sample tile 12/2273/1530 (Tirana)
+2D https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=Dtm_2015%3AHillshade_2015_group&STYLES=&CRS=EPSG%3A3857&BBOX=2201386.4146,5058296.7838,2211170.3542,5068080.7234&WIDTH=256&HEIGHT=256&FORMAT=image%2Fpng&TRANSPARENT=TRUE
+3D /api/map3d/tile?layer=albania.lidar&z=12&x=2273&y=1530
+```
+```
 # vegfp.ppi — Vegetation PPI (dekadal)
+sample tile undefined
 2D https://phenology.hrvpp2.vgt.vito.be/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=CLMS_HRVPP_ST_PPI_10M&STYLE=&FORMAT=image%2Fpng&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A12&TILEROW=1480&TILECOL=2345&TIME=2024-07-01
 3D https://phenology.hrvpp2.vgt.vito.be/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=CLMS_HRVPP_ST_PPI_10M&STYLE=&FORMAT=image%2Fpng&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A{z}&TILEROW={y}&TILECOL={x}&TIME=2024-07-01
 ```
 ```
 # vegfp.smx — Vegetation SMX (season max)
+sample tile undefined
 2D https://phenology.hrvpp2.vgt.vito.be/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=CLMS_HRVPP_VPP_MAXV_SEASON1_10M&STYLE=&FORMAT=image%2Fpng&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A12&TILEROW=1480&TILECOL=2345&TIME=2024-01-01
 3D https://phenology.hrvpp2.vgt.vito.be/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=CLMS_HRVPP_VPP_MAXV_SEASON1_10M&STYLE=&FORMAT=image%2Fpng&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A{z}&TILEROW={y}&TILECOL={x}&TIME=2024-01-01
 ```
 ```
 # vegfp.sgu — Vegetation SGU (season start)
+sample tile undefined
 2D https://phenology.hrvpp2.vgt.vito.be/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=CLMS_HRVPP_VPP_LSLOPE_SEASON1_10M&STYLE=&FORMAT=image%2Fpng&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A12&TILEROW=1480&TILECOL=2345&TIME=2024-01-01
 3D https://phenology.hrvpp2.vgt.vito.be/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=CLMS_HRVPP_VPP_LSLOPE_SEASON1_10M&STYLE=&FORMAT=image%2Fpng&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A{z}&TILEROW={y}&TILECOL={x}&TIME=2024-01-01
 ```
 ```
 # vegfp.sgd — Vegetation SGD (season end)
+sample tile undefined
 2D https://phenology.hrvpp2.vgt.vito.be/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=CLMS_HRVPP_VPP_RSLOPE_SEASON1_10M&STYLE=&FORMAT=image%2Fpng&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A12&TILEROW=1480&TILECOL=2345&TIME=2024-01-01
 3D https://phenology.hrvpp2.vgt.vito.be/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=CLMS_HRVPP_VPP_RSLOPE_SEASON1_10M&STYLE=&FORMAT=image%2Fpng&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A{z}&TILEROW={y}&TILECOL={x}&TIME=2024-01-01
 ```
 ```
+# albania.heritage — Heritage Sites
+sample tile 12/2273/1530 (Tirana)
+2D https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=iktk%3Azonatembrojturatetrashegimisekulturore22_07_2026&STYLES=&CRS=EPSG%3A3857&BBOX=2201386.4146,5058296.7838,2211170.3542,5068080.7234&WIDTH=256&HEIGHT=256&FORMAT=image%2Fpng&TRANSPARENT=TRUE
+3D /api/map3d/tile?layer=albania.heritage&z=12&x=2273&y=1530
+```
+```
+# albania.natural — Natural Protected Sites
+sample tile 12/2273/1530 (Tirana)
+2D https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=akzm%3Azonat_mbrojtura_081124&STYLES=&CRS=EPSG%3A3857&BBOX=2201386.4146,5058296.7838,2211170.3542,5068080.7234&WIDTH=256&HEIGHT=256&FORMAT=image%2Fpng&TRANSPARENT=TRUE
+3D /api/map3d/tile?layer=albania.natural&z=12&x=2273&y=1530
+```
+```
+# albania.cultural — Cultural Protected Sites
+sample tile 12/2273/1530 (Tirana)
+2D https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=iktk%3Azonatembrojturatetrashegimisekulturore_pike13_05_2026&STYLES=&CRS=EPSG%3A3857&BBOX=2201386.4146,5058296.7838,2211170.3542,5068080.7234&WIDTH=256&HEIGHT=256&FORMAT=image%2Fpng&TRANSPARENT=TRUE
+3D /api/map3d/tile?layer=albania.cultural&z=12&x=2273&y=1530
+```
+```
+# albania.monument — Environment: Natural monument
+sample tile 12/2273/1530 (Tirana)
+2D https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=akzm%3Amonumentet_natyrore_07032023&STYLES=&CRS=EPSG%3A3857&BBOX=2201386.4146,5058296.7838,2211170.3542,5068080.7234&WIDTH=256&HEIGHT=256&FORMAT=image%2Fpng&TRANSPARENT=TRUE
+3D /api/map3d/tile?layer=albania.monument&z=12&x=2273&y=1530
+```
+```
 # overlay.image-overlays — Dynamic image overlays
+sample tile undefined
 2D (built at runtime)
 ```
 ```
 # cenagis.wig25k — WIG Detailed Map 1:25,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Awig25k_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Awig25k_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.wig100k — WIG Tactical Map 1:100,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Awig100k_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Awig100k_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.wig300k — WIG Operational Map 1:300,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Awig300k_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Awig300k_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.wig500k_1947 — WIG Poland & Neighboring Countries 1:500,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Awig500k_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Awig500k_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.tkkp_126k — Topographic Chart of the Kingdom of Poland (TKKP) 1:126,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3ATKKP_126k_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3ATKKP_126k_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.chrzanowski — Charter of Old Poland (Wojciech Chrzanowski) 1:300,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Achrzanowski_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Achrzanowski_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.gaul — Gaul / Raczyński Map 1:125,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Agaul_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Agaul_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.kummersberg — Administrative Map of Galicia & Lodomeria (Kummersberg) 1:115,200
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Akummersberg_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Akummersberg_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.schroetter — Schroetter Map (East & West Prussia) 1:150,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Aschroetter_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Aschroetter_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.gilly — Gilly Map (South Prussia) 1:150,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Agilly_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Agilly_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.textor — Textor-Sotzmann Map (New East Prussia) 1:150,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Atextor_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Atextor_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.m25k — German Topographic Messtischblätter 1:25,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Am25k_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Am25k_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.kdr — German Empire Map (Karte des Deutschen Reiches) 1:100,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Akdr_2180&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/map3d/tile?layer=cenagis.kdr&z={z}&x={x}&y={y}
 ```
 ```
 # cenagis.kdr_gb — German Grossblätter WWII 1:100,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Akdr_gb_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Akdr_gb_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.kdwr — Western Russia Map (Karte des Westlichen Russlands) 1:100,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Akdwr_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Akdwr_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.ukvme — Central Europe Map (Übersichtskarte von Mitteleuropa) 1:300,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Aukvme_2180&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/map3d/tile?layer=cenagis.ukvme&z={z}&x={x}&y={y}
 ```
 ```
 # cenagis.reymann — Reymann's Special Map of Central Europe 1:200,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Areymann_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Areymann_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.dwuwiorstowka — Russian 2-Verst Map (Dvukhverstka) 1:84,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Adwuwiorstowka_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Adwuwiorstowka_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.ahp_ziemie_polskie — Crown Lands of Poland in 16th c. 1:250,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Aahp_ziemie_polskie_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Aahp_ziemie_polskie_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.ahp_drogi — Trade & Postal Routes in 16th c. 1:500,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Aahp_drogi_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Aahp_drogi_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.ahp_koscielne — Ecclesiastical Divisions in 16th c. 1:500,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Aahp_koscielne_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Aahp_koscielne_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.ahp_wlasnosc — Land Ownership Structure in 16th c. 1:500,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Aahp_wlasnosc_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Aahp_wlasnosc_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_warszawa — Warsaw City Plan 1:25,000 (1944)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Awarszawa_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Awarszawa_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_krakow — Kraków City Plan 1:25,000 (1943)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Akrakow_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Akrakow_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_gdansk — Gdańsk City Plan 1:25,000 (1944)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Agdansk_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Agdansk_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_wroclaw — Wrocław (Breslau) City Plan 1:25,000 (1944)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Awroclaw_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Awroclaw_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_poznan — Poznań City Plan 1:25,000 (1943)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Apoznan_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Apoznan_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_lodz — Łódź City Plan 1:25,000 (1943)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Alodz_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Alodz_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_katowice — Katowice City Plan 1:25,000 (1943)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Akatowice_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Akatowice_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_czestochowa — Częstochowa City Plan 1:25,000 (1943)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Aczestochowa_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Aczestochowa_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_bialystok — Białystok City Plan 1:25,000 (1943)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Abialystok_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Abialystok_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_bydgoszcz — Bydgoszcz City Plan 1:25,000 (1943)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Abydgoszcz_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Abydgoszcz_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_torun — Toruń City Plan 1:25,000 (1943)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Atorun_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Atorun_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_lublin — Lublin City Plan 1:25,000 (1943)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Alublin_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Alublin_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_kielce — Kielce City Plan 1:25,000 (1943)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Akielce_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Akielce_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_radom — Radom City Plan 1:25,000 (1943)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Aradom_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Aradom_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_rzeszow — Rzeszów City Plan 1:25,000 (1943)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Arzeszow_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Arzeszow_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_tarnow — Tarnów City Plan 1:25,000 (1943)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Atarnow_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Atarnow_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_grudziadz — Grudziądz City Plan 1:25,000 (1943)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Agrudziadz_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Agrudziadz_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_inowroclaw — Inowrocław City Plan 1:25,000 (1943)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Ainowroclaw_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Ainowroclaw_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_jaslo — Jasło City Plan 1:25,000 (1943)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Ajaslo_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Ajaslo_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_siedlce — Siedlce City Plan 1:25,000 (1943)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Asiedlce_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Asiedlce_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_warszawa_lindley — Lindley Warsaw Plan 1:2,500 (1897–1901)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Alindley_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Alindley_3857&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # cenagis.city_warszawa_1822 — Warsaw City Plan (Corps of Engineers) 1:4,800 (1822)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3AwarszawaOKI_2180&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/map3d/tile?layer=cenagis.city_warszawa_1822&z={z}&x={x}&y={y}
 ```
 ```
 # cenagis.city_praga_1796 — Praga Suburb (Warsaw) Plan 1:7,200 (1796)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.3.0&layers=ihpan%3Arauch_2180&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/map3d/tile?layer=cenagis.city_praga_1796&z={z}&x={x}&y={y}
 ```
 ```
 # hist.austrian — Austrian Map 1910
+sample tile undefined
 2D https://services.geo-spatial.org/geoserver/eharta/wms?service=WMS&request=GetMap&version=1.1.0&layers=eharta%3Amozaic_austrian_200k&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://services.geo-spatial.org/geoserver/eharta/wms?service=WMS&request=GetMap&version=1.1.0&layers=eharta%3Amozaic_austrian_200k&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
+# albania.topo50k — Topographic map 1:50k
+sample tile 12/2273/1530 (Tirana)
+2D https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=Topografike%3A50K_Topografike&STYLES=&CRS=EPSG%3A3857&BBOX=2201386.4146,5058296.7838,2211170.3542,5068080.7234&WIDTH=256&HEIGHT=256&FORMAT=image%2Fpng&TRANSPARENT=FALSE
+3D /api/map3d/tile?layer=albania.topo50k&z=12&x=2273&y=1530
+```
+```
 # hist.firing-plans — Firing Plans
+sample tile undefined
 2D https://services.geo-spatial.org/geoserver/eharta/wms?service=WMS&request=GetMap&version=1.1.0&layers=eharta%3Amozaic_planuri_tragere_20k&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://services.geo-spatial.org/geoserver/eharta/wms?service=WMS&request=GetMap&version=1.1.0&layers=eharta%3Amozaic_planuri_tragere_20k&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # hist.soviet-1970 — Soviet Map 1970
+sample tile undefined
 2D https://services.geo-spatial.org/geoserver/eharta/wms?service=WMS&request=GetMap&version=1.1.0&layers=eharta%3Amozaic_soviet100k&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://services.geo-spatial.org/geoserver/eharta/wms?service=WMS&request=GetMap&version=1.1.0&layers=eharta%3Amozaic_soviet100k&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # sat.corona-60s — Satellite imagery 60s (CORONA)
+sample tile undefined
 2D (built at runtime)
 3D /api/map3d/tile?layer=sat.corona-60s&z={z}&x={x}&y={y}
 ```
 ```
 # premium.mitteleuropa — Central Europe (Übersichtskarte 1:300,000)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.1.1&layers=ihpan%3Aukvme_2180&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.1.1&layers=ihpan%3Aukvme_2180&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # premium.chrzanowski — Charter of Old Poland (Chrzanowski 1859)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.1.1&layers=ihpan%3Achrzanowski_3857&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.1.1&layers=ihpan%3Achrzanowski_3857&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # premium.reymann — Reymann Special Map (1:200,000)
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.1.1&layers=ihpan%3Areymann_3857&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.1.1&layers=ihpan%3Areymann_3857&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # premium.kdr-100k — Karte des Deutschen Reiches 1:100,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.1.1&layers=ihpan%3Akdr_2180&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.1.1&layers=ihpan%3Akdr_2180&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # premium.kdr-gb — German Grossblätter 1:100,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.1.1&layers=ihpan%3Akdr_gb_3857&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.1.1&layers=ihpan%3Akdr_gb_3857&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # premium.wig-100k — WIG Tactical Map 1:100,000
+sample tile undefined
 2D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.1.1&layers=ihpan%3Awig100k_3857&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://pastmaps.cenagis.edu.pl/geoserver/ihpan/wms?service=WMS&request=GetMap&version=1.1.1&layers=ihpan%3Awig100k_3857&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
@@ -802,8 +1083,9 @@ node tools/audit-wms-layers.mjs --write=WMS_WMTS_LAYER_AUDIT.md   # regenerate t
 ```
 
 The tool never talks to the network: it checks the requests the app *would* send.
-A live check is one `curl` of any URL in the section above — a service that cannot
-render answers with text/XML/JSON under an HTTP 200, and `curl -I` shows it.
+Live results are deliberately separate. Albania requires the same-origin proxy probe:
+`node tools/probe-asig-production.mjs --origin=https://detectlab.eu --tile=12/2273/1530`.
+No live production result is implied by this offline audit.
 
 ## What to do when one of them breaks
 

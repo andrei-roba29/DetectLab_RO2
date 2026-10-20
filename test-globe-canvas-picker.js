@@ -22,7 +22,7 @@ assert(indexHtml.includes('css/globe-country-picker.css?v=20261013-no-change-pil
 assert(indexHtml.indexOf('js/globe-country-picker.js?v=20261017-outline-zoom-settle') <
        indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d') &&
        indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d') <
-       indexHtml.indexOf('js/map-app.js?v=20261017-albania-asig'),
+       indexHtml.indexOf('js/map-app.js?v=20261020-albania-independent-rows'),
     'gate, country dock and map-app load in the documented order');
 /* The retired MapLibre globe BASEMAP stays gone; MapLibre GL is now loaded on
  * purpose as the separate 3D terrain viewer (js/map3d-terrain.js + the shared
@@ -47,7 +47,7 @@ const swJs = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8');
  'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
  'js/d3.min.js?v=7.9.0', 'js/topojson-client.min.js?v=3.1.0',
  'data/countries-50m.json?v=20261008',
- 'js/map-app.js?v=20261017-albania-asig'].forEach(function (p) {
+ 'js/map-app.js?v=20261020-albania-independent-rows'].forEach(function (p) {
     assert(swJs.includes("'" + p + "'"), 'sw.js precaches ' + p);
 });
 const shellVersion = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);

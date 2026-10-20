@@ -8403,12 +8403,12 @@
     }
 }
 
-/* ── Albanian layers (js/asig-albania-layers.config.js + js/asig-albania-layers.js)
-   The rows are generated, so they carry their own small set of classes. They
-   mirror the Danish rows and inherit the panel's colours and type scale,
-   staying inside the existing .transp-layer-row. The accent is the Albanian
-   flag red (#e04545). */
-.albania-sublayers {
+/* ── Albania ASIG rows rendered into the existing Free-tab sections. */
+.asig-section-mount {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
     padding-left: 6px;
     border-left: 2px solid rgba(224, 69, 69, 0.3);
 }
@@ -8431,6 +8431,30 @@
     display: flex;
     align-items: center;
     gap: 6px;
+}
+
+.albania-layer-actions {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+}
+
+.albania-layer-go {
+    border: 1px solid rgba(224, 69, 69, 0.45);
+    border-radius: 3px;
+    padding: 2px 5px;
+    background: none;
+    color: rgba(245, 240, 235, 0.78);
+    font: inherit;
+    font-size: 0.62rem;
+    cursor: pointer;
+}
+
+.albania-layer-go:hover,
+.albania-layer-go:focus-visible {
+    border-color: #e04545;
+    color: #fff;
 }
 
 .albania-layer-label {
@@ -8508,14 +8532,6 @@
     opacity: 1;
 }
 
-.albania-group-notice {
-    font-size: 0.68rem;
-    line-height: 1.35;
-    color: #ffd166;
-    border-left: 2px solid rgba(255, 209, 102, 0.5);
-    padding: 3px 0 3px 7px;
-    margin: 0 0 6px;
-}
 
 .albania-layer-row.is-active .albania-layer-title {
     color: rgba(245, 240, 235, 0.98);
@@ -8523,47 +8539,17 @@
 
 /* The "Protected Sites" toggle group: a caption the visitor can collapse,
    with the four child checkboxes nested underneath (transparent overlays). */
-.albania-protected-caption {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    padding: 0;
-    border: none;
-    background: none;
-    color: rgba(245, 240, 235, 0.82);
-    font: inherit;
-    cursor: pointer;
-    text-align: left;
-}
 
-.albania-protected-icon {
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
-    border: 1px solid rgba(224, 69, 69, 0.7);
-    background: rgba(224, 69, 69, 0.18);
-    flex-shrink: 0;
-}
 
-.albania-protected-chevron {
-    margin-left: auto;
-    color: rgba(224, 69, 69, 0.85);
-    font-size: 0.72rem;
-    transition: transform 0.25s ease;
-}
 
-.albania-protected-body {
-    padding-left: 19px;
-}
 
 /* Everything the module creates must stay reachable by keyboard: the panel
    rows use real inputs, and this keeps the focus ring visible on the dark
    glass. */
 .albania-layer-label input:focus-visible,
 .albania-layer-info:focus-visible,
-.albania-layer-slider:focus-visible,
-.albania-protected-caption:focus-visible {
+.albania-layer-go:focus-visible,
+.albania-layer-slider:focus-visible {
     outline: 2px solid #e04545;
     outline-offset: 1px;
 }

@@ -40,7 +40,7 @@ assert.doesNotMatch(styles, /atlas-primary|atlas-view|legacy-map-tab|atlas-mode-
 assert.doesNotMatch(index, /leaflet-maplibre-gl|globe-base-layer/,
     'the retired MapLibre globe basemap is not loaded by the shell');
 assert(index.includes('js/map3d-terrain.js?v=20261019-lidar-depth') &&
-       index.includes('js/layer-registry.js?v=20261017-albania-asig') &&
+       index.includes('js/layer-registry.js?v=20261020-albania-independent-rows') &&
        index.includes('js/map3d-mirror.js?v=20261017-archeo-3d-projection'),
     'the 3D terrain viewer, its shared layer registry and the 2D→3D mirror are loaded');
 
@@ -74,7 +74,7 @@ const order = [
     'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
     'js/globe-country-picker.js?v=20261017-outline-zoom-settle',
     'js/country-dock.js?v=20261013-country-2d',
-    'js/map-app.js?v=20261017-albania-asig',
+    'js/map-app.js?v=20261020-albania-independent-rows',
     'js/offline-maps.js?v=20261009-3d-globe'
 ];
 order.forEach((asset) => assert(index.includes(asset), 'index.html loads ' + asset));
@@ -132,13 +132,13 @@ assert(cacheVersion >= 187, 'the PWA shell version was bumped to v187 for the fl
   'css/europe-roman-atlas.css?v=20261011-arcgis-primary',
   'js/europe-roman-atlas.js?v=20261011-arcgis-primary',
   'js/atlas-shell.js?v=20261011-arcgis-primary',
-  'css/styles.css?v=20261017-albania-asig',
+  'css/styles.css?v=20261020-albania-independent-rows',
   'css/globe-country-picker.css?v=20261013-no-change-pill',
   'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
   'js/globe-country-picker.js?v=20261017-outline-zoom-settle',
   'css/country-dock.css?v=20261008',
   'js/country-dock.js?v=20261013-country-2d',
-  'js/map-app.js?v=20261017-albania-asig',
+  'js/map-app.js?v=20261020-albania-independent-rows',
   'js/offline-maps.js?v=20261009-3d-globe',
   'js/translations.js?v=20261017-albania-asig',
   'data/countries-50m.json'
