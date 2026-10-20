@@ -67,7 +67,10 @@ for (const pwa of [false, true]) {
         'no duplicate default bottom-right attribution control in either layout');
 }
 assert(ensureBar.includes('m3d-pitch-row') && ensureBar.includes('m3d-bearing-row'), 'camera rows can be hidden independently');
-assert(/body\.is-pwa\.is-3d #map3d-bar \.m3d-pitch-row,[\s\S]*?\.m3d-bearing-row \{ display: none; \}/.test(skin), 'PWA hides camera sliders only');
+assert(/body\.is-pwa\.is-3d #map3d-bar \.m3d-head,[\s\S]*?\.m3d-exag-row,[\s\S]*?\.m3d-pitch-row,[\s\S]*?\.m3d-bearing-row \{ display: none; \}/.test(skin),
+    'PWA hides exaggeration and camera sliders');
+assert(/\.m3d-row:not\(\.m3d-exag-row\):not\(\.m3d-pitch-row\):not\(\.m3d-bearing-row\)/.test(skin),
+    'the PWA collapsed-bar override cannot reveal the hidden exaggeration row');
 assert(/body\.is-pwa\.is-3d #map3d-bar \.m3d-head/.test(skin), 'PWA hides the extra collapse button');
 assert(!/#map3d-surface \.maplibregl-ctrl-bottom-left \{ display: none; \}/.test(skin),
     'mobile source credits are not hidden with the scale');
@@ -76,7 +79,7 @@ assert(/body\.is-pwa\.is-3d #map3d-surface \.maplibregl-ctrl-bottom-left\s*\{[^}
 for (const action of ['reset', 'north', 'flat']) {
     assert(ensureBar.includes('m3d-' + action), 'retained action: ' + action);
 }
-const SLIDER_TAGS = { 'js/map3d-terrain.js': '20261020-lidar-disc-route', 'css/map3d-terrain.css': '20261020-pwa-lidar-pill-clearance' };
+const SLIDER_TAGS = { 'js/map3d-terrain.js': '20261020-1km-raster-refresh', 'css/map3d-terrain.css': '20261020-1km-raster-refresh' };
 for (const file of ['js/map3d-terrain.js', 'css/map3d-terrain.css']) {
     const url = file + '?v=' + SLIDER_TAGS[file];
     assert(html.includes(url) && sw.includes("'" + url + "'"), 'updated asset cache wiring: ' + file);
@@ -103,7 +106,10 @@ async function browserChecks() {
             await page.setContent(`${sheets}<style>
                 body { margin:0; } .map-frame, .map-wrapper { position:relative; width:100%; height:100dvh; border:0; margin:0; }
                 </style><body class="is-3d ${pwa ? 'is-pwa' : ''}" ${pwa ? 'style="--map3d-safe-area-bottom: 34px"' : ''}><div class="map-frame"><div class="map-wrapper">
-                <div id="map3d-surface"></div><button id="map3d-toggle">2D</button>
+                <div id="map3d-surface"></div>
+                <div id="map3d-toggle-group" class="m3d-toggle-group">
+                  <button id="map3d-toggle">2D</button><button id="map3d-refresh">↻</button>
+                </div>
                 <div id="map3d-focus" class="is-minimized"><button id="map3d-focus-mini" class="m3d-focus-mini">LiDAR in 3D</button></div>
                 </div><button class="map-help-btn" id="mapHelpBtn">?</button></div></body>`);
             await page.addScriptTag({ path: path.join(__dirname, 'js/maplibre-gl.js') });
@@ -113,8 +119,9 @@ async function browserChecks() {
                 var bar = null, state = { exaggeration: 1.4 };
                 var surface = document.getElementById('map3d-surface');
                 var CONFIG = { terrain: { minExaggeration: 0.5, maxExaggeration: 4 }, camera: { maxPitch: 80 } };
+                var root = { getArcgisBasemap() { return 'imagery'; }, setArcgisBasemap(key) { return key; } };
                 function wrapper() { return document.querySelector('.map-wrapper'); }
-                function t(key) { return ({ title:'3D View', exaggeration:'Terrain exaggeration', pitch:'Pitch', bearing:'Bearing', reset:'Reset view' })[key] || key; }
+                function t(key) { return ({ title:'3D View', basemap:'Base map', basemapImagery:'Imagery ArcGIS', basemapTopographic:'Topographic ArcGIS', basemapTerrain:'Terrain ArcGIS', exaggeration:'Terrain exaggeration', pitch:'Pitch', bearing:'Bearing', reset:'Reset view' })[key] || key; }
                 function cameraPitch() { return map.pitch; } function cameraBearing() { return map.bearing; }
                 function setExaggeration(v) { state.exaggeration = v; }
                 function resetView() { map.pitch = 62; map.bearing = 0; }
@@ -149,13 +156,18 @@ async function browserChecks() {
                 const box = el => { const r = el.getBoundingClientRect(); return { left:r.left, right:r.right, top:r.top, bottom:r.bottom, width:r.width, height:r.height }; };
                 const bar = document.getElementById('map3d-bar');
                 const rows = [...bar.querySelectorAll('.m3d-row')];
+                const group = document.getElementById('map3d-toggle-group');
                 const toggle = document.getElementById('map3d-toggle');
+                const refresh = document.getElementById('map3d-refresh');
                 const toggleRect = toggle.getBoundingClientRect();
+                const refreshRect = refresh.getBoundingClientRect();
                 const toggleHit = document.elementFromPoint(toggleRect.left + toggleRect.width / 2,
                     toggleRect.top + toggleRect.height / 2);
-                return { bar:box(bar), rows:rows.map(box), toggle:box(toggle),
+                const refreshHit = document.elementFromPoint(refreshRect.left + refreshRect.width / 2,
+                    refreshRect.top + refreshRect.height / 2);
+                return { bar:box(bar), rows:rows.map(box), group:box(group), toggle:box(toggle), refresh:box(refresh),
                     mini:box(document.getElementById('map3d-focus-mini')),
-                    toggleHit:toggleHit && toggleHit.id, help:box(document.getElementById('mapHelpBtn')),
+                    toggleHit:toggleHit && toggleHit.id, refreshHit:refreshHit && refreshHit.id, help:box(document.getElementById('mapHelpBtn')),
                     zoom:document.querySelector('.maplibregl-ctrl-zoom-in') ? box(document.querySelector('.maplibregl-ctrl-zoom-in')) : null,
                     compass:!!document.querySelector('.maplibregl-ctrl-compass'),
                     info:(() => { const el = document.querySelector('.maplibregl-ctrl-attrib-button');
@@ -172,23 +184,27 @@ async function browserChecks() {
             });
             assert.strictEqual(geometry.bg, 'rgba(0, 0, 0, 0)');
             assert.strictEqual(geometry.filter, 'none');
-            assert.strictEqual(geometry.rows.length, 3);
-            assert(geometry.alpha.every(value => value.includes('0.48')), 'separate semi-transparent slider strips');
-            assert(geometry.rows.filter(row => row.width > 0).every(row => row.width > row.height * 2), 'visible sliders are horizontal');
+            assert.strictEqual(geometry.rows.length, 4, 'basemap, exaggeration, pitch and bearing each have a row');
+            assert(geometry.alpha.every(value => value.includes('0.48')), 'separate semi-transparent control strips');
+            assert(geometry.rows.filter(row => row.width > 0).every(row => row.width > row.height * 2), 'visible control rows stay horizontal');
             assert.strictEqual(geometry.actions, 3, 'reset/north/flat actions remain available');
             assert.strictEqual(geometry.zoom, null, 'no duplicate +/- buttons');
             assert.strictEqual(geometry.compass, false, 'no duplicate compass');
+            assert(geometry.refresh.width >= 44 && geometry.refresh.left >= geometry.toggle.right,
+                'the raster refresh action has a touch-sized target beside the 2D/3D switch');
             if (pwa) {
-                assert.strictEqual(geometry.visibleRows, 1, 'only terrain exaggeration is visible');
+                assert.strictEqual(geometry.visibleRows, 1, 'only the basemap picker is visible; exaggeration and camera sliders are hidden');
                 assert.strictEqual(geometry.head, 'none', 'no extra PWA collapse control');
                 assert(Math.abs((geometry.bar.left + geometry.bar.right) / 2 - width / 2) < 1, 'PWA bar is centred');
                 assert(geometry.bar.top >= 56, 'PWA bar clears the top map controls');
                 assert(geometry.bar.bottom < height - 80, 'bar clears bottom toggle/actions');
                 if (width <= 720) {
-                    assert(geometry.toggle.bottom <= geometry.mini.top - 8,
-                        'the PWA 2D/3D switch clears the minimized LiDAR pill with a 10px safe-area gap');
+                    assert(geometry.group.bottom <= geometry.mini.top - 8,
+                        'the grouped 2D switch and raster refresh clear the minimized LiDAR pill with a 10px safe-area gap');
                     assert.strictEqual(geometry.toggleHit, 'map3d-toggle',
                         'the switch itself receives a tap at its centre rather than the higher-z-index pill');
+                    assert.strictEqual(geometry.refreshHit, 'map3d-refresh',
+                        'the adjacent refresh button receives a tap at its centre');
                 }
                 if (geometry.scroll) {
                     assert.strictEqual(geometry.overflow, 'auto', 'short-screen controls can scroll');
@@ -197,7 +213,7 @@ async function browserChecks() {
                     await page.waitForFunction(() => document.getElementById('map3d-bar').scrollTop > 0, { timeout: 2000 });
                 }
             } else {
-                assert.strictEqual(geometry.visibleRows, 3, 'web keeps all three sliders');
+                assert.strictEqual(geometry.visibleRows, 4, 'web keeps the basemap picker and all three sliders');
             }
             assert.strictEqual(geometry.info, true, 'the compact source-credit button remains available');
             assert.strictEqual(geometry.creditControl, true, 'the compact attribution control stays bottom-left');
@@ -208,7 +224,7 @@ async function browserChecks() {
             // Range callbacks and the retained actions must still drive the camera.
             const values = await page.evaluate(() => {
                 const update = (selector, value) => { const el = document.querySelector(selector); el.value = value; el.dispatchEvent(new Event('input')); };
-                update('.m3d-exag', 70);
+                if (!document.body.classList.contains('is-pwa')) update('.m3d-exag', 70);
                 if (document.body.classList.contains('is-pwa')) {
                     // Pitch/bearing still respond to map gestures, not hidden sliders.
                     map.setPitch(34); map.setBearing(120);
@@ -229,7 +245,8 @@ async function browserChecks() {
                 }
                 return values;
             });
-            assert(Math.abs(values.exag - 2.95) < 0.001);
+            if (pwa) assert.strictEqual(values.exag, 1.4, 'PWA does not expose or change terrain exaggeration');
+            else assert(Math.abs(values.exag - 2.95) < 0.001);
             assert.strictEqual(values.pitch, 34); assert.strictEqual(values.bearing, 120);
             assert.strictEqual(values.north, 0); assert.strictEqual(values.flat, 0);
             assert.strictEqual(values.resetPitch, 62); assert.strictEqual(values.resetBearing, 0);

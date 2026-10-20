@@ -287,12 +287,11 @@ const shellVersion = Number((swJs.match(/CACHE_NAME = 'detectlab-v(\d+)-/) || []
 assert(shellVersion >= 196,
     'sw.js cache is v196 or newer so installed PWAs get the mobile fix (found v' + shellVersion + ')');
 /* Each asset is versioned by whatever last changed it: the registry by the
- * WMS/WMTS audit, the viewer by the 3D attribution update, and the sheet by
- * the smaller LiDAR focus dialog. */
+ * WMS/WMTS audit and the viewer + skin by the 3D basemap picker. */
 const TAGS = {
     'js/layer-registry.js': '20261020-albania-independent-rows',
-    'js/map3d-terrain.js': '20261020-lidar-disc-route',
-    'css/map3d-terrain.css': '20261020-pwa-lidar-pill-clearance',
+    'js/map3d-terrain.js': '20261020-1km-raster-refresh',
+    'css/map3d-terrain.css': '20261020-1km-raster-refresh',
     'js/danish-layers.config.js': '20261019-danish-token-maps',
     'js/danish-layers.js': '20261019-danish-free-groups'
 };

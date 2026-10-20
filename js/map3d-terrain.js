@@ -75,7 +75,14 @@
     var surface = null;
     var veil = null;
     var bar = null;
+    var toggleGroup = null;
     var toggleBtn = null;
+    var refreshBtn = null;
+    var refreshIcon = null;
+    var refreshCount = null;
+    var refreshStatus = null;
+    var refreshJob = null;
+    var refreshStatusTimer = null;
 
     var state = {
         open: false,
@@ -114,6 +121,7 @@
         primedBytes: 0,
         primedHits: 0,
         prefetching: false,
+        prefetchCount: 0,
         /* The entry gate: an async function the LiDAR focus installs so that
          * pressing “3D” on a map with a LiDAR layer on can ask first. */
         entryGate: null,
@@ -288,6 +296,15 @@
             buttonOn: '2D',
             buttonTitle: 'Vezi harta în 3D, cu relief (teren DEM)',
             buttonTitleOn: 'Întoarce-te la harta 2D',
+            refreshTitle: 'Încarcă tile-urile active pe o rază de 1 km în jurul centrului 3D',
+            refreshProgress: 'Se încarcă tile-uri: {done}/{total}',
+            refreshStopping: 'Se oprește pregătirea tile-urilor: {done}/{total}',
+            refreshDone: 'Tile-uri pregătite: {prepared}/{total}; eșuate: {failed}',
+            refreshStopped: 'Pregătire oprită: {prepared} pregătite, {failed} eșuate din {total}',
+            refreshNoLayers: 'Nu există tile-uri raster non-LiDAR active în zona aceasta',
+            refreshUnavailable: 'Centrul hărții 3D nu este disponibil',
+            refreshBusy: 'O altă pregătire de tile-uri este deja în curs',
+            refreshStop: 'Oprește pregătirea tile-urilor',
             title: 'Vedere 3D',
             loading: 'Se încarcă vederea 3D…',
             loadingDetail: 'Se descarcă MapLibre GL și modelul de elevație.',
@@ -302,6 +319,10 @@
             safeMode: 'mod avansat (calitate redusă)',
             pitch: 'Înclinare',
             bearing: 'Rotație',
+            basemap: 'Hartă de bază',
+            basemapImagery: 'Imagery ArcGIS',
+            basemapTopographic: 'Topographic ArcGIS',
+            basemapTerrain: 'Terrain ArcGIS',
             exaggeration: 'Exagerare relief',
             reset: 'Resetează',
             resetTitle: 'Reia poziția și unghiul hărții 2D',
@@ -330,6 +351,15 @@
             buttonOn: '2D',
             buttonTitle: 'View the map in 3D, draped over terrain (DEM)',
             buttonTitleOn: 'Back to the 2D map',
+            refreshTitle: 'Load active tiles within 1 km of the current 3D center',
+            refreshProgress: 'Loading tiles: {done}/{total}',
+            refreshStopping: 'Stopping tile preparation: {done}/{total}',
+            refreshDone: 'Tiles ready: {prepared}/{total}; failed: {failed}',
+            refreshStopped: 'Preparation stopped: {prepared} ready, {failed} failed of {total}',
+            refreshNoLayers: 'No active non-LiDAR raster tiles cover this area',
+            refreshUnavailable: 'The 3D map center is unavailable',
+            refreshBusy: 'Another tile preparation is already running',
+            refreshStop: 'Stop tile preparation',
             title: '3D view',
             loading: 'Loading the 3D view…',
             loadingDetail: 'Fetching MapLibre GL and the elevation model.',
@@ -344,6 +374,10 @@
             safeMode: 'safe mode (reduced quality)',
             pitch: 'Pitch',
             bearing: 'Bearing',
+            basemap: 'Base map',
+            basemapImagery: 'Imagery ArcGIS',
+            basemapTopographic: 'Topographic ArcGIS',
+            basemapTerrain: 'Terrain ArcGIS',
             exaggeration: 'Terrain exaggeration',
             reset: 'Reset',
             resetTitle: 'Return to the 2D camera',
@@ -923,7 +957,10 @@
          * base map alone. Collect first, exactly as the view will see it. */
         collectMirror();
         var entries = (list || []).slice();
-        var total = entries.length;
+        var entryIndex = 0;
+        var requestedTotal = Number(options.total);
+        var total = options.total != null && isFinite(requestedTotal)
+            ? Math.max(0, Math.floor(requestedTotal)) : entries.length;
         var report = {
             total: total, done: 0, prepared: 0, failed: 0, stopped: false,
             bytes: 0, startedAt: Date.now(), finishedAt: 0, errors: []
@@ -933,9 +970,19 @@
             if (options.onProgress) { try { options.onProgress(report); } catch (e) { /* ignore */ } }
             return Promise.resolve(report);
         }
+        state.prefetchCount = (state.prefetchCount || 0) + 1;
         state.prefetching = true;
         var concurrency = Math.max(1, Math.min(12, Number(options.concurrency) || prefetchConcurrency()));
         var cancelled = false;
+
+        function takeEntry() {
+            if (entryIndex < entries.length) return entries[entryIndex++];
+            if (typeof options.nextEntry === 'function') {
+                try { return options.nextEntry() || null; }
+                catch (error) { return { error: String((error && error.message) || error) }; }
+            }
+            return null;
+        }
 
         function stopped() {
             if (report.done >= total) return true;          /* nothing left to do */
@@ -947,6 +994,7 @@
         }
 
         function prepare(entry) {
+            if (entry && entry.error) return Promise.reject(new Error(String(entry.error)));
             var defId = entry.defId || null;
             var key = entry.layerKey || (defId ? 'def:' + defId : null);
             /* The tile's identity. Named `tileId`, not `tile`: the fetch below
@@ -978,7 +1026,15 @@
                 }
                 return MIRROR.renderTile(MIRROR.layerByKey(key), entry.z, entry.x, entry.y).then(function (bytes) {
                     /* renderTile repaints a CSS-blended layer itself. */
-                    return clipFocusedTile(key, templateUrl, bytes, tileId).then(function () {});
+                    return clipFocusedTile(key, templateUrl, bytes, tileId).then(function (prepared) {
+                        /* A normal (non-LiDAR) canvas tile has no fetch URL to
+                         * warm in the browser cache. Keep the finished pixels
+                         * under the dl2d:// address the map will request. */
+                        if (!focusMaskFor(key) && prepared) {
+                            state.primedLayer[templateUrl] = key;
+                            primedPut(templateUrl, prepared, true, pipelineSigFor(key, templateUrl));
+                        }
+                    });
                 });
             }
 
@@ -1031,16 +1087,20 @@
 
         function worker() {
             if (stopped()) return Promise.resolve();
-            var entry = entries.shift();
+            var entry = takeEntry();
             if (!entry) return Promise.resolve();
-            return prepare(entry).then(function () {
+            var prepared;
+            try { prepared = prepare(entry); }
+            catch (error) { prepared = Promise.reject(error); }
+            return Promise.resolve(prepared).then(function () {
                 report.done += 1;
                 report.prepared += 1;
             }, function (error) {
                 report.done += 1;
                 report.failed += 1;
                 if (report.errors.length < 5) {
-                    report.errors.push(String((error && error.message) || error) + ' — ' + entry.url);
+                    report.errors.push(String((error && error.message) || error) + ' — ' +
+                        (entry.url || entry.template || entry.layerKey || 'tile'));
                 }
             }).then(function () {
                 if (options.onProgress) { try { options.onProgress(report); } catch (e) { /* ignore */ } }
@@ -1053,7 +1113,8 @@
         return Promise.all(lanes).then(function () {
             report.stopped = cancelled;
             report.finishedAt = Date.now();
-            state.prefetching = false;
+            state.prefetchCount = Math.max(0, (state.prefetchCount || 1) - 1);
+            state.prefetching = state.prefetchCount > 0;
             if (options.onProgress) { try { options.onProgress(report); } catch (e) { /* ignore */ } }
             return report;
         });
@@ -1329,15 +1390,42 @@
     }
 
     function ensureToggle() {
-        if (toggleBtn) return toggleBtn;
+        if (toggleGroup) return toggleBtn;
         var host = wrapper();
         if (!host) return null;
+        toggleGroup = document.createElement('div');
+        toggleGroup.id = 'map3d-toggle-group';
+        toggleGroup.className = 'm3d-toggle-group';
+
         toggleBtn = document.createElement('button');
         toggleBtn.id = 'map3d-toggle';
         toggleBtn.type = 'button';
         toggleBtn.innerHTML = '<span class="m3d-dot" aria-hidden="true"></span><span class="m3d-label"></span>';
         toggleBtn.addEventListener('click', function () { toggle(); });
-        host.appendChild(toggleBtn);
+        toggleGroup.appendChild(toggleBtn);
+
+        refreshBtn = document.createElement('button');
+        refreshBtn.id = 'map3d-refresh';
+        refreshBtn.type = 'button';
+        refreshBtn.title = t('refreshTitle');
+        refreshBtn.setAttribute('aria-label', t('refreshTitle'));
+        refreshBtn.setAttribute('aria-busy', 'false');
+        refreshBtn.innerHTML = '<span class="m3d-refresh-icon" aria-hidden="true">↻</span>' +
+            '<span class="m3d-refresh-count" aria-hidden="true" hidden></span>';
+        refreshIcon = refreshBtn.querySelector('.m3d-refresh-icon');
+        refreshCount = refreshBtn.querySelector('.m3d-refresh-count');
+        refreshBtn.addEventListener('click', function () { refreshTiles(); });
+        toggleGroup.appendChild(refreshBtn);
+
+        refreshStatus = document.createElement('span');
+        refreshStatus.id = 'map3d-refresh-status';
+        refreshStatus.className = 'm3d-refresh-status';
+        refreshStatus.setAttribute('role', 'status');
+        refreshStatus.setAttribute('aria-live', 'polite');
+        refreshStatus.setAttribute('aria-atomic', 'true');
+        toggleGroup.appendChild(refreshStatus);
+
+        host.appendChild(toggleGroup);
         refreshToggle();
         return toggleBtn;
     }
@@ -1346,7 +1434,12 @@
         if (!toggleBtn) return;
         toggleBtn.querySelector('.m3d-label').textContent = state.open ? t('buttonOn') : t('button');
         toggleBtn.title = state.open ? t('buttonTitleOn') : t('buttonTitle');
+        toggleBtn.setAttribute('aria-label', state.open ? t('buttonTitleOn') : t('buttonTitle'));
         toggleBtn.setAttribute('aria-pressed', state.open ? 'true' : 'false');
+        if (refreshBtn && !refreshJob) {
+            refreshBtn.title = t('refreshTitle');
+            refreshBtn.setAttribute('aria-label', t('refreshTitle'));
+        }
     }
 
     function ensureBar() {
@@ -1358,7 +1451,13 @@
         bar.innerHTML = [
             '<div class="m3d-head"><span>' + t('title') + '</span>',
             '<button type="button" class="m3d-collapse" title="Collapse" aria-expanded="true" aria-label="Toggle 3D controls">▾</button></div>',
-            '<div class="m3d-row"><label for="map3d-exag"><span>' + t('exaggeration') + '</span>',
+            '<div class="m3d-row m3d-basemap-row"><label for="map3d-basemap"><span>' + t('basemap') + '</span></label>',
+            '<select id="map3d-basemap" class="m3d-basemap-select">',
+            '<option value="imagery">' + t('basemapImagery') + '</option>',
+            '<option value="topographic">' + t('basemapTopographic') + '</option>',
+            '<option value="terrain">' + t('basemapTerrain') + '</option>',
+            '</select></div>',
+            '<div class="m3d-row m3d-exag-row"><label for="map3d-exag"><span>' + t('exaggeration') + '</span>',
             '<b class="m3d-exag-val"></b></label>',
             '<input id="map3d-exag" type="range" class="m3d-exag" min="0" max="100" step="1"></div>',
             '<div class="m3d-row m3d-pitch-row"><label for="map3d-pitch"><span>' + t('pitch') + '</span>',
@@ -1380,6 +1479,37 @@
             '</div>'
         ].join('');
         host.appendChild(bar);
+
+        /* The 3D view uses the same basemap stack as Leaflet. Route selection
+         * through the existing 2D setter so there is still only one active
+         * basemap state; the mirror then replaces the raster in this deck. */
+        var basemapSelect = bar.querySelector('.m3d-basemap-select');
+        var basemapKeys = ['imagery', 'topographic', 'terrain'];
+        function syncBasemapSelect(key) {
+            if (!basemapSelect) return;
+            var active = key;
+            if (basemapKeys.indexOf(active) < 0) {
+                try {
+                    active = typeof root.getArcgisBasemap === 'function'
+                        ? root.getArcgisBasemap() : '';
+                } catch (e) { active = ''; }
+            }
+            if (basemapKeys.indexOf(active) >= 0) basemapSelect.value = active;
+        }
+        if (basemapSelect) {
+            basemapSelect.addEventListener('change', function () {
+                if (typeof root.setArcgisBasemap !== 'function') {
+                    syncBasemapSelect();
+                    return;
+                }
+                try {
+                    syncBasemapSelect(root.setArcgisBasemap(basemapSelect.value));
+                } catch (e) { syncBasemapSelect(); }
+            });
+        }
+        bar.syncBasemap = function () { syncBasemapSelect(); };
+        syncBasemapSelect();
+
         /* The LiDAR focus row is the viewer's own report of what it drew; the
          * two buttons only announce the intent — js/lidar-3d-focus.js owns the
          * dialog, the prefetch and the 2D circle behind them. */
@@ -1494,9 +1624,14 @@
         if (!bar) return;
         bar.querySelector('.m3d-head span').textContent = t('title');
         var rows = bar.querySelectorAll('.m3d-row > label > span');
-        if (rows[0]) rows[0].textContent = t('exaggeration');
-        if (rows[1]) rows[1].textContent = t('pitch');
-        if (rows[2]) rows[2].textContent = t('bearing');
+        if (rows[0]) rows[0].textContent = t('basemap');
+        if (rows[1]) rows[1].textContent = t('exaggeration');
+        if (rows[2]) rows[2].textContent = t('pitch');
+        if (rows[3]) rows[3].textContent = t('bearing');
+        var basemapOptions = bar.querySelectorAll('.m3d-basemap-select option');
+        if (basemapOptions[0]) basemapOptions[0].textContent = t('basemapImagery');
+        if (basemapOptions[1]) basemapOptions[1].textContent = t('basemapTopographic');
+        if (basemapOptions[2]) basemapOptions[2].textContent = t('basemapTerrain');
         var reset = bar.querySelector('.m3d-reset');
         if (reset) { reset.textContent = t('reset'); reset.title = t('resetTitle'); }
         refreshFocusRow();
@@ -2084,6 +2219,579 @@
             }
         }
         return [item.template];
+    }
+
+    var REFRESH_RADIUS_KM = 1;
+
+    function refreshRegistrySpec(def) {
+        if (!def || typeof REGISTRY.rasterSource !== 'function') return null;
+        try {
+            return REGISTRY.rasterSource(def, {
+                proxyHosts: Object.keys(state.proxyHosts),
+                time: REGISTRY.timeOf(def),
+                mode: REGISTRY.modeOf(def, {})
+            });
+        } catch (e) { return null; }
+    }
+
+    function refreshDefLabel(def) {
+        var title = def && def.title;
+        if (title && typeof title === 'object') title = title[lang()] || title.en || title.ro;
+        return String(title || (def && def.id) || 'raster layer');
+    }
+
+    /** Fail closed on every LiDAR spelling the live map / registry can carry. */
+    function isRefreshLidar(item, def) {
+        if (item && item.lidarKey) return true;
+        if (def && def.group === 'lidar') return true;
+        var layer = item && item.layer;
+        if (!layer) return false;
+        if (layer._dlLidar && layer._dlLidar.key) return true;
+        try {
+            if (root._lidarGroup && typeof root._lidarGroup.hasLayer === 'function' &&
+                    root._lidarGroup.hasLayer(layer)) return true;
+        } catch (e) { /* ignore */ }
+        var options = layer.options || {};
+        return /\blidar\b/i.test(String(options.name || '') + ' ' + String(options.className || ''));
+    }
+
+    function refreshTileInBounds(bounds, z, x, y) {
+        if (!bounds || bounds.length < 4 || !MIRROR.disc || !MIRROR.disc.tileBounds) return true;
+        var tile = MIRROR.disc.tileBounds(z, x, y);
+        var south = Number(bounds[1]), north = Number(bounds[3]);
+        if (tile.north < south || tile.south > north) return false;
+        var west = Number(bounds[0]), east = Number(bounds[2]);
+        if (west <= east) return tile.east >= west && tile.west <= east;
+        /* A bounds box crossing the antimeridian is two longitude ranges. */
+        return tile.east >= west || tile.west <= east;
+    }
+
+    function refreshTileBbox3857(z, x, y) {
+        var half = Math.PI * 6378137;
+        var size = (2 * half) / Math.pow(2, z);
+        var minX = -half + x * size;
+        var maxY = half - y * size;
+        return [minX, maxY - size, minX + size, maxY].join(',');
+    }
+
+    /** Resolve the standard MapLibre placeholders for one Web-Mercator tile. */
+    function refreshUrlFromTemplate(template, tile, scheme, def) {
+        var url = String(template || '');
+        if (!url) return '';
+        if (/^dl3d:\/\//.test(url)) {
+            try { return def && REGISTRY.tileUrlAt ? REGISTRY.tileUrlAt(def, tile.z, tile.x, tile.y) : ''; }
+            catch (e) { return ''; }
+        }
+        var n = Math.pow(2, tile.z);
+        var tmsY = n - 1 - tile.y;
+        var y = scheme === 'tms' ? tmsY : tile.y;
+        return url
+            .replace(/\{bbox-epsg-3857\}/gi, refreshTileBbox3857(tile.z, tile.x, tile.y))
+            .replace(/\{bbox-epsg-900913\}/gi, refreshTileBbox3857(tile.z, tile.x, tile.y))
+            .replace(/\{-y\}/g, String(tmsY))
+            .replace(/\{z\}/g, String(tile.z))
+            .replace(/\{x\}/g, String(tile.x))
+            .replace(/\{y\}/g, String(y));
+    }
+
+    function refreshSourceIds(entry) {
+        var rendered = entry && state.rendered[entry.id];
+        if (rendered && rendered.sourceIds && rendered.sourceIds.length) return rendered.sourceIds.slice();
+        if (!entry) return [];
+        if (entry.kind === 'registry') return [entry.id];
+        if (entry.kind === 'raster') return [entry.id + '-src'];
+        return [];
+    }
+
+    function makeRegistryRefreshSource(def, entry, item) {
+        if (!def || isRefreshLidar(item, def)) return null;
+        var spec = refreshRegistrySpec(def);
+        if (!spec || !spec.tiles || !spec.tiles.length) return null;
+        var template = String(spec.tiles[0] || '');
+        var key = item ? item.key : 'def:' + def.id;
+        var sourceIds = refreshSourceIds(entry);
+        return {
+            key: key,
+            label: (item && item.label) || refreshDefLabel(def),
+            defId: def.id,
+            layerKey: key,
+            template: template,
+            route: 'url',
+            minZoom: item && item.minzoom != null ? item.minzoom : spec.minzoom,
+            maxZoom: item && item.maxzoom != null ? item.maxzoom : spec.maxzoom,
+            tileSize: (item && item.tileSize) || spec.tileSize || 256,
+            bounds: (item && item.bounds) || spec.bounds || null,
+            scheme: spec.scheme || null,
+            paneZ: item && item.z != null ? item.z : (def.z == null ? 500 : def.z),
+            sourceIds: sourceIds,
+            order: entry && entry.seq || 0,
+            urlFor: function (tile) { return refreshUrlFromTemplate(template, tile, spec.scheme, def); }
+        };
+    }
+
+    function makeRefreshSource(entry) {
+        if (!entry) return null;
+        if (entry.kind === 'registry') return makeRegistryRefreshSource(entry.def, entry, null);
+        if (entry.kind !== 'raster' || !entry.item) return null;
+        var item = entry.item;
+        var def = item.defId ? REGISTRY.get(item.defId) : null;
+        if (isRefreshLidar(item, def)) return null;
+        /* A def-backed mirrored layer uses the exact registry template the 3D
+         * source uses (including a proxy or a per-tile dl3d:// builder). */
+        if (def) {
+            var registrySource = makeRegistryRefreshSource(def, entry, item);
+            if (registrySource) return registrySource;
+        }
+        var layer = item.layer;
+        if (!layer || item.render === 'none') return null;
+        if (item.render === 'canvas') {
+            return {
+                key: item.key,
+                label: item.label || item.key,
+                layerKey: item.key,
+                template: MIRROR.templateFor ? MIRROR.templateFor(layer) : item.template,
+                route: 'canvas',
+                minZoom: item.minzoom,
+                maxZoom: item.maxzoom,
+                tileSize: item.tileSize || 256,
+                bounds: item.bounds || null,
+                paneZ: item.z,
+                sourceIds: refreshSourceIds(entry),
+                order: entry.seq || 0
+            };
+        }
+        if (typeof MIRROR.tileUrlFor !== 'function') return null;
+        return {
+            key: item.key,
+            label: item.label || item.key,
+            layerKey: item.key,
+            template: MIRROR.templateFor ? MIRROR.templateFor(layer) : item.template,
+            route: 'url',
+            minZoom: item.minzoom,
+            maxZoom: item.maxzoom,
+            tileSize: item.tileSize || 256,
+            bounds: item.bounds || null,
+            paneZ: item.z,
+            sourceIds: refreshSourceIds(entry),
+            order: entry.seq || 0,
+            preferProxy: function (url) {
+                var options = layer.options || {};
+                return !!((options.layers || options.layer) || /[?&](service=wms|request=getmap)/i.test(url || ''));
+            },
+            urlFor: function (tile) {
+                try { return MIRROR.tileUrlFor(layer, tile.z, tile.x, tile.y) || ''; }
+                catch (e) { return ''; }
+            }
+        };
+    }
+
+    function makeTemplateRefreshSource(options) {
+        options = options || {};
+        var templates = options.tiles || [];
+        if (!templates.length) return null;
+        var template = String(templates[0] || '');
+        if (!template) return null;
+        return {
+            key: options.key,
+            label: options.label || options.key || 'raster source',
+            layerKey: options.key,
+            template: template,
+            route: 'url',
+            minZoom: options.minZoom,
+            maxZoom: options.maxZoom,
+            tileSize: options.tileSize || 256,
+            bounds: options.bounds || null,
+            scheme: options.scheme || null,
+            paneZ: options.paneZ == null ? -1 : options.paneZ,
+            sourceIds: options.sourceIds || [],
+            order: options.order || 0,
+            urlFor: function (tile) { return refreshUrlFromTemplate(template, tile, options.scheme, null); }
+        };
+    }
+
+    function tileDistanceFromCentre(disc, z, x, y) {
+        if (!MIRROR.disc || !MIRROR.disc.distanceM || !MIRROR.disc.latAt || !MIRROR.disc.lngAt) return 0;
+        return MIRROR.disc.distanceM(disc, {
+            lat: MIRROR.disc.latAt(y + 0.5, z),
+            lng: MIRROR.disc.lngAt(x + 0.5, z)
+        });
+    }
+
+    /**
+     * Make a lazy plan for every active non-LiDAR raster source. It records an
+     * exact tile count up front, then emits one zoom level at a time so an
+     * unusually deep source does not require a huge tile-list allocation.
+     */
+    function planTileRefresh(center) {
+        center = center || (map && map.getCenter ? map.getCenter() : null);
+        var lat = center && Number(center.lat);
+        var rawLng = center && Number(center.lng);
+        /* MapLibre can report an unwrapped longitude after panning through a
+         * world copy. Tile x is canonical, so normalize before making the disc
+         * or a centre east/west of ±180° would produce an empty tile window. */
+        var lng = isFinite(rawLng) ? ((rawLng + 180) % 360 + 360) % 360 - 180 : NaN;
+        var disc = isFinite(lat) && isFinite(lng)
+            ? MIRROR.disc.of({ lat: lat, lng: lng, radiusKm: REFRESH_RADIUS_KM }) : null;
+        if (!disc) return { center: null, radiusKm: REFRESH_RADIUS_KM, total: 0, layers: [], groups: [], skipped: [], sourceIds: [], nextEntry: function () { return null; } };
+
+        collectMirror();
+        var active = plan();
+        var sources = [];
+        var skipped = [];
+        var seen = {};
+        active.entries.forEach(function (entry) {
+            if (entry.kind !== 'raster' && entry.kind !== 'registry') return;
+            var source = makeRefreshSource(entry);
+            if (!source) {
+                var def = entry.def || (entry.item && entry.item.defId ? REGISTRY.get(entry.item.defId) : null);
+                if (!isRefreshLidar(entry.item, def)) skipped.push((entry.item && entry.item.label) || (def && refreshDefLabel(def)) || entry.id);
+                return;
+            }
+            if (seen[source.key]) return;
+            seen[source.key] = true;
+            sources.push(source);
+        });
+
+        /* The fallback base map is added outside plan() only if no live 2D
+         * basemap exists. Include it when it is actually present in the deck. */
+        if (!mirroredBaseItem() && map && map.getSource) {
+            try {
+                if (map.getSource('base.imagery')) {
+                    var baseDef = REGISTRY.get('base.imagery');
+                    var baseSource = makeRegistryRefreshSource(baseDef,
+                        { id: 'base.imagery', kind: 'registry', seq: -1 }, null);
+                    if (baseSource && !seen[baseSource.key]) {
+                        seen[baseSource.key] = true;
+                        sources.push(baseSource);
+                    }
+                }
+            } catch (e) { /* ignore */ }
+        }
+
+        /* The 3D terrain DEM is an active raster source too. It is not LiDAR;
+         * use the same mobile zoom ceiling as buildStyle(). */
+        if (map && map.getSource) {
+            var dem = terrainSource();
+            if (dem && !dem.missingKey && dem.tiles && dem.tiles.length) {
+                var demMax = isMobile()
+                    ? Math.min(Number(dem.maxzoom == null ? 22 : dem.maxzoom), Number((REGISTRY.config().perf || {}).mobileMaxTerrainZoom || 22))
+                    : dem.maxzoom;
+                var demSource = makeTemplateRefreshSource({
+                    key: 'source:' + (dem.id || 'terrain-dem'),
+                    label: '3D terrain elevation',
+                    tiles: dem.tiles,
+                    minZoom: isMobile() ? 0 : dem.minzoom,
+                    maxZoom: demMax,
+                    tileSize: dem.tileSize || 256,
+                    sourceIds: [dem.id]
+                });
+                try {
+                    if (demSource && map.getSource(dem.id)) {
+                        if (!seen[demSource.key]) sources.push(demSource);
+                        seen[demSource.key] = true;
+                    }
+                } catch (e) { /* ignore */ }
+            }
+
+            var hillshade = REGISTRY.config().hillshade || {};
+            if (hillshade.enabled && hillshade.mode === 'service' && hillshade.serviceTiles &&
+                    hillshade.serviceTiles.length) {
+                var hillSource = makeTemplateRefreshSource({
+                    key: 'source:m3d-hillshade-service',
+                    label: '3D hillshade',
+                    tiles: hillshade.serviceTiles,
+                    minZoom: 0,
+                    maxZoom: hillshade.serviceMaxzoom || 16,
+                    sourceIds: ['m3d-hillshade-service'],
+                    paneZ: -2
+                });
+                try {
+                    if (hillSource && map.getSource('m3d-hillshade-service') && !seen[hillSource.key]) {
+                        seen[hillSource.key] = true;
+                        sources.push(hillSource);
+                    }
+                } catch (e) { /* ignore */ }
+            }
+        }
+
+        var targetZoom = map && map.getZoom ? Math.round(Number(map.getZoom()) || 0) : 0;
+        var groups = [];
+        var total = 0;
+        sources.forEach(function (source) {
+            var rawMin = Number(source.minZoom);
+            var rawMax = Number(source.maxZoom);
+            var minZoom = Math.max(0, Math.min(22, isFinite(rawMin) ? Math.ceil(rawMin) : 0));
+            var maxZoom = Math.max(0, Math.min(22, isFinite(rawMax) ? Math.floor(rawMax) : 22));
+            source.zoomFrom = minZoom;
+            source.zoomTo = maxZoom;
+            source.tileCount = 0;
+            if (maxZoom < minZoom) return;
+            for (var z = minZoom; z <= maxZoom; z += 1) {
+                var window = MIRROR.disc.tileWindow(disc, z);
+                var count = 0;
+                for (var x = window.x0; x <= window.x1; x += 1) {
+                    for (var y = window.y0; y <= window.y1; y += 1) {
+                        if (!MIRROR.disc.touchesTile(disc, z, x, y)) continue;
+                        if (!refreshTileInBounds(source.bounds, z, x, y)) continue;
+                        count += 1;
+                    }
+                }
+                if (!count) continue;
+                source.tileCount += count;
+                total += count;
+                groups.push({ source: source, z: z, window: window, count: count, started: false, tiles: null, tileIndex: 0 });
+            }
+        });
+
+        groups.sort(function (a, b) {
+            var zoomPriority = Math.abs(b.z - targetZoom) - Math.abs(a.z - targetZoom);
+            if (zoomPriority) return zoomPriority; /* the live camera zoom is prepared last */
+            if (a.z !== b.z) return a.z - b.z;
+            if (a.source.paneZ !== b.source.paneZ) return a.source.paneZ - b.source.paneZ;
+            return a.source.order - b.source.order;
+        });
+
+        var groupIndex = 0;
+        function loadGroupTiles(group) {
+            var tiles = [];
+            var window = group.window;
+            for (var x = window.x0; x <= window.x1; x += 1) {
+                for (var y = window.y0; y <= window.y1; y += 1) {
+                    if (!MIRROR.disc.touchesTile(disc, group.z, x, y)) continue;
+                    if (!refreshTileInBounds(group.source.bounds, group.z, x, y)) continue;
+                    tiles.push({ z: group.z, x: x, y: y,
+                        distanceM: tileDistanceFromCentre(disc, group.z, x, y) });
+                }
+            }
+            /* primed cache is FIFO: far tiles first keeps centre/current-zoom
+             * tiles resident for the first 3D repaint on memory-limited phones. */
+            tiles.sort(function (a, b) { return b.distanceM - a.distanceM; });
+            group.tiles = tiles;
+            group.started = true;
+        }
+
+        function nextEntry() {
+            while (groupIndex < groups.length) {
+                var group = groups[groupIndex];
+                if (!group.started) loadGroupTiles(group);
+                if (group.tileIndex >= group.tiles.length) {
+                    group.tiles = null;
+                    group.tileIndex = 0;
+                    groupIndex += 1;
+                    continue;
+                }
+                var tile = group.tiles[group.tileIndex++];
+                var source = group.source;
+                if (source.route === 'canvas') {
+                    return { route: 'canvas', layerKey: source.layerKey, template: source.template,
+                        z: tile.z, x: tile.x, y: tile.y };
+                }
+                var url = '';
+                try { url = source.urlFor ? source.urlFor(tile) : ''; } catch (e) { url = ''; }
+                if (!url) {
+                    return { error: 'could not build a tile URL for ' + source.label + ' at ' +
+                        tile.z + '/' + tile.x + '/' + tile.y, layerKey: source.layerKey,
+                        template: source.template, z: tile.z, x: tile.x, y: tile.y };
+                }
+                var preferProxy = false;
+                try { preferProxy = typeof source.preferProxy === 'function' && source.preferProxy(url); }
+                catch (e) { preferProxy = false; }
+                return { route: 'url', url: url, layerKey: source.layerKey, defId: source.defId,
+                    template: source.template, preferProxy: preferProxy, z: tile.z, x: tile.x, y: tile.y };
+            }
+            return null;
+        }
+
+        var sourceIds = [];
+        sources.forEach(function (source) {
+            (source.sourceIds || []).forEach(function (id) {
+                if (sourceIds.indexOf(id) === -1) sourceIds.push(id);
+            });
+        });
+        return {
+            center: { lat: lat, lng: lng },
+            radiusKm: REFRESH_RADIUS_KM,
+            targetZoom: targetZoom,
+            total: total,
+            groups: groups,
+            layers: sources.map(function (source) {
+                return { key: source.key, label: source.label, zoomFrom: source.zoomFrom,
+                    zoomTo: source.zoomTo, count: source.tileCount };
+            }),
+            skipped: skipped,
+            sourceIds: sourceIds,
+            nextEntry: nextEntry
+        };
+    }
+
+    function refreshCountText(value) {
+        var count = Math.max(0, Number(value) || 0);
+        try { return count.toLocaleString(lang()); } catch (e) { return String(count); }
+    }
+
+    function refreshCopy(key, values) {
+        var text = t(key);
+        Object.keys(values || {}).forEach(function (name) {
+            text = text.replace('{' + name + '}', refreshCountText(values[name]));
+        });
+        return text;
+    }
+
+    function paintRefreshControl(mode, text, countText, announce) {
+        if (!refreshBtn) return;
+        var label = text || t('refreshTitle');
+        refreshBtn.classList.remove('is-busy', 'is-stopping', 'is-result', 'is-error');
+        if (mode === 'busy') refreshBtn.classList.add('is-busy');
+        if (mode === 'stopping') refreshBtn.classList.add('is-stopping');
+        if (mode === 'result') refreshBtn.classList.add('is-result');
+        if (mode === 'error') refreshBtn.classList.add('is-error');
+        refreshBtn.disabled = mode === 'stopping';
+        refreshBtn.setAttribute('aria-busy', mode === 'busy' || mode === 'stopping' ? 'true' : 'false');
+        refreshBtn.setAttribute('aria-label', mode === 'busy' ? t('refreshStop') : label);
+        refreshBtn.title = mode === 'busy' ? t('refreshStop') + ' — ' + label : label;
+        if (refreshIcon) refreshIcon.textContent = mode === 'result' ? '✓' : (mode === 'error' ? '!' : '↻');
+        if (refreshCount) {
+            refreshCount.textContent = countText || '';
+            refreshCount.hidden = !countText;
+        }
+        if (refreshStatus && announce !== false) refreshStatus.textContent = label;
+    }
+
+    function resetRefreshControl() {
+        if (refreshStatusTimer) root.clearTimeout(refreshStatusTimer);
+        refreshStatusTimer = null;
+        if (refreshJob) return;
+        paintRefreshControl('idle', t('refreshTitle'), '', true);
+    }
+
+    function showRefreshResult(mode, message, countText) {
+        if (refreshStatusTimer) root.clearTimeout(refreshStatusTimer);
+        refreshStatusTimer = null;
+        paintRefreshControl(mode || 'result', message, countText || '', true);
+        refreshStatusTimer = root.setTimeout(function () {
+            if (!refreshJob) resetRefreshControl();
+        }, 7000);
+    }
+
+    function reloadRefreshSources(refreshPlan) {
+        if (!map || !refreshPlan || !refreshPlan.sourceIds) return;
+        refreshPlan.sourceIds.forEach(function (sourceId) {
+            var source = null;
+            try { source = map.getSource(sourceId); } catch (e) { source = null; }
+            if (!source || !source.tiles || !source.tiles.length) return;
+            setSourceTiles(sourceId, source.tiles.slice(), true);
+        });
+    }
+
+    function emptyRefreshReport(message) {
+        return { total: 0, done: 0, prepared: 0, failed: 0, stopped: false,
+            bytes: 0, errors: message ? [message] : [], skipped: [] };
+    }
+
+    /** Refresh every active raster source around the 3D camera centre. */
+    function refreshTiles() {
+        if (refreshJob) {
+            if (!refreshJob.stop) {
+                refreshJob.stop = true;
+                var latest = refreshJob.report || { done: 0, total: refreshJob.plan.total };
+                paintRefreshControl('stopping', refreshCopy('refreshStopping', latest),
+                    refreshCountText(latest.done) + '/' + refreshCountText(latest.total), true);
+            }
+            return refreshJob.promise || Promise.resolve(refreshJob.report || emptyRefreshReport());
+        }
+        if (!state.open || !map) {
+            var closedReport = emptyRefreshReport(t('refreshUnavailable'));
+            showRefreshResult('error', t('refreshUnavailable'));
+            return Promise.resolve(closedReport);
+        }
+        if (state.prefetching) {
+            var busyReport = emptyRefreshReport(t('refreshBusy'));
+            showRefreshResult('result', t('refreshBusy'));
+            return Promise.resolve(busyReport);
+        }
+        var camera = null;
+        try { camera = map.getCenter(); } catch (e) { camera = null; }
+        var refreshPlan = null;
+        try { refreshPlan = planTileRefresh(camera); }
+        catch (planningError) {
+            var planningReport = emptyRefreshReport(String((planningError && planningError.message) || planningError));
+            showRefreshResult('error', String((planningError && planningError.message) || planningError));
+            return Promise.resolve(planningReport);
+        }
+        if (!refreshPlan.center) {
+            var centerReport = emptyRefreshReport(t('refreshUnavailable'));
+            showRefreshResult('error', t('refreshUnavailable'));
+            return Promise.resolve(centerReport);
+        }
+        if (!refreshPlan.total) {
+            var noTiles = emptyRefreshReport(t('refreshNoLayers'));
+            noTiles.center = refreshPlan.center;
+            noTiles.radiusKm = refreshPlan.radiusKm;
+            noTiles.layers = refreshPlan.layers;
+            noTiles.skipped = refreshPlan.skipped;
+            var noTilesMessage = t('refreshNoLayers');
+            if (refreshPlan.skipped.length) noTilesMessage += ' (' + refreshCountText(refreshPlan.skipped.length) + ')';
+            showRefreshResult('result', noTilesMessage);
+            return Promise.resolve(noTiles);
+        }
+
+        var job = { stop: false, plan: refreshPlan, report: null, lastPaintAt: 0,
+            lastAnnouncedPercent: -1, promise: null };
+        refreshJob = job;
+        if (refreshStatusTimer) root.clearTimeout(refreshStatusTimer);
+        refreshStatusTimer = null;
+        var initial = { done: 0, total: refreshPlan.total };
+        paintRefreshControl('busy', refreshCopy('refreshProgress', initial),
+            '0/' + refreshCountText(refreshPlan.total), true);
+
+        var prefetch;
+        try {
+            prefetch = prefetchTiles(null, {
+                total: refreshPlan.total,
+                nextEntry: refreshPlan.nextEntry,
+                shouldStop: function () { return job.stop; },
+                onProgress: function (report) {
+                    job.report = report;
+                    var now = Date.now();
+                    if (report.done === report.total || now - job.lastPaintAt >= 300) {
+                        job.lastPaintAt = now;
+                        var copy = refreshCopy(job.stop ? 'refreshStopping' : 'refreshProgress', report);
+                        var percent = report.total ? Math.floor((report.done / report.total) * 100) : 100;
+                        var announce = report.done === report.total || percent >= job.lastAnnouncedPercent + 5;
+                        if (announce) job.lastAnnouncedPercent = percent;
+                        paintRefreshControl(job.stop ? 'stopping' : 'busy', copy,
+                            refreshCountText(report.done) + '/' + refreshCountText(report.total), announce);
+                    }
+                }
+            });
+        } catch (error) { prefetch = Promise.reject(error); }
+
+        job.promise = Promise.resolve(prefetch).then(function (report) {
+            report.center = refreshPlan.center;
+            report.radiusKm = refreshPlan.radiusKm;
+            report.layers = refreshPlan.layers;
+            report.layerCount = refreshPlan.layers.filter(function (layer) { return layer.count > 0; }).length;
+            report.skipped = refreshPlan.skipped.slice();
+            reloadRefreshSources(refreshPlan);
+            if (refreshJob === job) refreshJob = null;
+            var message = report.stopped
+                ? refreshCopy('refreshStopped', report)
+                : refreshCopy('refreshDone', report);
+            if (report.skipped.length) message += ' · skipped ' + refreshCountText(report.skipped.length);
+            showRefreshResult(report.failed ? 'error' : 'result', message,
+                refreshCountText(report.prepared) + '/' + refreshCountText(report.total));
+            return report;
+        }, function (error) {
+            var report = emptyRefreshReport(String((error && error.message) || error));
+            report.center = refreshPlan.center;
+            report.radiusKm = refreshPlan.radiusKm;
+            report.layers = refreshPlan.layers;
+            report.skipped = refreshPlan.skipped.slice();
+            if (refreshJob === job) refreshJob = null;
+            showRefreshResult('error', String((error && error.message) || error));
+            return report;
+        });
+        return job.promise;
     }
 
     function renderRegistryRaster(entry) {
@@ -2825,7 +3533,8 @@
     }
 
     // Layer/provider diagnostics remain available through status()/report().
-    // The visible controls deliberately contain only camera/terrain sliders.
+    // Visible controls stay compact: basemap picker, camera/terrain sliders,
+    // reset/north/flat actions and the focused-LiDAR row.
 
     function escapeHtml(value) {
         return String(value == null ? '' : value)
@@ -2954,7 +3663,8 @@
         if (state.failed || map) close();
         var generation = ++openGeneration;
         ensureSurface();
-        ensureBar();
+        var controlBar = ensureBar();
+        if (controlBar && typeof controlBar.syncBasemap === 'function') controlBar.syncBasemap();
         ensureToggle();
         document.body.classList.add('is-3d');
         state.open = true;
@@ -3480,6 +4190,7 @@
         isOpen: function () { return state.open; },
         getMap: function () { return map; },
         syncLayers: syncLayers,
+        refreshTiles: refreshTiles,
         setExaggeration: setExaggeration,
         getExaggeration: function () { return state.exaggeration; },
         setPitch: function (v) { if (map) map.setPitch(Number(v) || 0); },
@@ -3499,6 +4210,7 @@
         getLastError: function () { return state.lastError || ''; },
         _deckOrder: computeDeckOrder,
         _mirror: function () { collectMirror(); return state.mirror; },
+        _planTileRefresh: planTileRefresh,
         _fetchTile: fetchTile,
         /* CSS-blend emulation (see blendedTile) and the upload cache: exposed so
          * the suite can prove a blended tile is really repainted, and cached,

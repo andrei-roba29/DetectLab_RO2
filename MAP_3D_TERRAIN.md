@@ -28,20 +28,29 @@ map: a MapLibre GL JS view in which every layer that is switched on in the 2D pa
   rotation control was used); closing 3D writes the 3D camera back into Leaflet.
 * **Layers** – the *same* checkboxes decide what 3D draws. Switch a historical map on in
   2D, and it is draped in 3D; drag its opacity slider, and 3D follows live.
-* **Controls** – oblique pitch, bearing, terrain exaggeration (0.5–4×), reset view,
-  plus MapLibre's source credits and scale at bottom-left. There is **no terrain
-  on/off button** (MapLibre's `TerrainControl`, titled “Disable terrain”): 3D is
-  draped over the DEM by the style itself, and the only terrain knob the app
-  offers is the exaggeration slider. The camera sliders are separate
-  semi-transparent strips with no shared panel background. Layer/provider
-  diagnostics are available via `window.DetectLabMap3D.status()` / `.report()`,
-  not in the visible controls.
+* **Controls** – a 3D-view basemap picker (Imagery / Topographic / Terrain),
+  oblique pitch, bearing, terrain exaggeration (0.5–4× on web; hidden in the
+  installed PWA because changing DEM exaggeration can crash it), reset view,
+  plus MapLibre's source credits and scale at bottom-left. The picker uses the
+  same ArcGIS basemap stack as 2D, so its choice stays in sync and the mirrored
+  3D deck updates without leaving the view. Beside the bottom-centre **2D**
+  switch, the **refresh** button preloads every source-supported zoom for the
+  active non-LiDAR raster layers within a 1 km radius of the current 3D camera
+  centre. This includes the current basemap and terrain raster sources; it shows
+  progress, can be stopped, and reloads the visible sources from the warmed
+  cache. LiDAR stays on its separate prepared-disc flow (§6.4). There is **no
+  terrain on/off button** (MapLibre's `TerrainControl`, titled “Disable terrain”):
+  3D is draped over the DEM by the style itself, and on web the only terrain knob
+  is the exaggeration slider. The camera sliders are separate semi-transparent
+  strips with no shared panel background. Layer/provider diagnostics are available
+  via `window.DetectLabMap3D.status()` / `.report()`, not in the visible controls.
 * **Layout while 3D is on** – the Leaflet panes stop painting and Leaflet's own controls
   (zoom, locate, measure — they move the *2D* camera) are hidden, so nobody clicks a
   button that changes a map they cannot see; MapLibre contributes only the source
   credits and the scale, both bottom-left, so the top-right corner stays the app's own
-  “?” help button. The 3D bar sits bottom-left and the 2D⇄3D toggle bottom-centre,
-  while the search bar, the layer panel and the opacity mirror keep their exact 2D
+  “?” help button. The 3D bar sits bottom-left and the 2D⇄3D toggle plus raster-refresh
+  button sit bottom-centre as one group; the refresh action is visible only while 3D is
+  open. The search bar, the layer panel and the opacity mirror keep their exact 2D
   position and stay fully usable. In the installed PWA, the slider strips instead
   sit horizontally centred in the lower half, above the bottom actions; short
   screens can scroll them. PWA zoom buttons sit top-left (14px + top safe area),
@@ -271,8 +280,8 @@ never from the layer provider — a WMS only ever contributes flat imagery.
 1. **Historical maps do not line up with modern terrain.** A 1855 sheet is draped on
    today's SRTM/ETOPO DEM; where the landscape changed (quarries, mines, drained
    marshes, river regulation) the relief will not match the printed map. That is a
-   property of the data, not of the viewer. Raise/lower **terrain exaggeration** to make
-   the draping easier to judge.
+   property of the data, not of the viewer. On web, raise/lower **terrain
+   exaggeration** to make the draping easier to judge.
 2. **The two EPSG:2180 city plans are re-projected approximately** (Warsaw 1822, Prague
    1796). The proxy converts the Web-Mercator tile bbox into PL-1992 (GRS80 transverse
    Mercator, k0 = 0.9993, λ0 = 19° E) and requests the tile in `crs=EPSG:2180`; the
@@ -593,6 +602,25 @@ user's back is exactly the load this path exists to prevent — records
 `{reason: 'unprepared', count}` in `status().lidar.notes` and the bar shows
 “LiDAR: prepare the area for 3D”, whose button is the dialog. Nothing is silently blank:
 the state is named, and it is one press away from being prepared.
+
+### 6.5 Raster refresh in a running 3D view
+
+The refresh action sits beside the bottom-centre **2D** switch and snapshots the
+current MapLibre camera centre when tapped (it does not request GPS permission). It
+preloads all tile zooms supported by each active non-LiDAR raster source, from that
+source's `minzoom` through its native `maxzoom`, keeping only tiles that intersect a
+1 km ground-radius disc. The current basemap, DEM and configured service hillshade
+are included when present. LiDAR stays on §6.4's separate, chosen-disc flow; vectors,
+markers, heatmaps and image overlays have no raster tile pyramid to preload.
+
+The planner counts the complete request set, emits one zoom level at a time, and
+uses the active source templates / live layer URL builders so WMS, proxy and custom
+canvas tiles follow the same route as 3D. It does not silently trim zoom levels. The
+button displays progress; pressing it again stops after in-flight tiles finish. Once
+preparation ends, visible raster sources are reloaded so the current viewport requests
+the warmed tiles immediately. Requests use the viewer's modest concurrency (4 on
+phones, 6 on desktop), and individual failures are reported rather than blocking the
+whole refresh. The public entry point is `window.DetectLabMap3D.refreshTiles()`.
 
 ## 7. Mobile — WebGL, why 3D used to snap straight back to 2D, and what changed
 

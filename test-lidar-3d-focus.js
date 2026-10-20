@@ -50,8 +50,8 @@ const focusSource = read('js/lidar-3d-focus.js');
 /* Every build that changes the LiDAR 3D focus path bumps its own tag. */
 const TAG = '20261020-lidar-disc-route';
 const TAG_MIRROR = '20261020-3d-analysis-points';
-const TAG_VIEWER = '20261020-lidar-disc-route';
-const TAG_CSS = '20261020-pwa-lidar-pill-clearance';
+const TAG_VIEWER = '20261020-1km-raster-refresh';
+const TAG_CSS = '20261020-1km-raster-refresh';
 
 /* One real event-loop turn: the viewer runs its entry gate through a promise,
  * so the dialog is not in the DOM in the same tick as open(). */
@@ -352,13 +352,13 @@ const fakeCanvas = function () {
      * with an explicit [hidden] win, the banner lesson of §1 below. */
     assert(/body:not\(\.is-3d\) #map3d-focus\.is-minimized \{\s*display: none;/.test(skin),
         'the minimized window only paints while the 3D view is up');
-    const pwaToggleRule = (skin.match(/body\.is-pwa\.is-3d #map3d-toggle \{[^}]*\}/) || [''])[0];
+    const pwaToggleRule = (skin.match(/body\.is-pwa\.is-3d \.m3d-toggle-group \{[^}]*\}/) || [''])[0];
     const miniPillRule = (skin.match(/#map3d-focus \.m3d-focus-mini \{[^}]*\}/) || [''])[0];
     assert(/bottom: calc\(64px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\)\)/.test(pwaToggleRule) &&
            /body\.is-pwa \{\s*--map3d-safe-area-bottom: env\(safe-area-inset-bottom, 0px\);/.test(skin) &&
            /padding: 10px 10px calc\(10px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\)\)/.test(skin) &&
            /min-height: 44px/.test(miniPillRule),
-        'the PWA toggle stays above the 44px minimized pill with a gap, sharing its safe-area offset');
+        'the grouped PWA switch/refresh stays above the 44px minimized pill with a gap, sharing its safe-area offset');
     assert(/#map3d-focus \.m3d-focus-mini\[hidden\] \{\s*display: none;/.test(skin) &&
            /#map3d-focus\[hidden\] \{\s*display: none;/.test(skin),
         'and the pill/host hidden attributes beat their author display');

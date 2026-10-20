@@ -33,9 +33,8 @@ assert(/body:not\(\.is-pwa\) \.map-frame\.is-fullscreen #detectlab-map \.leaflet
     'mobile web fullscreen notch inset respects the left safe area');
 for (const file of ['css/styles.css', 'css/map3d-terrain.css']) {
     /* Each asset carries the tag of whatever last changed it: styles.css by
-     * the Danish layers block, and the terrain skin by the smaller LiDAR focus
-     * dialog. */
-    const tag = file === 'css/styles.css' ? '20261020-albania-independent-rows' : '20261020-pwa-lidar-pill-clearance';
+     * the Danish layers block, and the terrain skin by the 3D basemap picker. */
+    const tag = file === 'css/styles.css' ? '20261020-albania-independent-rows' : '20261020-1km-raster-refresh';
     const url = file + '?v=' + tag;
     assert(html.includes(url) && sw.includes("'" + url + "'"), 'cache-busted and precached: ' + file);
 }

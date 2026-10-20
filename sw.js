@@ -609,7 +609,16 @@
 //   orice apăsare pe hartă era clasificată drept UI și long-press-ul nu mai
 //   pornea. Căutarea țintei UI se oprește acum la containerul hărții. Vezi
 //   HIST_SHIFT_DOCKED_SLIDER.md.
-const CACHE_NAME = 'detectlab-v241-hist-shift-docked-slider';
+// v242: the 3D control bar can change the shared ArcGIS base map (Imagery,
+//   Topographic or Terrain); its choice updates the live Leaflet layer and is
+//   mirrored into the MapLibre deck without leaving 3D.
+// v243: hide the terrain-exaggeration slider in the installed PWA; changing
+//   DEM exaggeration there can crash the app. Web controls remain unchanged.
+// v244: add a 1 km 3D tile refresh beside the 2D switch. It preloads every
+//   source-supported zoom for active non-LiDAR raster layers around the current
+//   3D camera centre, reports progress, supports cancellation and reloads the
+//   visible sources from the warmed cache.
+const CACHE_NAME = 'detectlab-v244-1km-raster-refresh';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -696,6 +705,8 @@ const PRECACHE_URLS = [
   'js/map3d-mirror.js?v=20261013-3d-mobile',
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
+  'js/map3d-terrain.js?v=20261020-1km-raster-refresh',
+  'js/map3d-terrain.js?v=20261020-3d-basemap-selector',
   'js/map3d-terrain.js?v=20261020-lidar-disc-route',
   'js/map3d-terrain.js?v=20261020-3d-attribution-compact',
   'js/map3d-terrain.js?v=20261019-lidar-depth',
@@ -714,6 +725,8 @@ const PRECACHE_URLS = [
   'js/maplibre-gl.js?v=20261019-tile-order',
   'js/maplibre-gl.js',
   'css/maplibre-gl.css?v=20261013-3d-terrain',
+  'css/map3d-terrain.css?v=20261020-1km-raster-refresh',
+  'css/map3d-terrain.css?v=20261020-3d-basemap-selector',
   'css/map3d-terrain.css?v=20261020-pwa-lidar-pill-clearance',
   'css/map3d-terrain.css?v=20261020-lidar-focus-smaller',
   'css/map3d-terrain.css?v=20261020-3d-attribution-compact',

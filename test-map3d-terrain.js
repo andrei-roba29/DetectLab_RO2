@@ -80,8 +80,8 @@ const skin = read('css/map3d-terrain.css');
 
 const TAG = '20261019-tile-order';              /* MapLibre itself (coveringTiles patch) */
 const TAG_3D = '20261020-3d-analysis-points';    /* mirror                        */
-const TAG_VIEWER = '20261020-lidar-disc-route'; /* viewer (js)                         */
-const TAG_CSS = '20261020-pwa-lidar-pill-clearance';    /* viewer skin (css)              */
+const TAG_VIEWER = '20261020-1km-raster-refresh'; /* viewer (js)                         */
+const TAG_CSS = '20261020-1km-raster-refresh';    /* viewer skin (css)              */
 const TAG_FOCUS = '20261020-lidar-disc-route';  /* LiDAR focus (3D, one disc)     */
 const TAG_REGISTRY = '20261020-albania-independent-rows'; /* shared registry (WMS audit) */
 
@@ -541,8 +541,9 @@ const TAG_REGISTRY = '20261020-albania-independent-rows'; /* shared registry (WM
     assert(api, 'window.DetectLabMap3D is exported');
     viewApi = api;
     ['open', 'close', 'toggle', 'isOpen', 'getMap', 'syncLayers', 'setExaggeration', 'getExaggeration',
-     'setPitch', 'setBearing', 'resetView', 'status', 'report', 'registry', 'mirror',
-     '_blendedTile', '_setSourceData', '_setSourceTiles'].forEach(function (fn) {
+     'setPitch', 'setBearing', 'resetView', 'refreshTiles', 'prefetchTiles', '_planTileRefresh',
+     'status', 'report', 'registry', 'mirror', '_blendedTile', '_setSourceData', '_setSourceTiles']
+        .forEach(function (fn) {
         assert(typeof api[fn] === 'function' || typeof api[fn] === 'object', 'API exposes ' + fn);
     });
     const status = api.status();
@@ -792,6 +793,87 @@ const TAG_REGISTRY = '20261020-albania-independent-rows'; /* shared registry (WM
         'a deck that hit its budget says so in status().errors — each line once, not on every poll');
     viewWindow._dlMap = savedDlMap;
 
+    /* The non-LiDAR refresh plans the current camera centre as a 1 km disc,
+     * covers each raster's full supported integer zoom range, and leaves every
+     * LiDAR spelling out of the request stream. */
+    const refreshBase = new viewWindow.L.TileLayer('https://tiles.example.test/base', {
+        name: 'Refresh test basemap', minZoom: 1, maxNativeZoom: 2, pane: 'pane_refresh_base'
+    });
+    refreshBase._leaflet_id = 'refresh-base';
+    const refreshOverlay = new viewWindow.L.TileLayer('https://tiles.example.test/overlay', {
+        name: 'Refresh test overlay', minZoom: 2, maxNativeZoom: 3, pane: 'pane_refresh_overlay'
+    });
+    refreshOverlay._leaflet_id = 'refresh-overlay';
+    const refreshLidarByClass = new viewWindow.L.TileLayer('https://tiles.example.test/lidar-class', {
+        name: 'Romania LiDAR', className: 'lidar-ro1m-tiles', minZoom: 1, maxNativeZoom: 3,
+        pane: 'pane_refresh_lidar'
+    });
+    refreshLidarByClass._leaflet_id = 'refresh-lidar-class';
+    const refreshLidarTagged = new viewWindow.L.TileLayer('https://tiles.example.test/lidar-tag', {
+        name: 'Tagged LiDAR', minZoom: 1, maxNativeZoom: 3, pane: 'pane_refresh_lidar'
+    });
+    refreshLidarTagged._leaflet_id = 'refresh-lidar-tag';
+    refreshLidarTagged._dlLidar = { key: 'lidar.test', label: 'Tagged LiDAR' };
+    const refreshLayers = [refreshBase, refreshOverlay, refreshLidarByClass, refreshLidarTagged];
+    viewWindow._dlMap = {
+        getPane: function (name) {
+            const z = name === 'pane_refresh_base' ? '200' : (name === 'pane_refresh_overlay' ? '650' : '610');
+            return { style: { zIndex: z }, ownerDocument: null };
+        },
+        eachLayer: function (fn) { refreshLayers.forEach(fn); },
+        hasLayer: function (layer) { return refreshLayers.indexOf(layer) !== -1; }
+    };
+    const refreshPlan = viewApi._planTileRefresh({ lat: 45, lng: 25 });
+    assert(refreshPlan.center && refreshPlan.center.lat === 45 && refreshPlan.center.lng === 25 &&
+           refreshPlan.radiusKm === 1,
+        'the refresh disc is fixed at 1 km around the 3D centre captured at tap time');
+    const wrappedRefreshPlan = viewApi._planTileRefresh({ lat: 45, lng: 385 });
+    assert(wrappedRefreshPlan.center && wrappedRefreshPlan.center.lng === 25,
+        'unwrapped MapLibre world-copy longitudes normalize to the same canonical tile centre');
+    assert(refreshPlan.layers.length === 2 &&
+           refreshPlan.layers.every(function (layer) { return !/lidar/i.test(layer.label); }),
+        'active raster sources are collected while both tagged and class-labelled LiDAR are excluded');
+    const refreshEntries = [];
+    var refreshEntry;
+    while ((refreshEntry = refreshPlan.nextEntry())) refreshEntries.push(refreshEntry);
+    const refreshBaseKey = viewWindow.DetectLabMirror.keyFor(refreshBase);
+    const refreshOverlayKey = viewWindow.DetectLabMirror.keyFor(refreshOverlay);
+    function zoomsFor(key) {
+        return Array.from(new Set(refreshEntries.filter(function (entry) { return entry.layerKey === key; })
+            .map(function (entry) { return entry.z; }))).sort(function (a, b) { return a - b; });
+    }
+    assert(JSON.stringify(zoomsFor(refreshBaseKey)) === JSON.stringify([1, 2]) &&
+           JSON.stringify(zoomsFor(refreshOverlayKey)) === JSON.stringify([2, 3]),
+        'each active raster includes every integer zoom from minZoom through maxNativeZoom');
+    assert(refreshEntries.length === refreshPlan.total && refreshEntries.every(function (entry) {
+        return viewWindow.DetectLabMirror.disc.touchesTile(
+            { lat: 45, lng: 25, radiusKm: 1 }, entry.z, entry.x, entry.y);
+    }), 'the exact lazy plan contains only tiles touching the requested 1 km disc');
+    const providerReport = await viewApi.prefetchTiles(null, {
+        total: 2,
+        nextEntry: (function () {
+            var remaining = 2;
+            return function () { return remaining-- > 0 ? { error: 'expected test tile failure' } : null; };
+        }()),
+        concurrency: 2
+    });
+    assert(providerReport.total === 2 && providerReport.done === 2 && providerReport.failed === 2,
+        'the shared prefetch workers consume a lazy tile provider and account for every tile failure');
+    var stopAfterFirst = false;
+    var cancellableRemaining = 3;
+    const stoppedReport = await viewApi.prefetchTiles(null, {
+        total: 3,
+        nextEntry: function () {
+            return cancellableRemaining-- > 0 ? { error: 'expected cancellation test failure' } : null;
+        },
+        concurrency: 1,
+        shouldStop: function () { return stopAfterFirst; },
+        onProgress: function (report) { if (report.done) stopAfterFirst = true; }
+    });
+    assert(stoppedReport.done === 1 && stoppedReport.stopped === true,
+        'stopping a lazy prefetch leaves in-flight work accounted and prevents the next tile from starting');
+    viewWindow._dlMap = savedDlMap;
+
     /* The wiring itself: the dl2d:// protocol repaints, and no renderer may
      * re-upload data MapLibre already has (a 20 000-feature reparse per pan is
      * exactly what made 3D crawl while the Roman roads were on). */
@@ -820,6 +902,38 @@ const TAG_REGISTRY = '20261020-albania-independent-rows'; /* shared registry (WM
         'the Leaflet panes are hidden (not removed) while 3D is on');
     assert(/body\.is-3d #map3d-bar \{ display: flex; \}/.test(skin),
         'the 3D bar only appears in 3D');
+    assert(viewer.includes('class="m3d-row m3d-basemap-row"') &&
+           ['imagery', 'topographic', 'terrain'].every(function (key) {
+               return viewer.includes('<option value="' + key + '">');
+           }),
+        'the 3D bar offers the three ArcGIS basemaps');
+    assert(/window\.setArcgisBasemap = function \(key\)/.test(mapApp) &&
+           /window\.getArcgisBasemap = function \(\)/.test(mapApp) &&
+           viewer.includes('root.setArcgisBasemap(basemapSelect.value)') &&
+           viewer.includes('root.getArcgisBasemap()') &&
+           viewer.includes('bar.syncBasemap = function () { syncBasemapSelect(); };') &&
+           /controlBar\.syncBasemap\(\)/.test(viewer),
+        'the picker calls the shared 2D basemap API and refreshes its selected value on each 3D open');
+    assert(/#map3d-bar \.m3d-basemap-select\s*\{[^}]*min-height: 36px/.test(skin),
+        'the basemap picker has a full-width, touch-sized select control');
+    assert(viewer.includes('class="m3d-row m3d-exag-row"') &&
+           /body\.is-pwa\.is-3d #map3d-bar \.m3d-exag-row/.test(skin),
+        'terrain exaggeration remains available on web but is hidden only in the installed PWA');
+    assert(viewer.includes("toggleGroup.className = 'm3d-toggle-group'") &&
+           viewer.includes("refreshBtn.id = 'map3d-refresh'") &&
+           viewer.includes("refreshBtn.addEventListener('click', function () { refreshTiles(); })") &&
+           viewer.includes("refreshStatus.setAttribute('aria-live', 'polite')") &&
+           /body\.is-3d #map3d-refresh \{ display: inline-flex; \}/.test(skin),
+        'the 1 km raster refresh is an accessible action grouped beside the 2D switch and shown only in 3D');
+    assert(viewer.includes('var REFRESH_RADIUS_KM = 1') &&
+           viewer.includes('function planTileRefresh(center)') &&
+           viewer.includes('nextEntry: refreshPlan.nextEntry') &&
+           viewer.includes('reloadRefreshSources(refreshPlan)'),
+        'the refresh plans a lazy, source-aware tile set and reloads visible sources after warming it');
+    const refreshFn = viewer.match(/function refreshTiles\(\) \{[\s\S]*?\n    \}/);
+    assert(refreshFn && refreshFn[0].indexOf('camera = map.getCenter()') !== -1 &&
+           refreshFn[0].indexOf('camera = map.getCenter()') < refreshFn[0].indexOf('planTileRefresh(camera)'),
+        'the 3D camera centre is snapshotted synchronously before tile planning starts');
     assert(/@media \(max-width: 720px\)/.test(skin),
         'the bar has a phone layout');
     assert(/#map3d-surface \.maplibregl-popup/.test(skin),
