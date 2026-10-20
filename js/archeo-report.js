@@ -1950,8 +1950,11 @@
                     'line-opacity': CIRCLE_STYLE_IDLE.opacity,
                     'line-dasharray': [2, 2]
                 },
+                /* No 'line-color' here: it is not a fill paint property, and
+                   MapLibre's style validation refuses the whole fill layer
+                   when it is present (the report's rings then lose their
+                   fill in 3D and the layer is reported as failed). */
                 fill: {
-                    'line-color': CIRCLE_STYLE_IDLE.color,
                     'fill-color': CIRCLE_STYLE_IDLE.fillColor,
                     'fill-opacity': CIRCLE_STYLE_IDLE.fillOpacity
                 },
@@ -2058,8 +2061,9 @@
                     'line-opacity': 0.98,
                     'line-dasharray': [2, 2]
                 },
+                /* See searchAreaFeatures3d: 'line-color' is not a fill
+                   paint property — MapLibre rejects the layer carrying it. */
                 fill: {
-                    'line-color': strokeColor,
                     'fill-color': fillColor,
                     'fill-opacity': 0.22
                 },

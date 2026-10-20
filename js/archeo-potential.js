@@ -3388,6 +3388,81 @@
         return _pinRenderer;
     }
 
+    /* ── 3D: pinul + cercul lui, ca forme la sol ─────────────────────────────
+     * Cercul pinului e un L.circle DE SINE STĂTĂTOR (nu copil al grupului de
+     * lucru): fără punte, mirror-ul îl traducea prin toGeoJSON() — doar
+     * centrul — cu raza în METRI citită ca PIXELI de MapLibre, deci un disc
+     * mov de 1 000–10 000 px acoperea toată vederea 3D și bulele (mov la
+     * scorurile mari) nu se mai distingeau de fundal. Puntea de mai jos îl
+     * trimite în 3D ca poligon la sol pe raza curentă + punctul central, cu
+     * aceleași culori ca în 2D; pinul-marker însuși e `_dl3dSkip` (e HTML
+     * fără glif SVG, iar centrul e deja în punte). */
+    var _pin3dCache = { stamp: '', value: null };
+    function pinFeatures3d() {
+        var latlng = null;
+        if (_pinCircle && typeof _pinCircle.getLatLng === 'function') {
+            try { latlng = _pinCircle.getLatLng(); } catch (e) { latlng = null; }
+        }
+        if (!latlng) latlng = _pinLatLng;
+        if (!latlng || !isFinite(latlng.lat) || !isFinite(latlng.lng)) return null;
+        var radiusM = currentRadiusM();
+        if (_pinCircle && typeof _pinCircle.getRadius === 'function') {
+            try {
+                var live = Number(_pinCircle.getRadius());
+                if (live > 0) radiusM = live;
+            } catch (e) { /* keep the slider radius */ }
+        }
+        if (!(radiusM > 0)) return null;
+        var idle = CONFIG.PIN.CIRCLE_IDLE;
+        var stamp = 'archeo-pin|' + latlng.lat.toFixed(6) + '|' + latlng.lng.toFixed(6) + '|' + radiusM;
+        if (_pin3dCache.stamp === stamp && _pin3dCache.value) return _pin3dCache.value;
+        var built = {
+            geojson: {
+                type: 'FeatureCollection',
+                features: [
+                    feature3d(
+                        { type: 'Polygon', coordinates: [groundRing3d(latlng.lat, latlng.lng, radiusM)] },
+                        {
+                            color: idle.color, fillColor: idle.fillColor,
+                            fillOpacity: idle.fillOpacity, opacity: idle.opacity,
+                            weight: idle.weight, kind: 'radius'
+                        }
+                    ),
+                    feature3d(
+                        { type: 'Point', coordinates: [latlng.lng, latlng.lat] },
+                        {
+                            color: idle.color, fillColor: CONFIG.PIN.FILL || '#c4a0f0',
+                            fillOpacity: 0.9, opacity: 1, radius: 5, kind: 'radius'
+                        }
+                    )
+                ]
+            },
+            paints: {
+                line: {
+                    'line-color': idle.color, 'line-width': idle.weight,
+                    'line-opacity': idle.opacity, 'line-dasharray': [2, 2]
+                },
+                fill: { 'fill-color': idle.fillColor, 'fill-opacity': idle.fillOpacity },
+                circle: {
+                    'circle-radius': 5, 'circle-color': CONFIG.PIN.FILL || '#c4a0f0',
+                    'circle-stroke-color': idle.color, 'circle-stroke-width': 1.5,
+                    'circle-stroke-opacity': 1, 'circle-opacity': 0.9
+                },
+                layout: {}
+            },
+            stamp: stamp,
+            label: 'Archeological Potential Sites'
+        };
+        _pin3dCache = { stamp: stamp, value: built };
+        return built;
+    }
+
+    function attachPin3d(circle) {
+        if (!circle) return;
+        circle._dl3dFeatures = pinFeatures3d;
+        if (circle.options) circle.options.name = 'Archeological Potential Sites';
+    }
+
     function drawPinCircle(latlng, dragging) {
         var map = window._dlMap;
         if (!map || typeof L === 'undefined' || !L.circle) return;
@@ -3413,6 +3488,7 @@
         var renderer = pinRendererOption(map);
         if (renderer) options.renderer = renderer;
         _pinCircle = L.circle(latlng, options);
+        attachPin3d(_pinCircle);
         if (_pinCircle.addTo) _pinCircle.addTo(map);
         else if (map.addLayer) map.addLayer(_pinCircle);
     }
@@ -3443,6 +3519,9 @@
             iconAnchor: [13, 13]
         });
         _pinMarker = L.marker(latlng, assignPane(map, { icon: icon, zIndexOffset: 2000, interactive: false }, 'pane_archeo_pin'));
+        /* Centrul pinului ajunge în 3D prin puntea cercului (pinFeatures3d);
+           markerul HTML singur ar deveni o etichetă fără punct. */
+        _pinMarker._dl3dSkip = true;
         if (_pinMarker.addTo) _pinMarker.addTo(map);
         if (_pinMarker.bindTooltip) {
             _pinMarker.bindTooltip(
@@ -4125,6 +4204,7 @@
         heatLayerProto: heatLayerProto,
         makeHeatLayer: makeHeatLayer,
         renderField: renderField,
+        pinFeatures3d: pinFeatures3d,
         outputMode: outputMode,
         setOutputMode: setOutputMode,
         radiusKm: radiusKm,

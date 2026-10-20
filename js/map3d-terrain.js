@@ -1604,6 +1604,16 @@
      * ═══════════════════════════════════════════════════════════════════════ */
     function terrainSource() { return REGISTRY.terrainSource(); }
 
+    /** A #rrggbb colour with an alpha channel, as an rgba() string MapLibre
+     * parses identically everywhere (8-digit hex is not accepted by every
+     * style-spec version this viewer has shipped with). */
+    function hillshadeColor(hex, opacity) {
+        var m = /^#([0-9a-f]{6})$/i.exec(String(hex || ''));
+        if (!m || opacity >= 1) return String(hex || '');
+        var n = parseInt(m[1], 16);
+        return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + opacity + ')';
+    }
+
     /**
      * @param {object} maplibre resolved SDK namespace (unused — kept for the tests)
      * @param {boolean} safeMode drop everything that is decoration, not map:
@@ -1646,15 +1656,28 @@
                 attribution: cfg.hillshade.serviceAttribution || ''
             };
         } else if (cfg.hillshade && cfg.hillshade.enabled && !safeMode && style.sources[ts.id]) {
+            /* The relief must read THROUGH the imagery, at the configured low
+             * opacity — MapLibre has no hillshade-opacity property, so the
+             * opacity is carried as the alpha of the three shading colours
+             * (the shader multiplies its output by them, alpha included).
+             * At full alpha the DEM shading sat on the satellite base at
+             * full strength and the 3D view read as a grey topographic
+             * sheet instead of the same map the user had in 2D — the
+             * “3D turns the map topographic” report. `hillshade.opacity`
+             * (0.55 by default) was configured for exactly this and was
+             * never applied. */
+            var hsOpacity = cfg.hillshade.opacity == null ? 1 : Number(cfg.hillshade.opacity);
+            if (!isFinite(hsOpacity)) hsOpacity = 1;
+            hsOpacity = Math.max(0, Math.min(1, hsOpacity));
             style.layers.push({
                 id: 'm3d-hillshade',
                 type: 'hillshade',
                 source: ts.id,
                 paint: {
                     'hillshade-exaggeration': cfg.hillshade.exaggeration || 1,
-                    'hillshade-shadow-color': '#2b2b33',
-                    'hillshade-highlight-color': '#ffffff',
-                    'hillshade-accent-color': '#3a3a45'
+                    'hillshade-shadow-color': hillshadeColor('#2b2b33', hsOpacity),
+                    'hillshade-highlight-color': hillshadeColor('#ffffff', hsOpacity),
+                    'hillshade-accent-color': hillshadeColor('#3a3a45', hsOpacity)
                 }
             });
         }
@@ -2130,6 +2153,20 @@
         return { sourceIds: [sourceId], layerIds: [layerId] };
     }
 
+    /* MapLibre's style validation refuses a layer whose paint carries a
+     * property of another layer type (a 'line-color' inside a fill paint
+     * dropped the Archeological Report's fill layer in real browsers while
+     * every headless stub accepted it). Keep each paint inside its own
+     * namespace, so a stray key from any present or future bridge costs
+     * that one property, never the whole layer. */
+    function paintForType(paint, type) {
+        var out = {};
+        Object.keys(paint || {}).forEach(function (key) {
+            if (key.indexOf(type + '-') === 0) out[key] = paint[key];
+        });
+        return out;
+    }
+
     function vectorLayersFor(entry, sourceId) {
         var item = entry.item;
         var paints = item.paints || { line: {}, fill: {}, circle: {}, layout: {} };
@@ -2162,6 +2199,9 @@
             });
         }
 
+        fillPaint = paintForType(fillPaint, 'fill');
+        linePaint = paintForType(linePaint, 'line');
+        circlePaint = paintForType(circlePaint, 'circle');
         if (hasPolygon) {
             var fillId = entry.id + '-fill';
             if (!map.getLayer(fillId)) {
