@@ -5,7 +5,8 @@
 `netlify/lib/map3d-country-modules.mjs`, `netlify/functions/map3d-tile.mjs`,
 `tools/map3d-dev-server.mjs`; wired in `index.html`, `sw.js`, `netlify.toml` and consumed by
 `js/map-app.js` / `js/historical-eu-maps.js`. Regression suites:
-`node test-map3d-terrain.js`, `node test-map3d-mobile.js`, `node test-lidar-3d-focus.js`.*
+`node test-map3d-terrain.js`, `node test-map3d-mobile.js`, `node test-lidar-3d-focus.js`,
+`node test-search-exit-3d.js`.*
 
 **Status: all 91 registry layers are drapeable.** Nothing is left behind in 2D: the
 nine country LiDAR layers whose URL builders need a real tile bbox are draped tile by
@@ -26,6 +27,11 @@ map: a MapLibre GL JS view in which every layer that is switched on in the 2D pa
   disc are downloaded and draped before the view opens (§6.4).
 * **Camera** – opening 3D keeps the 2D centre/zoom (and Leaflet's bearing, if the
   rotation control was used); closing 3D writes the 3D camera back into Leaflet.
+  Before that hand-off, the viewer stops Leaflet pan/fly motion and completes any
+  in-flight CSS zoom. `Map.stop()` alone does not cancel Leaflet's delayed 250 ms
+  zoom-end callback; if it fires after the camera hand-off it can restore a stale
+  view and make the country outline jump when the user searches immediately after
+  returning to 2D.
 * **Layers** – the *same* checkboxes decide what 3D draws. Switch a historical map on in
   2D, and it is draped in 3D; drag its opacity slider, and 3D follows live.
 * **Controls** – a 3D-view basemap picker (Imagery / Topographic / Terrain),

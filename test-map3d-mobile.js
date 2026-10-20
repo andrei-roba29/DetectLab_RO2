@@ -287,10 +287,11 @@ const shellVersion = Number((swJs.match(/CACHE_NAME = 'detectlab-v(\d+)-/) || []
 assert(shellVersion >= 196,
     'sw.js cache is v196 or newer so installed PWAs get the mobile fix (found v' + shellVersion + ')');
 /* Each asset is versioned by whatever last changed it: the registry by the
- * WMS/WMTS audit and the viewer + skin by the 3D basemap picker. */
+ * WMS/WMTS audit, the viewer by the camera-handoff fix, and the skin by the
+ * 3D basemap picker. */
 const TAGS = {
     'js/layer-registry.js': '20261020-albania-independent-rows',
-    'js/map3d-terrain.js': '20261020-1km-raster-refresh',
+    'js/map3d-terrain.js': '20261020-outline-camera-handoff',
     'css/map3d-terrain.css': '20261020-1km-raster-refresh',
     'js/danish-layers.config.js': '20261019-danish-token-maps',
     'js/danish-layers.js': '20261019-danish-free-groups'

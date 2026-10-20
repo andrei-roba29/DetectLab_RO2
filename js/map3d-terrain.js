@@ -1660,10 +1660,30 @@
         };
     }
 
+    /*
+     * Leaflet's public stop() cancels pan/flyTo frames, but it does not finish
+     * an animated CSS zoom. That zoom owns a delayed _onZoomTransitionEnd()
+     * callback (250 ms); if we replace the view while it is pending, the late
+     * callback can restore the old center/zoom and make vector overlays such
+     * as the country border jump after returning from 3D. Settle the old view
+     * before handing the MapLibre camera back.
+     */
+    function settleLeafletMotion(lmap) {
+        if (!lmap) return;
+        try {
+            if (typeof lmap.stop === 'function') lmap.stop();
+        } catch (e) { /* keep the 2D/3D hand-off available */ }
+        if (!lmap._animatingZoom || typeof lmap._onZoomTransitionEnd !== 'function') return;
+        try {
+            lmap._onZoomTransitionEnd();
+        } catch (e) { /* a transition cleanup must never block closing 3D */ }
+    }
+
     /** Push the 3D camera back to Leaflet (called when 3D closes). */
     function cameraTo2D() {
         var lmap = leafletMap();
         if (!lmap || !map) return;
+        settleLeafletMotion(lmap);
         try {
             var center = map.getCenter();
             if (typeof lmap.setBearing === 'function' && map.getBearing) {

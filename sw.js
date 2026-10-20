@@ -618,7 +618,10 @@
 //   source-supported zoom for active non-LiDAR raster layers around the current
 //   3D camera centre, reports progress, supports cancellation and reloads the
 //   visible sources from the warmed cache.
-const CACHE_NAME = 'detectlab-v244-1km-raster-refresh';
+// v245: settle Leaflet's pending CSS zoom before the 3D camera hand-off. Its
+//   delayed transition-end callback could otherwise restore an old view during
+//   search and make the selected-country outline jump.
+const CACHE_NAME = 'detectlab-v245-outline-camera-handoff';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -705,6 +708,7 @@ const PRECACHE_URLS = [
   'js/map3d-mirror.js?v=20261013-3d-mobile',
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
+  'js/map3d-terrain.js?v=20261020-outline-camera-handoff',
   'js/map3d-terrain.js?v=20261020-1km-raster-refresh',
   'js/map3d-terrain.js?v=20261020-3d-basemap-selector',
   'js/map3d-terrain.js?v=20261020-lidar-disc-route',
