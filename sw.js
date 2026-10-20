@@ -584,7 +584,7 @@
 //   Historical Maps, Satellite, LiDAR and Heritage Sites sections. Requests
 //   are clipped to Albania, rows remain available in all country views, and
 //   the layer renderer detects failed image decodes before switching CRS.
-const CACHE_NAME = 'detectlab-v235-albania-independent-rows';
+const CACHE_NAME = 'detectlab-v236-3d-analysis-points';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -648,6 +648,7 @@ const PRECACHE_URLS = [
   'js/hist-shift.js?v=20261014-hist-shift',
   'css/hist-shift.css?v=20261014-hist-shift',
   'js/map3d-mirror.js?v=20261017-archeo-3d-projection',
+  'js/map3d-mirror.js?v=20261020-3d-analysis-points',
   'js/map3d-mirror.js?v=20261014-lidar-3d-focus',
   'js/map3d-mirror.js?v=20261014-3d-vectors',
   'js/map-app.js?v=20261015-basemap-collapse',
@@ -669,6 +670,7 @@ const PRECACHE_URLS = [
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
   'js/map3d-terrain.js?v=20261019-lidar-depth',
+  'js/map3d-terrain.js?v=20261020-3d-analysis-points',
   'js/map3d-terrain.js?v=20261017-archeo-3d-projection',
   'js/map3d-terrain.js?v=20261014-lidar-3d-focus',
   'js/map3d-terrain.js?v=20261014-3d-clean-controls',
@@ -903,6 +905,7 @@ const PRECACHE_URLS = [
   // L.Circle._project paints the circle top). Leaflet moves them natively on
   // pan / zoom / pinch / flyTo, so they no longer drift or jump between zooms.
   'js/battles-layer.js?v=20260902-battles-label-anchor',
+  'js/battles-layer.js?v=20261020-3d-analysis-points',
   'css/styles.css?v=20260902-battles-label-anchor',
   // Mini tutorial: "?" button (top-right of the map) + 5 purple, blurred
   // slides with arrows pointing at the real side / bottom-bar controls,
@@ -1224,8 +1227,10 @@ const PRECACHE_URLS = [
   // v138: archeo potential canvas must not swallow detectorist pin taps after
   // the layer is switched off (click-through pane + renderer detach).
   'js/archeo-potential.js?v=20261017-archeo-3d-projection',
+  'js/archeo-potential.js?v=20261020-3d-analysis-points',
   'js/lidar-scanner.js?v=20260922-distance-mirror-close',
   'js/archeo-report.js?v=20260922-distance-mirror-close',
+  'js/archeo-report.js?v=20261020-3d-analysis-points',
   // v130: caption chip (DISTANȚĂ / RAZĂ / ISTORIC) anchored to the card
   // itself, so it floats above the slider in the PWA as well.
   'css/styles.css?v=20260922-caption-above-card',
@@ -1261,6 +1266,7 @@ const PRECACHE_URLS = [
   'js/lidar-scanner.js?v=20260927-deduplicate-fortification',
   // v150: blacklist persistent pentru cele cinci coordonate retrase.
   'js/lidar-scanner.js?v=20261002-remove-five-points',
+  'js/lidar-scanner.js?v=20261020-3d-analysis-points',
   // v140: „Amprenta Vegetației / Vegetation Fingerprint” (premium) — primul
   // substrat PPI din CLMS HR-VPP, cu tile-uri WMTS limitate la România.
   // v141: + substratul SGU (VPP LSLOPE, anual); v142: + SGD (VPP RSLOPE).

@@ -54,7 +54,7 @@
      * importing the module must never be fatal. */
     if (!root) return;
 
-    var VERSION = '2026-10-17-archeo-3d-projection-v1';
+    var VERSION = '2026-10-20-3d-analysis-points-v1';
 
     /* Leaflet's own pane z-index defaults — used when a layer has no pane. */
     var PANE_Z = {
@@ -566,6 +566,49 @@
             if (json.type === 'FeatureCollection') return json;
             return json;
         } catch (e) { return null; }
+    }
+
+    /* ── ground circles ─────────────────────────────────────────────────────
+     * L.Circle (unlike L.CircleMarker, which it extends in Leaflet 1.9, so
+     * `instanceof Circle` is the discriminator) measures its radius in
+     * ground metres. The 32-segment ring uses the same local metric as the
+     * per-layer bridges in archeo-potential.js / archeo-report.js
+     * (r / 111 320 in latitude, stretched by 1/cos(lat) in longitude), so a
+     * circle the mirror projects and a circle a bridge projects coincide. */
+    var GROUND_CIRCLE_SEGMENTS = 32;
+
+    function isGroundCircle(layer, Leaflet) {
+        if (!layer || !Leaflet || !Leaflet.Circle) return false;
+        try {
+            return layer instanceof Leaflet.Circle &&
+                typeof layer.getLatLng === 'function' &&
+                typeof layer.getRadius === 'function';
+        } catch (e) { return false; }
+    }
+
+    function groundCircleGeoJSON(layer, geojson) {
+        var centre = null, radiusM = NaN;
+        try {
+            centre = layer.getLatLng();
+            radiusM = Number(layer.getRadius());
+        } catch (e) { return null; }
+        if (!centre || !isFinite(centre.lat) || !isFinite(centre.lng) || !(radiusM > 0)) return null;
+        var feature = geojson && geojson.type === 'Feature' ? geojson
+            : { type: 'Feature', properties: {}, geometry: null };
+        var latRad = centre.lat * Math.PI / 180;
+        var dLat = radiusM / METRES_PER_DEGREE;
+        var dLng = radiusM / (METRES_PER_DEGREE * Math.max(Math.abs(Math.cos(latRad)), 0.2));
+        var ring = [];
+        for (var i = 0; i < GROUND_CIRCLE_SEGMENTS; i += 1) {
+            var a = (i / GROUND_CIRCLE_SEGMENTS) * Math.PI * 2;
+            ring.push([centre.lng + Math.sin(a) * dLng, centre.lat + Math.cos(a) * dLat]);
+        }
+        ring.push(ring[0].slice());
+        return {
+            type: 'Feature',
+            properties: feature.properties || {},
+            geometry: { type: 'Polygon', coordinates: [ring] }
+        };
     }
 
     function popupHtml(layer) {
@@ -1457,7 +1500,34 @@
             }
             var gj = geometryOf(layer);
             if (!gj) return null;
+            /* An L.Circle is a GROUND circle: its radius is in metres, but
+             * Leaflet's toGeoJSON() returns only the centre Point, so a
+             * mirrored circle used to reach MapLibre as a Point whose
+             * `circle-radius` was the metre value read as PIXELS — a 100 m
+             * scanner ring became a 100 px disc that never scaled with the
+             * ground, and a 5 km analysis search circle became a 5 000 px
+             * disc that tinted the whole 3D view in its fill colour (the
+             * Archaeological Potential purple wash and the LiDAR Scanner
+             * points that “do not show appropriately” in 3D). Project the
+             * circle to a ground polygon, exactly like the per-layer 3D
+             * bridges do, so every present and future L.circle drapes at
+             * its true size. L.CircleMarker is deliberately excluded: its
+             * radius really is pixels, so its Point + circle paint is the
+             * faithful mirror. Layers that offer `_dl3dFeatures()` were
+             * already returned above and never reach this branch. */
+            var convertedCircle = false;
+            if (isGroundCircle(layer, Leaflet)) {
+                var ground = groundCircleGeoJSON(layer, gj);
+                if (ground) { gj = ground; convertedCircle = true; }
+            }
             var paints = pathPaints(layer);
+            if (convertedCircle) {
+                /* The geometry is a ground polygon now, so the circle paint
+                 * built from the metre radius (`circle-radius: 5000`) is a
+                 * dead, misleading value: drop it back to a plain dot size
+                 * in case the same source ever carries a real point. */
+                paints.circle = Object.assign({}, paints.circle, { 'circle-radius': 5 });
+            }
             var fc = gj.type === 'FeatureCollection' ? gj : featureCollection([gj]);
             /* An L.GeoJSON built with pointToLayer (DARE sites) holds real
              * L.Markers: toGeoJSON() keeps the point but drops the marker's

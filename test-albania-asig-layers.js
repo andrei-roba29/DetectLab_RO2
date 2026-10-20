@@ -62,7 +62,7 @@ const html = read('index.html');
 check(!/id="albaniaRow"|id="albaniaSubLayers"|id="albaniaToggle"|id="albaniaGroupNotice"/.test(html), 'no Albania-wide master group or generated subgroup container remains');
 check(/countryIndependent/.test(read('js/map-app.js')), 'country-layer filter honors independent registry rows');
 check(/asig-albania-layers\.config\.js\?v=20261020-albania-independent-rows/.test(html), 'updated config asset tag is in index');
-check(/detectlab-v235-albania-independent-rows/.test(read('sw.js')), 'service-worker cache moves forward from v234');
+check(/detectlab-v236-3d-analysis-points/.test(read('sw.js')), 'service-worker cache moves forward from v235');
 
 // Tiny DOM/Leaflet harness exercises config-driven rendering and tile errors.
 class Element {

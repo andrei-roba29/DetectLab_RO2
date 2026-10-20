@@ -539,8 +539,9 @@
                     'line-opacity': 0.9,
                     'line-dasharray': [2, 2]
                 },
+                /* No 'line-color' here: not a fill paint property, and
+                   MapLibre's style validation refuses the whole layer. */
                 fill: {
-                    'line-color': epochCol,
                     'fill-color': epochCol,
                     'fill-opacity': 0.30
                 },

@@ -49,8 +49,8 @@ const focusSource = read('js/lidar-3d-focus.js');
 
 /* Every build that changes the LiDAR 3D focus path bumps its own tag. */
 const TAG = '20261019-lidar-depth';
-const TAG_MIRROR = '20261017-archeo-3d-projection';
-const TAG_VIEWER = '20261019-lidar-depth';
+const TAG_MIRROR = '20261020-3d-analysis-points';
+const TAG_VIEWER = '20261020-3d-analysis-points';
 const TAG_CSS = '20261019-lidar-depth';
 
 /* One real event-loop turn: the viewer runs its entry gate through a promise,

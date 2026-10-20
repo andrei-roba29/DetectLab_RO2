@@ -35,6 +35,13 @@
     }
     var map = null, resultsLayer = null, selectedMarker = null, selectionCircle = null;
     var points = [], selected = null, active = false, scanning = false, pointsPromise = null;
+    /* The points of the last completed scan, in the order they were drawn.
+       This is the data the 3D bridge below hands to the mirror: the 2D
+       result rings are L.circle objects, whose toGeoJSON() is only the
+       centre point, so without the bridge the 3D view drew every result
+       as a 100-PIXEL dot (the metre radius read as screen pixels) and the
+       search circle as a disc thousands of pixels wide. */
+    var resultPoints = [];
 
     // ── Selection circle styling ──────────────────────────────────────────
     // Two styles, because redrawing the search circle is the single most
@@ -373,6 +380,174 @@
     // centre keeps it locked onto its site at every zoom level.
     var RESULT_RADIUS_M = 100;
     var RESULT_LABEL_OFFSET = [0, -14];
+
+    /* ── 3D bridge (js/map3d-mirror.js → js/map3d-terrain.js) ──────────────
+     * Same pattern as the Archeological Report: the scanner's groups offer
+     * their geometry as ground shapes through `_dl3dFeatures()` and their
+     * 2D children are marked `_dl3dSkip`, so the mirror carries each result
+     * exactly once, as a 100 m ground ring (32-segment polygon, the same
+     * construction the other analysis layers use) plus a centre point
+     * carrying the label and the popup. The search selection gets the same
+     * treatment: a ground polygon for the chosen radius plus the centre
+     * point, instead of a pixel disc that covered the whole 3D view. */
+    var CIRCLE_SEGMENTS_3D = 32;
+
+    function groundRing3d(lat, lng, radiusM) {
+        var ring = [];
+        var latRad = lat * Math.PI / 180;
+        var dLat = radiusM / 111320;
+        var dLng = radiusM / (111320 * Math.max(Math.abs(Math.cos(latRad)), 0.2));
+        for (var i = 0; i < CIRCLE_SEGMENTS_3D; i++) {
+            var a = (i / CIRCLE_SEGMENTS_3D) * Math.PI * 2;
+            ring.push([lng + Math.sin(a) * dLng, lat + Math.cos(a) * dLat]);
+        }
+        ring.push(ring[0].slice());
+        return ring;
+    }
+
+    function feature3d(geometry, properties) {
+        return { type: 'Feature', properties: properties, geometry: geometry };
+    }
+
+    function resultPopupHtml(p) {
+        // Traseu Google Maps: destinația e ÎNTOTDEAUNA centrul inelului de
+        // rezultat (p.lat/p.lng), nu marginea lui — cererea „în cadrul
+        // razelor mai mari, traseul va fi către centrul lor”.
+        var gmapsBtn = (window.DetectLabDirections && window.DetectLabDirections.buttonHtml)
+            ? window.DetectLabDirections.buttonHtml(p.lat, p.lng)
+            : '';
+        return '<strong>' + esc(p.category) + '</strong>' + (p.name ? '<br>' + esc(p.name) : '') +
+            '<br><small>' + p.lat.toFixed(5) + ', ' + p.lng.toFixed(5) + '</small>' +
+            (gmapsBtn ? '<div style="margin-top:4px">' + gmapsBtn + '</div>' : '');
+    }
+
+    function syncScanner3d() {
+        try {
+            var m3d = window.DetectLabMap3D;
+            if (m3d && typeof m3d.isOpen === 'function' && m3d.isOpen() && typeof m3d.syncLayers === 'function') {
+                m3d.syncLayers();
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    /* Stamp-cached bridge result, so the 1.5 s mirror poll re-uploads the
+       GeoJSON only when the drawn geometry actually changed. */
+    function cachedBridge(cache, stamp, build) {
+        if (cache.stamp === stamp && cache.value) return cache.value;
+        var value = build();
+        cache.stamp = stamp;
+        cache.value = value;
+        return value;
+    }
+
+    var _results3dCache = { stamp: '', value: null };
+    function scannerResultsFeatures3d() {
+        if (!resultPoints.length) return null;
+        var stamp = 'lidar-scanner-results|' + resultPoints.map(function (p) {
+            return p.lat.toFixed(6) + ',' + p.lng.toFixed(6) + ',' + (p.category || '');
+        }).join(';');
+        return cachedBridge(_results3dCache, stamp, function () {
+            var features = [];
+            resultPoints.forEach(function (p) {
+                var popup = resultPopupHtml(p);
+                features.push(feature3d(
+                    { type: 'Polygon', coordinates: [groundRing3d(p.lat, p.lng, RESULT_RADIUS_M)] },
+                    {
+                        kind: 'lidar-result', color: '#8cff66', fillColor: '#39ff14',
+                        fillOpacity: 0.11, opacity: 0.98, weight: 2,
+                        lat: p.lat, lng: p.lng, popup: popup
+                    }
+                ));
+                features.push(feature3d(
+                    { type: 'Point', coordinates: [p.lng, p.lat] },
+                    {
+                        kind: 'lidar-result-point', color: '#8cff66', fillColor: '#39ff14',
+                        fillOpacity: 0.95, opacity: 1, radius: 5,
+                        lat: p.lat, lng: p.lng, label: String(p.category || ''), popup: popup
+                    }
+                ));
+            });
+            return {
+                geojson: { type: 'FeatureCollection', features: features },
+                paints: {
+                    line: { 'line-color': '#8cff66', 'line-width': 2, 'line-opacity': 0.98, 'line-dasharray': [1, 2] },
+                    fill: { 'fill-color': '#39ff14', 'fill-opacity': 0.11 },
+                    circle: {
+                        'circle-radius': 5, 'circle-color': '#39ff14',
+                        'circle-stroke-color': '#8cff66', 'circle-stroke-width': 1.5,
+                        'circle-stroke-opacity': 0.98, 'circle-opacity': 0.95
+                    },
+                    layout: {}
+                },
+                stamp: stamp,
+                label: 'LiDAR Scanner'
+            };
+        });
+    }
+
+    var _selection3dCache = { stamp: '', value: null };
+    function scannerSelectionFeatures3d() {
+        if (!selected || !isFinite(selected.lat) || !isFinite(selected.lng)) return null;
+        var radiusM = NaN;
+        if (selectionCircle && typeof selectionCircle.getRadius === 'function') {
+            try { radiusM = Number(selectionCircle.getRadius()); } catch (e) { radiusM = NaN; }
+        }
+        if (!(radiusM > 0)) {
+            var slider = document.getElementById('lidarScannerDistance');
+            radiusM = slider ? parseInt(slider.value, 10) * 1000 : NaN;
+        }
+        if (!(radiusM > 0)) return null;
+        var stamp = 'lidar-scanner-selection|' + selected.lat.toFixed(6) + '|' + selected.lng.toFixed(6) + '|' + radiusM;
+        return cachedBridge(_selection3dCache, stamp, function () {
+            var features = [
+                feature3d(
+                    { type: 'Polygon', coordinates: [groundRing3d(selected.lat, selected.lng, radiusM)] },
+                    {
+                        kind: 'radius', color: CIRCLE_STYLE_IDLE.color,
+                        fillColor: CIRCLE_STYLE_IDLE.fillColor,
+                        fillOpacity: CIRCLE_STYLE_IDLE.fillOpacity,
+                        opacity: CIRCLE_STYLE_IDLE.opacity, weight: CIRCLE_STYLE_IDLE.weight
+                    }
+                ),
+                feature3d(
+                    { type: 'Point', coordinates: [selected.lng, selected.lat] },
+                    {
+                        kind: 'lidar-search-point', color: '#ffffff', fillColor: '#39ff14',
+                        fillOpacity: 0.95, opacity: 1, radius: 6,
+                        label: selected.lat.toFixed(4) + ', ' + selected.lng.toFixed(4)
+                    }
+                )
+            ];
+            return {
+                geojson: { type: 'FeatureCollection', features: features },
+                paints: {
+                    line: {
+                        'line-color': CIRCLE_STYLE_IDLE.color,
+                        'line-width': CIRCLE_STYLE_IDLE.weight,
+                        'line-opacity': CIRCLE_STYLE_IDLE.opacity,
+                        'line-dasharray': [2, 2]
+                    },
+                    fill: { 'fill-color': CIRCLE_STYLE_IDLE.fillColor, 'fill-opacity': CIRCLE_STYLE_IDLE.fillOpacity },
+                    circle: {
+                        'circle-radius': 6, 'circle-color': '#39ff14',
+                        'circle-stroke-color': '#ffffff', 'circle-stroke-width': 1.5,
+                        'circle-stroke-opacity': 1, 'circle-opacity': 0.95
+                    },
+                    layout: {}
+                },
+                stamp: stamp,
+                label: 'LiDAR Scanner'
+            };
+        });
+    }
+
+    function attachResults3d(group) {
+        if (!group || group._dl3dFeatures) return;
+        group.options = group.options || {};
+        group.options.name = 'LiDAR Scanner';
+        group._dl3dFeatures = scannerResultsFeatures3d;
+    }
+
     function makeResult(p) {
         // Result rings stay on Leaflet's SVG renderer on purpose. They are
         // clickable (they carry a popup), and the circles pane is
@@ -386,14 +561,14 @@
         // of the distance drag, and that one keeps the canvas renderer.
         var resultOptions = assignPane({radius:RESULT_RADIUS_M,color:'#8cff66',weight:2,dashArray:'3 6',fillColor:'#39ff14',fillOpacity:.11,opacity:.98,interactive:true}, PANE_CIRCLES);
         var circle=L.circle([p.lat,p.lng],resultOptions);
+        /* The ring reaches 3D only through the results group's ground
+           bridge (scannerResultsFeatures3d): mirrored on its own, an
+           L.circle is just its centre point with the metre radius read as
+           pixels, and Leaflet also lists group children individually, so
+           the ring would be carried twice. */
+        circle._dl3dSkip = true;
         circle.bindTooltip('<span class="lidar-result-tag"><b>Category / Categoria</b><br>'+esc(p.category)+'</span>',assignPane({permanent:true,direction:'top',offset:RESULT_LABEL_OFFSET,className:'lidar-result-tooltip'}, PANE_TAGS));
-        // Traseu Google Maps: destinația e ÎNTOTDEAUNA centrul inelului de
-        // rezultat (p.lat/p.lng), nu marginea lui — cererea „în cadrul
-        // razelor mai mari, traseul va fi către centrul lor”.
-        var gmapsBtn = (window.DetectLabDirections && window.DetectLabDirections.buttonHtml)
-            ? window.DetectLabDirections.buttonHtml(p.lat, p.lng)
-            : '';
-        circle.bindPopup('<strong>'+esc(p.category)+'</strong>'+(p.name?'<br>'+esc(p.name):'')+'<br><small>'+p.lat.toFixed(5)+', '+p.lng.toFixed(5)+'</small>'+(gmapsBtn?'<div style="margin-top:4px">'+gmapsBtn+'</div>':'')); return circle;
+        circle.bindPopup(resultPopupHtml(p)); return circle;
     }
     function setStatus(s) { var e=document.getElementById('lidarScannerStatus'); if(e)e.textContent=s; }
     function updateRunButtonVisibility(show) {
@@ -428,6 +603,11 @@
             zIndexOffset: 2000,
             interactive: true
         }, PANE_PIN)).addTo(map);
+        /* The pulsing pin is HTML with no SVG glyph: mirrored on its own it
+           degrades to a text label with no dot. The selection circle's 3D
+           bridge already carries the centre point, so the marker itself
+           stays 2D-only. */
+        selectedMarker._dl3dSkip = true;
         selectedMarker.bindTooltip('<span class="lidar-result-tag"><b>Search Point / Punct căutare</b><br>' + ll.lat.toFixed(4) + ', ' + ll.lng.toFixed(4) + '</span>', assignPane({
             direction: 'top',
             offset: [0, -14],
@@ -448,7 +628,14 @@
         var renderer = circleRendererOption();
         if (renderer) circleOptions.renderer = renderer;
         selectionCircle = L.circle(ll, circleOptions).addTo(map);
+        /* 3D: the selection reaches MapLibre as a ground polygon of the
+           chosen radius plus its centre point (scannerSelectionFeatures3d),
+           never as the raw L.circle — that mirrored as a point with a
+           several-thousand-pixel radius and painted over everything. */
+        selectionCircle._dl3dFeatures = scannerSelectionFeatures3d;
+        if (selectionCircle.options) selectionCircle.options.name = 'LiDAR Scanner';
         setStatus(ll.lat.toFixed(4) + ', ' + ll.lng.toFixed(4));
+        syncScanner3d();
     }
     function run() {
         if (!selected || scanning) return;
@@ -466,8 +653,11 @@
                 });
                 if (resultsLayer) resultsLayer.clearLayers();
                 else resultsLayer = L.layerGroup();
+                resultPoints = out.slice();
+                attachResults3d(resultsLayer);
                 out.forEach(function (point) { resultsLayer.addLayer(makeResult(point)); });
                 resultsLayer.addTo(map);
+                syncScanner3d();
                 if (out.length) {
                     var bounds = L.latLngBounds(out.map(function (point) { return [point.lat, point.lon]; }));
                     map.fitBounds(bounds.pad(.18), { maxZoom: 14 });
@@ -513,6 +703,7 @@
             if (selectedMarker) map.removeLayer(selectedMarker);
             if (selectionCircle) map.removeLayer(selectionCircle);
             if (resultsLayer) resultsLayer.clearLayers();
+            resultPoints = [];
             selected = null;
             map.off('click', onMapClick);
             setStatus('Choose a point on the map / Alege un punct pe harta');
@@ -626,6 +817,10 @@
             }
             if (selected && selectionCircle) selectionCircle.setStyle(CIRCLE_STYLE_IDLE);
             setDragClass(false);
+            /* The 3D selection polygon is sized by stamp (centre + radius):
+               tell an open 3D view once, at the end of the drag, instead of
+               on every coalesced repaint. */
+            syncScanner3d();
         }
 
         slider.addEventListener('input', function () {
@@ -670,6 +865,10 @@
     // never triggers a second CSV download.
     window._lidarScannerApi = {
         getPoints: function () { return points; },
+        /* The drawn results of the last scan (the 3D bridge's data). */
+        getResultPoints: function () { return resultPoints.slice(); },
+        resultsFeatures3d: scannerResultsFeatures3d,
+        selectionFeatures3d: scannerSelectionFeatures3d,
         // Same heritage exclusions as run(); never expose hidden annotations
         // as automatic report results. Re-evaluate as heritage data loads.
         getEligiblePoints: function () { return points.filter(function (p) { return !isNearHeritage(p); }); },
