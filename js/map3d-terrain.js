@@ -2809,8 +2809,8 @@
             minZoom: (CONFIG.camera && CONFIG.camera.minZoom) || 2,
             maxZoom: (CONFIG.camera && CONFIG.camera.maxZoom) || 20,
             maxPitch: (CONFIG.camera && CONFIG.camera.maxPitch) || 80,
-            // Add source credits explicitly below, away from the bottom-right
-            // corner and without MapLibre's extra info button in either layout.
+            // Avoid MapLibre's default bottom-right attribution placement; the
+            // compact source-credit control is added explicitly at bottom-left.
             attributionControl: false,
             maxTileCacheSize: safeMode ? Math.min(32, profile.maxTileCacheSize) : profile.maxTileCacheSize,
             fadeDuration: (cfg.perf && cfg.perf.fadeDuration) || 120,
@@ -2924,10 +2924,39 @@
             }
             map.touchZoomRotate.enableRotation();
             // The app's controls and map gestures make MapLibre's +/- and
-            // compass redundant. Show the required source credits as text at
-            // bottom-left, not as another (i) button at bottom-right.
+            // compass redundant. Keep source credits available from a compact
+            // info control rather than as a permanent text panel. MapLibre
+            // expands compact credits when the first source is discovered, so
+            // collapse that initial state once the attribution text is ready.
             if (maplibre.AttributionControl) {
-                map.addControl(new maplibre.AttributionControl({ compact: false }), 'bottom-left');
+                map.addControl(new maplibre.AttributionControl({ compact: true }), 'bottom-left');
+
+                var collapseInitialAttribution = function () {
+                    var control = surface && surface.querySelector
+                        ? surface.querySelector('.maplibregl-ctrl-attrib')
+                        : null;
+                    var content = control && control.querySelector
+                        ? control.querySelector('.maplibregl-ctrl-attrib-inner')
+                        : null;
+                    if (!control || !content || !String(content.textContent || '').trim()) return;
+
+                    control.classList.remove('maplibregl-compact-show');
+                    control.removeAttribute('open');
+                    if (typeof map.off === 'function') {
+                        map.off('styledata', collapseInitialAttribution);
+                        map.off('sourcedata', collapseInitialAttribution);
+                        map.off('terrain', collapseInitialAttribution);
+                    }
+                };
+
+                // Wait for the source metadata if the control was added before
+                // MapLibre had any attributions to render.
+                if (typeof map.on === 'function') {
+                    map.on('styledata', collapseInitialAttribution);
+                    map.on('sourcedata', collapseInitialAttribution);
+                    map.on('terrain', collapseInitialAttribution);
+                }
+                collapseInitialAttribution();
             }
             /* No MapLibre TerrainControl here. It was the only widget in the
              * top-right corner (the web layout reserved that row for it, phones

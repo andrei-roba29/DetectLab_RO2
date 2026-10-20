@@ -584,7 +584,13 @@
 //   Historical Maps, Satellite, LiDAR and Heritage Sites sections. Requests
 //   are clipped to Albania, rows remain available in all country views, and
 //   the layer renderer detects failed image decodes before switching CRS.
-const CACHE_NAME = 'detectlab-v236-3d-analysis-points';
+// v237: keep the 3D map attribution collapsed until the user opens its compact
+//   info control; the source credits remain available on demand.
+// v238: reduce the LiDAR-in-3D dialog footprint while keeping its controls
+//   scrollable and touch-friendly on smaller screens.
+// v239: keep the PWA 2D/3D switch clear of the minimized LiDAR pill, including
+//   the iOS safe area.
+const CACHE_NAME = 'detectlab-v239-pwa-lidar-pill-clearance';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -669,6 +675,7 @@ const PRECACHE_URLS = [
   'js/map3d-mirror.js?v=20261013-3d-mobile',
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
+  'js/map3d-terrain.js?v=20261020-3d-attribution-compact',
   'js/map3d-terrain.js?v=20261019-lidar-depth',
   'js/map3d-terrain.js?v=20261020-3d-analysis-points',
   'js/map3d-terrain.js?v=20261017-archeo-3d-projection',
@@ -685,6 +692,9 @@ const PRECACHE_URLS = [
   'js/maplibre-gl.js?v=20261019-tile-order',
   'js/maplibre-gl.js',
   'css/maplibre-gl.css?v=20261013-3d-terrain',
+  'css/map3d-terrain.css?v=20261020-pwa-lidar-pill-clearance',
+  'css/map3d-terrain.css?v=20261020-lidar-focus-smaller',
+  'css/map3d-terrain.css?v=20261020-3d-attribution-compact',
   'css/map3d-terrain.css?v=20261019-lidar-depth',
   'css/map3d-terrain.css?v=20261017-lidar-3d-entry-handover',
   'css/map3d-terrain.css?v=20261014-lidar-3d-focus',
