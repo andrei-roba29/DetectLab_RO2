@@ -682,7 +682,7 @@
 //   were visible under Romania's satellite/heritage sections and under the
 //   LiDAR group that hosts Denmark's DHM. Re-tags the ASIG config/module so a
 //   cached copy cannot keep the old placement alive. See ALBANIA_ASIG_LAYERS.md.
-const CACHE_NAME = 'detectlab-v252-pwa-bottom-fix';
+const CACHE_NAME = 'detectlab-v253-viewport-layer-filter';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -735,11 +735,11 @@ const PRECACHE_URLS = [
   'js/layer-registry.js?v=20261019-finland-filter',
   'js/layer-registry.js?v=20261021-albania-country-group',
   'js/map-app.js?v=20261019-finland-filter',
-  'js/map-app.js?v=20261021-albania-country-group',
+  'js/map-app.js?v=20261021-viewport-layer-filter',
   'js/map-app.js?v=20261017-finland',
   'js/map-app.js?v=20261017-albania-asig',
   'css/styles.css?v=20261019-danish-free-groups',
-  'css/styles.css?v=20261021-albania-country-group',
+  'css/styles.css?v=20261021-viewport-layer-filter',
   'js/danish-layers.js?v=20261019-danish-free-groups',
   'js/layer-registry.js?v=20261014-wms-audit',
   'js/layer-registry.js?v=20261013-3d-mobile',

@@ -13244,10 +13244,10 @@
             });
             window.updatePremiumMapCoverageVisibility();
 
-            // ── LAYER VISIBILITY HIGHLIGHT ──
-            // Partial intersection with coverage highlights each leaf row and
-            // only the expand arrow of its group, in desktop and standalone PWA.
-            // Both modes use the same rows inside #transpPanel (not the bottom bar).
+            // ── LAYER VIEWPORT FILTER ──
+            // Only layers whose coverage intersects the current map viewport remain
+            // in the panel. Rows return automatically when the map moves back into
+            // their coverage; desktop and standalone PWA share this same panel.
             // Resolve rows on every check: auth/layer UI may not be ready yet.
             (function() {
                 function _isEuropeMarket() {
@@ -13745,6 +13745,28 @@
                     }
                 }
 
+                function setViewportAvailability(row, available) {
+                    if (!row) return;
+                    row.classList.toggle('viewport-layer-unavailable', !available);
+                    var countryUnavailable = row.classList.contains('country-layer-unavailable');
+                    row.setAttribute('aria-hidden', available && !countryUnavailable ? 'false' : 'true');
+                }
+
+                function updateGeneratedLayers(api, fallbackBounds, mapBounds) {
+                    if (!api || !api.state || !api.state.rows || !api.layers) return 0;
+                    var availableCount = 0;
+                    api.layers.forEach(function (layer) {
+                        var entry = api.state.rows[layer.id];
+                        var row = entry && entry.row;
+                        if (!row) return;
+                        var bounds = layer.bounds || fallbackBounds;
+                        var available = !!bounds && isIntersecting(mapBounds, toBounds(bounds));
+                        setViewportAvailability(row, available);
+                        if (available) availableCount++;
+                    });
+                    return availableCount;
+                }
+
                 window.checkLayerVisibility = function() {
                     var activeMap = window._dlMap || map || window.map;
                     // Keep event listeners on the same instance whose bounds we read,
@@ -13755,27 +13777,75 @@
                     try { mapBounds = activeMap.getBounds(); } catch(e) { return; }
                     if (!mapBounds) return;
 
+                    var allDefs = layerDefs.concat(internationalLayerDefs);
                     var groupVisible = { hist: false, lidar: false, roman: false, histPremium: false, vegfp: false };
-                    layerDefs.forEach(function(def) {
+                    allDefs.forEach(function(def) {
                         var visible = isIntersecting(mapBounds, def.bounds);
-                        if (def.group && visible) groupVisible[def.group] = true;
-
-                        // Do not gate on panel.open, offsetParent or toggle.checked:
-                        // collapsed/hidden rows must already be correct when revealed.
                         var rowEl = null;
                         try { rowEl = def.getRow(); } catch(e) { rowEl = null; }
-                        if (rowEl) rowEl.classList.toggle('layer-visible-highlight', visible);
+                        if (rowEl) setViewportAvailability(rowEl, visible);
+                        if (def.group && visible && rowEl) groupVisible[def.group] = true;
                     });
 
-                    // Only arrows go green. Clear any stale group-row highlight even
-                    // when outside coverage or while its sublayer DOM is unavailable.
-                    Object.keys(groups).forEach(function(gKey) {
-                        var icon = document.getElementById(groups[gKey].expandIconId);
-                        if (!icon) return;
-                        icon.classList.toggle('layer-group-arrow-highlight', groupVisible[gKey]);
-                        var groupRow = icon.closest ? icon.closest('.transp-layer-row') : null;
-                        if (groupRow) groupRow.classList.remove('layer-visible-highlight');
+                    // Generated country catalogs share the same viewport rule;
+                    // their per-layer extents are sourced from their configs.
+                    var danish = window.DetectLabDanishLayers;
+                    var danishCount = updateGeneratedLayers(danish, danish && danish.CONFIG && danish.CONFIG.countryBounds, mapBounds);
+                    var finland = window.FinlandLayers;
+                    var finlandCount = updateGeneratedLayers(finland, finland && finland.CONFIG && finland.CONFIG.countryBounds, mapBounds);
+
+                    // Albania's nine generated rows share the national coverage.
+                    var albania = window.AsigAlbaniaLayers;
+                    var albaniaBounds = albania && albania.CONFIG && albania.CONFIG.countryBounds;
+                    var albaniaCount = 0;
+                    if (albania && albania.state && albania.state.rows) {
+                        var albaniaAvailable = !!albaniaBounds && isIntersecting(mapBounds, toBounds(albaniaBounds));
+                        Object.keys(albania.state.rows).forEach(function(id) {
+                            var entry = albania.state.rows[id];
+                            var row = entry && entry.row;
+                            if (!row) return;
+                            setViewportAvailability(row, albaniaAvailable);
+                            if (albaniaAvailable) albaniaCount++;
+                        });
+                    }
+                    [
+                        ['danishRow', danishCount],
+                        ['finlandRow', finlandCount],
+                        ['albaniaRow', albaniaCount]
+                    ].forEach(function(item) {
+                        var groupRow = document.getElementById(item[0]);
+                        if (groupRow) setViewportAvailability(groupRow, item[1] > 0);
                     });
+
+                    // Historical maps are created from a separate catalogue at
+                    // runtime, so use each sheet's own published extent.
+                    var euCatalog = window.DetectLabEuMaps;
+                    var euCount = 0;
+                    if (euCatalog && euCatalog.catalog) {
+                        Object.keys(euCatalog.catalog).forEach(function(key) {
+                            var meta = euCatalog.catalog[key];
+                            var row = document.getElementById('cenagisMapRow_' + key);
+                            if (!row || !meta || !meta.bounds) return;
+                            var available = isIntersecting(mapBounds, toBounds(meta.bounds));
+                            setViewportAvailability(row, available);
+                            if (available) euCount++;
+                        });
+                    }
+                    if (euCount) groupVisible.histPremium = true;
+
+                    // Parent rows disappear when no child layer is available in
+                    // this viewport. The arrows remain ordinary controls, never
+                    // availability indicators.
+                    Object.keys(groups).forEach(function(gKey) {
+                        var groupRow = getGroupRow(gKey);
+                        if (!groupRow) return;
+                        var anyAvailable = groupVisible[gKey];
+                        if (gKey === 'histPremium' && euCount > 0) anyAvailable = true;
+                        setViewportAvailability(groupRow, anyAvailable);
+                    });
+
+                    var panel = document.getElementById('transpPanel');
+                    if (panel) panel.classList.add('viewport-filter-active');
                 };
 
                 // Is a layer row nested inside a group row (LiDAR, historical,
@@ -13906,7 +13976,8 @@
                         // attribution are left untouched (live/API layers that
                         // do not publish coverage yet).
                         row.classList.toggle('country-layer-unavailable', !available);
-                        row.setAttribute('aria-hidden', available ? 'false' : 'true');
+                        var viewportUnavailable = row.classList.contains('viewport-layer-unavailable');
+                        row.setAttribute('aria-hidden', available && !viewportUnavailable ? 'false' : 'true');
                     });
 
                     // The Danish rows (js/danish-layers.js) are generated from
@@ -13971,7 +14042,8 @@
                             anyAvailable = window.DetectLabEuMaps.hasAvailableMaps();
                         }
                         groupRow.classList.toggle('country-layer-unavailable', !anyAvailable);
-                        groupRow.setAttribute('aria-hidden', anyAvailable ? 'false' : 'true');
+                        var viewportUnavailable = groupRow.classList.contains('viewport-layer-unavailable');
+                        groupRow.setAttribute('aria-hidden', anyAvailable && !viewportUnavailable ? 'false' : 'true');
                     });
 
                     var panel = document.getElementById('transpPanel');
@@ -14002,13 +14074,13 @@
                         try { row = def.getRow(); } catch (e) {}
                         if (!row) return;
                         row.classList.remove('country-layer-unavailable');
-                        row.setAttribute('aria-hidden', 'false');
+                        row.setAttribute('aria-hidden', row.classList.contains('viewport-layer-unavailable') ? 'true' : 'false');
                     });
                     Object.keys(groups).forEach(function (gKey) {
                         var groupRow = getGroupRow(gKey);
                         if (!groupRow) return;
                         groupRow.classList.remove('country-layer-unavailable');
-                        groupRow.setAttribute('aria-hidden', 'false');
+                        groupRow.setAttribute('aria-hidden', groupRow.classList.contains('viewport-layer-unavailable') ? 'true' : 'false');
                     });
                     var panel = document.getElementById('transpPanel');
                     if (panel) panel.classList.remove('country-filter-active');

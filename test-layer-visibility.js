@@ -1,4 +1,4 @@
-// Coverage-highlight regression tests. No network, account or npm dependencies.
+// Viewport layer-filter regression tests. No network, account or npm dependencies.
 // Run: node test-layer-visibility.js
 'use strict';
 
@@ -13,7 +13,7 @@ const source = read('js/map-app.js');
 const html = read('index.html');
 const css = read('css/styles.css');
 const sw = read('sw.js');
-const ROW_CLASS = 'layer-visible-highlight';
+const ROW_CLASS = 'viewport-layer-unavailable';
 const ARROW_CLASS = 'layer-group-arrow-highlight';
 const groups = ['hist', 'lidar', 'roman', 'histPremium'];
 const OUTSIDE = [[20, -20], [21, -19]];
@@ -29,7 +29,7 @@ function section(start, end) {
 }
 
 const coverageConfig = section('var premiumMapCoverageBounds = {', '// Create coverage polygons');
-const visibilityCode = section('// ── LAYER VISIBILITY HIGHLIGHT', '// ── BUCOVINA 1861-1864 (XYZ tiles');
+const visibilityCode = section('// ── LAYER VIEWPORT FILTER', '// ── BUCOVINA 1861-1864 (XYZ tiles');
 
 // Leaflet-compatible rectangle intersection, including edge contact. Browser
 // smoke checks use the actual bundled Leaflet; this keeps the unit test offline.
@@ -91,6 +91,7 @@ class ElementMock extends EventTarget {
         }
         return null;
     }
+    setAttribute(key, value) { this[key] = String(value); }
 }
 
 // Read the actual row ancestry/IDs from index.html so PWA tests cannot silently
@@ -167,31 +168,32 @@ function setup({ local = new MapMock(OUTSIDE), exposed, legacy, pwa = false, vis
     };
 }
 
-function highlighted(h, id, className = ROW_CLASS) {
+function highlighted(h, id) {
     const el = h.row(id);
     assert(el, id + ' exists in the shared desktop/PWA DOM');
-    return el.classList.contains(className);
+    return !el.classList.contains(ROW_CLASS);
 }
 
 function assertGroupsUnoutlined(h) {
     groups.forEach(group => {
         const row = h.row(group + 'ExpandIcon').closest('.transp-layer-row');
-        assert.equal(row.classList.contains(ROW_CLASS), false, group + ': only arrow, not parent row');
+        assert.equal(row.classList.contains('layer-visible-highlight'), false, group + ': no green availability highlight');
+        assert.equal(h.row(group + 'ExpandIcon').classList.contains('layer-group-arrow-highlight'), false, group + ': arrow stays neutral');
     });
 }
 
 function premiumRows(h) {
-    return h.document.elements.filter(el => el.parentElement?.id === 'histPremiumSubLayers' && el.classList.contains(ROW_CLASS))
+    return h.document.elements.filter(el => el.parentElement?.id === 'histPremiumSubLayers' && el.id !== 'histEuMapsSection' && !el.classList.contains(ROW_CLASS))
         .map(el => el.id).sort();
 }
 
-test('desktop: Banat highlights its leaf, not Bucovina or the whole historical group', () => {
+test('desktop: Banat keeps covered leaves and hides Bucovina and unrelated areas', () => {
     const h = setup({ local: new MapMock(BANAT) });
     // WWII, Mitteleuropa and Reymann also cover Banat. Excluding them would break intersects semantics.
     assert.deepEqual(premiumRows(h), ['banatRow', 'mitteleuropaRow', 'reymannRow', 'ww2Row']);
     assert.equal(highlighted(h, 'bucovinaRow'), false);
     assert.equal(highlighted(h, 'satellite60sRow'), true);
-    assert.equal(highlighted(h, 'histPremiumExpandIcon', ARROW_CLASS), true);
+    assert.equal(h.row('histPremiumExpandIcon').classList.contains(ARROW_CLASS), false);
     assertGroupsUnoutlined(h);
 });
 
@@ -204,7 +206,7 @@ test('PWA: _dlMap takes precedence over a stale local map and window.map', () =>
     assert.deepEqual(premiumRows(h), ['bucovinaRow', 'chrzanowskiRow', 'galicia1855Row', 'kdrGbRow', 'mitteleuropaRow', 'reymannRow', 'wig100kRow', 'ww2Row']);
     assert.equal(active.reads, 1);
     assert.equal(local.reads + legacy.reads, 0);
-    assert.equal(highlighted(h, 'histPremiumExpandIcon', ARROW_CLASS), true);
+    assert.equal(h.row('histPremiumExpandIcon').classList.contains(ARROW_CLASS), false);
     assert.equal(h.row('transpPanel').classList.contains('open'), false);
     assertGroupsUnoutlined(h);
 });
@@ -224,7 +226,7 @@ test('local map and legacy window.map fallbacks work; unavailable/unready maps a
     assert.equal(highlighted(h, 'bucovinaRow'), true);
 });
 
-test('partial overlaps and boundary contact count; leaving coverage removes highlights', () => {
+test('partial overlaps and boundary contact count; rows return when coverage enters the viewport', () => {
     const h = setup();
     h.local.setBounds([[44.5, 20.8], [44.6, 20.9]]); // only Banat's SW corner overlaps
     h.local.fire('moveend');
@@ -235,7 +237,7 @@ test('partial overlaps and boundary contact count; leaving coverage removes high
     h.local.setBounds(OUTSIDE);
     h.local.fire('moveend');
     assert.equal(highlighted(h, 'banatRow'), false);
-    groups.forEach(group => assert.equal(highlighted(h, group + 'ExpandIcon', ARROW_CLASS), false));
+    groups.forEach(group => assert.equal(h.row(group + 'ExpandIcon').classList.contains(ARROW_CLASS), false));
 });
 
 test('moveend, zoomend and resize listen on the active map, without duplicate subscriptions', () => {
@@ -350,7 +352,7 @@ test('all real historical, LIDAR and Roman rows resolve in the shared PWA panel'
     const pwaStack = h.row('pwa-br-stack');
     assert(pwaStack, 'PWA account stack keeps its id');
     leafRows.forEach(row => {
-        assert.equal(row.classList.contains(ROW_CLASS), true, row.id || 'anonymous LIDAR/Roman row');
+        assert.equal(row.classList.contains(ROW_CLASS), false, row.id || 'anonymous LIDAR/Roman row');
         assert.equal(row.closest('.transp-panel'), h.row('transpPanel'));
         for (let el = row; el; el = el.parentElement) {
             assert.notEqual(el, pwaStack, (row.id || 'anonymous row') + ' stays out of the PWA account stack');
@@ -365,14 +367,14 @@ test('missing/late rows are safe and do not suppress the group arrow', () => {
     lateRows.forEach(row => h.document.ids.delete(row.id));
     h.local.setBounds(BUCOVINA);
     assert.doesNotThrow(h.check);
-    assert.equal(highlighted(h, 'histPremiumExpandIcon', ARROW_CLASS), true);
+    assert.equal(h.row('histPremiumExpandIcon').classList.contains(ARROW_CLASS), false);
     lateRows.forEach(row => h.document.ids.set(row.id, row));
     h.window.dispatchEvent(new Event('detectlab:authchange'));
     h.flushFrames();
     assert.equal(highlighted(h, 'bucovinaRow'), true);
 });
 
-test('group rows lose stale highlights both inside and outside coverage', () => {
+test('group rows never receive green highlights', () => {
     const h = setup();
     [OUTSIDE, ALL].forEach(bounds => {
         groups.forEach(group => h.row(group + 'ExpandIcon').closest('.transp-layer-row').classList.add(ROW_CLASS));
@@ -420,24 +422,14 @@ test('tab switching and all five direct expand/panel hooks remain functional', (
     });
 });
 
-test('highlight CSS never changes geometry, keeps rotations and uses only a small arrow glow', () => {
-    const styles = css.slice(css.indexOf('/* ── Layer coverage highlight'));
-    const rowRules = [...styles.matchAll(/\.layer-visible-highlight\s*\{([^}]+)\}/g)].map(match => match[1]);
-    assert.equal(rowRules.length, 2);
-    rowRules.forEach(rule => {
-        assert(!/(?:^|[;\n])\s*(?:border|border-width|border-left|padding|margin|width|height)\s*:/m.test(rule), 'no layout-affecting declarations');
-    });
-    assert.match(styles, /outline:\s*1px solid rgba\(57,255,20,0\.85\)/);
-    assert.match(styles, /outline-offset:\s*-1px/);
-    assert.match(styles, /box-shadow:\s*-2px 0 0 #39ff14/);
-    const arrowRule = styles.match(/\.layer-group-arrow-highlight\s*\{([^}]+)\}/)[1];
-    assert.equal((arrowRule.match(/drop-shadow\(/g) || []).length, 1);
-    assert.match(arrowRule, /drop-shadow\(0 0 3px rgba\(57,255,20,0\.6\)\)/);
-    assert.match(styles, /transition: transform 0\.25s ease, color 0\.25s ease, filter 0\.25s ease !important/);
-    assert.match(styles, /prefers-reduced-motion: reduce/);
-    assert.match(styles, /outline: 1px solid transparent/, 'outline can fade out without losing its solid style');
-    assert.match(styles, /#transpPanel \.layer-visible-highlight:focus-visible\s*\{[^}]*outline: 2px solid rgba\(184,216,240,0\.75\) !important/,
-        'coverage must not hide the existing keyboard focus indicator');
+test('viewport filtering hides unavailable rows, removes decorative layer icons and never uses green highlights', () => {
+    assert.match(css, /#transpPanel\.viewport-filter-active \.viewport-layer-unavailable\s*\{\s*display: none !important/);
+    assert.doesNotMatch(css, /\.layer-visible-highlight\s*\{/);
+    assert.doesNotMatch(css, /\.layer-group-arrow-highlight\s*\{/);
+    assert.match(css, /#transpPanel \.transp-layer-label > span:first-child > svg[\s\S]*?display: none !important/);
+    assert.match(css, /babel-scroll-icon/);
+    assert.match(source, /viewport-layer-unavailable/);
+    assert.match(source, /mapBounds, def\.bounds/);
 });
 
 test('PWA asset URLs are versioned together and pre-cached under a refreshed cache name', () => {
