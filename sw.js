@@ -674,7 +674,15 @@
 //   css/styles.css, js/asig-albania-layers.js, js/asig-albania-layers.config.js,
 //   js/map-app.js, js/layer-registry.js and js/wms-health.js.
 //   See ALBANIA_ASIG_LAYERS.md.
-const CACHE_NAME = 'detectlab-v250-albania-country-group';
+// v251: the Albania-only group is now self-enforcing. js/asig-albania-layers.js
+//   removes any pre-group mount (#asigHistoricalLayers / #asigSatelliteLayers /
+//   #asigLidarLayers / #asigHeritageLayers) and any Albanian row that is still
+//   sitting outside #albaniaSubLayers before it renders the nine rows again.
+//   That repairs an installed PWA still running the older shell, whose rows
+//   were visible under Romania's satellite/heritage sections and under the
+//   LiDAR group that hosts Denmark's DHM. Re-tags the ASIG config/module so a
+//   cached copy cannot keep the old placement alive. See ALBANIA_ASIG_LAYERS.md.
+const CACHE_NAME = 'detectlab-v251-albania-only';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -715,6 +723,8 @@ const PRECACHE_URLS = [
   'js/asig-albania-layers.js?v=20261017-albania-asig',
   'js/asig-albania-layers.config.js?v=20261021-albania-country-group',
   'js/asig-albania-layers.js?v=20261021-albania-country-group',
+  'js/asig-albania-layers.config.js?v=20261021-albania-only',
+  'js/asig-albania-layers.js?v=20261021-albania-only',
   'js/layer-registry.js?v=20261017-albania-asig',
   'js/translations.js?v=20261017-albania-asig',
   'js/wms-health.js?v=20261017-albania-asig',

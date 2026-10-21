@@ -19,7 +19,9 @@
  *   the Leaflet pane/z-order and the small caption inside the group; it no
  *   longer decides where the row is mounted. The group and every row are
  *   hidden unless Albania (ISO2 `AL`) is the selected country — see
- *   `country` below.
+ *   `country` below. `js/asig-albania-layers.js` also sweeps any surviving
+ *   pre-group mount or stray Albanian row on every panel build, so the group
+ *   stays the single place these layers exist.
  *
  * Source: geoportal.asig.gov.al — Autoriteti Shtetëror për Informacionin
  * Gjeohapësinor (ASIG, the Albanian State Authority for Geospatial
@@ -77,7 +79,7 @@
     var ATTRIBUTION = 'Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)';
 
     var CONFIG = {
-        version: '20261021-albania-country-group',
+        version: '20261021-albania-only',
         provider: 'ASIG — Autoriteti Shtetëror për Informacionin Gjeohapësinor',
         licence: 'ASIG terms of use (no explicit licence in the capabilities — verify redistribution terms)',
 

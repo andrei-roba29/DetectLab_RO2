@@ -32,6 +32,12 @@ layers** and keeps the selection visible on the map:
     Romanian Historical Maps / Satellite / Heritage Sites rows or in the LiDAR
     group that hosts Denmark's DHM; the module removes their tile layers from the
     map (keeping the user's switch state) while another country is on screen.
+    On every panel build it also **sweeps** any surviving pre-group mount
+    (`asigHistoricalLayers` / `asigSatelliteLayers` / `asigLidarLayers` /
+    `asigHeritageLayers`) and any row carrying `data-albania-row` that is not
+    inside `#albaniaSubLayers`, so a stale app shell cannot keep Albanian rows
+    scattered under another country's section (see `sweepLegacyRows()` in
+    `js/asig-albania-layers.js`).
   - **Premium sheets** list the modern countries whose territory the sheet
     genuinely shows (e.g. Bucovina → `RO, UA`; Banat → `RO, HU, RS`; the
     Moldavia sheets → `RO, MD`).
@@ -81,7 +87,10 @@ layers** and keeps the selection visible on the map:
 - `js/asig-albania-layers.js` / `js/asig-albania-layers.config.js` — the
   Albania-only group: `filterForCountry(iso)` shows `#albaniaRow` only for `AL`,
   marks the group and every row `country-layer-unavailable` otherwise, and parks
-  the tile layers. `js/map-app.js` calls it on selection and on exit;
+  the tile layers. `buildPanel()` sweeps the old per-section mounts and any
+  stray `data-albania-row` node before re-rendering the nine rows, so the only
+  Albanian rows in the panel are the ones inside `#albaniaSubLayers`.
+  `js/map-app.js` calls it on selection and on exit;
   `js/layer-registry.js` mirrors the rows with `countries: ['AL']`.
 - `js/map-app.js` — `LAYER_COUNTRIES` (per-row ISO attribution, Romanian
   county LiDAR keys added programmatically), `SHARED_PREMIUM_CATALOG_KEYS` /

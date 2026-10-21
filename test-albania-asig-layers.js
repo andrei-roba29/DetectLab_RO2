@@ -90,14 +90,20 @@ check(/#albaniaRow\.albania-out-of-country\s*\{[\s\S]*?display:\s*none\s*!import
 const mapApp = read('js/map-app.js');
 check(/filterForCountry\(iso\)/.test(mapApp) && /AsigAlbaniaLayers[\s\S]{0,200}?filterForCountry\(null\)/.test(mapApp),
     'the country layer filter drives the Albanian gate on selection and on exit');
-check(/asig-albania-layers\.config\.js\?v=20261021-albania-country-group/.test(html), 'updated config asset tag is in index');
-check(/detectlab-v250-albania-country-group/.test(read('sw.js')), 'service-worker cache moves forward to v250');
+check(/asig-albania-layers\.config\.js\?v=20261021-albania-only/.test(html), 'updated config asset tag is in index');
+check(/asig-albania-layers\.js\?v=20261021-albania-only/.test(html), 'updated ASIG module tag is in index');
+check(/detectlab-v251-albania-only/.test(read('sw.js')), 'service-worker cache moves forward to v251');
+check(read('sw.js').includes("'js/asig-albania-layers.js?v=20261021-albania-only'") &&
+    read('sw.js').includes("'js/asig-albania-layers.config.js?v=20261021-albania-only'"),
+    'service-worker precaches the re-tagged ASIG module and config');
 
 // Tiny DOM/Leaflet harness exercises config-driven rendering, the country gate and tile errors.
 class Element {
     constructor(tag) { this.tagName = tag.toUpperCase(); this.children = []; this.attributes = {}; this.style = {}; this.listeners = {}; this.className = ''; this.textContent = ''; this.value = ''; this.checked = false; this.naturalWidth = 0; this.naturalHeight = 0; this.classes = new Set(); this.classList = { toggle: (name, on) => { on ? this.classes.add(name) : this.classes.delete(name); }, add: (name) => { this.classes.add(name); }, remove: (name) => { this.classes.delete(name); }, contains: (name) => this.classes.has(name) }; }
     setAttribute(k, v) { this.attributes[k] = String(v); if (k === 'id') this.id = String(v); }
     appendChild(child) { this.children.push(child); child.parentNode = this; return child; }
+    removeChild(child) { const i = this.children.indexOf(child); if (i >= 0) { this.children.splice(i, 1); child.parentNode = null; } return child; }
+    contains(node) { if (node === this) return true; return this.children.some((child) => child.contains(node)); }
     addEventListener(type, cb) { (this.listeners[type] ||= []).push(cb); }
     fire(type) { (this.listeners[type] || []).forEach((cb) => cb({ target: this, preventDefault() {}, stopPropagation() {} })); }
     set innerHTML(value) { if (value === '') this.children = []; }
@@ -110,11 +116,47 @@ const elements = {
     albaniaExpandBtn: new Element('button'),
     albaniaExpandIcon: new Element('svg')
 };
+/* A stale app shell: the pre-group mounts are still inside Romania's
+ * satellite and Heritage Sites sections, plus one Albanian row that ended up
+ * in the Romanian satellite section without a mount. */
+const staleSection = new Element('div');
+staleSection.id = 'asigSatelliteLayers';
+const staleHeritage = new Element('div');
+staleHeritage.id = 'asigHeritageLayers';
+const staleHeritageRow = new Element('div');
+staleHeritageRow.setAttribute('data-albania-row', 'heritage');
+staleHeritage.appendChild(staleHeritageRow);
+const romanianSatellite = new Element('div');
+romanianSatellite.id = 'romanianSatelliteSection';
+const romanianHeritage = new Element('div');
+romanianHeritage.id = 'romanianHeritageSection';
+romanianSatellite.appendChild(staleSection);
+romanianHeritage.appendChild(new Element('div'));      /* the Romanian heritage row */
+const strayRow = new Element('div');
+strayRow.setAttribute('data-albania-row', 'ortho1999');
+romanianSatellite.appendChild(strayRow);
+elements.asigSatelliteLayers = staleSection;
+elements.asigHeritageLayers = staleHeritage;
+elements.romanianSatelliteSection = romanianSatellite;
+elements.romanianHeritageSection = romanianHeritage;
 const document = {
     readyState: 'loading', documentElement: { getAttribute: () => 'en' }, listeners: {},
     createElement: (tag) => new Element(tag),
     getElementById: (id) => elements[id] || null,
-    addEventListener(type, cb) { (this.listeners[type] ||= []).push(cb); }
+    addEventListener(type, cb) { (this.listeners[type] ||= []).push(cb); },
+    querySelectorAll(selector) {
+        if (selector !== '[data-albania-row]') return [];
+        const found = [];
+        const seen = new Set();
+        const walk = (node) => (node.children || []).forEach((child) => {
+            if (seen.has(child)) return;
+            seen.add(child);
+            if (child.attributes['data-albania-row'] !== undefined) found.push(child);
+            walk(child);
+        });
+        Object.keys(elements).forEach((key) => walk(elements[key]));
+        return found;
+    }
 };
 function Layer() {}
 Layer.prototype.initialize = function (_url, options) { this.options = Object.assign({}, this.options || {}, options || {}); };
@@ -143,6 +185,16 @@ const API = sandbox.AsigAlbaniaLayers;
 API.init();
 assert.strictEqual(API.layers.length, 9);
 const mount = elements.albaniaSubLayers;
+/* Placement sweep: a stale shell still carries the old per-country mounts. */
+check(JSON.stringify(API.LEGACY_MOUNT_IDS) === JSON.stringify(['asigHistoricalLayers', 'asigSatelliteLayers', 'asigLidarLayers', 'asigHeritageLayers']),
+    'the module names every pre-group mount');
+check(API.state.swept >= 2, 'the placement sweep removes the legacy mounts at startup');
+check(!elements.romanianSatelliteSection.children.includes(elements.asigSatelliteLayers),
+    'the old satellite mount no longer sits between Romania\'s satellite periods');
+check(!elements.romanianHeritageSection.children.includes(elements.asigHeritageLayers),
+    'the old heritage mount no longer sits under Romania\'s Heritage Sites');
+check(!elements.romanianSatelliteSection.children.includes(strayRow),
+    'an Albanian row found inside another country\'s section is removed');
 const captions = mount.children.filter((child) => child.className === 'albania-layer-section');
 const rendered = mount.children.filter((child) => child.className === 'albania-layer-row');
 assert.strictEqual(rendered.length, 9, 'renderer generates nine rows from config, all in the one Albania group');
@@ -212,5 +264,15 @@ const failedTile = layer.createTile({ x: 1, y: 2, z: 3 }, (err) => { layerTileEr
 let layerTileError = false;
 failedTile.naturalWidth = 0; failedTile.naturalHeight = 0; failedTile.onload();
 check(layerTileError, 'HTTP 200 XML/HTML or non-image decode is surfaced as a tile error');
+
+/* A row written into another section after the first render is swept on the
+ * next rebuild as well, and the group still holds exactly the nine rows. */
+const lateStray = new Element('div');
+lateStray.setAttribute('data-albania-row', 'dsm');
+elements.romanianSatelliteSection.appendChild(lateStray);
+API.refreshTexts();
+check(!elements.romanianSatelliteSection.children.includes(lateStray), 'a late Albanian row outside the group is swept on the next rebuild');
+check(mount.children.filter((child) => child.className === 'albania-layer-row').length === 9,
+    'the rebuild keeps exactly the nine Albanian rows inside the one group');
 
 console.log(`[ASIG] ${checks + 18} checks passed (offline only; no production request made).`);

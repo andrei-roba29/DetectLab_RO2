@@ -6,6 +6,11 @@
  * it — is hidden unless Albania (ISO2 AL) is the selected country, and the
  * tile layers are taken off the map while another country (or the global
  * view) is active.
+ *
+ * Placement is enforced at runtime: buildPanel() removes the four pre-group
+ * mounts and any Albanian row that is still outside the group before it
+ * renders the nine rows again (sweepLegacyRows), so a stale installed shell
+ * cannot leave Albanian layers scattered under another country's section.
  */
 (function (window, document) {
     'use strict';
@@ -21,6 +26,15 @@
     var GROUP_TOGGLE_ID = 'albaniaToggle';
     var EXPAND_BTN_ID = 'albaniaExpandBtn';
     var EXPAND_ICON_ID = 'albaniaExpandIcon';
+    /* Mounts used before the single Albania group existed: the 1:50k map in
+     * the free Historical Maps section (#asigHistoricalLayers), the two
+     * orthophotos between Romania's satellite periods (#asigSatelliteLayers),
+     * the two hillshades in the LiDAR group that hosts Denmark's DHM
+     * (#asigLidarLayers) and the four protected-site rows under Romania's
+     * Heritage Sites (#asigHeritageLayers). A stale app shell (an installed
+     * PWA still running an older index.html) can carry them; they are removed
+     * so no Albanian row can ever sit inside another country's section. */
+    var LEGACY_MOUNT_IDS = ['asigHistoricalLayers', 'asigSatelliteLayers', 'asigLidarLayers', 'asigHeritageLayers'];
     var COUNTRY = String(CONFIG.country || 'AL').toUpperCase();
     /* The row is hidden for every other country — including "no country" —
      * with a plain class that does not depend on the panel's filter state
@@ -36,9 +50,10 @@
     var runtime = {
         ready: false, map: null, panes: false, built: {}, active: {}, opacity: {}, rows: {}, notices: {},
         /* Country gating: `inCountry` mirrors the last filter call, `suppressed`
-         * says the tile layers are currently off the map because of it, and
-         * `expanded` is the accordion state of the group. */
-        inCountry: false, suppressed: false, expanded: true
+         * says the tile layers are currently off the map because of it,
+         * `expanded` is the accordion state of the group and `swept` is the
+         * number of stray Albanian rows the placement sweep removed. */
+        inCountry: false, suppressed: false, expanded: true, swept: 0
     };
     var STRINGS = {
         en: { opacity: 'Opacity', go: 'Tirana', unavailable: 'the source is not answering' },
@@ -259,12 +274,49 @@
         runtime.rows[def.id] = { row: row, input: input, slider: slider, pct: pct, status: status, go: go };
         return row;
     }
+    /* ── placement sweep ────────────────────────────────────────────────────
+     * Every Albanian row must live inside #albaniaSubLayers: that is the one
+     * container the country gate hides, so a row mounted anywhere else would
+     * stay visible for Romania, Denmark and every other country — exactly the
+     * scattered layout this module replaced. The current markup ships the
+     * rows in the group, but an installed PWA can keep running an older shell
+     * whose mounts above are still present. They are removed (the nine rows
+     * are re-created from CONFIG right after), together with any Albanian row
+     * that somehow ended up outside the group. Returns the number of stale
+     * nodes removed. */
+    function sweepLegacyRows(mount) {
+        var removed = 0;
+        LEGACY_MOUNT_IDS.forEach(function (id) {
+            var node = document.getElementById(id);
+            if (!node || node === mount) return;
+            if (node.parentNode && node.parentNode.removeChild) node.parentNode.removeChild(node);
+            else if (node.innerHTML !== undefined) node.innerHTML = '';
+            removed += 1;
+        });
+        if (mount && typeof document.querySelectorAll === 'function') {
+            var strays = document.querySelectorAll('[data-albania-row]');
+            Array.prototype.forEach.call(strays, function (row) {
+                if (row === mount) return;
+                if (typeof mount.contains === 'function' && mount.contains(row)) return;
+                if (row.parentNode && row.parentNode.removeChild) row.parentNode.removeChild(row);
+                removed += 1;
+            });
+        }
+        runtime.swept = removed;
+        /* Informational, not a layer failure: it must not inflate the
+         * one-warning-per-layer console contract. */
+        if (removed && window.console && window.console.info) {
+            window.console.info('[ASIG] removed ' + removed + ' Albanian row(s) mounted outside the Albania group');
+        }
+        return removed;
+    }
     /* The nine rows live in ONE container inside the Albania group row, in
      * draw order, with a small caption whenever the theme changes. */
     function buildPanel() {
         runtime.rows = {};
         var mount = document.getElementById(MOUNT_ID);
         if (mount) {
+            sweepLegacyRows(mount);
             mount.innerHTML = '';
             var lastSection = null;
             CONFIG.drawOrder().forEach(function (def) {
@@ -490,6 +542,7 @@
     var API = {
         CONFIG: CONFIG, layers: LAYERS, state: runtime, Layer: AsigWmsLayer, TEXT: STRINGS,
         GROUP_ROW_ID: GROUP_ROW_ID, MOUNT_ID: MOUNT_ID, COUNTRY: COUNTRY,
+        LEGACY_MOUNT_IDS: LEGACY_MOUNT_IDS, sweepLegacyRows: sweepLegacyRows,
         tileUrl: tileUrl, init: start, toggle: toggle, setOpacity: setOpacity,
         isActive: function (id) { return !!runtime.active[id]; },
         filterForCountry: filterForCountry, refreshTexts: refreshTexts,
