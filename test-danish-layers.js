@@ -64,7 +64,15 @@ const TOKEN = 'test-token-not-a-credential';
     assert.strictEqual(CONFIG.byId('witx_fundogfortidsminder').enabled, false);
     assert.strictEqual(CONFIG.byId('witx_fundogfortidsminder_areal').layers, 'witx:FundOgFortidsminderAreal');
     assert.strictEqual(CONFIG.byId('witx_fundogfortidsminder').layers, 'witx:FundOgFortidsminder');
-    ok('existing Danish layers retained; three LiDAR, historic map, summer and spring-year layers added; witx disabled');
+    assert.deepStrictEqual(CONFIG.panelGroups.map((group) => [group.id, group.title.en, group.layers]), [
+        ['heritage', 'Heritage', ['fortidsminder_punkt_ikkefredet', 'fortidsminder_punkt_fredet']],
+        ['historical', 'Historical maps', ['topo4cm_1980_2001', 'topo4cm_1953_1976', 'hist_lave', 'hist_hoeje', 'hist_preussen']],
+        ['orthophoto', 'Ortophoto', ['orto_sommer_2008', 'orto_sommer_2005', 'orto_sommer_2002', 'orto_sommer_1999']]
+    ], 'the requested free Denmark groups and sublayer order are explicit in the catalogue');
+    CONFIG.panelGroups.forEach((group) => group.layers.forEach((id) => {
+        assert.strictEqual(CONFIG.byId(id).enabled, true, id + ' is available in the free Denmark catalogue');
+    }));
+    ok('existing Danish layers retained; requested free Heritage, Historical maps and Ortophoto groups are enabled');
 
     const FIELDS = ['id', 'title', 'group', 'type', 'url', 'layers', 'crs', 'format', 'minZoom', 'maxZoom',
         'attribution', 'opacity', 'defaultOn', 'enabled', 'requiresCredentials', 'auth', 'provider', 'licence', 'bounds'];
@@ -622,13 +630,23 @@ async function testMapModule() {
         'the row reports state (zoom hint or feature count)');
     ok('the heritage overlay is a styled GeoJSON group with its own status line');
 
-    /* Country filter: visible in Denmark only. */
+    /* Country filter: visible in Denmark only. The requested free groups hide
+     * with the Danish parent outside DK and all their subrows return for DK. */
+    const requestedPanelIds = CONFIG.panelGroups.reduce((ids, group) => ids.concat(group.layers), []);
     API.filterForCountry('FR');
     assert.strictEqual(dom.byId['danishRow'].classList.contains('country-layer-unavailable'), true);
     assert.strictEqual(dom.byId['danishRow_dtk25'].classList.contains('country-layer-unavailable'), true);
+    requestedPanelIds.forEach((id) => {
+        assert.strictEqual(dom.byId['danishRow_' + id].classList.contains('country-layer-unavailable'), true,
+            id + ' is hidden outside Denmark');
+    });
     API.filterForCountry('DK');
     assert.strictEqual(dom.byId['danishRow'].classList.contains('country-layer-unavailable'), false);
-    ok('the country filter keeps the Danish group for Denmark and hides it elsewhere');
+    requestedPanelIds.forEach((id) => {
+        assert.strictEqual(dom.byId['danishRow_' + id].classList.contains('country-layer-unavailable'), false,
+            id + ' is available when Denmark is selected');
+    });
+    ok('the country filter keeps all requested free sublayers for Denmark and hides them elsewhere');
 
     /* The basemap control mirror. */
     const controlButtons = dom.byId['arcgisBasemapCtrl'].descendants
@@ -658,7 +676,10 @@ function testWiring() {
     const translations = read('js/translations.js');
     const mapApp = read('js/map-app.js');
 
-    assert.ok(html.indexOf('id="danishRow"') !== -1, 'the panel has the Danish group row');
+    const danishGroupMarkup = html.match(/<div\b[^>]*\bid="danishRow"[^>]*>/);
+    assert.ok(danishGroupMarkup, 'the panel has the Danish group row');
+    assert.match(danishGroupMarkup[0], /\bdata-category="free"/,
+        'the Denmark group appears in the Gratis / Free tab, not an unrecognized category');
     assert.ok(html.indexOf('id="danishSubLayers"') !== -1, '…and the container the rows are built into');
     assert.ok(html.indexOf('id="danishToggle"') !== -1, '…and the group switch');
     assert.ok(html.indexOf('onclick="toggleDanishSubLayers()"') !== -1, '…and the collapse button');

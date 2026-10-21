@@ -2566,11 +2566,11 @@
                     <!-- Danmark / Denmark — the Danish layers. Every entry (title in
                          DA+EN, service, LAYERS, CRS, zoom limits, attribution,
                          credentials, licence) lives in js/danish-layers.config.js;
-                         js/danish-layers.js builds these rows, the Leaflet layers
-                         and the extra buttons of the basemap control from it, so a
-                         new Danish layer never touches map code. Sources, licences
-                         and the per-layer state: DATA_SOURCES.md + DANISH_LAYERS.md. -->
-                    <div class="transp-layer-row" data-category="danish" id="danishRow">
+                         js/danish-layers.js builds these rows and their subgroups
+                         from it. This group belongs to the Gratis / Free tab and is
+                         filtered to Denmark in a country-scoped view. Sources,
+                         licences and per-layer state: DATA_SOURCES.md + DANISH_LAYERS.md. -->
+                    <div class="transp-layer-row" data-category="free" id="danishRow">
                         <div class="transp-layer-label" style="margin-bottom:6px">
                             <span style="display:flex;align-items:center;gap:7px;min-width:0">
                                 <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style="flex-shrink:0">
