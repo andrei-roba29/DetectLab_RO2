@@ -8142,61 +8142,17 @@
     margin-top: 0.45em;
 }
 
-/* ── Layer coverage highlight ──
-   Partial viewport intersection = green. Group rows keep their normal style;
-   only the expand arrow and each intersecting leaf row are highlighted.
-   Keep transitions on the base elements so fading out is smooth too. */
-#transpPanel .transp-layer-row,
-#histSubLayers > div,
-#lidarSubLayers > div,
-#romanSubLayers > div,
-#histPremiumSubLayers > div {
-    outline: 1px solid transparent;
-    outline-offset: -1px;
-    transition: background-color 0.25s ease, border-color 0.25s ease,
-        border-radius 0.25s ease, outline-color 0.25s ease,
-        box-shadow 0.25s ease, transform 0.25s ease;
+/* Viewport coverage filter: rows outside the visible map area are temporarily
+   removed from the panel and return as soon as their coverage enters the view. */
+#transpPanel.viewport-filter-active .viewport-layer-unavailable {
+    display: none !important;
 }
 
-.layer-visible-highlight {
-    /* An inward outline stays visible inside clipped/blurred PWA panels.
-       No border-width or padding changes: sliders and text never move. */
-    outline: 1px solid rgba(57,255,20,0.85) !important;
-    outline-offset: -1px;
-    border-radius: 6px !important;
-    box-shadow: 0 0 0 1px rgba(57,255,20,0.15),
-        0 0 8px rgba(57,255,20,0.35) !important;
-    background-color: rgba(57,255,20,0.04) !important;
-}
-
-/* A fine outline plus a left accent in the containers' existing 6px gutter.
-   The shadow draws the 2px accent without adding a layout-affecting border. */
-#histSubLayers .layer-visible-highlight,
-#lidarSubLayers .layer-visible-highlight,
-#romanSubLayers .layer-visible-highlight,
-#histPremiumSubLayers .layer-visible-highlight {
-    outline-color: rgba(57,255,20,0.15) !important;
-    box-shadow: -2px 0 0 #39ff14 !important;
-}
-
-/* Coverage is not keyboard focus: keep the existing, distinct focus ring.
-   The green shadow/accent remains visible underneath it. */
-#transpPanel .layer-visible-highlight:focus-visible {
-    outline: 2px solid rgba(184,216,240,0.75) !important;
-    outline-offset: 3px;
-}
-
-/* Preserve the inline expand/collapse rotation as well as the colour fade. */
-#histExpandIcon,
-#lidarExpandIcon,
-#romanExpandIcon,
-#histPremiumExpandIcon {
-    transition: transform 0.25s ease, color 0.25s ease, filter 0.25s ease !important;
-}
-
-.layer-group-arrow-highlight {
-    color: #39ff14 !important;
-    filter: drop-shadow(0 0 3px rgba(57,255,20,0.6)) !important;
+/* The small leading SVGs/emoji are decorative layer markers, not controls.
+   Keep functional expand/collapse arrows, info buttons and toggle controls. */
+#transpPanel .transp-layer-label > span:first-child > svg,
+#transpPanel .transp-layer-label > span:first-child .babel-scroll-icon {
+    display: none !important;
 }
 
 /* ── Country coverage filter ──
