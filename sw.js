@@ -696,7 +696,21 @@
 //   (--layer-dock-clearance, --country-exit-lift) no longer move the switch.
 //   Re-tags css/map3d-terrain.css and js/map3d-terrain.js.
 //   See MAP3D_SWITCH_BASE_LAYER_COLUMN.md.
-const CACHE_NAME = 'detectlab-v254-3d-switch-baselayer-column';
+// v255: the Romanian 1 m / 2 m LiDAR hillshades (“Romania 1m/pixel agregare”,
+//   “Romania 2-5m/pixel”) looked semitransparent in 3D no matter what the
+//   opacity slider said. js/map3d-mirror.js used to repaint their white-backed
+//   tiles as “white with alpha = 1 − luminance” — an emulation of the
+//   stylesheet's dead `mix-blend-mode: screen` declaration. That repaint makes
+//   the tiles translucent by construction and lets the basemap bleed through
+//   (over the dark backdrop of a basemap swap the same tiles read as solid
+//   invert(tile), which is the “full opacity for a millisecond” the user saw).
+//   2D really draws filter:invert(1) with normal blending (the seam-fix
+//   `#detectlab-map img.leaflet-tile { mix-blend-mode: normal !important }`
+//   pins it), so the retint is now exactly that filter — RGB inverted, alpha
+//   preserved — and css/styles.css says `mix-blend-mode: normal` explicitly.
+//   3D now shows the same pixels as 2D, solid at slider 100 % over every
+//   basemap. Re-tags css/styles.css and js/map3d-mirror.js.
+const CACHE_NAME = 'detectlab-v255-lidar-invert-retint';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -753,6 +767,7 @@ const PRECACHE_URLS = [
   'js/map-app.js?v=20261017-finland',
   'js/map-app.js?v=20261017-albania-asig',
   'css/styles.css?v=20261019-danish-free-groups',
+  'css/styles.css?v=20261021-lidar-invert-retint',
   'css/styles.css?v=20261021-viewport-layer-filter',
   'js/danish-layers.js?v=20261019-danish-free-groups',
   'js/layer-registry.js?v=20261014-wms-audit',
@@ -763,6 +778,7 @@ const PRECACHE_URLS = [
   'js/hist-shift.js?v=20261014-hist-shift',
   'css/hist-shift.css?v=20261014-hist-shift',
   'js/map3d-mirror.js?v=20261017-archeo-3d-projection',
+  'js/map3d-mirror.js?v=20261021-lidar-invert-retint',
   'js/map3d-mirror.js?v=20261021-lidar-canvas-tiles',
   'js/map3d-mirror.js?v=20261020-3d-analysis-points',
   'js/map3d-mirror.js?v=20261014-lidar-3d-focus',

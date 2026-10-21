@@ -113,35 +113,36 @@ const restyled = MIRROR.collect(map);
 console.log('[probe] opacity slider : ' + (Date.now() - t) + ' ms, line-opacity ' +
     (restyled.items[0] && restyled.items[0].paints.line['line-opacity']));
 
-/* ── 2. the blend: CSS screen(invert(tile)) vs the repainted pixels ──────── */
+/* ── 2. the repaint: CSS filter:invert(1) vs the repainted pixels ────────── */
 const SIZE = 256;
 const source = new Uint8ClampedArray(SIZE * SIZE * 4);
 for (let i = 0; i < source.length; i += 4) {
     const c = (i / 4) % 256;                     /* one grayscale ramp */
     source[i] = c; source[i + 1] = c; source[i + 2] = c; source[i + 3] = 255;
 }
-const blended = MIRROR.blendPixels({ data: source.slice(), width: SIZE, height: SIZE }, 'invert-screen');
+const blended = MIRROR.blendPixels({ data: source.slice(), width: SIZE, height: SIZE }, 'invert');
 let worst = 0;
 for (let i = 0; i < blended.data.length; i += 4) {
     const c = ((i / 4) % 256) / 255;
-    const base = 0.35;                            /* any base at all, not just black */
-    const css = 1 - (1 - base) * c;               /* screen(base, invert(tile))      */
-    const at = blended.data[i + 3] / 255;         /* white over base with that alpha */
-    worst = Math.max(worst, Math.abs(css - (at + (1 - at) * base)));
+    const css = 1 - c;                           /* filter: invert(1) on the channel   */
+    worst = Math.max(worst, Math.abs(css - blended.data[i] / 255));
+    if (blended.data[i + 3] !== 255) worst = 1;  /* the filter must not touch alpha    */
 }
-console.log('[probe] blend vs CSS  : worst channel error ' + worst.toFixed(4) +
-    ' (0 = pixel-exact), corner alpha ' + blended.data[3] + '…' + blended.data[blended.data.length - 1]);
-const transparent = MIRROR.blendPixels({ data: new Uint8ClampedArray([10, 10, 10, 0]) }, 'invert-screen');
-console.log('[probe] transparent px: alpha ' + transparent.data[3] + ' (stays invisible)');
+console.log('[probe] invert vs CSS  : worst channel error ' + worst.toFixed(4) +
+    ' (0 = pixel-exact), corner rgb ' + blended.data[0] + '…' + blended.data[blended.data.length - 4] +
+    ', alphas all ' + blended.data[3] + '/' + blended.data[blended.data.length - 1]);
+const transparent = MIRROR.blendPixels({ data: new Uint8ClampedArray([10, 10, 10, 0]) }, 'invert');
+console.log('[probe] transparent px: alpha ' + transparent.data[3] + ' (stays invisible), rgb ' +
+    transparent.data[0] + ' (inverted like the rest)');
 
 /* ── 3. the full repaint chain the dl2d:// protocol uses ─────────────────── */
-MIRROR.retintTile(source.buffer, SIZE, 'invert-screen').then(function (bytes) {
+MIRROR.retintTile(source.buffer, SIZE, 'invert').then(function (bytes) {
     const out = new Uint8ClampedArray(bytes);
     console.log('[probe] retintTile    : ' + bytes.byteLength + ' bytes, rgb ' +
         out[0] + ',' + out[1] + ',' + out[2] + ', alpha ' + out[3]);
     return MIRROR.retintTile(source.buffer, SIZE, null);
 }).then(function (bytes) {
-    console.log('[probe] no blend      : ' + bytes.byteLength + ' bytes untouched');
+    console.log('[probe] no filter     : ' + bytes.byteLength + ' bytes untouched');
 }).catch(function (error) {
     console.error('[probe] FAILED: ' + (error && error.stack || error));
     process.exitCode = 1;

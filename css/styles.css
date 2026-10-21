@@ -401,11 +401,25 @@
         }
         .osm-places-tooltip::before { display: none; }
 
-        /* ── Romania-wide LIDAR: elimina fundalul alb al tile-urilor ArcGIS pe harta satelit ── */
+        /* ── Romania-wide LIDAR: elimina fundalul alb al tile-urilor ArcGIS ──
+           `filter: invert(1)` is the part that renders: the white ArcGIS
+           sheet turns black and the relief lines turn light, and the tile is
+           then drawn OPAQUE, at exactly the opacity slider's value.
+
+           `mix-blend-mode` is `normal` on purpose. The stylesheet used to say
+           `screen` here, but the tile-seam fix further down this sheet — the
+           img.leaflet-tile rule under #detectlab-map that pins
+           mix-blend-mode to normal !important — overrides it, so `screen`
+           never rendered. This declaration now states the look that ships and
+           that js/map3d-mirror.js reproduces in 3D (its 'invert' retint: RGB
+           inverted, alpha kept). Do not change one without the other: a blend
+           mode other than `normal` makes the tiles mix with the basemap (the
+           “semitransparent even at 100 % opacity” look) and 3D would drift
+           from 2D again. */
         .lidar-ro2m-tiles,
         .lidar-ro1m-tiles {
             filter: invert(1);
-            mix-blend-mode: screen;
+            mix-blend-mode: normal;
         }
 
         /* ── Premium Historical Maps Coverage Polygons ── */

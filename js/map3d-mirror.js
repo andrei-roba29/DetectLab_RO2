@@ -95,21 +95,38 @@
     var MAX_BUNDLES_PER_GROUP = 256;   /* merged sources taken from one group */
     var MAX_ITEMS = 400;               /* mirrored items in the whole deck    */
 
-    /* ── CSS-blended rasters ────────────────────────────────────────────────
-       Some 2D layers are only readable because CSS blends them into the base
-       map (css/styles.css):
-           .lidar-ro2m-tiles, .lidar-ro1m-tiles { filter: invert(1); mix-blend-mode: screen; }
-       The ArcGIS hillshades behind them are white-backed, so 2D shows the
-       relief lines glowing over the satellite imagery. MapLibre has no blend
-       modes: mirrored as-is, the same tiles cover the terrain with an opaque
-       white sheet — which is exactly what “the Romanian LiDAR does not load in
-       3D” looked like. The descriptor carries the blend and the pixels are
-       repainted here (blendPixels / retintTile below, driven by the viewer's
-       dl2d:// protocol): white lines with alpha = 1 − luminance, which IS
-       screen(base, invert(pixel)) — pixel for pixel. */
+    /* ── CSS-filtered rasters ───────────────────────────────────────────────
+       The Romanian 1 m / 2 m ArcGIS hillshades arrive white-backed, so 2D
+       strips the sheet with CSS (css/styles.css):
+           .lidar-ro2m-tiles, .lidar-ro1m-tiles { filter: invert(1); mix-blend-mode: normal; }
+       `filter: invert(1)` is the part that renders: it turns the white sheet
+       black and the relief lines light, and the tile is then drawn OPAQUE, at
+       exactly the opacity slider's value. (The stylesheet used to declare
+       `mix-blend-mode: screen` here; the tile-seam fix's
+       `#detectlab-map img.leaflet-tile { mix-blend-mode: normal !important }`
+       overrides it, so what 2D actually shows — and what the user expects —
+       is the inverted tile drawn normally.)
+
+       MapLibre has no CSS filters, so the mirror carries the transform and the
+       viewer repaints every such tile before handing it over (blendPixels /
+       retintTile below, driven by the dl2d:// protocol): RGB inverted, alpha
+       preserved — the exact pixels the 2D map draws.
+
+       WHY NOT THE OLD “white with alpha = 1 − luminance” REPAINT: that one
+       emulated screen(base, invert(pixel)), which is the stylesheet's dead
+       declaration, not its rendering. It made the tiles *inherently*
+       translucent — at slider 100 % the relief was still a ghostly white veil
+       that mixed with whatever basemap sat under it, so the look depended on
+       how bright the base was (“semitransparent in 3D even at maximum
+       opacity”). During a basemap swap the new base fades in and the backdrop
+       is briefly the dark map background, where the veil renders exactly as
+       invert(tile) — solid white-on-dark relief — and that split-second look
+       is what the user reported as “full opacity, as it is supposed to”. The
+       invert repaint draws that very image over every basemap, at every
+       slider value. */
     var BLEND_BY_CLASS = {
-        'lidar-ro1m-tiles': 'invert-screen',
-        'lidar-ro2m-tiles': 'invert-screen'
+        'lidar-ro1m-tiles': 'invert',
+        'lidar-ro2m-tiles': 'invert'
     };
 
     function blendOf(layer) {
@@ -1116,38 +1133,31 @@
         return canvasToBytes(canvas);
     }
 
-    /* ── CSS blend modes, repainted into the pixels ─────────────────────────
+    /* ── CSS filters, repainted into the pixels ─────────────────────────────
      * css/styles.css paints the Romanian 1 m / 2 m LiDAR hillshades with
-     * `filter: invert(1); mix-blend-mode: screen`. MapLibre has neither blend
-     * modes nor this build's `raster-color`, so a mirrored tile of those layers
-     * arrives as the service sent it: an opaque white sheet that hides the
-     * terrain — the “LiDAR layers never load in 3D” report.
+     * `filter: invert(1)` (drawn normally, at the slider's opacity — see
+     * BLEND_BY_CLASS above). MapLibre has neither CSS filters nor this build's
+     * `raster-color`, so a mirrored tile of those layers arrives as the
+     * service sent it: an opaque white sheet over the terrain — the “LiDAR
+     * layers never load in 3D” report.
      *
-     * Screen is exactly reproducible in the pixels. Drawing the tile with
-     * source alpha `a` and colour `c` over a base `b` gives
-     *     (1 − a)·b + a·[1 − (1 − b)·c]                     (screen of invert)
-     * and painting white with alpha `a·(1 − c)` gives
-     *     (1 − a·(1 − c))·b + a·(1 − c)
-     * which is the same value for every `b`. So repainting the tile as white
-     * with alpha = 1 − luminance reproduces the 2D look over any base, not just
-     * a dark one. Grayscale hillshades — what these services return — come out
-     * pixel-exact; only a colourful tile differs, and only where its own
-     * channels disagree.
+     * The repaint is the filter itself, per pixel: invert the RGB channels,
+     * keep alpha. That is exactly what the 2D map shows — the white ArcGIS
+     * background becomes black (a solid sheet at slider 100 %, a translucent
+     * dark veil below it), and the grey relief lines become the light lines
+     * the user recognises from 2D. Transparent source pixels stay
+     * transparent, so a tile with holes keeps them.
      * ─────────────────────────────────────────────────────────────────────── */
 
-    /** The one blend this code can emulate, applied to RGBA pixels in place. */
+    /** The one filter this code can emulate, applied to RGBA pixels in place. */
     function blendPixels(frame, blend) {
-        if (!frame || blend !== 'invert-screen') return frame;
+        if (!frame || blend !== 'invert') return frame;
         var d = frame.data || frame;
         for (var i = 0; i < d.length; i += 4) {
-            var alpha = d[i + 3];
-            /* Rec. 601 luma: the weights CSS's invert()/screen pair behaves
-             * like on a gray tile, and within a rounding step on any other. */
-            var luma = (d[i] * 77 + d[i + 1] * 150 + d[i + 2] * 29) >> 8;
-            d[i] = 255;
-            d[i + 1] = 255;
-            d[i + 2] = 255;
-            d[i + 3] = ((alpha * (255 - luma)) + 127) / 255 | 0;
+            d[i] = 255 - d[i];
+            d[i + 1] = 255 - d[i + 1];
+            d[i + 2] = 255 - d[i + 2];
+            /* alpha is untouched: filter:invert(1) never changes transparency */
         }
         return frame;
     }
@@ -1209,7 +1219,7 @@
     }
 
     /**
-     * Repaint one tile for a layer whose 2D look comes from a CSS blend mode.
+     * Repaint one tile for a layer whose 2D look comes from a CSS filter.
      * `payload` is what the service sent (ArrayBuffer / typed array), a tile the
      * layer drew (canvas) or an <img>/ImageBitmap. Resolves with PNG bytes.
      */

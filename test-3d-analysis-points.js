@@ -327,7 +327,7 @@ function viewerChecks() {
     /* The mirror ships its own tag since the canvas-tile fix
      * (DENMARK_LIDAR_3D_CANVAS.md); the old tag stays in sw.js for installed
      * shells that are still running the previous index.html. */
-    const MIRROR_TAG = '20261021-lidar-canvas-tiles';
+    const MIRROR_TAG = '20261021-lidar-invert-retint';
     assert.ok(index.includes('js/map3d-mirror.js?v=' + MIRROR_TAG), 'index.html loads the mirror at its canvas-tiles tag');
     assert.ok(sw.includes("'js/map3d-mirror.js?v=" + MIRROR_TAG + "'"), 'sw.js pre-caches the mirror at its canvas-tiles tag');
     assert.ok(sw.includes("'js/map3d-mirror.js?v=" + TAG + "'"), '…and keeps the previous mirror tag for installed shells');

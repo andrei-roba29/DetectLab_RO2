@@ -356,19 +356,33 @@ is always answerable, and never repeats on every poll), and is printed by `.repo
 
 **2. “The Romanian LiDAR layers look like a white sheet / never load in 3D.”** `ro1m`
 (Romania 1m/pixel agregare) and `ro2m` are hillshades whose background is white; the 2D
-map removes it with CSS:
-`filter: invert(1); mix-blend-mode: screen` (`css/styles.css`). MapLibre has no blend
-modes — and the vendored build has no `raster-color` either — so the mirrored tile
-arrived as the service sent it, i.e. an opaque white rectangle over the terrain.
+map strips it with CSS (`css/styles.css`):
+`filter: invert(1)`, drawn **normally** at the opacity slider's value. (The rule used to
+declare `mix-blend-mode: screen`, but the tile-seam fix —
+`#detectlab-map img.leaflet-tile { mix-blend-mode: normal !important }` — overrides it,
+so what 2D renders is the inverted tile composited opaquely: the white sheet becomes
+black, the grey relief lines become light.) MapLibre has no CSS filters — and the
+vendored build has no `raster-color` either — so the mirrored tile arrived as the
+service sent it, i.e. an opaque white rectangle over the terrain.
 
-The mirror now carries the blend (`item.blend === 'invert-screen'`, read from the layer's
+The mirror now carries the transform (`item.blend === 'invert'`, read from the layer's
 own class name) and the viewer repaints every such tile before handing it to MapLibre:
-**white, with alpha = 1 − luminance**. That is not an approximation of a dark base — it
-is the stylesheet's arithmetic for *any* base: screen over a base `b` of an inverted tile
-`1 − c` is `1 − c + c·b`, and white at alpha `(1 − c)` composited over `b` is
-`(1 − c) + c·b`. Grayscale hillshades come out pixel-exact; `tools/probe-3d-blend.js`
-prints the worst channel error over a full ramp (0.0000). Transparent source pixels stay
-transparent, so a tile with holes keeps them.
+**RGB inverted, alpha preserved** — literally `filter: invert(1)` in the pixels, which
+is what the 2D map draws. `tools/probe-3d-blend.js` prints the worst channel error over
+a full ramp (0.0000). Transparent source pixels stay transparent, so a tile with holes
+keeps them.
+
+**2b. “The layers are semitransparent in 3D even at 100 % opacity.”** An earlier
+repaint emulated the stylesheet's dead `screen` declaration instead of its rendering:
+every tile became *white with alpha = 1 − luminance*. That is translucent by
+construction — at slider 100 % the relief was still a ghostly veil mixed into whatever
+basemap sat under it, and its strength depended on how bright that basemap was. During
+a basemap swap the new base fades in and the backdrop is briefly the dark map
+background, where that veil renders exactly as `invert(tile)` — solid white-on-dark
+relief — which is the “for a millisecond the layers show at full opacity, as they are
+supposed to” in the report. The invert repaint paints that very image over **every**
+basemap, and `raster-opacity` now maps 1:1 onto the slider: 100 % is an opaque
+inverted sheet, exactly like 2D.
 
 Repainted tiles are cached (160 tiles, dropped when 3D closes): MapLibre evicts decoded
 tiles, and re-downloading *and* re-encoding a 1 m hillshade tile on every pan back is what
@@ -391,12 +405,12 @@ seconds, which looks exactly like “it loads really slow, sometimes blank, some
 **Still a property of the data, not a bug:** beyond its published zoom (e.g. z16 for the
 Romanian 1 m service) or outside its coverage, a provider answers with a blank or
 all-white tile. The 3D view draws what it was sent at that zoom; only the white *sheet*
-over the whole layer was ours to fix, and that is the blend above.
+over the whole layer was ours to fix, and that is the filter above.
 
 ### 6.4 LiDAR in 3D: one layer, one disc, prepared before the view opens
 
 **4. “Some LiDAR layers still load really slow, or look really bad, or don't load at all
-in 3D — e.g. Romania 1m/pixel agregare, AB.”** The blend and the caching above fix *how* a
+in 3D — e.g. Romania 1m/pixel agregare, AB.”** The retint and the caching above fix *how* a
 LiDAR tile is drawn, but not *how many* of them are asked for. A national LiDAR pyramid is
 not a layer, it is a few hundred thousand heavy tiles, and the user's own sub-layers
 (`ro1m`, `ro2m`, `ab`, `hd`, … in `js/map-app.js`) plus the nine country modules all sit in
@@ -764,7 +778,7 @@ cache).
   country LiDAR layers** (module → `tileUrlAt` → `dl3d://` → proxy) and the
   **91/91-draped** diagnostics. It also covers §6: the sibling merge (25 001 polylines →
   2 bundles, cache, `invalidate()`, opacity change, the per-group and deck budgets with
-  their `capped` reports), the blend descriptor for `lidar-ro1m-tiles`, the pixel maths of
+  their `capped` reports), the filter descriptor for `lidar-ro1m-tiles`, the pixel maths of
   the repaint against the CSS formula, the repaint + cache running end-to-end with the
   layer `map-app.js` really builds, and the idempotent `setData`/`setTiles` calls.
 * `node test-lidar-3d-focus.js` — LiDAR in 3D (§6.4): the wiring (`_dlLidar` tags, the
@@ -797,8 +811,8 @@ cache).
 * `node tools/probe-3d-blend.js` — the same two mechanisms with the **real Leaflet**
   bundle and the numbers that justify the budgets: the `ro1m` descriptor and tile URL,
   a 200 000-polyline featureGroup (10 bundles, 200 000 features, ~1 s for the first pass,
-  ~20 ms for each cached poll pass, 292-character signature), and the blend error against
-  the CSS it replaces.
+  ~20 ms for each cached poll pass, 292-character signature), and the invert error
+  against the CSS filter it replaces.
 * `curl 'http://localhost:4173/api/map3d/tile?layer=lidar.pl-nmt&z=12&x=2266&y=1348'`
   returns the labelled blank tile (`X-Map3D-Upstream: error`) in a sandbox without
   egress; on the live deploy the same call returns the GUGiK relief tile.

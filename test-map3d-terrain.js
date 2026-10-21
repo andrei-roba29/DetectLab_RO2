@@ -79,7 +79,7 @@ const mirrorSource = read('js/map3d-mirror.js');
 const skin = read('css/map3d-terrain.css');
 
 const TAG = '20261019-tile-order';              /* MapLibre itself (coveringTiles patch) */
-const TAG_3D = '20261021-lidar-canvas-tiles';    /* mirror (canvas tiles)          */
+const TAG_3D = '20261021-lidar-invert-retint';    /* mirror (invert retint)           */
 const TAG_VIEWER = '20261021-3d-switch-baselayer-column'; /* viewer (js)                         */
 const TAG_CSS = '20261021-3d-switch-baselayer-column';    /* viewer skin (css)              */
 const TAG_FOCUS = '20261020-lidar-disc-route';  /* LiDAR focus (3D, one disc)     */
@@ -303,13 +303,16 @@ const TAG_REGISTRY = '20261021-albania-country-group'; /* shared registry (WMS a
     assert(collected.signature.indexOf('raster:2d.L77:640:72') === 0,
         'the signature carries kind, order and opacity (so a change triggers a re-sync)');
 
-    /* ── the layers the 2D stylesheet blends, and the Roman-roads group ──── */
+    /* ── the layers the 2D stylesheet filters, and the Roman-roads group ──── */
 
     /* css/styles.css paints the Romanian 1 m / 2 m LiDAR hillshades with
-     * `filter: invert(1); mix-blend-mode: screen`. MapLibre has no blend modes,
-     * so the mirror has to carry the blend and the viewer repaint the tile —
-     * without both, these layers arrive in 3D as an opaque white sheet (the
-     * “Romania 1m/pixel agregare never loads in 3D” report). */
+     * `filter: invert(1)` (drawn normally at the slider's opacity — the
+     * seam-fix `mix-blend-mode: normal !important` pins the blend to normal).
+     * MapLibre has no CSS filters, so the mirror has to carry the filter and
+     * the viewer repaint the tile — without both, these layers arrive in 3D
+     * as an opaque white sheet (the “Romania 1m/pixel agregare never loads in
+     * 3D” report), and with the old screen emulation they arrived as a
+     * translucent veil that no opacity slider could solidify. */
     const ro1m = new TileLayer('https://tiles.arcgis.com/tiles/wCvLzGFkz06gCfBg/arcgis/rest/services/1m/MapServer/tile/{z}/{y}/{x}', {
         name: 'Romania 1m/pixel agregare', className: 'lidar-ro1m-tiles',
         maxNativeZoom: 16, opacity: 0.85, pane: 'pane_lidar'
@@ -321,36 +324,36 @@ const TAG_REGISTRY = '20261021-albania-country-group'; /* shared registry (WMS a
         hasLayer: function () { return true; }
     };
     const roItem = mirror.describe(ro1m, roMap, {});
-    assert(roItem && roItem.kind === 'raster' && roItem.blend === 'invert-screen',
-        'a CSS-blended 2D layer carries its blend into 3D instead of draping a white sheet of tiles');
+    assert(roItem && roItem.kind === 'raster' && roItem.blend === 'invert',
+        'a CSS-filtered 2D layer carries its filter into 3D instead of draping a white sheet of tiles');
     assert(roItem.render === 'url' && roItem.template === 'dl2d://2d.R1/{z}/{x}/{y}',
-        'the blended layer still asks its own 2D layer for every tile URL');
+        'the filtered layer still asks its own 2D layer for every tile URL');
     assert(roItem.maxzoom === 16,
         'the 1 m service is never asked past its native zoom — MapLibre overzooms the z16 tiles instead');
-    assert(mirror.blendOf(new TileLayer('u', { className: 'lidar-ro2m-tiles' })) === 'invert-screen' &&
+    assert(mirror.blendOf(new TileLayer('u', { className: 'lidar-ro2m-tiles' })) === 'invert' &&
            mirror.blendOf(layer) === null,
-        'only the layers the stylesheet blends are repainted; everything else keeps the pixels it was sent');
+        'only the layers the stylesheet filters are repainted; everything else keeps the pixels it was sent');
 
-    /* The repaint is the stylesheet's arithmetic, in the pixels: screen over the
-     * base is white with alpha 1 − luminance. */
+    /* The repaint is the stylesheet's filter, in the pixels: RGB inverted,
+     * alpha preserved — the very image filter:invert(1) draws in 2D, opaque
+     * at slider 100 % and an even dark veil below it (never a basemap-
+     * dependent ghost). */
     const ramp = new Uint8ClampedArray([0, 0, 0, 255, 255, 255, 255, 255, 128, 128, 128, 255, 7, 7, 7, 0]);
-    const blended = mirror.blendPixels({ data: ramp, width: 2, height: 2 }, 'invert-screen');
+    const blended = mirror.blendPixels({ data: ramp, width: 2, height: 2 }, 'invert');
     assert(blended.data[0] === 255 && blended.data[1] === 255 && blended.data[2] === 255 && blended.data[3] === 255,
-        'a black tile pixel becomes opaque white — the hillshade line of the inverted tile');
-    assert(blended.data[7] === 0,
-        'the white ArcGIS background becomes fully transparent: this is the white sheet the 2D CSS filter removes');
-    assert(Math.abs(blended.data[11] - 127) <= 1, 'mid grey becomes half-transparent white');
+        'a black tile pixel becomes opaque white — the relief line of the inverted tile');
+    assert(blended.data[4] === 0 && blended.data[7] === 255,
+        'the white ArcGIS background becomes an opaque black sheet — filter:invert(1) exactly, no alpha tricks');
+    assert(blended.data[8] === 127 && blended.data[11] === 255, 'mid grey inverts in place and stays opaque');
     assert(blended.data[15] === 0, 'a tile pixel that is already transparent stays invisible');
     let worstBlend = 0;
     for (let c = 0; c < 256; c += 1) {
-        const px = mirror.blendPixels({ data: new Uint8ClampedArray([c, c, c, 255]) }, 'invert-screen').data;
-        const base = 0.35;                                   /* any base, not just a dark one */
-        const css = 1 - (1 - base) * (c / 255);              /* screen(base, invert(tile))    */
-        const ours = px[3] / 255 + (1 - px[3] / 255) * base; /* white, alpha 1 − luma         */
-        worstBlend = Math.max(worstBlend, Math.abs(css - ours));
+        const px = mirror.blendPixels({ data: new Uint8ClampedArray([c, c, c, 255]) }, 'invert').data;
+        worstBlend = Math.max(worstBlend, Math.abs((255 - c) - px[0])); /* filter:invert(1), byte-exact */
+        if (px[3] !== 255) worstBlend = 1;    /* the filter must not touch alpha           */
     }
-    assert(worstBlend < 1 / 255,
-        'the repainted tile equals screen(invert(tile)) within a rounding step (worst ' + worstBlend.toFixed(4) + ')');
+    assert(worstBlend === 0,
+        'the repainted tile equals filter:invert(1) pixel for pixel (worst byte error ' + worstBlend + ')');
 
     /* A group of siblings that draw identically becomes ONE 3D source. The
      * Roman roads are ~20 000 polylines in a featureGroup; one source, one
@@ -716,19 +719,20 @@ const TAG_REGISTRY = '20261021-albania-country-group'; /* shared registry (WMS a
     console.log('  ✓ the proxy builds, validates, reprojects and relays exactly as documented');
 
     // ══════════════════════════════════════════════════════════
-    // 6b. The Romanian LiDAR hillshades: blended in 2D, repainted for 3D
+    // 6b. The Romanian LiDAR hillshades: filtered in 2D, repainted for 3D
     // ══════════════════════════════════════════════════════════
     /* The mirror sees the live 2D layer the way map-app.js adds it … */
     const mirrorDeck = viewApi._mirror();
     const ro1mItem = mirrorDeck.items.filter(function (i) { return i.key === '2d.R1'; })[0];
-    assert(ro1mItem && ro1mItem.kind === 'raster' && ro1mItem.blend === 'invert-screen',
-        '“Romania 1m/pixel agregare” reaches the 3D deck as a raster carrying the CSS blend');
+    assert(ro1mItem && ro1mItem.kind === 'raster' && ro1mItem.blend === 'invert',
+        '“Romania 1m/pixel agregare” reaches the 3D deck as a raster carrying the CSS filter');
     assert(ro1mItem.template === 'dl2d://2d.R1/{z}/{x}/{y}' && ro1mItem.opacity === 0.85,
         'its tiles are asked of the 2D layer itself, at the opacity the 2D slider is on');
-    assert(viewApi.status().mirrored.some(function (m) { return m.blend === 'invert-screen'; }),
-        'status() names the emulated blend, so a support report can show it');
+    assert(viewApi.status().mirrored.some(function (m) { return m.blend === 'invert'; }),
+        'status() names the emulated filter, so a support report can show it');
 
-    /* …and the viewer repaints each of its tiles: white, alpha 1 − luminance. */
+    /* …and the viewer repaints each of its tiles: RGB inverted, alpha kept —
+     * the exact pixels of filter:invert(1), opaque at slider 100 %. */
     const SIZE = 256;
     const image = new Uint8ClampedArray(SIZE * SIZE * 4);
     for (let i = 0; i < image.length; i += 4) {
@@ -740,11 +744,11 @@ const TAG_REGISTRY = '20261021-albania-country-group'; /* shared registry (WMS a
     const repainted = new Uint8ClampedArray(await viewApi._blendedTile(viewRo1m, tileUrl, image.buffer));
     assert(repainted.length === image.length, 'the repaint keeps the tile size (a 256² tile is still 256²)');
     assert(repainted[0] === 255 && repainted[1] === 255 && repainted[2] === 255 && repainted[3] === 255,
-        'the darkest pixel of the tile is opaque white');
-    assert(repainted[255 * 4 + 3] === 0,
-        'the white ArcGIS background pixel is fully transparent — the white sheet is gone in 3D too');
-    assert(repainted.some(function (v, i) { return i % 4 === 3 && v > 0 && v < 255; }),
-        'the hillshade itself stays visible, as white lines at partial alpha');
+        'the darkest pixel of the tile is opaque white — the relief line of the inverted tile');
+    assert(repainted[255 * 4] === 0 && repainted[255 * 4 + 3] === 255,
+        'the white ArcGIS background pixel is opaque black — the sheet is inverted in 3D exactly as in 2D');
+    assert(!repainted.some(function (v, i) { return i % 4 === 3 && v !== 255; }),
+        'the invert repaint never touches alpha — the tile is solid at slider 100 %, over any basemap');
     assert(viewApi.status().retintedTiles === 1, 'a repainted tile is counted (status().retintedTiles)');
 
     /* Second request for the same tile: from the repaint cache, not the network,

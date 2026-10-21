@@ -15,7 +15,7 @@
 //      tiles, every tile really intersecting the circle, the zoom window taken
 //      from the layer's own limits and reported;
 //   4. the tiles are prefetched through the SAME path 3D draws with (fetchTile →
-//      CSS-blend repaint → disc clip), they are kept in memory, and a second
+//      CSS-filter repaint → disc clip), they are kept in memory, and a second
 //      run over the same disc makes no request at all;
 //   5. the clip is a circle, not a rectangle: tiles inside the disc come
 //      through untouched, the rim is repainted, and everything outside it is
@@ -49,7 +49,7 @@ const focusSource = read('js/lidar-3d-focus.js');
 
 /* Every build that changes the LiDAR 3D focus path bumps its own tag. */
 const TAG = '20261020-lidar-disc-route';
-const TAG_MIRROR = '20261021-lidar-canvas-tiles';
+const TAG_MIRROR = '20261021-lidar-invert-retint';
 const TAG_VIEWER = '20261021-3d-switch-baselayer-column';
 const TAG_CSS = '20261021-3d-switch-baselayer-column';
 
@@ -872,8 +872,8 @@ function runViewerSuite() {
     assert(ro1mItem && abItem, 'both tagged LiDAR layers reach the deck (' + deck.items.length + ' items)');
     assert(ro1mItem.lidarLabel === 'Romania 1m/pixel agregare' && abItem.lidarLabel === 'AB',
         'each carries the label the dialog shows');
-    assert(ro1mItem.blend === 'invert-screen' && ro1mItem.template === 'dl2d://2d.R1/{z}/{x}/{y}',
-        'the Romanian 1 m hillshade keeps its CSS blend and is asked of the 2D layer itself');
+    assert(ro1mItem.blend === 'invert' && ro1mItem.template === 'dl2d://2d.R1/{z}/{x}/{y}',
+        'the Romanian 1 m hillshade keeps its CSS filter and is asked of the 2D layer itself');
     assert(ro1mItem.defId === null && abItem.defId === null,
         'the Romanian sub-layers are not registry definitions — the focus must work for them too');
 

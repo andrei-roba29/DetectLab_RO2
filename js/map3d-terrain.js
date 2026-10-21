@@ -104,7 +104,7 @@
         blendCache: {},                  /* url → repainted tile bytes             */
         blendWarned: false,              /* the repaint failure was already reported */
         cappedSeen: {},                  /* deck-budget lines already reported     */
-        retintedTiles: 0,                /* tiles repainted for a CSS blend mode   */
+        retintedTiles: 0,                /* tiles repainted for a CSS filter      */
         /* ── LiDAR focus (js/lidar-3d-focus.js) ──────────────────────────────
          * ONE LiDAR layer may be draped in 3D, and only inside the disc the user
          * picked and prefetched. state.focus is that decision, state.lidarOff
@@ -746,19 +746,30 @@
     }
 
     /* ═══════════════════════════════════════════════════════════════════════
-     *  CSS BLEND MODES THE MIRROR CANNOT CARRY
+     *  CSS FILTERS THE MIRROR CANNOT CARRY
      * -----------------------------------------------------------------------
      *  The 2D map paints the Romanian 1 m / 2 m LiDAR hillshades with
-     *  `filter: invert(1); mix-blend-mode: screen` (css/styles.css). MapLibre
-     *  has no blend modes, so a mirrored tile arrived as the service sent it —
-     *  an opaque white sheet over the terrain, which is exactly the “these
-     *  LiDAR layers never load in 3D” report. The mirror repaints every such
-     *  tile (white, alpha = 1 − luminance) in js/map3d-mirror.js before it is
-     *  handed to MapLibre; this is where the fetch and that repaint meet.
+     *  `filter: invert(1)` (css/styles.css) — the white ArcGIS sheet becomes
+     *  a black one and the relief lines turn light, drawn normally at the
+     *  opacity slider's value. MapLibre has no CSS filters, so a mirrored tile
+     *  arrived as the service sent it — an opaque white sheet over the
+     *  terrain, which is exactly the “these LiDAR layers never load in 3D”
+     *  report. The mirror repaints every such tile (RGB inverted, alpha
+     *  preserved — the exact pixels of filter:invert(1)) in
+     *  js/map3d-mirror.js before it is handed to MapLibre; this is where the
+     *  fetch and that repaint meet.
+     *
+     *  The repaint is deliberately NOT the old “white with alpha =
+     *  1 − luminance” screen emulation: that made the tiles translucent even
+     *  at slider 100 %, with their strength depending on the basemap under
+     *  them — and the solid look the user saw for a split second while the
+     *  basemap was swapping (the tiles over the dark map background) is
+     *  exactly what invert(tile) paints over every basemap.
      *
      *  The repainted bytes are kept: MapLibre evicts decoded tiles, and
-     *  re-downloading *and* re-encoding a 1 m hillshade tile every time the user
-     *  pans back over it is what made these layers feel like they never load.
+     *  re-downloading *and* re-encoding a 1 m hillshade tile every time the
+     *  user pans back over it is what made these layers feel like they never
+     *  load.
      * ═══════════════════════════════════════════════════════════════════════ */
     var BLEND_CACHE_MAX = 160;
 
@@ -785,7 +796,7 @@
              * the terrain: keep it, and say so once. */
             if (!state.blendWarned) {
                 state.blendWarned = true;
-                pushError('could not repaint the blended tiles of ' + url.slice(0, 120) + ': ' +
+                pushError('could not repaint the inverted tiles of ' + url.slice(0, 120) + ': ' +
                     ((error && error.message) || error));
             }
             return payload;
@@ -2313,7 +2324,7 @@
         state.status[entry.id] = {
             state: 'on',
             mode: viaProtocol ? 'live 2D layer' : (shouldProxy(hostOfUrl(tiles[0])) ? 'proxy' : 'direct'),
-            /* The 2D look of these layers comes from a CSS blend mode MapLibre
+            /* The 2D look of these layers comes from a CSS filter MapLibre
              * lacks; the tiles are repainted instead (see blendedTile). */
             blend: item.blend || null,
             kind: item.kind,
