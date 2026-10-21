@@ -134,9 +134,15 @@ body.is-pwa.is-3d #map3d-surface {
      * top centre, the opacity mirror and layer panel on the right, and the
      * country “Exit view” pill occupies the very bottom centre. Keep the
      * switch and refresh action in one group so the pair remains centred even
-     * when the refresh button is hidden in 2D mode. */
+     * when the refresh button is hidden in 2D mode.
+     *
+     * --country-exit-lift is 0px everywhere the pill and the switch already
+     * have room. The installed PWA lifts the pill to 60px + the safe area,
+     * which put it right across the switch, so css/country-dock.css arms the
+     * variable (46px) while the pill is on screen and the switch steps above
+     * it instead of painting over it. */
     position: absolute;
-    bottom: calc(66px + var(--layer-dock-clearance, 0px));
+    bottom: calc(66px + var(--layer-dock-clearance, 0px) + var(--country-exit-lift, 0px));
     left: 50%;
     transform: translateX(-50%);
     z-index: 960;               /* above the 3D surface, below the app chrome */
@@ -343,7 +349,7 @@ body.is-3d #map3d-bar { display: flex; }
         font-size: 0.68rem;
         padding: 0;
     }
-    .m3d-toggle-group { bottom: 58px; }
+    .m3d-toggle-group { bottom: calc(58px + var(--country-exit-lift, 0px)); }
     #map3d-toggle,
     #map3d-refresh {
         min-height: 44px;
@@ -385,10 +391,13 @@ body.is-3d #map3d-bar { display: flex; }
 body.is-pwa { --map3d-safe-area-bottom: env(safe-area-inset-bottom, 0px); }
 
 /* The pill uses 10px + its 44px touch height. Lift the PWA switch with the
- * same inset and keep a 10px gap so its higher-z-index hit area stays clear. */
+ * same inset and keep a 10px gap so its higher-z-index hit area stays clear.
+ * The country “Exit view” pill gets the same step while it is on screen
+ * (--country-exit-lift) — without it the PWA's 60px pill sat 4px above this
+ * switch and the switch covered most of it. */
 @media (max-width: 720px) {
     body.is-pwa.is-3d .m3d-toggle-group {
-        bottom: calc(64px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
+        bottom: calc(64px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)) + var(--country-exit-lift, 0px));
     }
 }
 
@@ -441,16 +450,20 @@ body.is-pwa.is-3d #map3d-bar.collapsed .m3d-row:not(.m3d-exag-row):not(.m3d-pitc
 body.is-pwa.is-3d #map3d-bar.collapsed .m3d-actions { display: flex; }
 
 /* Centre the compact bar above the 2D/3D switch and bottom actions. Leave
- * room for the top map chrome on short/landscape PWA screens. */
+ * room for the top map chrome on short/landscape PWA screens. The bar rides
+ * on the switch's own step, so a country “Exit view” pill on screen moves the
+ * pair up together instead of sliding the switch under the bar; max-height
+ * takes the same step so the bar's top edge does not creep into the search
+ * bar on short/landscape screens. */
 body.is-pwa.is-3d #map3d-bar {
     top: auto;
     right: auto;
     left: 50%;
     transform: translateX(-50%);
-    bottom: calc(108px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
+    bottom: calc(108px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)) + var(--country-exit-lift, 0px));
     width: 280px;
     max-width: calc(100% - 100px);
-    max-height: calc(100% - 168px - var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
+    max-height: calc(100% - 168px - var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)) - var(--country-exit-lift, 0px));
     overflow-y: auto;
     scrollbar-width: thin;
 }

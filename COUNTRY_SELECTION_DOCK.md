@@ -153,6 +153,14 @@ freshly fitted view. Clicking it calls
 map with the previous country's layers intact (nothing was forgotten — only the
 lock was released).
 
+**PWA stacking.** The pill is bottom-centred and, in the installed PWA, lifted
+to `60px + env(safe-area-inset-bottom)` above the home indicator — the same
+slot the bottom-centre 2D/3D switch uses. `evaluateExitButton()` therefore also
+toggles `body.country-exit-open`, and `css/country-dock.css` turns that class
+into `--country-exit-lift: 46px` (PWA only) so `css/map3d-terrain.css` can step
+the 3D switch and the 3D bar above the pill. Details, measurements and the
+regression test: `PWA_EXIT_VIEW_3D_STACK.md` / `node test-country-exit-3d-stack.js`.
+
 ## Notes for future changes
 
 - Run `node test-country-dock.js` and `node test-globe-arcgis-gate.js` after

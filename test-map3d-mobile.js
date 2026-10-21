@@ -292,7 +292,7 @@ assert(shellVersion >= 196,
 const TAGS = {
     'js/layer-registry.js': '20261020-albania-independent-rows',
     'js/map3d-terrain.js': '20261020-outline-camera-handoff',
-    'css/map3d-terrain.css': '20261020-1km-raster-refresh',
+    'css/map3d-terrain.css': '20261021-country-exit-3d-stack',
     'js/danish-layers.config.js': '20261019-danish-token-maps',
     'js/danish-layers.js': '20261019-danish-free-groups'
 };

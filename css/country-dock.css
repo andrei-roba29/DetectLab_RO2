@@ -274,6 +274,23 @@ body.is-pwa .country-exit-view {
     bottom: calc(env(safe-area-inset-bottom, 0px) + 60px);
 }
 
+/* …and because of that lift the pill lands exactly where the 2D/3D switch
+   sits (66px up on the website, 58px on phones, 64px + the same safe-area
+   inset in the PWA 3D view). The switch is centred too and paints later, so
+   it covered the pill's middle and took its taps. While the pill is on screen
+   — js/country-dock.js sets this class from the very same show/hide decision
+   that reveals the button — the bottom-centre column gets one more slot:
+   css/map3d-terrain.css steps the switch (and the 3D bar stacked on top of
+   it) up by this constant. 46px = the pill's own height (32px on phones,
+   35px on desktop) plus a 10px gap.
+
+   Scoped to body.is-pwa on purpose: on the website the pill sits 18px from
+   the edge, below the 58/66px switch, so lifting anything there would just
+   move a control that is already clear. */
+body.is-pwa.country-exit-open {
+    --country-exit-lift: 46px;
+}
+
 @media (max-width: 480px) {
     .country-dock-hs { font-size: 0.7rem; padding: 6px 8px; }
     .country-dock-grid { grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); max-height: 44vh; }

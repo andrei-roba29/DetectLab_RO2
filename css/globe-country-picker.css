@@ -57,7 +57,10 @@
 .globe-gate-zoom {
     position: absolute;
     right: 14px;
-    bottom: 18px;
+    /* Clear of the home indicator / gesture area in the installed PWA, exactly
+       like the working map's bottom Leaflet corner (body.is-pwa .leaflet-bottom,
+       index.html). 0px on the website. */
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
     z-index: 3;
     display: flex;
     flex-direction: column;
@@ -83,7 +86,15 @@
     left: 0;
     right: 0;
     z-index: 3;
-    padding: 18px 20px 14px;
+    /* The gate covers the whole map frame, and in the installed PWA that frame
+       is the whole screen (body.is-pwa #map-section is position:fixed at
+       top:0 with min-height:100vh, index.html), so y = 0 is under the phone's
+       translucent status bar / notch. Without the inset the title started at
+       y = 14 and its first ~45px — the whole “Choose your country” line and
+       the start of the description — were painted behind the clock, and the
+       ✕ sat half under the same bar. The inset is 0 everywhere the gate is
+       not under system chrome, so the browser layout is untouched. */
+    padding: calc(18px + env(safe-area-inset-top, 0px)) 20px 14px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -139,7 +150,7 @@
 .globe-gate-hint {
     position: absolute;
     left: 50%;
-    bottom: 22px;
+    bottom: calc(22px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
     z-index: 3;
     padding: 7px 16px;
@@ -261,7 +272,11 @@
    by the picker (inline display), not by a body.country-selected rule. */
 .globe-gate-reopen {
     position: absolute;
-    top: 14px;
+    /* Same reasoning as .globe-gate-chrome: the gate's own ✕ is a fixed 12px
+       from the screen edge, which in the installed PWA is inside the status
+       bar. Fullscreen is covered by the same declaration — the frame is the
+       screen in both cases. */
+    top: calc(14px + env(safe-area-inset-top, 0px));
     right: 14px;
     z-index: 640;
     display: none;
@@ -278,9 +293,6 @@
     box-shadow: 0 6px 18px rgba(0,0,0,.4);
 }
 .globe-gate-reopen:hover { background: rgba(185,255,0,0.16); }
-.map-frame.is-fullscreen .globe-gate-reopen {
-    top: calc(14px + env(safe-area-inset-top));
-}
 
 /* Keep the "exit full screen" control reachable even while the globe
    gate (very high z-index) is open above everything else in the frame. */
@@ -291,7 +303,9 @@
 @media (max-width: 640px) {
     .globe-gate-title { font-size: 1.1rem; }
     .globe-gate-desc { font-size: .78rem; }
-    .globe-gate-chrome { padding: 14px 14px 10px; }
+    /* Phones are the case the inset exists for: the shorter padding must not
+       drop the title back under the status bar. */
+    .globe-gate-chrome { padding: calc(14px + env(safe-area-inset-top, 0px)) 14px 10px; }
 }
 
 /* ── Optional ArcGIS SceneView surface ──
@@ -331,7 +345,15 @@
 .globe-gate.is-canvas .globe-gate-arcgis { display: none !important; }
 
 /* Country selection is performed directly on the interactive globe. */
-#globeGateCloseBtn { top: 12px !important; left: 12px !important; right: auto !important; z-index: 20; }
+/* The inline style in index.html zeroes `top` so the shared .globe-gate-reopen
+   anchor does not apply; the screen-edge offset lives here — with the status
+   bar inset added, or the ✕ opens underneath the phone's clock. */
+#globeGateCloseBtn {
+    top: calc(12px + env(safe-area-inset-top, 0px)) !important;
+    left: calc(12px + env(safe-area-inset-left, 0px)) !important;
+    right: auto !important;
+    z-index: 20;
+}
 
 /* Loading and last-resort states must sit above the interactive globe. */
 .globe-gate-loading,
