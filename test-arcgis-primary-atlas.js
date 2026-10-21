@@ -41,7 +41,7 @@ assert.doesNotMatch(index, /leaflet-maplibre-gl|globe-base-layer/,
     'the retired MapLibre globe basemap is not loaded by the shell');
 assert(index.includes('js/map3d-terrain.js?v=20261020-outline-camera-handoff') &&
        index.includes('js/layer-registry.js?v=20261020-albania-independent-rows') &&
-       index.includes('js/map3d-mirror.js?v=20261020-3d-analysis-points'),
+       index.includes('js/map3d-mirror.js?v=20261021-lidar-canvas-tiles'),
     'the 3D terrain viewer, its shared layer registry and the 2D→3D mirror are loaded');
 
 /* ── 2. The original map tabs and controls are restored and visible ── */
@@ -146,7 +146,7 @@ assert(cacheVersion >= 187, 'the PWA shell version was bumped to v187 for the fl
 assert.doesNotMatch(sw, /'js\/(?:leaflet-maplibre-gl|globe-base-layer)\.js/, 'PWA does not precache the retired globe modules');
 assert(sw.includes("'js/maplibre-gl.js?v=20261019-tile-order'") &&
        sw.includes("'js/map3d-terrain.js?v=20261020-outline-camera-handoff'") &&
-       sw.includes("'js/map3d-mirror.js?v=20261020-3d-analysis-points'"),
+       sw.includes("'js/map3d-mirror.js?v=20261021-lidar-canvas-tiles'"),
     'PWA precaches the vendored 3D SDK and the terrain viewer');
 
 /* ── 8. Restored files exist ── */

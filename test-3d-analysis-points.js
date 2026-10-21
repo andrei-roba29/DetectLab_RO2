@@ -319,11 +319,18 @@ function viewerChecks() {
     const sw = read('sw.js');
     const TAG = '20261020-3d-analysis-points';
     const VIEWER_TAG = '20261020-outline-camera-handoff';
-    ['js/map3d-mirror.js', 'js/lidar-scanner.js',
+    ['js/lidar-scanner.js',
         'js/archeo-potential.js', 'js/archeo-report.js', 'js/battles-layer.js'].forEach((file) => {
         assert.ok(index.includes(file + '?v=' + TAG), 'index.html loads ' + file + ' at the analysis-points tag');
         assert.ok(sw.includes("'" + file + '?v=' + TAG + "'"), 'sw.js pre-caches ' + file + ' at the analysis-points tag');
     });
+    /* The mirror ships its own tag since the canvas-tile fix
+     * (DENMARK_LIDAR_3D_CANVAS.md); the old tag stays in sw.js for installed
+     * shells that are still running the previous index.html. */
+    const MIRROR_TAG = '20261021-lidar-canvas-tiles';
+    assert.ok(index.includes('js/map3d-mirror.js?v=' + MIRROR_TAG), 'index.html loads the mirror at its canvas-tiles tag');
+    assert.ok(sw.includes("'js/map3d-mirror.js?v=" + MIRROR_TAG + "'"), 'sw.js pre-caches the mirror at its canvas-tiles tag');
+    assert.ok(sw.includes("'js/map3d-mirror.js?v=" + TAG + "'"), '…and keeps the previous mirror tag for installed shells');
     assert.ok(index.includes('js/map3d-terrain.js?v=' + VIEWER_TAG) &&
         sw.includes("'js/map3d-terrain.js?v=" + VIEWER_TAG + "'"),
         'the updated terrain viewer has its own cache-busting tag');

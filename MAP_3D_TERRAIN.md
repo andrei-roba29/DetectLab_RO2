@@ -609,6 +609,41 @@ user's back is exactly the load this path exists to prevent — records
 “LiDAR: prepare the area for 3D”, whose button is the dialog. Nothing is silently blank:
 the state is named, and it is one press away from being prepared.
 
+### 6.4.2 A canvas tile is not ready when createTile() returns (the 2026-10-21 report)
+
+*“LiDAR in 3D doesn't work properly for Denmark: it says it loads around 200 tiles, the
+LiDAR is visible only at one zoom level, and zooming in more shows only the base layer.”*
+
+The count was right — a 1 km disc in Denmark is planned as 196 tiles on a desktop and 197
+on a phone (z13–z17). The disc was prepared and applied; what MapLibre was handed was a
+disc of **transparent** images.
+
+`js/dataforsyningen-dhm-layer.js` is the one country product that paints asynchronously: its
+tiles live on a WMTS `View1` grid in EPSG:25832, so `createTile()` returns an **empty
+canvas** and calls `done(null, canvas)` only after it has fetched a mosaic of View1 tiles
+through `/api/geo/dk-dhm` and warped them in. `renderTile()` in `js/map3d-mirror.js`
+snapshotted every canvas on the next frame, before a single pixel existed — so each
+prepared tile became a transparent PNG, stored in `state.primedOut` and served by
+`dl2d://` in 3D, with the base map showing through.
+
+Coarse tiles whose View1 sources were still in the layer's own source cache painted in a
+microtask, ahead of that timer, and did appear — which is why the relief was visible at one
+zoom level and vanished when the user zoomed onto the deep, uncached levels.
+
+`renderTile()` now follows Leaflet's own rule (`L.GridLayer._addTile`): a `createTile()`
+that declares `done` owns the moment the pixels exist (wait for it; a `done` that fires
+before `createTile()` returns counts too), while a one-argument `createTile()` is read on
+the next frame (`js/roman-roads.js` relies on that). A canvas whose `done` never arrives is
+handed over as it is when the tile deadline passes rather than rejected — an errored tile
+draws nothing at all. The plan, the disc clip, the prepared cache, the `dl2d://` route and
+the source ceiling are unchanged; past `plan.zoomTo` (z17 here) the deepest prepared level
+is overzoomed exactly as described in §6.4/`LIDAR_3D_MOBILE_ZOOM.md`.
+
+`DENMARK_LIDAR_3D_CANVAS.md` holds the long form; the regression is §4h-bis of
+`test-lidar-3d-focus.js` (an asynchronous Danish-style canvas must come back painted, a
+one-argument canvas must not wait for a `done` that never comes, and no prepared tile of a
+Danish disc may be a transparent placeholder).
+
 ### 6.5 Raster refresh in a running 3D view
 
 The refresh action sits beside the bottom-centre **2D** switch and snapshots the

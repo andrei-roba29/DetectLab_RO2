@@ -79,7 +79,7 @@ const mirrorSource = read('js/map3d-mirror.js');
 const skin = read('css/map3d-terrain.css');
 
 const TAG = '20261019-tile-order';              /* MapLibre itself (coveringTiles patch) */
-const TAG_3D = '20261020-3d-analysis-points';    /* mirror                        */
+const TAG_3D = '20261021-lidar-canvas-tiles';    /* mirror (canvas tiles)          */
 const TAG_VIEWER = '20261020-outline-camera-handoff'; /* viewer (js)                         */
 const TAG_CSS = '20261020-1km-raster-refresh';    /* viewer skin (css)              */
 const TAG_FOCUS = '20261020-lidar-disc-route';  /* LiDAR focus (3D, one disc)     */

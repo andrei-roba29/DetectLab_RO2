@@ -54,7 +54,7 @@
      * importing the module must never be fatal. */
     if (!root) return;
 
-    var VERSION = '2026-10-20-3d-analysis-points-v1';
+    var VERSION = '2026-10-21-lidar-canvas-tiles-v1';
 
     /* Leaflet's own pane z-index defaults — used when a layer has no pane. */
     var PANE_Z = {
@@ -1251,8 +1251,15 @@
             shim._tileZoom = z;
             shim._tileSize = { x: size, y: size };
             var settled = false;
+            /* A canvas tile that declared done() but never called it (a vector
+             * renderer whose fetch failed, a plugin that forgot): hand over what
+             * has been painted rather than failing the tile — MapLibre draws
+             * nothing at all for an errored tile, which is one more way a
+             * “prepared” disc shows the base map. */
+            var pendingCanvas = null;
             var timer = root.setTimeout(function () {
                 if (settled) return;
+                if (pendingCanvas) { finish(pendingCanvas); return; }
                 settled = true;
                 reject(new Error('the 2D layer did not finish drawing this tile in time'));
             }, timeoutMs || 15000);
@@ -1271,13 +1278,18 @@
             }
 
             var tile = null;
+            /* Did the layer already call the done() it was handed? A tile can be
+             * finished synchronously (from a cache) before createTile returns,
+             * and `tile` is only known afterwards. */
+            var doneCalled = false;
             try {
                 tile = layer.createTile.call(shim, coords, function (error) {
                     if (error) {
                         if (!settled) { settled = true; root.clearTimeout(timer); reject(error); }
                         return;
                     }
-                    finish(tile);
+                    doneCalled = true;
+                    if (tile) finish(tile);
                 });
             } catch (e) {
                 settled = true;
@@ -1290,10 +1302,34 @@
                 if (tile.complete && tile.naturalWidth) finish(tile);
                 else tile.addEventListener('load', function () { finish(tile); }, { once: true });
             } else if (tile.getContext) {
-                /* Leaflet canvas tiles call done() when they are finished; some
-                 * implementations return the canvas already painted. Give it one
-                 * frame anyway, then settle on whatever is there. */
-                root.setTimeout(function () { if (!settled) finish(tile); }, 0);
+                /* A CANVAS TILE IS NOT READY WHEN createTile() RETURNS.
+                 *
+                 * Leaflet's contract (`L.GridLayer._addTile`) is: a layer whose
+                 * createTile() declares the `done` argument owns the moment the
+                 * pixels exist and calls back when they do; one declared with a
+                 * single argument is ready on the next frame. This function used
+                 * to snapshot the canvas on the next frame in BOTH cases, so a
+                 * module that fetches and warps its sources first was read before
+                 * it had drawn anything. js/dataforsyningen-dhm-layer.js is
+                 * exactly that layer: every Danish LiDAR tile comes from a
+                 * mosaic of EPSG:25832 View1 tiles, warped cell by cell after
+                 * the network answers. 3D therefore prepared a disc of fully
+                 * transparent tiles — the dialog counted ~200 tiles, the disc
+                 * was empty and only the base map showed. Coarse tiles whose
+                 * sources happened to be in the layer's source cache were
+                 * painted within a microtask (before the snap-back timer) and
+                 * did show, which is why the LiDAR appeared only at some zoom
+                 * levels and vanished when the user zoomed in. Wait for done()
+                 * here; the single-argument case keeps Leaflet's next-frame
+                 * rule, and the timer above still bounds a layer that never
+                 * calls back. */
+                if (layer.createTile.length < 2) {
+                    root.setTimeout(function () { if (!settled) finish(tile); }, 0);
+                } else if (doneCalled) {
+                    finish(tile);
+                } else {
+                    pendingCanvas = tile;
+                }
             }
         });
     }

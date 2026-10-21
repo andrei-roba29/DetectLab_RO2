@@ -49,7 +49,7 @@ const focusSource = read('js/lidar-3d-focus.js');
 
 /* Every build that changes the LiDAR 3D focus path bumps its own tag. */
 const TAG = '20261020-lidar-disc-route';
-const TAG_MIRROR = '20261020-3d-analysis-points';
+const TAG_MIRROR = '20261021-lidar-canvas-tiles';
 const TAG_VIEWER = '20261020-outline-camera-handoff';
 const TAG_CSS = '20261020-1km-raster-refresh';
 
@@ -1224,6 +1224,10 @@ function runViewerSuite() {
                         const tile = fakeCanvas();
                         tile.width = 256;
                         tile.height = 256;
+                        /* Leaflet's contract: a createTile() that declares the
+                         * done callback calls it when the pixels are there.
+                         * These fakes paint synchronously. */
+                        done(null, tile);
                         return tile;
                     }
                 };
@@ -1349,7 +1353,8 @@ function runViewerSuite() {
                     const tile = fakeCanvas();
                     tile.width = 256;
                     tile.height = 256;
-                    return tile;         /* canvas tiles settle on the returned canvas */
+                    done(null, tile);    /* painted, so the tile is finished */
+                    return tile;
                 }
             };
             lidarGroup.addLayer(canvasLayer);
@@ -1403,6 +1408,7 @@ function runViewerSuite() {
                     const tile = fakeCanvas();
                     tile.width = 256;
                     tile.height = 256;
+                    done(null, tile);
                     return tile;
                 }
             };
@@ -1430,6 +1436,141 @@ function runViewerSuite() {
             assert(fetchCount === 0,
                 'without asking the provider again — the prepared disc is the one that is drawn');
             delete windowStub.AhnLidar;
+        }
+
+        /* ── 4h-bis. A canvas tile is not ready when createTile() returns ──
+         * “Denmark in 3D: it says ~200 tiles are loaded, the LiDAR is visible
+         * only at one zoom level, and zooming in shows the base layer alone.”
+         * js/dataforsyningen-dhm-layer.js is the one country product that
+         * paints asynchronously: createTile() returns a blank canvas and calls
+         * done(null, canvas) only after it has fetched the EPSG:25832 View1
+         * tiles and warped the mosaic into it. The mirror used to snapshot such
+         * a canvas on the next frame — before a single pixel existed — so every
+         * prepared tile of that disc was fully transparent, the dialog counted
+         * them all as ready, and 3D had nothing to drape. Coarse tiles whose
+         * View1 sources happened to sit in the layer's own source cache were
+         * painted within a microtask, ahead of that timer, which is why the
+         * LiDAR could appear at one zoom and disappear at the next.
+         *
+         * Leaflet's contract (`L.GridLayer._addTile`) is the rule the mirror
+         * now follows: a createTile() that declares `done` owns the moment the
+         * pixels exist, and one declared with a single argument is ready on the
+         * next frame (js/roman-roads.js relies on that). Both are covered. */
+        {
+            const paint = function (tile, size) {
+                const frame = new Uint8ClampedArray(size * size * 4);
+                for (let i = 3; i < frame.length; i += 4) frame[i] = 255;
+                tile.getContext('2d').putImageData({ data: frame }, 0, 0);
+            };
+            /* …the asynchronous case: nothing is drawn until `done` fires. */
+            const asyncCanvasLayer = {
+                options: { name: 'Denmark · DHM', pane: 'pane_lidar', opacity: 0.6, minZoom: 6, maxZoom: 20, maxNativeZoom: 19 },
+                _leaflet_id: 'C3',
+                _dlDefId: 'lidar.dk-dhm',
+                _dlLidar: { key: 'lidar.dkLidar', label: 'Denmark · DHM' },
+                getTileSize: function () { return { x: 8, y: 8 }; },
+                createTile: function (coords, done) {
+                    const tile = fakeCanvas();
+                    tile.width = 8;
+                    tile.height = 8;
+                    /* One real event-loop turn — the same shape as the network
+                     * answer the DHM module waits for before it warps. */
+                    setTimeout(function () { paint(tile, 8); done(null, tile); }, 15);
+                    return tile;
+                }
+            };
+            const direct = await mirror.renderTile(asyncCanvasLayer, 17, 70000, 40000);
+            const directPixels = new Uint8ClampedArray(direct);
+            assert(directPixels.length === 8 * 8 * 4,
+                'a canvas tile is read back at the layer’s own size (' + directPixels.length + ' bytes)');
+            assert(directPixels.some(function (value, at) { return at % 4 === 3 && value > 0; }),
+                'renderTile waits for the canvas the layer says is finished, instead of snapshotting it blank');
+
+            /* …and the single-argument case still settles at once (Leaflet’s
+             * own next-frame rule): a canvas that never calls done is not made
+             * to wait for the 15 s timeout. */
+            const syncCanvasLayer = {
+                options: { name: 'Roman roads tiles', pane: 'pane_roman', opacity: 1 },
+                _leaflet_id: 'C4',
+                getTileSize: function () { return { x: 8, y: 8 }; },
+                createTile: function () {
+                    const tile = fakeCanvas();
+                    tile.width = 8;
+                    tile.height = 8;
+                    paint(tile, 8);
+                    return tile;
+                }
+            };
+            const startedAt = Date.now();
+            const syncBytes = await mirror.renderTile(syncCanvasLayer, 12, 2300, 1400);
+            assert(new Uint8ClampedArray(syncBytes).some(function (value, at) { return at % 4 === 3 && value > 0; }),
+                'a synchronously painted canvas (one-argument createTile) is read as it is');
+            assert(Date.now() - startedAt < 5000,
+                'and it does not wait for a done() that will never come');
+
+            /* …and a layer that declares done but never calls it (a vector
+             * renderer whose fetch failed) is handed over as it is when the
+             * tile deadline passes, instead of failing the tile: MapLibre draws
+             * nothing at all for an errored tile. */
+            const stuckLayer = {
+                options: { name: 'Stuck canvas', pane: 'pane_lidar', opacity: 1 },
+                _leaflet_id: 'C5',
+                getTileSize: function () { return { x: 8, y: 8 }; },
+                createTile: function (coords, done) {        /* done is never called */
+                    const tile = fakeCanvas();
+                    tile.width = 8;
+                    tile.height = 8;
+                    paint(tile, 8);
+                    return tile;
+                }
+            };
+            const stuck = await mirror.renderTile(stuckLayer, 14, 8800, 5400, 40);
+            assert(new Uint8ClampedArray(stuck).some(function (value, at) { return at % 4 === 3 && value > 0; }),
+                'a canvas whose done() never arrives is still read back at the tile deadline (not rejected)');
+
+            /* The field symptom, end to end: the disc the dialog reports as
+             * prepared must be the pixels, not transparent placeholders — and
+             * the dl2d:// handler must serve exactly those. */
+            lidarGroup.addLayer(asyncCanvasLayer);
+            map.addLayer(asyncCanvasLayer);
+            const entryK = focus.activeLayers().filter(function (e) { return e.key === '2d.C3'; })[0];
+            assert(entryK && entryK.defId === 'lidar.dk-dhm', 'the Danish DHM layer is offered by the dialog');
+            const discK = { lat: 56.15, lng: 9.55, radiusKm: 0.4 };
+            const planK = focus.plan(discK,
+                { minZoom: 15, maxZoom: 17, tileSize: 256, budget: 60, viewport: { width: 1280, height: 800 } });
+            planK.route = 'canvas';
+            planK.layer = entryK;
+            planK.focus = { key: '2d.C3', lidarKey: 'lidar.dkLidar', defId: 'lidar.dk-dhm',
+                label: entryK.label, lat: discK.lat, lng: discK.lng, radiusKm: discK.radiusKm,
+                plan: { zoomFrom: planK.zoomFrom, zoomTo: planK.zoomTo, count: planK.count, route: 'canvas' } };
+            viewer.setLidarFocus(planK.focus);
+            const entriesK = focus.planEntries(planK);
+            assert(entriesK.length > 0 && entriesK.every(function (e) { return e.route === 'canvas'; }),
+                'the Danish disc runs on the canvas route (' + entriesK.length + ' tiles)');
+            const reportK = await viewer.prefetchTiles(entriesK, { concurrency: 4 });
+            assert(reportK.failed === 0 && reportK.prepared === reportK.total,
+                'every tile of the Danish disc is prepared (' + reportK.prepared + '/' + reportK.total + ')');
+            const transparent = entriesK.filter(function (entry) {
+                const url = 'dl2d://' + entryK.key + '/' + entry.z + '/' + entry.x + '/' + entry.y;
+                const bytes = viewer.preparedTile(url, entryK.key);
+                if (!bytes) return true;
+                const pixels = new Uint8ClampedArray(bytes);
+                return !pixels.some(function (value, at) { return at % 4 === 3 && value > 0; });
+            });
+            assert(transparent.length === 0,
+                'none of the prepared tiles is a transparent placeholder (' + transparent.length + ' blank, e.g. ' +
+                (transparent[0] ? transparent[0].z + '/' + transparent[0].x + '/' + transparent[0].y : 'none') + ')');
+            const protocolsK = protocols;
+            const sampleK = entriesK[Math.floor(entriesK.length / 2)];
+            const servedK = await protocolsK.dl2d(
+                { url: 'dl2d://2d.C3/' + sampleK.z + '/' + sampleK.x + '/' + sampleK.y }, null);
+            assert(servedK && servedK.data && servedK.data.byteLength > 0,
+                'the 3D view is handed the painted Danish tile');
+            assert(new Uint8ClampedArray(servedK.data).some(function (value, at) { return at % 4 === 3 && value > 0; }),
+                '…with pixels in it, not the transparent canvas that was on screen when the tile was requested');
+            lidarGroup.removeLayer(asyncCanvasLayer);
+            map.removeLayer(asyncCanvasLayer);
+            viewer.setLidarFocus(ro1mFocus);
         }
 
         /* ── 4i. “Done” must always hand over ──────────────────────────────
