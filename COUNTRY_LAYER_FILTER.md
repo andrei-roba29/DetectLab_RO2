@@ -25,6 +25,13 @@ layers** and keeps the selection visible on the map:
     tools, Amprenta Vegetației) are attributed `['RO']` and disappear for every
     other country — including the neighbours whose bboxes overlap
     `ROMANIA_BOUNDS`.
+  - **The Albanian ASIG rows** (`albania.*`, `js/asig-albania-layers.js`) live in
+    one Albania-owned panel group (`#albaniaRow` → `#albaniaSubLayers`) and are
+    strictly `['AL']`: they are hidden for every other ISO **and** in the global
+    view with no country selected. They are no longer mounted inside the
+    Romanian Historical Maps / Satellite / Heritage Sites rows or in the LiDAR
+    group that hosts Denmark's DHM; the module removes their tile layers from the
+    map (keeping the user's switch state) while another country is on screen.
   - **Premium sheets** list the modern countries whose territory the sheet
     genuinely shows (e.g. Bucovina → `RO, UA`; Banat → `RO, HU, RS`; the
     Moldavia sheets → `RO, MD`).
@@ -71,6 +78,11 @@ layers** and keeps the selection visible on the map:
 
 ## Files
 
+- `js/asig-albania-layers.js` / `js/asig-albania-layers.config.js` — the
+  Albania-only group: `filterForCountry(iso)` shows `#albaniaRow` only for `AL`,
+  marks the group and every row `country-layer-unavailable` otherwise, and parks
+  the tile layers. `js/map-app.js` calls it on selection and on exit;
+  `js/layer-registry.js` mirrors the rows with `countries: ['AL']`.
 - `js/map-app.js` — `LAYER_COUNTRIES` (per-row ISO attribution, Romanian
   county LiDAR keys added programmatically), `SHARED_PREMIUM_CATALOG_KEYS` /
   `SHARED_PREMIUM_COUNTRIES` (static mirror of the catalog's curated coverage

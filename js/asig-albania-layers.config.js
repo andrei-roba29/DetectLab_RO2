@@ -9,6 +9,18 @@
  * `albania.<id>`) so the layers are also catalogued for the diagnostics, the
  * 3D status report and the offline audit (tools/audit-wms-layers.mjs).
  *
+ * PANEL PLACEMENT — one Albania-only group
+ *   All nine rows are mounted in a single group row (`#albaniaRow` →
+ *   `#albaniaSubLayers`) that belongs to Albania exclusively. They are NOT
+ *   rendered inside the Romanian/Denmark/Finland sections any more (an
+ *   orthophoto used to appear between Romania's satellite periods, the
+ *   heritage rows under Romania's Heritage Sites and the two hillshades
+ *   under the LiDAR group that hosts Denmark's DHM). `section` still decides
+ *   the Leaflet pane/z-order and the small caption inside the group; it no
+ *   longer decides where the row is mounted. The group and every row are
+ *   hidden unless Albania (ISO2 `AL`) is the selected country — see
+ *   `country` below.
+ *
  * Source: geoportal.asig.gov.al — Autoriteti Shtetëror për Informacionin
  * Gjeohapësinor (ASIG, the Albanian State Authority for Geospatial
  * Information). GeoServer + GeoWebCache, public, no key, no token, HTTPS.
@@ -31,7 +43,8 @@
  *   id              stable id; the panel row, the registry entry
  *                   (`albania.<id>`) and localStorage all use it
  *   title           { ro, en } — the row label and the info popup title
- *   section         existing Free-tab section: historical/satellite/lidar/heritage
+ *   section         theme inside the single Albania group, and the Leaflet
+ *                   pane: historical/satellite/lidar/heritage
  *   registryGroup   existing shared catalogue group/z-order
  *   layers          WMS LAYERS value, exactly as published
  *   format          WMS FORMAT (image/jpeg only where the product is JPEG-only)
@@ -64,14 +77,35 @@
     var ATTRIBUTION = 'Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)';
 
     var CONFIG = {
-        version: '20261020-albania-independent-rows',
+        version: '20261021-albania-country-group',
         provider: 'ASIG — Autoriteti Shtetëror për Informacionin Gjeohapësinor',
         licence: 'ASIG terms of use (no explicit licence in the capabilities — verify redistribution terms)',
 
+        /* ISO2 of the only country these rows belong to. The panel group and
+         * every row are hidden (and their tile layers taken off the map) for
+         * any other selection, including the global view with no country. */
+        country: 'AL',
+        groupLabel: { ro: 'Albania · geoportalul ASIG', en: 'Albania · ASIG geoportal' },
+        groupInfo: 'Nine public ASIG WMS products for Albania: the 1:50,000 topographic map, the 1999 ' +
+            'and 2015 (20 cm) orthophotos, the DSM and 2015 DTM hillshades, and the four protected-site ' +
+            'overlays (cultural heritage zones, protected cultural points, protected natural areas and ' +
+            'natural monuments). Every request is clipped to the ASIG footprint, so the rows belong to ' +
+            'Albania only and appear only in the Albania view. Source: geoportal.asig.gov.al.',
+
         /* WGS84 coverage used to clip each WMS BBOX (west, south, east, north).
-         * It is not a country selector: rows stay visible in every map view. */
+         * Geography, not a selector: the panel rows are scoped by `country`. */
         countryBounds: [[39.538, 18.773], [42.758, 21.179]],
         view: { center: [41.3275, 19.8187], zoom: 9, label: { ro: 'Tirana', en: 'Tirana' } },
+
+        /* Captions inside the single Albania group. `section` keeps its job of
+         * choosing the Leaflet pane/z-order; these labels spell out the theme
+         * of the rows that follow them. */
+        sectionLabels: {
+            historical: { ro: 'Hărți istorice', en: 'Historical maps' },
+            satellite: { ro: 'Satelit', en: 'Satellite' },
+            lidar: { ro: 'LiDAR', en: 'LiDAR' },
+            heritage: { ro: 'Patrimoniu', en: 'Heritage sites' }
+        },
 
         endpoints: {
             /* The app currently calls a tiled WMS GetMap endpoint. */
@@ -105,7 +139,8 @@
         attribution: ATTRIBUTION,
 
         layers: [
-            /* Rendered into existing panel sections; the registry groups mirror those sections. */
+            /* Mounted in the single Albania-only group (#albaniaSubLayers); the
+             * registry groups keep the shared catalogue z-order. */
             {
                 id: 'topo50k',
                 section: 'historical',

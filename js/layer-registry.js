@@ -2177,8 +2177,11 @@
     };
     /* ═══════════════════════════════════════════════════════════════════════
      *  ALBANIA ASIG LAYERS — mirrored from the single ASIG config.
-     *  Each layer uses the app's existing Historical, Satellite, LiDAR or
-     *  Heritage registry group/z-order; there is no Albania-wide group.
+     *  Each layer keeps the shared catalogue group/z-order it draws in
+     *  (Historical, Satellite, LiDAR or Heritage); the PANEL, however, mounts
+     *  all nine rows in one Albania-only group (#albaniaRow) and the country
+     *  filter shows them only while AL is the selected country — hence the
+     *  `countries: ['AL']` attribution below.
      *  The renderer owns CRS fallback and per-row failure reporting, so the
      *  global availability guard must not flip these independent switches.
      * ═══════════════════════════════════════════════════════════════════════ */
@@ -2215,7 +2218,10 @@
                     maxNativeZoom: layer.maxNativeZoom,
                     opacity: layer.opacity,
                     bounds: cfg.countryBounds,
-                    countryIndependent: true,
+                    /* The rows belong to Albania alone: js/asig-albania-layers.js
+                     * hides the whole group for every other ISO (and in the
+                     * global view), and map-app.js calls its filterForCountry. */
+                    countries: [String(cfg.country || 'AL').toUpperCase()],
                     attribution: cfg.attribution,
                     provider: cfg.provider,
                     licence: cfg.licence,

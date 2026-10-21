@@ -8403,14 +8403,25 @@
     }
 }
 
-/* ── Albania ASIG rows rendered into the existing Free-tab sections. */
+/* ── Albania ASIG layers (js/asig-albania-layers.config.js) ─────────────────
+   One Albania-owned group (#albaniaRow → #albaniaSubLayers); the rows are not
+   mounted in the Romanian/Denmark/Finland sections any more. The group exists
+   only while Albania is the selected country: js/asig-albania-layers.js keeps
+   .albania-out-of-country on it for every other ISO — and in the global view
+   with no country selected. The HTML ships the class, so the rows never flash
+   before the module runs. The rule is not scoped to .country-filter-active
+   because the gate must also hold when no country filter is applied. */
+#albaniaRow.albania-out-of-country {
+    display: none !important;
+}
+
 .asig-section-mount {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    margin-top: 8px;
+    margin-top: 6px;
     padding-left: 6px;
-    border-left: 2px solid rgba(224, 69, 69, 0.3);
+    border-left: 2px solid rgba(228, 30, 32, 0.3);
 }
 
 .albania-layer-section {

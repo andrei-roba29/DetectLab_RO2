@@ -22,12 +22,15 @@ const ids = ['topo50k', 'ortho1999', 'ortho1994', 'dsm', 'lidar', 'heritage', 'n
 let checks = 0;
 const check = (condition, message) => { assert.ok(condition, message); checks++; };
 
-console.log('[ASIG] config, panel sections, WMS request, registry, tile failure behavior');
+console.log('[ASIG] config, single Albania group, country gate, WMS request, registry, tile failure behavior');
 assert.strictEqual(CONFIG.layers.length, 9);
 assert.deepStrictEqual(CONFIG.layers.map((layer) => layer.layers), names);
 assert.deepStrictEqual(CONFIG.layers.map((layer) => layer.id), ids);
 check(CONFIG.layers.every((layer) => layer.section && layer.registryGroup && Number.isFinite(layer.registryZ)), 'all layers carry render and registry section metadata');
 check(CONFIG.layers.every((layer) => layer.attributionRow.includes('ASIG')), 'each layer credits ASIG');
+check(CONFIG.country === 'AL', 'the rows are attributed to Albania (ISO2 AL)');
+check(!!CONFIG.groupLabel && !!CONFIG.groupLabel.ro && !!CONFIG.groupLabel.en, 'the single group carries a RO+EN label');
+check(!!CONFIG.groupInfo && CONFIG.layers.every((layer) => !!CONFIG.sectionLabels[layer.section]), 'every row theme has a caption inside the group');
 check(JSON.stringify(CONFIG.countryBounds) === JSON.stringify([[39.538, 18.773], [42.758, 21.179]]), 'coverage bounds match owner limits');
 check(JSON.stringify(CONFIG.view) === JSON.stringify({ center: [41.3275, 19.8187], zoom: 9, label: { ro: 'Tirana', en: 'Tirana' } }), 'Tirana center and zoom are configured');
 check(CONFIG.endpoints.capabilities.wmsVersion === '1.3.0', 'capabilities fixture facts state WMS 1.3.0');
@@ -53,20 +56,46 @@ CONFIG.layers.forEach((layer) => {
     assert.strictEqual(def.z, layer.registryZ);
     assert.strictEqual(def.guard, false);
     assert.strictEqual(def.selfGuarded, true);
-    check(!!def.selfGuardedReason && def.countryIndependent === true, layer.id + ' retains a meaningful self-guard and is country-independent');
+    check(!!def.selfGuardedReason, layer.id + ' retains a meaningful self-guard');
+    check(JSON.stringify(def.countries) === JSON.stringify(['AL']), layer.id + ' is attributed to Albania only');
+    check(def.countryIndependent === undefined, layer.id + ' is no longer country-independent');
 });
 check(/'geoportal\.asig\.gov\.al':/.test(read('js/wms-health.js')), 'ASIG host remains in the health host list');
 
+/* ── placement: one Albania-only group, nothing left in other countries' sections ── */
 const html = read('index.html');
-['asigHistoricalLayers', 'asigSatelliteLayers', 'asigLidarLayers', 'asigHeritageLayers'].forEach((id) => check(html.includes('id="' + id + '"'), id + ' mount exists in an existing section'));
-check(!/id="albaniaRow"|id="albaniaSubLayers"|id="albaniaToggle"|id="albaniaGroupNotice"/.test(html), 'no Albania-wide master group or generated subgroup container remains');
-check(/countryIndependent/.test(read('js/map-app.js')), 'country-layer filter honors independent registry rows');
-check(/asig-albania-layers\.config\.js\?v=20261020-albania-independent-rows/.test(html), 'updated config asset tag is in index');
-check(/detectlab-v236-3d-analysis-points/.test(read('sw.js')), 'service-worker cache moves forward from v235');
+['asigHistoricalLayers', 'asigSatelliteLayers', 'asigLidarLayers', 'asigHeritageLayers'].forEach((id) => {
+    check(!html.includes('id="' + id + '"'), id + ' (the old per-country mount) is gone');
+});
+['albaniaRow', 'albaniaSubLayers', 'albaniaToggle', 'albaniaGroupTitle', 'albaniaExpandBtn'].forEach((id) => {
+    check(html.includes('id="' + id + '"'), 'the Albania group carries #' + id);
+});
+check(/<div class="transp-layer-row albania-out-of-country" data-category="free" id="albaniaRow">/.test(html),
+    'the group ships hidden (albania-out-of-country) so it never flashes before the module runs');
+check(html.includes('onchange="toggleAlbaniaLayers(this.checked)"') && html.includes('onclick="toggleAlbaniaSubLayers()"') &&
+    html.includes('onclick="event.stopPropagation();goToAlbaniaView()"') && html.includes('onclick="event.stopPropagation();showAlbaniaInfo()"'),
+    'the group exposes its own master switch, expander, Tirana and info actions');
+const rowAt = html.indexOf('id="albaniaRow"');
+const lidarEnd = html.indexOf('</div><!-- /lidar transp-layer-row -->');
+const danishAt = html.indexOf('id="danishRow"');
+const finlandAt = html.indexOf('id="finlandRow"');
+check(lidarEnd > 0 && rowAt > lidarEnd && rowAt < danishAt && danishAt < finlandAt,
+    'the Albania group sits on its own, after the Romanian LiDAR group and before Denmark/Finland');
+const histSubClose = html.indexOf('</div><!-- /histSubLayers -->');
+const lidarSubClose = html.indexOf('</div><!-- /lidarSubLayers -->');
+check(histSubClose > 0 && lidarSubClose > histSubClose && rowAt > lidarSubClose,
+    'the group sits after the Romanian historical AND LiDAR (Danish DHM) sublayer containers, not inside them');
+check(/#albaniaRow\.albania-out-of-country\s*\{[\s\S]*?display:\s*none\s*!important/.test(read('css/styles.css')),
+    'styles.css hides the group outside the Albania view');
+const mapApp = read('js/map-app.js');
+check(/filterForCountry\(iso\)/.test(mapApp) && /AsigAlbaniaLayers[\s\S]{0,200}?filterForCountry\(null\)/.test(mapApp),
+    'the country layer filter drives the Albanian gate on selection and on exit');
+check(/asig-albania-layers\.config\.js\?v=20261021-albania-country-group/.test(html), 'updated config asset tag is in index');
+check(/detectlab-v250-albania-country-group/.test(read('sw.js')), 'service-worker cache moves forward to v250');
 
-// Tiny DOM/Leaflet harness exercises config-driven rendering and tile errors.
+// Tiny DOM/Leaflet harness exercises config-driven rendering, the country gate and tile errors.
 class Element {
-    constructor(tag) { this.tagName = tag.toUpperCase(); this.children = []; this.attributes = {}; this.style = {}; this.listeners = {}; this.className = ''; this.textContent = ''; this.value = ''; this.checked = false; this.naturalWidth = 0; this.naturalHeight = 0; this.classList = { toggle: (name, on) => { this.classes = this.classes || new Set(); on ? this.classes.add(name) : this.classes.delete(name); }, add: (name) => { this.classes = this.classes || new Set(); this.classes.add(name); } }; }
+    constructor(tag) { this.tagName = tag.toUpperCase(); this.children = []; this.attributes = {}; this.style = {}; this.listeners = {}; this.className = ''; this.textContent = ''; this.value = ''; this.checked = false; this.naturalWidth = 0; this.naturalHeight = 0; this.classes = new Set(); this.classList = { toggle: (name, on) => { on ? this.classes.add(name) : this.classes.delete(name); }, add: (name) => { this.classes.add(name); }, remove: (name) => { this.classes.delete(name); }, contains: (name) => this.classes.has(name) }; }
     setAttribute(k, v) { this.attributes[k] = String(v); if (k === 'id') this.id = String(v); }
     appendChild(child) { this.children.push(child); child.parentNode = this; return child; }
     addEventListener(type, cb) { (this.listeners[type] ||= []).push(cb); }
@@ -74,8 +103,13 @@ class Element {
     set innerHTML(value) { if (value === '') this.children = []; }
     get innerHTML() { return ''; }
 }
-const mounts = ['asigHistoricalLayers', 'asigSatelliteLayers', 'asigLidarLayers', 'asigHeritageLayers'];
-const elements = Object.fromEntries(mounts.map((id) => [id, new Element('div')]));
+const elements = {
+    albaniaRow: new Element('div'),
+    albaniaSubLayers: new Element('div'),
+    albaniaToggle: new Element('input'),
+    albaniaExpandBtn: new Element('button'),
+    albaniaExpandIcon: new Element('svg')
+};
 const document = {
     readyState: 'loading', documentElement: { getAttribute: () => 'en' }, listeners: {},
     createElement: (tag) => new Element(tag),
@@ -108,18 +142,54 @@ vm.runInContext(read('js/asig-albania-layers.js'), sandbox, { filename: 'js/asig
 const API = sandbox.AsigAlbaniaLayers;
 API.init();
 assert.strictEqual(API.layers.length, 9);
-const rendered = Object.values(elements).flatMap((mount) => mount.children);
-assert.strictEqual(rendered.length, 9, 'renderer generates nine rows from config');
+const mount = elements.albaniaSubLayers;
+const captions = mount.children.filter((child) => child.className === 'albania-layer-section');
+const rendered = mount.children.filter((child) => child.className === 'albania-layer-row');
+assert.strictEqual(rendered.length, 9, 'renderer generates nine rows from config, all in the one Albania group');
+check(captions.length === 4, 'the group keeps the four thematic captions (historical, satellite, LiDAR, heritage)');
 CONFIG.layers.forEach((layer) => {
     const row = API.state.rows[layer.id];
     assert.ok(row && row.input && row.slider && row.status && row.go, layer.id + ' has toggle, slider, status, and Tirana action');
     assert.strictEqual(row.row.attributes['data-category'], 'free');
 });
-check(rendered.length === 9, 'all nine independently operable Free rows are rendered into the four existing sections');
-API.filterForCountry('RO');
-check(rendered.every((row) => !row.classes || !row.classes.has('country-layer-unavailable')), 'rows remain visible in other country views');
+check(map.layers.size === 0, 'nothing Albanian is drawn before Albania is selected');
+
+/* country gate: no country → hidden; every other ISO → hidden; AL → visible */
+check(API.isInCountry() === false && elements.albaniaRow.classes.has('albania-out-of-country'),
+    'the group starts hidden in the global view (no country selected)');
+[['RO', 'Romania'], ['DK', 'Denmark'], ['FI', 'Finland'], ['IT', 'Italy']].forEach(([iso, label]) => {
+    API.filterForCountry(iso);
+    check(API.isInCountry() === false && elements.albaniaRow.classes.has('albania-out-of-country'),
+        'the group and its rows stay hidden for ' + label);
+    check(rendered.every((row) => row.classes.has('country-layer-unavailable')), label + ': every Albanian row is marked unavailable');
+});
+API.filterForCountry('AL');
+check(API.isInCountry() === true && !elements.albaniaRow.classes.has('albania-out-of-country'),
+    'selecting Albania shows the group');
+check(rendered.every((row) => !row.classes.has('country-layer-unavailable')), 'selecting Albania re-enables every row');
+API.filterForCountry(null);
+check(API.isInCountry() === false && elements.albaniaRow.classes.has('albania-out-of-country'),
+    'leaving the country view (no ISO) hides the Albanian group again');
+
+/* the user\'s on/off choice survives the gate, but no layer is drawn meanwhile */
+API.filterForCountry('AL');
 API.toggle('topo50k', true);
 check(API.isActive('topo50k') && map.layers.size === 1, 'per-layer toggle activates only its layer');
+API.filterForCountry('RO');
+check(API.isActive('topo50k') && map.layers.size === 0, 'switching country parks the Albanian layer (state remembered, nothing drawn)');
+API.filterForCountry('AL');
+check(API.isActive('topo50k') && map.layers.size === 1, 'returning to Albania restores the remembered layer');
+API.toggleAll(true);
+check(map.layers.size === 9, 'the group master switch turns the whole Albanian stack on');
+API.toggleAll(false);
+check(map.layers.size === 0 && CONFIG.layers.every((layer) => !API.isActive(layer.id)), 'the group master switch turns it off again');
+API.toggleExpanded();
+check(API.state.expanded === false && mount.style.maxHeight === '0px' && elements.albaniaExpandBtn.attributes['aria-expanded'] === 'false',
+    'the group expander collapses the sublayer container');
+API.toggleExpanded();
+check(API.state.expanded === true && mount.style.maxHeight === '4000px', 'the group expander re-opens the sublayer container');
+
+/* WMS request construction and the EPSG fallback are unchanged */
 API.setOpacity('topo50k', 43);
 check(API.state.opacity.topo50k === 43, 'per-layer opacity state is updated');
 API.goToView();

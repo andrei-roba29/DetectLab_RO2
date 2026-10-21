@@ -13918,8 +13918,14 @@
                         try { danishLayers.filterForCountry(iso); } catch (e) {}
                     }
 
-                    // Albania ASIG registry definitions mark their rows
-                    // countryIndependent; do not apply the legacy group filter.
+                    // The Albanian rows (js/asig-albania-layers.js) live in one
+                    // Albania-owned group (#albaniaRow). The module gates them
+                    // strictly by ISO: they are shown only while AL is the
+                    // selected country and hidden for every other country.
+                    var albaniaLayers = window.AsigAlbaniaLayers;
+                    if (albaniaLayers && typeof albaniaLayers.filterForCountry === 'function') {
+                        try { albaniaLayers.filterForCountry(iso); } catch (e) {}
+                    }
 
                     // The Finnish rows (js/finland-layers.js) are generated from
                     // js/finland-layers.config.js, so they are not in `layerDefs`
@@ -13984,6 +13990,12 @@
                     if (window.FinlandLayers &&
                         typeof window.FinlandLayers.filterForCountry === 'function') {
                         try { window.FinlandLayers.filterForCountry(null); } catch (e) {}
+                    }
+                    // Albania is strictly its own country view: leaving the
+                    // locked view (no ISO) keeps its group hidden too.
+                    if (window.AsigAlbaniaLayers &&
+                        typeof window.AsigAlbaniaLayers.filterForCountry === 'function') {
+                        try { window.AsigAlbaniaLayers.filterForCountry(null); } catch (e) {}
                     }
                     layerDefs.concat(internationalLayerDefs).forEach(function (def) {
                         var row = null;
