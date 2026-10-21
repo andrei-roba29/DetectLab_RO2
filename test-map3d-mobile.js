@@ -287,12 +287,12 @@ const shellVersion = Number((swJs.match(/CACHE_NAME = 'detectlab-v(\d+)-/) || []
 assert(shellVersion >= 196,
     'sw.js cache is v196 or newer so installed PWAs get the mobile fix (found v' + shellVersion + ')');
 /* Each asset is versioned by whatever last changed it: the registry by the
- * WMS/WMTS audit, the viewer by the camera-handoff fix, and the skin by the
- * 3D basemap picker. */
+ * WMS/WMTS audit, and the viewer + its skin by the 2D/3D switch moving into
+ * the bottom-left control column, above the base-layer button. */
 const TAGS = {
     'js/layer-registry.js': '20261021-albania-country-group',
-    'js/map3d-terrain.js': '20261020-outline-camera-handoff',
-    'css/map3d-terrain.css': '20261021-country-exit-3d-stack',
+    'js/map3d-terrain.js': '20261021-3d-switch-baselayer-column',
+    'css/map3d-terrain.css': '20261021-3d-switch-baselayer-column',
     'js/danish-layers.config.js': '20261019-danish-token-maps',
     'js/danish-layers.js': '20261019-danish-free-groups'
 };

@@ -361,11 +361,18 @@ ok('paint quantisation keeps the country-wash suppression intact');
 
 /* ══ 5. the dock no longer covers the 3D switch ═══════════════════════════ */
 
+/* The switch left the bottom-centre column the dock (and the country “Exit
+ * view” pill, the offline ✕ and the APM/zoom hints) occupies: it now heads the
+ * map's bottom-left control column, directly above the base-layer button, so
+ * the dock's 62px clearance can no longer collide with it and the switch no
+ * longer reads --layer-dock-clearance. See MAP3D_SWITCH_BASE_LAYER_COLUMN.md. */
 const toggleCss = read('css/map3d-terrain.css');
-const toggleRule = toggleCss.slice(toggleCss.indexOf('#map3d-toggle {'));
-assert.ok(/bottom:\s*calc\(66px\s*\+\s*var\(--layer-dock-clearance/.test(toggleRule),
-    '#map3d-toggle must lift by the dock clearance, not stay at a fixed 66px');
-ok('#map3d-toggle lifts by var(--layer-dock-clearance) when the action dock is open');
+const toggleRule = toggleCss.slice(toggleCss.indexOf('.m3d-toggle-group {'));
+assert.ok(/bottom:\s*var\(--m3d-anchor-bottom/.test(toggleRule),
+    '#map3d-toggle is placed by the measured base-layer anchor');
+assert.ok(!/--layer-dock-clearance/.test(toggleRule.slice(0, toggleRule.indexOf('}'))),
+    'the switch no longer needs the dock clearance: it is not in the dock’s column');
+ok('the 2D/3D switch sits in the bottom-left control column, out of the dock’s way');
 
 const stylesCss = read('css/styles.css');
 assert.ok(/--layer-dock-clearance:\s*62px/.test(stylesCss),
@@ -377,9 +384,11 @@ assert.ok(/bottom:\s*calc\(18px\s*\+\s*env\(safe-area-inset-bottom/.test(
     'the dock still sits on its 18px offset');
 ok('the dock geometry is unchanged: 18px offset + 7px padding over a 38px button (top ≈ 72px)');
 
-/* 66 + 62 clears the ~72px the dock reaches, so the switch is never under it. */
-assert.ok(66 + 62 > 72 + 10, '66px + 62px clearance clears the dock with room to spare');
-ok('66px + 62px clearance = 128px, above the dock top (~72px) with margin');
+/* The centred stack the dock lifts (APM help, zoom hints) still reads the
+ * clearance; the switch is 10px in from the left edge and never under the dock. */
+assert.ok(/bottom:\s*calc\(26px\s*\+\s*var\(--layer-dock-clearance/.test(stylesCss),
+    'the centred APM help button still lifts by the dock clearance');
+ok('the dock clearance still lifts the bottom-centre stack, which no longer holds the switch');
 
 /* ══ 6. the source, not just the behaviour ════════════════════════════════ */
 

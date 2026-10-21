@@ -682,7 +682,21 @@
 //   were visible under Romania's satellite/heritage sections and under the
 //   LiDAR group that hosts Denmark's DHM. Re-tags the ASIG config/module so a
 //   cached copy cannot keep the old placement alive. See ALBANIA_ASIG_LAYERS.md.
-const CACHE_NAME = 'detectlab-v253-viewport-layer-filter';
+// v254: the “3D” switch moved out of the bottom-centre slot and into the map's
+//   bottom-left control column, directly above the base-layer button
+//   (#arcgisBasemapCtrl) — one column, top to bottom: 2D/3D switch → base
+//   layer → compass → rotation lock (+ Detect in the installed PWA). Leaflet
+//   stacks that corner in flow and every environment moves it (the PWA adds a
+//   button and rides the home-indicator inset, mobile-web fullscreen makes the
+//   corner position:fixed above the browser bar), so js/map3d-terrain.js
+//   measures the control against .map-wrapper and publishes
+//   --m3d-anchor-bottom / --m3d-anchor-left / --m3d-stack-top; the stylesheet
+//   reads them, with the documented column as its fallback. The 3D bar rides
+//   on --m3d-stack-top in every layout, and the bottom-centre lift variables
+//   (--layer-dock-clearance, --country-exit-lift) no longer move the switch.
+//   Re-tags css/map3d-terrain.css and js/map3d-terrain.js.
+//   See MAP3D_SWITCH_BASE_LAYER_COLUMN.md.
+const CACHE_NAME = 'detectlab-v254-3d-switch-baselayer-column';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -772,6 +786,7 @@ const PRECACHE_URLS = [
   'js/map3d-mirror.js?v=20261013-3d-mobile',
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
+  'js/map3d-terrain.js?v=20261021-3d-switch-baselayer-column',
   'js/map3d-terrain.js?v=20261020-outline-camera-handoff',
   'js/map3d-terrain.js?v=20261020-1km-raster-refresh',
   'js/map3d-terrain.js?v=20261020-3d-basemap-selector',
@@ -796,6 +811,7 @@ const PRECACHE_URLS = [
   /* v248: the 2D/3D switch and the country “Exit view” pill stopped sharing
    * the same bottom-centre slot in the installed PWA (see the CACHE_NAME note
    * below). Re-tags the 3D skin, the country dock and its module. */
+  'css/map3d-terrain.css?v=20261021-3d-switch-baselayer-column',
   'css/map3d-terrain.css?v=20261021-country-exit-3d-stack',
   'css/map3d-terrain.css?v=20261020-1km-raster-refresh',
   'css/map3d-terrain.css?v=20261020-3d-basemap-selector',

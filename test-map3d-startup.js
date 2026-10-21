@@ -44,7 +44,7 @@ async function testCountryRace() {
     const ctx = vm.createContext({ state, map: null, openGeneration: 0,
         wrapper: () => true, ensureSurface: noop, ensureBar: noop, ensureToggle: noop,
         document: { body: { classList: { add: noop } }, addEventListener: noop },
-        refreshToggle: noop, showVeil: noop, t: x => x,
+        refreshToggle: noop, queueAnchorSync: noop, showVeil: noop, t: x => x,
         webglProbe: () => ({ webgl2: true }), loadMapLibre: () => sdk,
         registerProtocols: noop, REGISTRY: { config: () => ({}) },
         focusCamera: x => x, cameraFrom2D: noop, deviceProfile: () => ({}),
