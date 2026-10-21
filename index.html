@@ -180,7 +180,7 @@
             left: 0;
             height: auto !important;
             min-height: 100vh;
-            min-height: var(--dl-vvh, 100vh);
+            min-height: max(100vh, var(--dl-vvh, 100vh));
             width: 100% !important;
             max-width: 100% !important;
             z-index: 10;
@@ -208,7 +208,7 @@
         body.is-pwa #detectlab-map {
             height: 100% !important;
             min-height: 100vh !important;
-            min-height: var(--dl-vvh, 100vh) !important;
+            min-height: max(100vh, var(--dl-vvh, 100vh)) !important;
             border: none !important;
             border-radius: 0 !important;
             box-shadow: none !important;
@@ -234,7 +234,7 @@
             bottom: 0 !important;
             height: auto !important;
             min-height: 100vh !important;
-            min-height: var(--dl-vvh, 100vh) !important;
+            min-height: max(100vh, var(--dl-vvh, 100vh)) !important;
             max-height: none !important;
             padding-bottom: 0 !important;
             border-radius: 0 !important;
@@ -280,7 +280,7 @@
             width: 100% !important;
             height: 100% !important;
             min-height: 100vh !important;
-            min-height: var(--dl-vvh, 100vh) !important;
+            min-height: max(100vh, var(--dl-vvh, 100vh)) !important;
             margin: 0 !important;
             overflow: hidden !important;
         }

@@ -518,12 +518,8 @@
         } catch (e) { return null; }
     }
 
-    /* A country is often drawn at z4–6 before a LiDAR jump to z14+.
-       Leaflet rounds path vertices and derives its renderer transform from
-       the unrounded view centre. Both errors are multiplied by the animated
-       zoom scale (our map allows jumps of ten levels). Keep the outline in
-       exact projected pixels and scale from the SVG's actual pixel anchor,
-       just as tiles scale from their level origin. Do not patch other paths. */
+    /* (Removed custom projection — use Leaflet's standard _projectLatlngs so
+       the outline stays anchored to its LatLngs during every zoom.) */
     function projectBoundsLatlngs(latlngs, result, projectedBounds) {
         if (!latlngs.length) return;
         if (latlngs[0] && typeof latlngs[0].lat === 'number') {
@@ -549,19 +545,7 @@
         if (!L || !L.SVG || typeof L.SVG.extend !== 'function') return null;
         if (!BoundsSVG) BoundsSVG = L.SVG.extend({
             _update: function () {
-                // L.SVG._update skips the whole update while a zoom is animating
-                // (`_animatingZoom && _bounds`). Record the anchor under exactly
-                // that same condition: the pixel origin, `_bounds.min` and the
-                // projected rings must always describe one and the same view,
-                // or the next zoomanim scales the outline around an anchor that
-                // belongs to a different zoom — which is what makes the border
-                // jump when the view is changed while an animation is still
-                // running (a re-locked selection, a debounced resize moveend…).
-                var skip = !!(this._map && this._map._animatingZoom && this._bounds);
                 L.SVG.prototype._update.call(this);
-                if (this._map && !skip) {
-                    this._outlinePixelOrigin = this._map.getPixelOrigin().clone();
-                }
                 this._syncOutlineZoomVisibility();
             },
             /* A renderer that is born while a zoom animation is already in
@@ -605,33 +589,10 @@
             },
             _initPath: function (path) {
                 L.SVG.prototype._initPath.call(this, path);
-                // During an animated zoom Leaflet CSS-scales this container,
-                // which would scale the stroke with it — the border visibly
-                // fattening/thinning like a flat 2D graphic instead of
-                // staying the constant-width line Leaflet reprojects it to
-                // at zoomend. non-scaling-stroke keeps the painted width in
-                // device pixels at every intermediate scale; the geometry
-                // itself still scales with the map, and at rest (scale 1)
-                // nothing changes.
+                // Keep stroke width constant during zoom animations
                 if (path && path._path && typeof path._path.setAttribute === 'function') {
                     path._path.setAttribute('vector-effect', 'non-scaling-stroke');
                 }
-            },
-            _updateTransform: function (center, zoom) {
-                if (!this._outlinePixelOrigin || !this._bounds) {
-                    return L.SVG.prototype._updateTransform.call(this, center, zoom);
-                }
-                var scale = this._map.getZoomScale(zoom, this._zoom);
-                // Deliberately unrounded. GridLayer rounds the translate of a tile
-                // level, but that level and this container scale around different
-                // anchors (level origin vs pixelOrigin + _bounds.min) which their
-                // content offsets cancel exactly; rounding here would quantise one
-                // of the two on its own and put the border up to a pixel away from
-                // the imagery it is measured against. L.SVG does not round either.
-                var offset = this._outlinePixelOrigin.add(this._bounds.min)
-                    .multiplyBy(scale).subtract(this._map._getNewPixelOrigin(center, zoom));
-                if (L.Browser.any3d) L.DomUtil.setTransform(this._container, offset, scale);
-                else L.DomUtil.setPosition(this._container, offset);
             }
         });
         return new BoundsSVG({ pane: pane, padding: 0.1 });
@@ -678,10 +639,10 @@
         // (bundled 1.9.4: geometryToLayer forwards the GeoJSON options), so
         // pane/interactive apply to the outline itself.
         var styleOpts = {
-            color: '#39ff14',
+            color: '#A050DC',
             weight: 2.5,
             opacity: 0.9,
-            fillColor: '#39ff14',
+            fillColor: '#A050DC',
             fillOpacity: 0.05,
             interactive: false,
             bubblingMouseEvents: false,
@@ -698,9 +659,6 @@
         try { layer = window.L.geoJSON(feature, styleOpts); } catch (e) { layer = null; }
         if (!layer || typeof map.addLayer !== 'function') return;
         if (renderer && typeof layer.eachLayer === 'function') {
-            layer.eachLayer(function (path) {
-                if (typeof path._projectLatlngs === 'function') path._projectLatlngs = projectBoundsLatlngs;
-            });
             // The renderer is dedicated to this selection. Remove it with the
             // outline so country switching cannot accumulate empty SVGs/listeners.
             layer.on('remove', function () {
@@ -1577,15 +1535,15 @@
         ctx.lineJoin = 'round';
         if (G.selected) { // fly-to highlight
             ctx.beginPath(); path(G.selected.feature);
-            ctx.fillStyle = 'rgba(57,255,20,.5)'; ctx.fill();
+            ctx.fillStyle = 'rgba(160,80,220,.5)'; ctx.fill();
             ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 5; ctx.stroke();
-            ctx.strokeStyle = '#39ff14'; ctx.lineWidth = 2.4; ctx.stroke();
+            ctx.strokeStyle = '#A050DC'; ctx.lineWidth = 2.4; ctx.stroke();
         }
-        if (G.hovered && G.hovered !== G.selected) { // neon-green hover
+        if (G.hovered && G.hovered !== G.selected) { // purple hover
             ctx.beginPath(); path(G.hovered.feature);
-            ctx.fillStyle = 'rgba(57,255,20,.42)'; ctx.fill();
+            ctx.fillStyle = 'rgba(160,80,220,.42)'; ctx.fill();
             ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 4.5; ctx.stroke();
-            ctx.strokeStyle = '#39ff14'; ctx.lineWidth = 2; ctx.stroke();
+            ctx.strokeStyle = '#A050DC'; ctx.lineWidth = 2; ctx.stroke();
         }
         // micro-states: ring marker when they'd be invisible at this zoom
         for (i = 0; i < G.eu.length; i++) {
@@ -1596,7 +1554,7 @@
             if (!q || d3g.geoDistance([d.lng, d.lat], [-G.rot[0], -G.rot[1]]) > 1.5) continue;
             ctx.beginPath(); ctx.arc(q[0], q[1], 9, 0, 7);
             ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 5; ctx.stroke();
-            ctx.strokeStyle = '#39ff14'; ctx.lineWidth = 2.5; ctx.stroke();
+            ctx.strokeStyle = '#A050DC'; ctx.lineWidth = 2.5; ctx.stroke();
         }
         // label for the hovered / selected country
         var labelled = [];
@@ -2128,7 +2086,7 @@
         if (!els.hint) return;
         els.hint.textContent = text || '';
         els.hint.classList.toggle('show', !!text);
-        els.hint.style.borderColor = strong ? '#39ff14' : '';
+        els.hint.style.borderColor = strong ? '#A050DC' : '';
     }
     function hideHint() { if (els.hint) els.hint.classList.remove('show'); }
 

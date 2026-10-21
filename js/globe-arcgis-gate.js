@@ -21,9 +21,9 @@
     var WORLD_IMAGERY_SERVICE = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer';
     var KEYED_WORLD_IMAGERY_SERVICE = 'https://ibasemaps-api.arcgis.com/arcgis/rest/services/World_Imagery/MapServer';
     var BACKGROUND = '#030916';
-    var NEON = [57, 255, 20];
+    var NEON = [160, 80, 220];  // purple for selected/hovered country
     var VIOLET = [107, 95, 130];
-    var TEXT_COLOR = [234, 255, 221];
+    var TEXT_COLOR = [234, 230, 255];  // light purple tint for labels
     var ATTRIBUTION = 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community';
     var MICRO_ISO = { AD: true, LI: true, LU: true, MC: true, MT: true, SM: true, VA: true };
     // SceneView zoom window. The hand-off zoom comes from the flat map's
