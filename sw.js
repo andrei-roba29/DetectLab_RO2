@@ -642,7 +642,29 @@
 //   (a one-argument createTile still settles on the next frame, as Leaflet
 //   does), with the tile timeout as the bound. Re-tags js/map3d-mirror.js.
 //   See DENMARK_LIDAR_3D_CANVAS.md.
-const CACHE_NAME = 'detectlab-v247-lidar-canvas-tiles';
+// v248: “Exit view” was overlapped by the “3D” switch in the installed PWA.
+//   The pill is lifted to 60px above the safe area there, exactly where the
+//   bottom-centre 2D/3D switch has always sat (58px on phones, 66px on
+//   desktop, 64px + the same inset in PWA 3D) — and the switch paints later,
+//   so it covered the pill's middle and took its taps (elementFromPoint found
+//   #map3d-toggle on the pill's centre). js/country-dock.js now marks the
+//   visible pill with body.country-exit-open; css/country-dock.css turns that
+//   into --country-exit-lift (46px = pill height + a 10px gap) and
+//   css/map3d-terrain.css steps the switch and the 3D bar above it. On the
+//   website nothing moves: the pill sits 18px from the edge, under the switch.
+//   Re-tags css/map3d-terrain.css, css/country-dock.css and js/country-dock.js.
+//   See PWA_EXIT_VIEW_3D_STACK.md.
+// v249: the “Choose your country” gate painted its header under the phone's
+//   status bar. The gate fills the whole map frame, and in the installed PWA
+//   that frame starts at y = 0 (behind the translucent status bar / notch), so
+//   the title's first ~45px and half of the gate's ✕ were hidden under the
+//   clock. css/globe-country-picker.css now adds env(safe-area-inset-top) to
+//   the header padding (desktop and the ≤640px phone variant), to the ✕ anchor
+//   and to the shared reopen pill, and env(safe-area-inset-bottom) to the
+//   zoom stack and the hovered-country hint (same convention as the working
+//   map's bottom Leaflet corner). Re-tags css/globe-country-picker.css.
+//   See GLOBE_GATE_SAFE_AREA.md.
+const CACHE_NAME = 'detectlab-v249-gate-safe-area-top';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -751,6 +773,10 @@ const PRECACHE_URLS = [
   'js/maplibre-gl.js?v=20261019-tile-order',
   'js/maplibre-gl.js',
   'css/maplibre-gl.css?v=20261013-3d-terrain',
+  /* v248: the 2D/3D switch and the country “Exit view” pill stopped sharing
+   * the same bottom-centre slot in the installed PWA (see the CACHE_NAME note
+   * below). Re-tags the 3D skin, the country dock and its module. */
+  'css/map3d-terrain.css?v=20261021-country-exit-3d-stack',
   'css/map3d-terrain.css?v=20261020-1km-raster-refresh',
   'css/map3d-terrain.css?v=20261020-3d-basemap-selector',
   'css/map3d-terrain.css?v=20261020-pwa-lidar-pill-clearance',
@@ -1355,6 +1381,11 @@ const PRECACHE_URLS = [
   // v184: the ArcGIS-basemap working map, restored country gate (lazy ArcGIS
   // SceneView + canvas fallback) and country dock, in the documented load
   // order (gate → dock → map-app).
+  // v249: the gate header/✕/zoom stack now clear the phone's status bar and
+  // home indicator (env(safe-area-inset-*), see GLOBE_GATE_SAFE_AREA.md).
+  'css/globe-country-picker.css?v=20261021-gate-safe-area',
+  /* Older tag stays listed: an installed PWA still running an older
+   * index.html keeps working offline through its own URL. */
   'css/globe-country-picker.css?v=20261013-no-change-pill',
   'js/globe-arcgis-gate.js?v=20261013-handoff-zoom',
   'js/globe-country-picker.js?v=20261015-outline-zoom-anchor',
@@ -1377,6 +1408,8 @@ const PRECACHE_URLS = [
   // v167: country dock glued under the search bar (country switcher +
   // World-hillshade checkbox) and the “Exit view” button of the locked
   // country view. The hillshade tiles themselves stay network-only.
+  'css/country-dock.css?v=20261021-country-exit-3d-stack',
+  'js/country-dock.js?v=20261021-country-exit-3d-stack',
   'css/country-dock.css?v=20261008',
   'js/country-dock.js?v=20261008',
   'js/country-dock.js?v=20261009-3d-globe',

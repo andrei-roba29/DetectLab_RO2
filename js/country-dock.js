@@ -318,6 +318,15 @@
         if (show) els.exit.removeAttribute('hidden');
         else els.exit.setAttribute('hidden', 'hidden');
         if (els.exit.classList) els.exit.classList.toggle('show', show);
+        /* The installed PWA lifts this pill above the home indicator, right
+           into the slot the 2D/3D switch (and the 3D bar above it) already
+           occupies — the switch used to paint over the pill's middle and eat
+           its taps. The switch reads this one body class instead of trying to
+           guess the pill's box (see --country-exit-lift in
+           css/country-dock.css and css/map3d-terrain.css). */
+        if (document.body && document.body.classList) {
+            document.body.classList.toggle('country-exit-open', show);
+        }
     }
 
     function exitView() {

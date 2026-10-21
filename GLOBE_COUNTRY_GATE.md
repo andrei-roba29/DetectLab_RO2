@@ -152,6 +152,21 @@ may use the canvas or last-resort select fallback instead. The 10m geometry
 refinement can also increase work when it arrives on a mobile device. These are
 documented risks, not verified mobile-device results.
 
+## Safe area — the header must clear the phone's status bar (v249)
+
+The gate is `inset: 0` of `.map-wrapper`, and in the installed PWA that wrapper
+is the whole screen (`body.is-pwa #map-section` is `position: fixed; top: 0`
+with a `min-height: 100vh` floor, `index.html`), so `y = 0` is *behind* the
+translucent status bar / notch. The chrome's flat `18px` / `14px` paddings and
+the ✕'s `top: 12px` therefore drew the title and half the button under the
+clock. `css/globe-country-picker.css` now adds `env(safe-area-inset-top)` to the
+header padding (desktop and the ≤640px phone variant), to `#globeGateCloseBtn`
+(top + left) and to `.globe-gate-reopen`, and `env(safe-area-inset-bottom)` to
+the zoom stack and the hovered-country hint — the same convention the working
+map already uses for its bottom Leaflet corner. Every inset falls back to `0px`,
+so a desktop browser renders exactly as before. Details and measurements:
+`GLOBE_GATE_SAFE_AREA.md`; regression: `node test-globe-gate-safe-area.js`.
+
 ## Files
 
 - `js/globe-arcgis-gate.js` — optional ArcGIS SceneView renderer, projection and

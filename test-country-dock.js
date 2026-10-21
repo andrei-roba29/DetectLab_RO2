@@ -22,12 +22,12 @@ const indexHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
  'countryExitViewBtn', 'mapSearchResults'].forEach(function (id) {
     assert(indexHtml.includes('id="' + id + '"'), 'index.html contains #' + id);
 });
-assert(indexHtml.includes('css/country-dock.css?v=20261008'), 'index.html loads the dock css');
-assert(indexHtml.includes('js/country-dock.js?v=20261013-country-2d'), 'index.html loads the dock script');
+assert(indexHtml.includes('css/country-dock.css?v=20261021-country-exit-3d-stack'), 'index.html loads the dock css');
+assert(indexHtml.includes('js/country-dock.js?v=20261021-country-exit-3d-stack'), 'index.html loads the dock script');
 // The dock talks to the gate, so the gate must be parsed first.
 assert(indexHtml.indexOf('js/globe-country-picker.js?v=20261017-outline-zoom-settle') <
-    indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d'), 'globe gate loads before the dock');
-assert(indexHtml.indexOf('js/country-dock.js?v=20261013-country-2d') <
+    indexHtml.indexOf('js/country-dock.js?v=20261021-country-exit-3d-stack'), 'globe gate loads before the dock');
+assert(indexHtml.indexOf('js/country-dock.js?v=20261021-country-exit-3d-stack') <
     indexHtml.indexOf('js/map-app.js?v=20261020-albania-independent-rows'), 'dock loads before map-app.js');
 // The dock lives *inside* the search wrap so it stays glued to the search bar.
 const wrapIdx = indexHtml.indexOf('id="mapSearchWrap"');
@@ -49,8 +49,8 @@ const dockJs = fs.readFileSync(path.join(__dirname, 'js/country-dock.js'), 'utf8
 assert(dockJs.includes('working basemap is flat Leaflet/Web Mercator'),
     'the hillshade stays on the flat working map');
 assert(!dockJs.includes('attachTileTwin'), 'the hillshade has no retired globe-twin path');
-assert(swJs.includes("'css/country-dock.css?v=20261008'"), 'sw.js precaches the dock css');
-assert(swJs.includes("'js/country-dock.js?v=20261013-country-2d'"), 'sw.js precaches the re-versioned dock script');
+assert(swJs.includes("'css/country-dock.css?v=20261021-country-exit-3d-stack'"), 'sw.js precaches the dock css');
+assert(swJs.includes("'js/country-dock.js?v=20261021-country-exit-3d-stack'"), 'sw.js precaches the re-versioned dock script');
 const shellVersion = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
 assert(shellVersion >= 173, 'sw.js cache is v173 or newer (got v' + shellVersion + ')');
 console.log('  ✓ sw.js shell v' + shellVersion + ' precaches the dock');
@@ -680,18 +680,29 @@ function makeSandbox(elMap) {
     assert(dockEls.countryExitViewBtn.attrs.hidden === undefined,
         'zooming out to the maximum reveals “Exit view”');
     assert(dockEls.countryExitViewBtn.classList.contains('show'), 'the button animates in');
+    // The installed PWA lifts this pill into the 2D/3D switch's slot, so the
+    // body class that lets css/map3d-terrain.css step the switch above it must
+    // follow the very same show/hide decision (see PWA_EXIT_VIEW_3D_STACK.md).
+    assert(dockSandbox.document.body.classList.contains('country-exit-open'),
+        'showing the pill arms the bottom-stack hook (body.country-exit-open)');
     locked = false;
     dockMap.fire('zoomend');
     assert(dockEls.countryExitViewBtn.attrs.hidden === 'hidden', 'it disappears when the view is unlocked again');
+    assert(!dockSandbox.document.body.classList.contains('country-exit-open'),
+        'hiding the pill releases the hook again');
     locked = true;
     dockMap._zoom = 6;
     dockMap.fire('zoomend');
     assert(dockEls.countryExitViewBtn.attrs.hidden === 'hidden', 're-locking hides it until the user zooms out again');
     dockMap.setZoom(5);
     dockMap.fire('zoomend');
+    assert(dockSandbox.document.body.classList.contains('country-exit-open'),
+        'zooming back out re-arms the hook');
     dockEls.countryExitViewBtn.fire('click');
     assert(exits.length === 1, 'clicking “Exit view” asks the gate to leave the country view');
     assert(dockEls.countryExitViewBtn.attrs.hidden === 'hidden', 'the button hides as the view is left');
+    assert(!dockSandbox.document.body.classList.contains('country-exit-open'),
+        'leaving the country view also clears the hook');
     console.log('  ✓ “Exit view” appears only at the zoom floor and exits the country view');
 
     // // 6f. A globe pick refreshes the chip and the grid highlight.

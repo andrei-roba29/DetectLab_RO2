@@ -22,14 +22,14 @@ console.log('[Test] Lazy ArcGIS country gate...');
 // Page and service-worker wiring: adapter before the public gate, no eager CDN.
 const adapterUrl = 'js/globe-arcgis-gate.js?v=20261013-handoff-zoom';
 const pickerUrl = 'js/globe-country-picker.js?v=20261017-outline-zoom-settle';
-const cssUrl = 'css/globe-country-picker.css?v=20261013-no-change-pill';
+const cssUrl = 'css/globe-country-picker.css?v=20261021-gate-safe-area';
 const translationsUrl = 'js/translations.js?v=20261017-albania-asig';
 for (const asset of [adapterUrl, pickerUrl, cssUrl, translationsUrl]) {
     assert(html.includes(asset), 'index.html references ' + asset);
     assert(sw.includes("'" + asset + "'"), 'sw.js precaches ' + asset);
 }
 assert(html.indexOf(adapterUrl) < html.indexOf(pickerUrl), 'local ArcGIS adapter loads before the gate API');
-assert(html.indexOf(pickerUrl) < html.indexOf('js/country-dock.js?v=20261013-country-2d'), 'public gate API loads before the country dock');
+assert(html.indexOf(pickerUrl) < html.indexOf('js/country-dock.js?v=20261021-country-exit-3d-stack'), 'public gate API loads before the country dock');
 assert(!/https:\/\/js\.arcgis\.com/.test(html), 'the ArcGIS SDK is not eagerly included in index.html');
 assert(adapter.includes("var SDK_ROOT = 'https://js.arcgis.com/4.31/'"), 'the adapter pins ArcGIS SDK 4.31');
 assert(adapter.includes("var SDK_CSS = SDK_ROOT + 'esri/themes/dark/main.css'"), 'the ArcGIS theme is dynamically loaded');

@@ -31,10 +31,10 @@
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
     <link rel="stylesheet" href="css/maplibre-gl.css?v=20261013-3d-terrain">
-    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261020-1km-raster-refresh">
+    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261021-country-exit-3d-stack">
     <link rel="stylesheet" href="css/hist-shift.css?v=20261014-hist-shift">
-    <link rel="stylesheet" href="css/globe-country-picker.css?v=20261013-no-change-pill">
-    <link rel="stylesheet" href="css/country-dock.css?v=20261008">
+    <link rel="stylesheet" href="css/globe-country-picker.css?v=20261021-gate-safe-area">
+    <link rel="stylesheet" href="css/country-dock.css?v=20261021-country-exit-3d-stack">
     <link rel="stylesheet" href="css/library-of-babel.css?v=20260917-babel-epochs">
     <link rel="stylesheet" href="css/tutorial.css?v=20260922-mobile-fs-controls">
     <link rel="stylesheet" href="css/offline-maps.css?v=20260916-pwa-panel-offline-exit">
@@ -4977,7 +4977,7 @@
          “Exit view” button. Loaded after the globe gate (it only talks to it
          through window.DetectLabGlobeGate) and before map-app.js, which
          attaches it to the Leaflet map. -->
-    <script src="js/country-dock.js?v=20261013-country-2d"></script>
+    <script src="js/country-dock.js?v=20261021-country-exit-3d-stack"></script>
     <!-- Single shared layer registry (js/layer-registry.js): every raster
          layer — historical WMS sheets, R2/Supabase tile pyramids, LiDAR
          relief, CORONA, VEG-FP, base imagery — is defined ONCE here. The 2D
