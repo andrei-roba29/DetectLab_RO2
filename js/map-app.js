@@ -13886,10 +13886,10 @@
                         try { row = def.getRow(); } catch (e) {}
                         if (!row) return;
                         var available = true;
-                        // ASIG exposes globally selectable rows in the app's
-                        // existing sections. The WMS request bbox is clipped
-                        // to Albania; selection of another country must not hide
-                        // those rows.
+                        // ASIG's nine rows live in their own Albania-only
+                        // group and are gated by js/asig-albania-layers.js;
+                        // they are attributed ['AL'] in the registry and are
+                        // never treated as country-independent rows here.
                         if (!def.countryIndependent) {
                             var list = curatedCountriesFor(def);
                             if (list) {

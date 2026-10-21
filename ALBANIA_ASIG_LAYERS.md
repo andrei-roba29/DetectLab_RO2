@@ -64,6 +64,20 @@ Historical / Satellite / LiDAR / Heritage caption whenever the theme changes
 (`CONFIG.sectionLabels`). The group row sits on its own between the LiDAR group
 and the Denmark group.
 
+**Placement is enforced, not just authored.** `buildPanel()` first runs
+`sweepLegacyRows()`: it removes any surviving pre-group mount (the four ids
+above) and any element carrying `data-albania-row` that is not inside
+`#albaniaSubLayers`, then re-renders the nine rows from the config. The sweep
+is what repairs an installed PWA that is still running an older app shell
+whose rows were mounted under Romania's satellite/heritage sections or under
+the LiDAR group that hosts Denmark's DHM — those rows sit outside the country
+gate, so without the sweep they would stay visible for every country. The
+function is exposed as `AsigAlbaniaLayers.sweepLegacyRows()` (with
+`AsigAlbaniaLayers.LEGACY_MOUNT_IDS` and `state.swept`) for diagnostics and
+tests. The shell cache is `detectlab-v251-albania-only`, and the config/module
+asset tags are `?v=20261021-albania-only`, so a browser cannot keep the old
+placement alive from a previous cache.
+
 **Country gate.** `filterForCountry(iso)` (called by
 `js/map-app.js` → `filterLayersForCountry` on every selection, by
 `unfilterLayersForCountry` on “Exit view”, and from the
@@ -134,9 +148,11 @@ offline audit—as live verification.
   and any Albanian layer that was on is parked without losing its switch state.
   Back to Albania: the same rows return with the same on/off and opacity values.
 - `node test-albania-asig-layers.js` covers the placement invariants (one group,
-  no old mounts, position before the Denmark group), the gate for RO/DK/FI/IT,
-  the global view, the remembered per-layer state, the master switch, the
-  expander, the WMS URL/BBOX clipping and the EPSG:4326 fallback.
+  no old mounts, position before the Denmark group), the stale-shell sweep
+  (legacy mounts and stray rows are removed at startup and on rebuild), the
+  gate for RO/DK/FI/IT, the global view, the remembered per-layer state, the
+  master switch, the expander, the WMS URL/BBOX clipping and the EPSG:4326
+  fallback.
   `node test-country-layer-filter.js`, `node test-wms-layer-audit.js` and
   `node test-wms-health.js` cover the surrounding filter/registry/health
   contracts.

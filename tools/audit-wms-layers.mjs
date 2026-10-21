@@ -704,9 +704,10 @@ const SIGNATURES = [
       'X-Map3D-Upstream failure marker. EPSG:3857 is retained as the request path but is not listed literally ' +
       'in the owner-supplied capabilities excerpt (which advertises EPSG:900913).',
     owner: 'external (the agency GeoServer; government host, no SLA)',
-    app: 'rows are rendered individually in the existing Historical Maps, Satellite, LiDAR and Heritage Sites ' +
-      'sections; renderer owns error handling, retries EPSG:4326 after the configured EPSG:3857 error burst, ' +
-      'then reports a persistent fallback failure on that layer row'
+    app: 'rows are rendered in one Albania-only group (#albaniaRow, with Historical/Satellite/LiDAR/Heritage ' +
+      'captions) and are shown only while Albania is selected; a runtime sweep removes any surviving pre-group ' +
+      'mount or stray Albanian row; renderer owns error handling, retries EPSG:4326 after the configured ' +
+      'EPSG:3857 error burst, then reports a persistent fallback failure on that layer row'
   },
   {
     host: 'paikkatiedot.ymparisto.fi', provider: 'SYKE / Finnish Environment Institute',
