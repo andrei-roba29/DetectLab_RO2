@@ -83,7 +83,8 @@ expect('vegfp.ppi', 'watch', 'VITO');
 });
 console.log('  ✓ every family names its provider (CENAGIS, eHarta, IGN, Copernicus, CAST, VITO, …)');
 
-// ASIG's nine exact registry names stay in the existing thematic groups. This
+// ASIG's nine exact registry names stay attributed to Albania in the registry
+// (the panel groups them in one Albania-only panel row). This
 // is an offline URL audit only; production status is established by the probe.
 const ASIG_NAMES = [
     'Topografike:50K_Topografike', 'Orthophoto:Ortofoto_1999',
@@ -98,8 +99,8 @@ const asig = report.layers.filter((l) => l.id.startsWith('albania.'));
 const layerRegistry = require('./js/layer-registry.js');
 assert.strictEqual(asig.length, 9, 'the audit contains all nine ASIG registry rows');
 assert.deepStrictEqual(asig.map((l) => l.layer).sort(), ASIG_NAMES.slice().sort(), 'ASIG WMS Names remain exact');
-assert(asig.every((l) => { const def = layerRegistry.get(l.id); return def && def.countryIndependent === true && def.selfGuarded === true && def.guard === false && def.selfGuardedReason; }),
-    'all ASIG registry rows remain country-independent and self-guarded');
+assert(asig.every((l) => { const def = layerRegistry.get(l.id); return def && JSON.stringify(def.countries) === JSON.stringify(['AL']) && def.selfGuarded === true && def.guard === false && def.selfGuardedReason; }),
+    'all ASIG registry rows are attributed to Albania alone and stay self-guarded');
 assert(asig.every((l) => l.sampleTile === '12/2273/1530 (Tirana)'), 'ASIG offline samples use Tirana tile 12/2273/1530');
 assert(asig.every((l) => l.sample2d.includes('STYLES=&') && /crs=EPSG%3A3857/i.test(l.sample2d)),
     'offline WMS URL construction preserves empty style and the existing 3857 path');

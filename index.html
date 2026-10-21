@@ -26,7 +26,7 @@
     <link rel="stylesheet" href="css/leaflet.photon.css">
     <link rel="stylesheet" href="css/leaflet-measure.css">
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
-    <link rel="stylesheet" href="css/styles.css?v=20261020-albania-independent-rows">
+    <link rel="stylesheet" href="css/styles.css?v=20261021-albania-country-group">
     <!-- 3D TERRAIN VIEW (2D ⇄ 3D) — MapLibre GL JS, vendored like Leaflet.
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
@@ -1820,7 +1820,6 @@
                             <span>2021</span>
                             <span class="t" data-key="layer_sat_period_present">2025</span>
                         </div>
-                        <div id="asigSatelliteLayers" class="asig-section-mount" aria-label="ASIG satellite imagery"></div>
                     </div>
 
                     <div class="transp-divider active" data-category="free"></div>
@@ -1987,8 +1986,7 @@
                                 <span class="t" data-key="heritage_legend_yellow">Tumulus</span>
                             </div>
                         </div>
-                        <div id="asigHeritageLayers" class="asig-section-mount" aria-label="ASIG heritage sites"></div>
-                    </div>
+                                            </div>
 
                     <div class="transp-divider active" data-category="free"></div>
 
@@ -2020,8 +2018,7 @@
 
                         <!-- Sub-layer: Josephine Map -->
                         <div id="histSubLayers" style="margin-top:0;padding-left:6px;border-left:2px solid rgba(200,169,110,0.3);display:flex;flex-direction:column;gap:8px;overflow:hidden;transition:max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;max-height:0;opacity:0;">
-                            <div id="asigHistoricalLayers" class="asig-section-mount" aria-label="ASIG historical maps"></div>
-                            <!-- Sub-layer: Harta Iosefina gratuita — always visible -->
+                                                        <!-- Sub-layer: Harta Iosefina gratuita — always visible -->
                             <div id="iosfreeRow">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
@@ -2348,7 +2345,6 @@
                         </div><!-- /lidarEuropeanSubLayers -->
 
                         <div id="lidarSubLayers" style="margin-top:0;padding-left:6px;border-left:2px solid rgba(79,195,247,0.3);display:flex;flex-direction:column;gap:8px;overflow:hidden;transition:max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;max-height:0;opacity:0;">
-                            <div id="asigLidarLayers" class="asig-section-mount" aria-label="ASIG LiDAR layers"></div>
 
                             <!-- HD sub-layer -->
                             <div>
@@ -2563,6 +2559,45 @@
 
                     </div><!-- /lidar transp-layer-row -->
 
+                    <!-- Shqipëria / Albania — the ASIG layers for Albania ONLY. Every
+                         entry (title in RO+EN, WMS Name, format, opacity, zoom
+                         limits, attribution, snapshot dates) lives in
+                         js/asig-albania-layers.config.js; js/asig-albania-layers.js
+                         builds these rows from it. All nine rows are mounted in this
+                         single group — never inside another country's section — and
+                         the group plus its rows are visible ONLY while Albania is
+                         the selected country (the country filter hides them for every
+                         other ISO, including the global view). Sources, exact WMS
+                         names and the CRS fallback: ALBANIA_ASIG_LAYERS.md. -->
+                    <div class="transp-layer-row albania-out-of-country" data-category="free" id="albaniaRow">
+                        <div class="transp-layer-label" style="margin-bottom:6px">
+                            <span style="display:flex;align-items:center;gap:7px;min-width:0">
+                                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style="flex-shrink:0">
+                                    <rect x="1" y="2" width="11" height="9" rx="0.8" fill="rgba(228,30,32,0.35)" stroke="#e41e20" stroke-width="0.9" />
+                                    <path d="M6.5 4.2 L7.3 5.7 L8.9 5.5 L7.8 6.7 L8.3 8.3 L6.5 7.5 L4.7 8.3 L5.2 6.7 L4.1 5.5 L5.7 5.7 Z" fill="#ffffff" />
+                                </svg>
+                                <span class="t" data-key="albania_group_title" id="albaniaGroupTitle">Albania · ASIG geoportal</span>
+                                <button type="button" class="layer-info-btn" onclick="event.stopPropagation();showAlbaniaInfo()" title="Albanian ASIG layers: sources, WMS names and coverage"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="7.5" r="1.3" fill="currentColor" /><rect x="10.8" y="10.5" width="2.4" height="7" rx="1.2" fill="currentColor" /></svg></button>
+                            </span>
+                            <span style="display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0">
+                                <button type="button" id="albaniaGotoBtn" onclick="event.stopPropagation();goToAlbaniaView()" title="Centre the map on Tirana, Albania" style="background:none;border:1px solid rgba(228,30,32,0.45);color:rgba(245,240,235,0.8);border-radius:3px;cursor:pointer;font-size:0.62rem;padding:2px 5px;line-height:1.2;">Tirana</button>
+                                <button type="button" onclick="toggleAlbaniaSubLayers()" id="albaniaExpandBtn" title="Expand/Collapse the Albanian sublayers" aria-expanded="true" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:rgba(228,30,32,0.85);display:flex;align-items:center;transition:color 0.2s;" onmouseover="this.style.color='rgba(228,30,32,1)'" onmouseout="this.style.color='rgba(228,30,32,0.85)'">
+                                    <svg id="albaniaExpandIcon" width="12" height="12" viewBox="0 0 12 12" fill="none" style="transition:transform 0.25s ease;transform:rotate(0deg)">
+                                        <polyline points="2,4 6,8 10,4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                                    </svg>
+                                </button>
+                                <label class="apm-toggle-switch" title="Toggle the Albanian layers on/off">
+                                    <input type="checkbox" id="albaniaToggle" onchange="toggleAlbaniaLayers(this.checked)">
+                                    <span class="apm-toggle-track"></span>
+                                </label>
+                            </span>
+                        </div>
+
+                        <!-- The nine ASIG rows (and their small Historical / Satellite /
+                             LiDAR / Heritage captions) are generated here. -->
+                        <div id="albaniaSubLayers" class="asig-section-mount" style="display:flex;flex-direction:column;gap:8px;overflow:hidden;transition:max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;max-height:4000px;opacity:1;"></div>
+                    </div>
+
                     <!-- Danmark / Denmark — the Danish layers. Every entry (title in
                          DA+EN, service, LAYERS, CRS, zoom limits, attribution,
                          credentials, licence) lives in js/danish-layers.config.js;
@@ -2601,10 +2636,6 @@
                              with an opacity slider each) are generated here. -->
                         <div id="danishSubLayers" class="danish-sublayers" style="display:flex;flex-direction:column;gap:8px;overflow:hidden;transition:max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;max-height:6000px;opacity:1;"></div>
                     </div>
-
-                    <!-- Albania ASIG rows are rendered from their single config into the
-                         existing Historical Maps, Satellite, LiDAR and Heritage Sites
-                         sections; there is no Albania-wide panel group. -->
 
                     <!-- Suomi / Finland — MML terrain + cadastral, Museovirasto
                          heritage registers, SYKE protected sites, Åland and the
@@ -4901,7 +4932,7 @@
          historical maps): probes one GetMap tile per layer, marks the row
          unavailable and explains 200-with-error-body failures instead of
          silently showing empty tiles. See js/wms-health.js. -->
-    <script src="js/wms-health.js?v=20261020-albania-independent-rows"></script>
+    <script src="js/wms-health.js?v=20261021-albania-country-group"></script>
     <!-- Global tile performance governor: gesture-safe defaults for every tile
          layer of the app (LIDAR, CORONA 60's, historical maps, APM…), one tile
          update per layer per gesture and a page-wide budget on live tiles.
@@ -4992,8 +5023,9 @@
          the single description of every Albanian layer (WMS LAYERS names
          included; the protected-sites names carry publication dates and
          change) and it is loaded before the registry, which mirrors it.
-         js/asig-albania-layers.js (below, after map-app.js) draws them. -->
-    <script src="js/asig-albania-layers.config.js?v=20261020-albania-independent-rows"></script>
+         js/asig-albania-layers.js (below, after map-app.js) draws them and
+         gates the whole group to the Albania view (country: 'AL'). -->
+    <script src="js/asig-albania-layers.config.js?v=20261021-albania-country-group"></script>
     <!-- The Finnish layers: the CONFIG is the single description of every
          Finnish layer (endpoints, kinds, zoom limits, attributions) and it is
          loaded before the registry, which mirrors it. js/finland-tm35.js is
@@ -5002,7 +5034,7 @@
          depend on. -->
     <script src="js/finland-tm35.js?v=20261019-finland-filter"></script>
     <script src="js/finland-layers.config.js?v=20261019-finland-filter"></script>
-    <script src="js/layer-registry.js?v=20261020-albania-independent-rows"></script>
+    <script src="js/layer-registry.js?v=20261021-albania-country-group"></script>
     <!-- Roman roads („Drumuri romane”): the parser owns the record/geometry
          format, the layer paints the road network on canvas tiles, and the
          worker streams + parses the NDJSON off the main thread. map-app.js
@@ -5010,13 +5042,15 @@
          See ROMAN_ROADS_PERFORMANCE.md. -->
     <script src="js/roman-roads-parser.js?v=20261015-roman-roads"></script>
     <script src="js/roman-roads.js?v=20261015-roman-roads"></script>
-    <script src="js/map-app.js?v=20261020-albania-independent-rows"></script>
+    <script src="js/map-app.js?v=20261021-albania-country-group"></script>
     <!-- Danish layers: panel rows, basemap-control buttons and the lazy
          Leaflet layers, all built from js/danish-layers.config.js. -->
     <script src="js/danish-layers.js?v=20261019-danish-free-groups"></script>
-    <!-- Albanian layers (ASIG): panel rows and the lazy Leaflet layers, all
-         built from js/asig-albania-layers.config.js. -->
-    <script src="js/asig-albania-layers.js?v=20261020-albania-independent-rows"></script>
+    <!-- Albanian layers (ASIG): the nine rows of the single Albania group
+         (#albaniaRow) plus their lazy Leaflet layers, all built from
+         js/asig-albania-layers.config.js. The group is shown only while
+         Albania is the selected country. -->
+    <script src="js/asig-albania-layers.js?v=20261021-albania-country-group"></script>
     <!-- Finnish layers: panel rows and the lazy Leaflet layers — canvas
          reprojection from the ETRS-TM35FIN grid, MVT cadastral decoding,
          WMS tiles, debounced WFS, local GeoJSON — all built from

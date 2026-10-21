@@ -664,7 +664,17 @@
 //   zoom stack and the hovered-country hint (same convention as the working
 //   map's bottom Leaflet corner). Re-tags css/globe-country-picker.css.
 //   See GLOBE_GATE_SAFE_AREA.md.
-const CACHE_NAME = 'detectlab-v249-gate-safe-area-top';
+// v250: the Albanian ASIG rows were scattered through other countries'
+//   sections — the two orthophotos between Romania's satellite periods, the
+//   heritage rows under Romania's Heritage Sites and the DSM/LiDAR hillshades
+//   under the LiDAR group that hosts Denmark's DHM. They now live in ONE
+//   Albania-only group (#albaniaRow → #albaniaSubLayers, built by
+//   js/asig-albania-layers.js from js/asig-albania-layers.config.js) and are
+//   shown only while Albania is the selected country. Re-tags index.html,
+//   css/styles.css, js/asig-albania-layers.js, js/asig-albania-layers.config.js,
+//   js/map-app.js, js/layer-registry.js and js/wms-health.js.
+//   See ALBANIA_ASIG_LAYERS.md.
+const CACHE_NAME = 'detectlab-v250-albania-country-group';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -703,23 +713,23 @@ const PRECACHE_URLS = [
   'js/asig-albania-layers.config.js?v=20261017-albania-asig',
   'js/asig-albania-layers.js',
   'js/asig-albania-layers.js?v=20261017-albania-asig',
-  'js/asig-albania-layers.config.js?v=20261020-albania-independent-rows',
-  'js/asig-albania-layers.js?v=20261020-albania-independent-rows',
+  'js/asig-albania-layers.config.js?v=20261021-albania-country-group',
+  'js/asig-albania-layers.js?v=20261021-albania-country-group',
   'js/layer-registry.js?v=20261017-albania-asig',
   'js/translations.js?v=20261017-albania-asig',
   'js/wms-health.js?v=20261017-albania-asig',
-  'js/wms-health.js?v=20261020-albania-independent-rows',
+  'js/wms-health.js?v=20261021-albania-country-group',
   'js/finland-tm35.js?v=20261019-finland-filter',
   'js/finland-layers.config.js?v=20261019-finland-filter',
   'js/finland-layers.js?v=20261019-finland-filter',
   'js/layer-registry.js?v=20261019-finland-filter',
-  'js/layer-registry.js?v=20261020-albania-independent-rows',
+  'js/layer-registry.js?v=20261021-albania-country-group',
   'js/map-app.js?v=20261019-finland-filter',
-  'js/map-app.js?v=20261020-albania-independent-rows',
+  'js/map-app.js?v=20261021-albania-country-group',
   'js/map-app.js?v=20261017-finland',
   'js/map-app.js?v=20261017-albania-asig',
   'css/styles.css?v=20261019-danish-free-groups',
-  'css/styles.css?v=20261020-albania-independent-rows',
+  'css/styles.css?v=20261021-albania-country-group',
   'js/danish-layers.js?v=20261019-danish-free-groups',
   'js/layer-registry.js?v=20261014-wms-audit',
   'js/layer-registry.js?v=20261013-3d-mobile',

@@ -1,7 +1,11 @@
 /*
- * Albania ASIG WMS layers. Every Free-tab row and Leaflet layer is rendered
- * from js/asig-albania-layers.config.js; the rows live inside the app's
- * Historical Maps, Satellite, LiDAR and Heritage Sites sections.
+ * Albania ASIG WMS layers. Every row and Leaflet layer is rendered from
+ * js/asig-albania-layers.config.js into ONE Albania-only panel group
+ * (#albaniaRow → #albaniaSubLayers). The rows are not mounted inside the
+ * Romanian/Denmark/Finland sections any more: the group — and every row in
+ * it — is hidden unless Albania (ISO2 AL) is the selected country, and the
+ * tile layers are taken off the map while another country (or the global
+ * view) is active.
  */
 (function (window, document) {
     'use strict';
@@ -12,12 +16,16 @@
 
     var LAYERS = CONFIG.enabledLayers();
     var STORE_KEY = 'detectlab_albania_layers_v1';
-    var MOUNTS = {
-        historical: 'asigHistoricalLayers',
-        satellite: 'asigSatelliteLayers',
-        lidar: 'asigLidarLayers',
-        heritage: 'asigHeritageLayers'
-    };
+    var GROUP_ROW_ID = 'albaniaRow';
+    var MOUNT_ID = 'albaniaSubLayers';
+    var GROUP_TOGGLE_ID = 'albaniaToggle';
+    var EXPAND_BTN_ID = 'albaniaExpandBtn';
+    var EXPAND_ICON_ID = 'albaniaExpandIcon';
+    var COUNTRY = String(CONFIG.country || 'AL').toUpperCase();
+    /* The row is hidden for every other country — including "no country" —
+     * with a plain class that does not depend on the panel's filter state
+     * (the HTML ships the class, so nothing flashes before this module runs). */
+    var OUT_OF_COUNTRY_CLASS = 'albania-out-of-country';
     var PANE_BY_SECTION = {
         historical: ['pane_asig_historical', 405],
         satellite: ['pane_satellite', 398],
@@ -25,7 +33,13 @@
         heritage: ['pane_patrimoniu', 620]
     };
     var BLANK_TILE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
-    var runtime = { ready: false, map: null, panes: false, built: {}, active: {}, opacity: {}, rows: {}, notices: {} };
+    var runtime = {
+        ready: false, map: null, panes: false, built: {}, active: {}, opacity: {}, rows: {}, notices: {},
+        /* Country gating: `inCountry` mirrors the last filter call, `suppressed`
+         * says the tile layers are currently off the map because of it, and
+         * `expanded` is the accordion state of the group. */
+        inCountry: false, suppressed: false, expanded: true
+    };
     var STRINGS = {
         en: { opacity: 'Opacity', go: 'Tirana', unavailable: 'the source is not answering' },
         ro: { opacity: 'Opacitate', go: 'Tirana', unavailable: 'sursa nu răspunde' }
@@ -245,19 +259,86 @@
         runtime.rows[def.id] = { row: row, input: input, slider: slider, pct: pct, status: status, go: go };
         return row;
     }
+    /* The nine rows live in ONE container inside the Albania group row, in
+     * draw order, with a small caption whenever the theme changes. */
     function buildPanel() {
         runtime.rows = {};
-        Object.keys(MOUNTS).forEach(function (section) {
-            var mount = document.getElementById(MOUNTS[section]);
-            if (mount) mount.innerHTML = '';
-        });
-        LAYERS.forEach(function (def) {
-            var mount = document.getElementById(MOUNTS[def.section]);
-            if (mount) mount.appendChild(createRow(def));
-        });
+        var mount = document.getElementById(MOUNT_ID);
+        if (mount) {
+            mount.innerHTML = '';
+            var lastSection = null;
+            CONFIG.drawOrder().forEach(function (def) {
+                if (def.section !== lastSection) {
+                    lastSection = def.section;
+                    var label = CONFIG.sectionLabels && CONFIG.sectionLabels[def.section];
+                    if (label) mount.appendChild(el('div', { className: 'albania-layer-section', text: text(label) }));
+                }
+                mount.appendChild(createRow(def));
+            });
+        }
         Object.keys(runtime.rows).forEach(function (id) {
             if (runtime.notices[id]) setStatus(id, runtime.notices[id].text, runtime.notices[id].kind);
         });
+        setExpanded(runtime.expanded);
+        /* Rebuilding the DOM must not undo the country gate. */
+        applyCountryVisibility(runtime.inCountry);
+    }
+    function setExpanded(expanded) {
+        runtime.expanded = !!expanded;
+        var mount = document.getElementById(MOUNT_ID);
+        if (mount && mount.style) {
+            mount.style.maxHeight = expanded ? '4000px' : '0px';
+            mount.style.opacity = expanded ? '1' : '0';
+            mount.style.marginTop = expanded ? '6px' : '0px';
+        }
+        var button = document.getElementById(EXPAND_BTN_ID);
+        if (button) button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        var icon = document.getElementById(EXPAND_ICON_ID);
+        if (icon && icon.style) icon.style.transform = expanded ? 'rotate(0deg)' : 'rotate(-90deg)';
+    }
+    function toggleExpanded() { setExpanded(!runtime.expanded); }
+
+    /* ── country gate ────────────────────────────────────────────────────────
+     * Albania owns these rows. `applyCountryVisibility(false)` hides the group
+     * row and every child row and parks the tile layers (the user's on/off
+     * choice is remembered in runtime.active), so nothing is requested while
+     * another country — or no country at all — is selected. */
+    function setMapSuppressed(suppressed) {
+        runtime.suppressed = !!suppressed;
+        var map = runtime.map || window._dlMap || window.map;
+        if (!map) return;
+        LAYERS.forEach(function (def) {
+            var layer = runtime.built[def.id];
+            if (!layer) return;
+            if (runtime.suppressed) {
+                if (map.hasLayer(layer)) map.removeLayer(layer);
+            } else if (runtime.active[def.id] && !map.hasLayer(layer)) {
+                map.addLayer(layer);
+            }
+        });
+    }
+    function applyCountryVisibility(visible) {
+        runtime.inCountry = !!visible;
+        var groupRow = document.getElementById(GROUP_ROW_ID);
+        if (groupRow) {
+            groupRow.classList.toggle(OUT_OF_COUNTRY_CLASS, !visible);
+            groupRow.classList.toggle('country-layer-unavailable', !visible);
+            groupRow.setAttribute('aria-hidden', visible ? 'false' : 'true');
+        }
+        LAYERS.forEach(function (def) {
+            var row = runtime.rows[def.id] && runtime.rows[def.id].row;
+            if (!row) return;
+            row.classList.toggle('country-layer-unavailable', !visible);
+            row.setAttribute('aria-hidden', visible ? 'false' : 'true');
+        });
+        setMapSuppressed(!visible);
+    }
+    /* The same signature the other country groups expose. Albania is strictly
+     * its own country: no ISO (the global view) hides the rows too. */
+    function filterForCountry(iso) {
+        var code = String(iso == null ? (window._detectlabSelectedCountry || '') : iso).toUpperCase();
+        applyCountryVisibility(code === COUNTRY);
+        return code === COUNTRY;
     }
     function save() {
         try { window.localStorage.setItem(STORE_KEY, JSON.stringify({ active: runtime.active, opacity: runtime.opacity })); }
@@ -312,7 +393,9 @@
         if (!runtime.built[def.id]) runtime.built[def.id] = buildLayer(def);
         var layer = runtime.built[def.id];
         if (layer.setOpacity) layer.setOpacity(runtime.opacity[def.id] / 100);
-        if (!map.hasLayer(layer)) map.addLayer(layer);
+        /* The country gate owns the map membership while another country (or
+         * the global view) is selected: remember the choice, draw nothing. */
+        if (!runtime.suppressed && !map.hasLayer(layer)) map.addLayer(layer);
         setStatus(def.id, '', 'info');
     }
     function deactivate(def) {
@@ -341,23 +424,41 @@
         save();
     }
     function syncUI() {
+        var anyActive = false;
         LAYERS.forEach(function (def) {
             var row = runtime.rows[def.id];
+            if (runtime.active[def.id]) anyActive = true;
             if (!row) return;
             row.input.checked = !!runtime.active[def.id];
             row.row.classList.toggle('is-active', !!runtime.active[def.id]);
             row.pct.textContent = runtime.opacity[def.id] + '%';
             if (String(row.slider.value) !== String(runtime.opacity[def.id])) row.slider.value = String(runtime.opacity[def.id]);
         });
+        var master = document.getElementById(GROUP_TOGGLE_ID);
+        if (master) master.checked = anyActive;
     }
-    /* ASIG rows are intentionally country-independent. Their image requests
-     * are clipped to the source footprint; this compatibility hook is a no-op. */
-    function filterForCountry() { return true; }
+    /* Group master switch: one click turns the whole Albanian stack on/off. */
+    function toggleAll(on) {
+        LAYERS.forEach(function (def) { if (on) activate(def); else deactivate(def); });
+        syncUI();
+        save();
+    }
+    function showGroupInfo() {
+        var title = text(CONFIG.groupLabel);
+        var description = text(CONFIG.groupInfo) || '';
+        if (typeof window.showLayerInfo === 'function') {
+            window.showLayerInfo(title, CONFIG.attribution, description);
+            return;
+        }
+        if (window.alert) window.alert(title + '\n' + CONFIG.attribution + '\n' + description);
+    }
     function start() {
         if (runtime.started) return;
         runtime.started = true;
         load();
         buildPanel();
+        /* Nothing Albanian is shown before Albania is the selected country. */
+        filterForCountry(window._detectlabSelectedCountry || '');
         var map = window._dlMap || window.map;
         if (map) ready(map);
         else {
@@ -377,6 +478,9 @@
         syncUI();
     }
     function refreshTexts() {
+        /* The group title is a static .t[data-key] node (js/translations.js has
+         * albania_group_title in every language) — only the generated rows are
+         * rebuilt, and the country gate is re-applied by buildPanel(). */
         buildPanel();
         syncUI();
     }
@@ -385,17 +489,30 @@
 
     var API = {
         CONFIG: CONFIG, layers: LAYERS, state: runtime, Layer: AsigWmsLayer, TEXT: STRINGS,
+        GROUP_ROW_ID: GROUP_ROW_ID, MOUNT_ID: MOUNT_ID, COUNTRY: COUNTRY,
         tileUrl: tileUrl, init: start, toggle: toggle, setOpacity: setOpacity,
         isActive: function (id) { return !!runtime.active[id]; },
         filterForCountry: filterForCountry, refreshTexts: refreshTexts,
         goToView: goToView, showInfo: showInfo, setStatus: setStatus,
+        showGroupInfo: showGroupInfo, toggleAll: toggleAll,
+        toggleExpanded: toggleExpanded, setExpanded: setExpanded,
+        isInCountry: function () { return !!runtime.inCountry; },
         layerIds: function () { return LAYERS.map(function (def) { return def.id; }); }
     };
     window.AsigAlbaniaLayers = API;
     window.setAlbaniaLayer = toggle;
     window.setAlbaniaOpacity = setOpacity;
     window.goToAlbaniaView = goToView;
+    window.showAlbaniaInfo = showGroupInfo;
+    window.toggleAlbaniaLayers = toggleAll;
+    window.toggleAlbaniaSubLayers = toggleExpanded;
     document.addEventListener('detectlab:langchange', refreshTexts);
+    /* The country gate follows every selection / exit, including restores. */
+    document.addEventListener('detectlab:country-selected', function (event) {
+        var iso = (event && event.detail && event.detail.iso) || window._detectlabSelectedCountry || '';
+        filterForCountry(iso);
+    });
+    document.addEventListener('detectlab:country-cleared', function () { filterForCountry(null); });
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
     else start();
 })(typeof window !== 'undefined' ? window : this, typeof document !== 'undefined' ? document : null);

@@ -290,7 +290,7 @@ assert(shellVersion >= 196,
  * WMS/WMTS audit, the viewer by the camera-handoff fix, and the skin by the
  * 3D basemap picker. */
 const TAGS = {
-    'js/layer-registry.js': '20261020-albania-independent-rows',
+    'js/layer-registry.js': '20261021-albania-country-group',
     'js/map3d-terrain.js': '20261020-outline-camera-handoff',
     'css/map3d-terrain.css': '20261021-country-exit-3d-stack',
     'js/danish-layers.config.js': '20261019-danish-token-maps',
