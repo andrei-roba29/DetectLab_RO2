@@ -62,7 +62,7 @@ function boot(mode) {
             getCenter() { return { lat: 40, lng: 10 }; }, getZoom() { return 5; },
             getBearing() { return 0; }, remove() { events.push('3d-removed'); }
         } : null,
-        stopPanelWatcher() {}, hideVeil() {}, refreshToggle() {},
+        stopPanelWatcher() {}, hideVeil() {}, refreshToggle() {}, queueAnchorSync() {},
         document: {
             body: { classList: { remove(name) { events.push('body-remove:' + name); } } },
             getElementById(id) { return elements[id]; },
@@ -156,7 +156,7 @@ for (const coordinateItem of [null, { valid: false }]) {
     assert(pending.context.state.open && !pending.events.includes('fly'),
         'pending place lookup and invalid coordinates do not exit 3D');
 }
-const viewerUrl = 'js/map3d-terrain.js?v=20261020-outline-camera-handoff';
+const viewerUrl = 'js/map3d-terrain.js?v=20261021-3d-switch-baselayer-column';
 assert(read('index.html').includes(viewerUrl) && read('sw.js').includes("'" + viewerUrl + "'"),
     'the 3D camera hand-off fix is cache-busted and precached');
 assert(Number(read('sw.js').match(/CACHE_NAME = 'detectlab-v(\d+)-/)[1]) >= 245);

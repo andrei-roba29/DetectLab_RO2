@@ -50,8 +50,8 @@ const focusSource = read('js/lidar-3d-focus.js');
 /* Every build that changes the LiDAR 3D focus path bumps its own tag. */
 const TAG = '20261020-lidar-disc-route';
 const TAG_MIRROR = '20261021-lidar-canvas-tiles';
-const TAG_VIEWER = '20261020-outline-camera-handoff';
-const TAG_CSS = '20261021-country-exit-3d-stack';
+const TAG_VIEWER = '20261021-3d-switch-baselayer-column';
+const TAG_CSS = '20261021-3d-switch-baselayer-column';
 
 /* One real event-loop turn: the viewer runs its entry gate through a promise,
  * so the dialog is not in the DOM in the same tick as open(). */
@@ -352,15 +352,18 @@ const fakeCanvas = function () {
      * with an explicit [hidden] win, the banner lesson of §1 below. */
     assert(/body:not\(\.is-3d\) #map3d-focus\.is-minimized \{\s*display: none;/.test(skin),
         'the minimized window only paints while the 3D view is up');
-    const pwaToggleRule = (skin.match(/body\.is-pwa\.is-3d \.m3d-toggle-group \{[^}]*\}/) || [''])[0];
+    const pwaToggleRule = (skin.match(/body\.is-pwa \.m3d-toggle-group \{[^}]*\}/) || [''])[0];
     const miniPillRule = (skin.match(/#map3d-focus \.m3d-focus-mini \{[^}]*\}/) || [''])[0];
-    /* The 64px + inset anchor also carries --country-exit-lift (0px unless the
-     * country “Exit view” pill is on screen — see PWA_EXIT_VIEW_3D_STACK.md). */
-    assert(/bottom: calc\(64px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\) \+ var\(--country-exit-lift, 0px\)\)/.test(pwaToggleRule) &&
+    /* The pill keeps the bottom-centre slot to itself since v254: the grouped
+     * switch/refresh heads the bottom-LEFT control column, directly above the
+     * base-layer button, placed by the anchor js/map3d-terrain.js measures
+     * (its installed-PWA fallback still rides the home-indicator inset).
+     * See MAP3D_SWITCH_BASE_LAYER_COLUMN.md. */
+    assert(/bottom: var\(--m3d-anchor-bottom, calc\(192px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\)\)\)/.test(pwaToggleRule) &&
            /body\.is-pwa \{\s*--map3d-safe-area-bottom: env\(safe-area-inset-bottom, 0px\);/.test(skin) &&
            /padding: 10px 10px calc\(10px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\)\)/.test(skin) &&
            /min-height: 44px/.test(miniPillRule),
-        'the grouped PWA switch/refresh stays above the 44px minimized pill with a gap, sharing its safe-area offset');
+        'the PWA switch follows the measured base-layer anchor (safe-area inset in its fallback) while the 44px pill keeps the bottom centre');
     assert(/#map3d-focus \.m3d-focus-mini\[hidden\] \{\s*display: none;/.test(skin) &&
            /#map3d-focus\[hidden\] \{\s*display: none;/.test(skin),
         'and the pill/host hidden attributes beat their author display');

@@ -25,6 +25,16 @@
  *       rides on top of it (108px + inset), so the whole column steps up
  *       together instead of the switch sliding under the bar.
  *
+ * SINCE v254 the 2D/3D switch no longer lives in this bottom-centre column at
+ * all: it heads the map's bottom-left control column, directly above the
+ * base-layer button (#arcgisBasemapCtrl), placed by the custom properties
+ * js/map3d-terrain.js measures — see MAP3D_SWITCH_BASE_LAYER_COLUMN.md and
+ * test-3d-switch-base-layer-column.js. §3 below therefore asserts the new
+ * arrangement (nothing in the pill's column needs the lift any more, and the
+ * pill can never be covered or out-tapped again), while the hook itself stays:
+ * the country dock still publishes it and the bottom-centre 3D bar can still
+ * read it.
+ *
  * Run:  node test-country-exit-3d-stack.js
  * Optional real-DOM geometry checks:
  *       PUPPETEER_MODULE_DIR=/path/to/node_modules node test-country-exit-3d-stack.js
@@ -91,37 +101,48 @@ console.log('[Test] “Exit view” and the 2D/3D switch share the bottom-centre
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
- * 3. Every rule that places the switch (and the bar above it) reads the hook
+ * 3. The switch left this column, so the pill cannot be covered again
  * ══════════════════════════════════════════════════════════════════════════ */
 {
+    /* v254: the switch is placed by the base-layer button it sits above, not
+       by a bottom-centre constant — so no rule that positions it may still
+       read the pill's lift or the action dock's clearance. */
+    const switchRules = skinFlat.match(/\.m3d-toggle-group\s*\{[^}]*\}/g) || [];
+    assert(switchRules.length >= 1, 'the skin still places .m3d-toggle-group');
+    switchRules.forEach(function (rule) {
+        assert(!/--country-exit-lift/.test(rule),
+            'no switch rule reads --country-exit-lift any more: ' + rule.trim());
+        assert(!/--layer-dock-clearance/.test(rule),
+            'no switch rule reads --layer-dock-clearance any more: ' + rule.trim());
+        assert(!/left:\s*50%/.test(rule),
+            'the switch is no longer centred in the pill’s column: ' + rule.trim());
+    });
+
     const desktop = ruleOf(skinCss, '.m3d-toggle-group');
-    assert(/bottom:\s*calc\(66px \+ var\(--layer-dock-clearance, 0px\) \+ var\(--country-exit-lift, 0px\)\)/.test(desktop),
-        'the desktop switch keeps its 66px + dock clearance and adds the pill lift');
+    assert(/bottom:\s*var\(--m3d-anchor-bottom, 146px\)/.test(desktop) &&
+           /left:\s*var\(--m3d-anchor-left, 10px\)/.test(desktop),
+        'the switch reads the measured base-layer anchor, with the documented left column as fallback');
 
-    assert(/\.m3d-toggle-group\s*\{\s*bottom:\s*calc\(58px \+ var\(--country-exit-lift, 0px\)\);\s*\}/.test(skinFlat),
-        'the phone switch keeps its 58px anchor and adds the pill lift');
+    const pwa = ruleOf(skinCss, 'body.is-pwa .m3d-toggle-group');
+    assert(/bottom:\s*var\(--m3d-anchor-bottom, calc\(192px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\)\)\)/.test(pwa),
+        'the installed-PWA fallback keeps the home-indicator inset (192px + inset)');
 
-    assert(/body\.is-pwa\.is-3d \.m3d-toggle-group\s*\{[^}]*bottom:\s*calc\(64px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\) \+ var\(--country-exit-lift, 0px\)\)/.test(skinFlat),
-        'the PWA 3D switch keeps the safe-area inset and adds the pill lift');
+    /* The 3D bar is the one piece of 3D chrome still bottom-centred in the
+       installed PWA, and it now rides on the switch's measured top edge. */
+    assert(/body\.is-pwa\.is-3d #map3d-bar\s*\{[^}]*bottom:\s*calc\(var\(--m3d-stack-top/.test(skinFlat),
+        'the PWA 3D bar rides on the switch’s measured top edge, so it never covers the switch');
 
-    assert(/body\.is-pwa\.is-3d #map3d-bar\s*\{[^}]*bottom:\s*calc\(108px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\) \+ var\(--country-exit-lift, 0px\)\)/.test(skinFlat),
-        'the 3D bar rides on the same lift, so the switch never slides underneath it');
-
-    /* The arithmetic the fix exists for: the lifted switch must clear the
-       pill's top edge, and the lifted bar must start at the lifted switch's
-       top edge (the pre-existing “bar sits right on the group” spacing). */
-    const PILL_H_DESKTOP = 35, PILL_H_PHONE = 32, SWITCH_H_PHONE = 44, SWITCH_H_DESKTOP = 36;
-    assert.strictEqual(66 + 46 > 60 + PILL_H_DESKTOP, true,
-        'desktop PWA: 66px + 46px sits above the pill’s top edge (60px + 35px)');
-    assert.strictEqual(58 + 46 > 60 + PILL_H_PHONE, true,
-        'phone PWA (2D): 58px + 46px sits above the pill’s top edge (60px + 32px)');
-    assert.strictEqual(64 + 46 > 60 + PILL_H_PHONE, true,
-        'phone PWA (3D): 64px + 46px sits above the pill’s top edge (60px + 32px)');
-    assert.strictEqual(108 + 46 >= 64 + 46 + SWITCH_H_PHONE, true,
-        'phone PWA (3D): the lifted bar starts at the lifted switch’s top edge');
-    assert.strictEqual(66 + 46 + SWITCH_H_DESKTOP > 60 + PILL_H_DESKTOP, true,
-        'desktop PWA: the lifted group still fits above the pill without clipping');
-    console.log('  ✓ desktop / phone / PWA-3D switch rules and the 3D bar all read --country-exit-lift');
+    /* The arithmetic that keeps the pill tappable: the bar's fallback bottom
+       (236px + inset + 8px) is far above the lifted pill's top edge
+       (60px + 35px), and the switch's own column starts 10px in from the left
+       edge, i.e. outside a centred pill's box on a 390px phone. */
+    const PILL_TOP_PWA = 60 + 35;
+    assert.strictEqual(236 + 8 > PILL_TOP_PWA, true,
+        'the PWA 3D bar starts above the pill’s top edge even before the lift');
+    const SWITCH_COLUMN_RIGHT = 11 + 44 + 6 + 44;   /* left edge + switch + gap + refresh */
+    assert.strictEqual(SWITCH_COLUMN_RIGHT < (390 - 130) / 2, true,
+        'on a 390px phone the switch column ends before a centred 130px pill begins');
+    console.log('  ✓ the switch lives in the bottom-left column now; the pill’s slot is free');
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -132,11 +153,20 @@ console.log('[Test] “Exit view” and the 2D/3D switch share the bottom-centre
         'no non-PWA rule arms the lift');
 
     const TAG = '20261021-country-exit-3d-stack';
-    for (const asset of ['css/country-dock.css', 'css/map3d-terrain.css', 'js/country-dock.js']) {
+    for (const asset of ['css/country-dock.css', 'js/country-dock.js']) {
         const url = asset + '?v=' + TAG;
         assert(html.indexOf(url) !== -1, 'index.html loads ' + url);
         assert(sw.indexOf("'" + url + "'") !== -1, 'sw.js precaches ' + url);
     }
+    /* The 3D skin carries the tag of whatever changed it last — v254 moved the
+     * switch into the bottom-left control column — but this fix's URL stays in
+     * the precache so an installed shell still finds the copy it references. */
+    assert(sw.indexOf("'" + 'css/map3d-terrain.css?v=' + TAG + "'") !== -1,
+        'sw.js still precaches the v248 skin an installed shell may ask for');
+    const SKIN_TAG = '20261021-3d-switch-baselayer-column';
+    assert(html.indexOf('css/map3d-terrain.css?v=' + SKIN_TAG) !== -1 &&
+        sw.indexOf("'" + 'css/map3d-terrain.css?v=' + SKIN_TAG + "'") !== -1,
+        'index.html loads and sw.js precaches the re-tagged 3D skin');
     const version = Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1] || 0);
     assert(version >= 248, 'the app-shell cache moved past v247 (found v' + version + ')');
     console.log('  ✓ website geometry untouched, assets re-tagged and precached');
@@ -206,23 +236,23 @@ async function browserChecks() {
             });
 
             const label = width + '×' + height + (pwa ? ' PWA' : ' web') + (is3d ? ' 3D' : '');
-            if (lift) {
-                assert(geometry.toggle.bottom <= geometry.pill.top + 0.5,
-                    label + ': the switch must sit above the pill (switch bottom '
-                    + geometry.toggle.bottom + ' > pill top ' + geometry.pill.top + ')');
-                assert(geometry.pillHit,
-                    label + ': the pill’s centre must belong to the pill, not to the switch (hit: '
-                    + geometry.hitId + ')');
-                if (geometry.bar) {
-                    assert(geometry.bar.bottom <= geometry.toggle.top + 0.5,
-                        label + ': the 3D bar must ride above the lifted switch');
-                }
-            } else {
-                // Website, or PWA with the pill hidden: the switch keeps its slot.
-                assert(Math.abs(geometry.toggle.bottom - (height - 58)) < 1.5
-                    || Math.abs(geometry.toggle.bottom - (height - 66)) < 1.5
-                    || Math.abs(geometry.toggle.bottom - (height - 64)) < 1.5,
-                    label + ': the switch keeps its 58/64/66px anchor when the pill is hidden');
+            /* The switch is in the bottom-left column now, so the two boxes
+               must not intersect at all — with the pill lifted or not. */
+            const intersects = !(geometry.toggle.right <= geometry.pill.left + 0.5
+                || geometry.toggle.left >= geometry.pill.right - 0.5
+                || geometry.toggle.bottom <= geometry.pill.top + 0.5
+                || geometry.toggle.top >= geometry.pill.bottom - 0.5);
+            assert(!intersects, label + ': the switch must not touch the pill’s box');
+            assert(geometry.pillHit,
+                label + ': the pill’s centre must belong to the pill, not to the switch (hit: '
+                + geometry.hitId + ')');
+            const anchorBottom = pwa ? 192 : 146;      /* documented CSS fallbacks */
+            assert(Math.abs(geometry.toggle.bottom - (height - anchorBottom)) < 1.5,
+                label + ': the switch keeps the base-layer column’s anchor (bottom '
+                + geometry.toggle.bottom + ', expected ' + (height - anchorBottom) + ')');
+            if (geometry.bar) {
+                assert(geometry.bar.bottom <= geometry.toggle.top + 0.5,
+                    label + ': the 3D bar must ride above the switch');
             }
             console.log('  ✓ ' + label + ': pill ' + Math.round(geometry.pill.top) + '–'
                 + Math.round(geometry.pill.bottom) + ', switch ' + Math.round(geometry.toggle.top)

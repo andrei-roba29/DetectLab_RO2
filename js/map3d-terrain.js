@@ -1389,6 +1389,120 @@
         surface.classList.remove('is-busy', 'is-error');
     }
 
+    /* ── the switch's anchor: the bottom-left control column ─────────────────
+     * The 2D/3D switch sits directly above the base-layer button
+     * (#arcgisBasemapCtrl — the Leaflet control js/map-app.js folds the three
+     * ArcGIS base maps into). Leaflet stacks that corner in flow and every
+     * environment moves it: the installed PWA adds the Detect button to the
+     * compass column and rides the home-indicator inset, mobile-web fullscreen
+     * makes the corner position:fixed above the browser bar, and the control
+     * itself grows upward when its list folds open. So the offset is measured
+     * rather than guessed, and published on .map-wrapper — the box the switch
+     * and the 3D bar are positioned against — as three custom properties that
+     * css/map3d-terrain.css reads:
+     *   --m3d-anchor-bottom  wrapper bottom → the control's top edge + the gap
+     *   --m3d-anchor-left    wrapper left   → the control's left edge
+     *   --m3d-stack-top      wrapper bottom → the switch's own top edge
+     * The stylesheet keeps constants for the documented column as fallbacks,
+     * so the switch is still placed correctly before the first measurement. */
+    var BASE_LAYER_CTRL_ID = 'arcgisBasemapCtrl';
+    var ANCHOR_GAP = 8;                 /* px between the base-layer button and the switch */
+    var anchorWatched = false;
+    var anchorQueued = false;
+    var anchorTimer = null;
+    var anchorAttempts = 0;
+
+    function queueAnchorSync() {
+        if (anchorQueued) return;
+        anchorQueued = true;
+        var next = root.requestAnimationFrame || function (fn) { return root.setTimeout(fn, 16); };
+        next(function () { anchorQueued = false; syncToggleAnchor(); });
+    }
+
+    /* Returns true once the control has actually been measured. */
+    function syncToggleAnchor() {
+        var host = wrapper();
+        /* A stub wrapper (the layout harnesses) has no CSSStyleDeclaration:
+         * say “not measured” instead of throwing inside a boot retry. */
+        if (!host || !host.style || typeof host.style.setProperty !== 'function' ||
+            typeof host.style.removeProperty !== 'function') return false;
+        var ctrl = document.getElementById(BASE_LAYER_CTRL_ID);
+        if (!ctrl || typeof ctrl.getBoundingClientRect !== 'function' ||
+            typeof host.getBoundingClientRect !== 'function') {
+            /* No base-layer button in this document (a bare layout harness, or
+             * js/map-app.js has not built it yet): drop the properties so the
+             * stylesheet's fallbacks place the switch. */
+            host.style.removeProperty('--m3d-anchor-bottom');
+            host.style.removeProperty('--m3d-anchor-left');
+            host.style.removeProperty('--m3d-stack-top');
+            return false;
+        }
+        var hostBox = host.getBoundingClientRect();
+        var ctrlBox = ctrl.getBoundingClientRect();
+        /* Nothing is laid out yet — keep the previous anchor rather than
+         * publishing a zero that would drop the switch onto the corner. */
+        if (!hostBox.height || !ctrlBox.height) return false;
+        var bottom = Math.round(hostBox.bottom - ctrlBox.top + ANCHOR_GAP);
+        var left = Math.round(ctrlBox.left - hostBox.left);
+        var height = (toggleGroup && typeof toggleGroup.getBoundingClientRect === 'function')
+            ? Math.round(toggleGroup.getBoundingClientRect().height) : 0;
+        host.style.setProperty('--m3d-anchor-bottom', bottom + 'px');
+        host.style.setProperty('--m3d-anchor-left', left + 'px');
+        host.style.setProperty('--m3d-stack-top', (bottom + height) + 'px');
+        return true;
+    }
+
+    function watchToggleAnchor() {
+        if (anchorWatched) return;
+        var host = wrapper();
+        var ctrl = document.getElementById(BASE_LAYER_CTRL_ID);
+        if (!host || !ctrl) return;             /* startAnchorWatch() retries */
+        anchorWatched = true;
+        /* Every listener is optional: a layout harness may hand this module a
+         * window or a document without one, and the anchor must still work. */
+        if (typeof root.addEventListener === 'function') {
+            root.addEventListener('resize', queueAnchorSync);
+            root.addEventListener('orientationchange', queueAnchorSync);
+        }
+        if (typeof document.addEventListener === 'function') {
+            document.addEventListener('fullscreenchange', queueAnchorSync);
+        }
+        /* The control grows when its list of base maps folds open, the corner
+         * grows when a button joins the compass column, and the wrapper is
+         * resized by the panels folding — none of which is a window resize. */
+        if (typeof root.ResizeObserver === 'function') {
+            var observer = new root.ResizeObserver(queueAnchorSync);
+            observer.observe(ctrl);
+            if (ctrl.parentNode) observer.observe(ctrl.parentNode);
+            observer.observe(host);
+        }
+        /* body.is-pwa (and the fullscreen classes) move the whole corner. */
+        if (typeof root.MutationObserver === 'function' && document.body) {
+            new root.MutationObserver(queueAnchorSync)
+                .observe(document.body, { attributes: true, attributeFilter: ['class'] });
+        }
+        var map = leafletMap();
+        if (map && typeof map.on === 'function') map.on('resize', queueAnchorSync);
+    }
+
+    function startAnchorWatch() {
+        watchToggleAnchor();
+        if (anchorWatched || anchorTimer) return;
+        /* js/map-app.js builds the base-layer control inside its own async
+         * boot, so the first measurement can easily run before it exists:
+         * retry briefly, exactly the way the button's own boot loop does. */
+        if (typeof root.setInterval !== 'function') { syncToggleAnchor(); return; }
+        anchorTimer = root.setInterval(function () {
+            anchorAttempts += 1;
+            syncToggleAnchor();
+            watchToggleAnchor();
+            if (anchorWatched || anchorAttempts > 40) {
+                root.clearInterval(anchorTimer);
+                anchorTimer = null;
+            }
+        }, 250);
+    }
+
     function ensureToggle() {
         if (toggleGroup) return toggleBtn;
         var host = wrapper();
@@ -1427,6 +1541,10 @@
 
         host.appendChild(toggleGroup);
         refreshToggle();
+        /* Measure the base-layer button and follow it: the switch's slot in the
+         * bottom-left column belongs to that control's geometry. */
+        syncToggleAnchor();
+        startAnchorWatch();
         return toggleBtn;
     }
 
@@ -3709,6 +3827,10 @@
         state.open = true;
         state.failed = false;
         refreshToggle();
+        /* The refresh action joins the group in 3D, so the group's own box —
+         * and with it --m3d-stack-top, which the 3D bar rides on — is
+         * remeasured once the class has landed. */
+        queueAnchorSync();
         showVeil('busy', t('loading'), t('loadingDetail'), null);
 
         /* Before spending 1 MB on the SDK: can this browser do WebGL at all?
@@ -3972,6 +4094,9 @@
         hideVeil();
         document.body.classList.remove('is-3d');
         refreshToggle();
+        /* Back in 2D: the refresh action leaves the group and the Leaflet
+         * corner is visible again, so the anchor is remeasured. */
+        queueAnchorSync();
         return true;
     }
 
@@ -4297,7 +4422,27 @@
         _clipFocusedTile: clipFocusedTile,
         _focusExcludesTile: focusExcludesTile,
         _lidarFilter: lidarFilter,
-        _focusCamera: focusCamera
+        _focusCamera: focusCamera,
+        /* The switch's measured slot in the bottom-left control column, right
+         * above the base-layer button. Exposed so the layout tests can drive
+         * the same arithmetic the browser does, and so a support session can
+         * read what was actually measured instead of guessing from the
+         * stylesheet's fallbacks. */
+        _syncToggleAnchor: syncToggleAnchor,
+        _toggleAnchor: function () {
+            var host = wrapper();
+            if (!host || !host.style || typeof host.style.getPropertyValue !== 'function') return null;
+            var read = function (name) {
+                var value = host.style.getPropertyValue(name);
+                return value ? parseFloat(value) : null;
+            };
+            return {
+                bottom: read('--m3d-anchor-bottom'),
+                left: read('--m3d-anchor-left'),
+                stackTop: read('--m3d-stack-top'),
+                gap: ANCHOR_GAP
+            };
+        }
     };
 
     root.DetectLabMap3D = api;
