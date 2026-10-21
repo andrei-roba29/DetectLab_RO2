@@ -54,9 +54,12 @@ map: a MapLibre GL JS view in which every layer that is switched on in the 2D pa
   (zoom, locate, measure — they move the *2D* camera) are hidden, so nobody clicks a
   button that changes a map they cannot see; MapLibre contributes only the source
   credits and the scale, both bottom-left, so the top-right corner stays the app's own
-  “?” help button. The 3D bar sits bottom-left and the 2D⇄3D toggle plus raster-refresh
-  button sit bottom-centre as one group; the refresh action is visible only while 3D is
-  open. The search bar, the layer panel and the opacity mirror keep their exact 2D
+  “?” help button. The 3D bar sits bottom-left and, on the website, the 2D⇄3D toggle
+  plus raster-refresh button sit bottom-centre as one group; the refresh action is
+  visible only while 3D is open. In the **installed PWA** that group instead joins
+  Leaflet's bottom-left column, one row directly above the base-layer button
+  (`#arcgisBasemapCtrl`) — see `PWA_3D_BUTTON_ABOVE_BASEMAP.md`. The search bar, the
+  layer panel and the opacity mirror keep their exact 2D
   position and stay fully usable. In the installed PWA, the slider strips instead
   sit horizontally centred in the lower half, above the bottom actions; short
   screens can scroll them. PWA zoom buttons sit top-left (14px + top safe area),

@@ -34,7 +34,7 @@ assert(/body:not\(\.is-pwa\) \.map-frame\.is-fullscreen #detectlab-map \.leaflet
 for (const file of ['css/styles.css', 'css/map3d-terrain.css']) {
     /* Each asset carries the tag of whatever last changed it: styles.css by
      * the Danish layers block, and the terrain skin by the 3D basemap picker. */
-    const tag = file === 'css/styles.css' ? '20261021-albania-country-group' : '20261021-country-exit-3d-stack';
+    const tag = file === 'css/styles.css' ? '20261021-albania-country-group' : '20261021-pwa-3d-above-basemap';
     const url = file + '?v=' + tag;
     assert(html.includes(url) && sw.includes("'" + url + "'"), 'cache-busted and precached: ' + file);
 }

@@ -291,8 +291,8 @@ assert(shellVersion >= 196,
  * 3D basemap picker. */
 const TAGS = {
     'js/layer-registry.js': '20261021-albania-country-group',
-    'js/map3d-terrain.js': '20261020-outline-camera-handoff',
-    'css/map3d-terrain.css': '20261021-country-exit-3d-stack',
+    'js/map3d-terrain.js': '20261021-pwa-3d-above-basemap',
+    'css/map3d-terrain.css': '20261021-pwa-3d-above-basemap',
     'js/danish-layers.config.js': '20261019-danish-token-maps',
     'js/danish-layers.js': '20261019-danish-free-groups'
 };

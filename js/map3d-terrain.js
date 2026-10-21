@@ -76,6 +76,7 @@
     var veil = null;
     var bar = null;
     var toggleGroup = null;
+    var toggleSlot = null;   /* PWA only: the bottom-left column row above the basemap */
     var toggleBtn = null;
     var refreshBtn = null;
     var refreshIcon = null;
@@ -1307,6 +1308,105 @@
         return (el && el.parentNode) || null;
     }
 
+    /* ═══════════════════════════════════════════════════════════════════════
+     *  WHERE THE 2D⇄3D SWITCH LIVES — website vs installed app
+     * -----------------------------------------------------------------------
+     *  On the website the switch floats bottom-centre (css/map3d-terrain.css),
+     *  where it has room. The installed app has no bottom bar and the phone
+     *  bottom edge already carries the map's own control column on the left,
+     *  so there the switch belongs IN that column, directly above the
+     *  base-layer (ArcGIS basemap) button — the button that decides what the
+     *  map itself is draped on. Keeping it next to the layer controls is also
+     *  what the user asked for: “move the 3D button right above the base layer
+     *  button, only in the PWA”.
+     *
+     *  The placement is structure, not magic offsets: js inserts a slot into
+     *  Leaflet's bottom-left corner IMMEDIATELY BEFORE #arcgisBasemapCtrl.
+     *  Leaflet stacks a bottom corner top-down, so “before the basemap control”
+     *  is exactly “one row above it”, with the column's own anchoring, safe-area
+     *  offset, margins and z-index. If the column grows (the basemap list
+     *  unfolds) or shrinks, the slot follows without a single pixel being
+     *  hard-coded, and a future control in that corner cannot land between the
+     *  two. Only the PWA uses the slot — the website keeps wrapper().
+     * ═══════════════════════════════════════════════════════════════════════ */
+    function pwaLayout() {
+        var el = document.documentElement;
+        var body = document.body;
+        try {
+            return !!((el && el.classList && el.classList.contains('is-pwa')) ||
+                (body && body.classList && body.classList.contains('is-pwa')));
+        } catch (e) { return false; }
+    }
+
+    function controlCorner() {
+        return document.querySelector('#detectlab-map .leaflet-bottom.leaflet-left');
+    }
+
+    /* The map area a click on the switch must not reach: it now lives inside
+     * #detectlab-map, so without this a tap would also pan the map or drop a
+     * point in one of the “click the map” tools. Leaflet's own controls do the
+     * same (L.DomEvent.disableClickPropagation). */
+    function guardToggleSlot(el) {
+        var stop = function (event) { if (event && event.stopPropagation) event.stopPropagation(); };
+        ['mousedown', 'touchstart', 'pointerdown', 'dblclick', 'contextmenu', 'click', 'wheel'].forEach(function (type) {
+            el.addEventListener(type, stop);
+        });
+        if (root.L && root.L.DomEvent && root.L.DomEvent.disableScrollPropagation) {
+            root.L.DomEvent.disableScrollPropagation(el);
+        }
+    }
+
+    function ensureToggleSlot(corner) {
+        if (toggleSlot && corner.contains && corner.contains(toggleSlot)) return toggleSlot;
+        toggleSlot = document.createElement('div');
+        toggleSlot.id = 'map3d-toggle-slot';
+        toggleSlot.className = 'm3d-toggle-slot';
+        placeToggleSlot(corner);
+        guardToggleSlot(toggleSlot);
+        return toggleSlot;
+    }
+
+    /* Keep the slot immediately BEFORE the base-layer button. Leaflet's own
+     * control.addTo() inserts every new bottom corner control at firstChild, so
+     * the basemap control (added by map-app.js after the map is built, and any
+     * later companion of it) can appear above the slot unless the order is
+     * re-asserted. Idempotent, cheap, and safe to call any time. */
+    function placeToggleSlot(corner) {
+        if (!toggleSlot) return null;
+        var host = corner || (toggleSlot.parentNode && toggleSlot.parentNode.classList &&
+            /(^|\s)leaflet-bottom(\s|$)/.test(toggleSlot.parentNode.className) ? toggleSlot.parentNode : null);
+        if (!host) return null;
+        var basemap = document.getElementById('arcgisBasemapCtrl');
+        var anchor = basemap && basemap.parentNode === host ? basemap : null;
+        var follower = toggleSlot.nextElementSibling || toggleSlot.nextSibling;
+        if (!toggleSlot.parentNode || toggleSlot.parentNode !== host ||
+            (anchor ? follower !== anchor : host.firstChild !== toggleSlot)) {
+            host.insertBefore(toggleSlot, anchor || host.firstChild);
+        }
+        return toggleSlot;
+    }
+
+    /* The element the switch group is appended to: the PWA slot when the map's
+     * bottom-left column exists, the wrapper (bottom-centre) otherwise — the
+     * website layout is also the PWA's fallback while Leaflet is still building
+     * its corners, and the retry loop moves the group into the slot as soon as
+     * the column is there. */
+    function toggleHost() {
+        if (!pwaLayout()) return wrapper();
+        var corner = controlCorner();
+        if (!corner) return wrapper();
+        return ensureToggleSlot(corner);
+    }
+
+    function mountToggleGroup() {
+        if (!toggleGroup) return false;
+        var host = toggleHost();
+        if (!host) return false;
+        if (toggleGroup.parentNode !== host) host.appendChild(toggleGroup);
+        if (host === toggleSlot) placeToggleSlot(toggleSlot.parentNode);
+        return true;
+    }
+
     function ensureSurface() {
         if (surface) return surface;
         var host = wrapper();
@@ -1390,9 +1490,9 @@
     }
 
     function ensureToggle() {
-        if (toggleGroup) return toggleBtn;
-        var host = wrapper();
-        if (!host) return null;
+        if (toggleGroup) { mountToggleGroup(); return toggleBtn; }
+        if (!wrapper()) return null;
+        var host = toggleHost();
         toggleGroup = document.createElement('div');
         toggleGroup.id = 'map3d-toggle-group';
         toggleGroup.className = 'm3d-toggle-group';
@@ -1425,13 +1525,18 @@
         refreshStatus.setAttribute('aria-atomic', 'true');
         toggleGroup.appendChild(refreshStatus);
 
-        host.appendChild(toggleGroup);
+        if (host) host.appendChild(toggleGroup);
+        if (host && host === toggleSlot) placeToggleSlot(toggleSlot.parentNode);
         refreshToggle();
         return toggleBtn;
     }
 
     function refreshToggle() {
         if (!toggleBtn) return;
+        /* Re-assert the host on every refresh (open/close, language change,
+         * a re-created map): in the PWA the switch must be in the column, on
+         * the website bottom-centre. Cheap and idempotent. */
+        mountToggleGroup();
         toggleBtn.querySelector('.m3d-label').textContent = state.open ? t('buttonOn') : t('button');
         toggleBtn.title = state.open ? t('buttonTitleOn') : t('buttonTitle');
         toggleBtn.setAttribute('aria-label', state.open ? t('buttonTitleOn') : t('buttonTitle'));
@@ -4297,7 +4402,16 @@
         _clipFocusedTile: clipFocusedTile,
         _focusExcludesTile: focusExcludesTile,
         _lidarFilter: lidarFilter,
-        _focusCamera: focusCamera
+        _focusCamera: focusCamera,
+        /* Where the 2D⇄3D switch is allowed to live: the PWA mounts it into the
+         * map's bottom-left column (a slot just above the base-layer button),
+         * the website keeps it bottom-centre. Exposed so the suite can drive
+         * the placement against a real DOM stub. */
+        _pwaLayout: pwaLayout,
+        _toggleHost: toggleHost,
+        _mountToggle: mountToggleGroup,
+        _placeToggleSlot: placeToggleSlot,
+        _toggleSlot: function () { return toggleSlot; }
     };
 
     root.DetectLabMap3D = api;
@@ -4306,17 +4420,24 @@
     function boot() {
         if (!wrapper()) return;
         ensureToggle();
+        if (toggleSlot) placeToggleSlot();
     }
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', boot);
     } else {
         boot();
     }
-    /* map-app.js builds the map inside an async IIFE; retry briefly. */
+    /* map-app.js builds the map inside an async IIFE; retry briefly. In the
+     * PWA the switch cannot be mounted before Leaflet's bottom-left corner
+     * exists, so the retry also covers “the map is built but its column is
+     * not there yet” and stops as soon as the switch sits where it belongs. */
     var attempts = 0;
     var bootTimer = root.setInterval(function () {
         attempts += 1;
-        if (toggleBtn || attempts > 40) { root.clearInterval(bootTimer); return; }
         boot();
+        if (!toggleBtn) { if (attempts > 80) root.clearInterval(bootTimer); return; }
+        var settled = toggleGroup && toggleGroup.parentNode &&
+            (!pwaLayout() || toggleGroup.parentNode === toggleSlot);
+        if (settled || attempts > 80) root.clearInterval(bootTimer);
     }, 250);
 }(window, document));

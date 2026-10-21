@@ -206,6 +206,66 @@ body.is-3d #map3d-refresh { display: inline-flex; }
     border: 0;
 }
 
+/* ── installed PWA: the switch joins the map's bottom-left control column ──
+ * The website has room for a bottom-centre switch (the rules above). The
+ * installed app has no bottom bar and the phone's bottom edge belongs to the
+ * map's own column — the compass / rotation-lock / detect stack with the
+ * base-layer (ArcGIS basemap) button above it. js/map3d-terrain.js therefore
+ * mounts #map3d-toggle-group into #map3d-toggle-slot, a plain row inserted
+ * into Leaflet's bottom-left corner IMMEDIATELY BEFORE #arcgisBasemapCtrl,
+ * so the switch sits directly above the base-layer button:
+ *
+ *   [ 3D ]            ← the slot (this file)
+ *   [ ▤  ]            ← #arcgisBasemapCtrl (base layer)
+ *   [ ✥  ]            ← compass column (compass, lock, detect)
+ *
+ * Nothing here imposes an offset: the column's own 10px inset, safe-area
+ * anchoring and stacking do the work, and the switch steps up by itself when
+ * the basemap list unfolds. The bottom-centre rules stay valid as the website
+ * layout and as the fallback for a page whose map has no Leaflet column. */
+.m3d-toggle-slot {
+    float: left;
+    clear: both;
+    margin: 0 0 8px 10px;       /* the column's 10px left inset + an 8px gap */
+    pointer-events: none;       /* the two buttons re-enable themselves */
+}
+
+/* Inside the slot the group is ordinary flow content: no absolute centring,
+ * no 58/64/66px bottom anchor — those belong to the bottom-centre layout and
+ * are overridden here for every PWA screen (the id outranks the
+ * body.is-pwa.is-3d rule, so 3D does not pull it back to the centre). */
+body.is-pwa #map3d-toggle-slot .m3d-toggle-group {
+    position: static;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    transform: none;
+    z-index: auto;
+    width: auto;
+}
+
+/* The switch is the ONE control of that column that must survive into 3D:
+ * it is how the user gets back to the 2D map. Leaflet's control container is
+ * hidden while 3D is on (visibility, layout kept) — visibility is inherited,
+ * so the slot has to say “visible” for the group inside it. */
+body.is-3d #detectlab-map .leaflet-control-container #map3d-toggle-slot {
+    visibility: visible;
+}
+
+/* In 3D the rest of the column is invisible anyway; taking it out of the
+ * layout as well lets the slot drop to the bottom-left corner instead of
+ * hovering 230px above an empty screen edge. */
+body.is-pwa.is-3d #detectlab-map .leaflet-bottom.leaflet-left > .leaflet-control {
+    display: none;
+}
+
+/* …but the corner's very bottom belongs to MapLibre's compact source-credit
+ * button (24px tall + its 10px margin). 34 + the same 8px gap + 4px slack =
+ * 46px; the switch still clears the 108px 3D bar (46 + 44 = 90). */
+body.is-pwa.is-3d #map3d-toggle-slot {
+    margin-bottom: 46px;
+}
+
 /* ── the 3D control bar (only while 3D is on) ───────────────────────────── */
 #map3d-bar {
     /* Bottom-left. The right edge belongs to the layer panel (1001, full

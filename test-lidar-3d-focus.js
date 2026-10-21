@@ -50,8 +50,8 @@ const focusSource = read('js/lidar-3d-focus.js');
 /* Every build that changes the LiDAR 3D focus path bumps its own tag. */
 const TAG = '20261020-lidar-disc-route';
 const TAG_MIRROR = '20261021-lidar-canvas-tiles';
-const TAG_VIEWER = '20261020-outline-camera-handoff';
-const TAG_CSS = '20261021-country-exit-3d-stack';
+const TAG_VIEWER = '20261021-pwa-3d-above-basemap';
+const TAG_CSS = '20261021-pwa-3d-above-basemap';
 
 /* One real event-loop turn: the viewer runs its entry gate through a promise,
  * so the dialog is not in the DOM in the same tick as open(). */

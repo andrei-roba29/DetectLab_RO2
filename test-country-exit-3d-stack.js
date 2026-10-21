@@ -132,8 +132,10 @@ console.log('[Test] “Exit view” and the 2D/3D switch share the bottom-centre
         'no non-PWA rule arms the lift');
 
     const TAG = '20261021-country-exit-3d-stack';
+    const SKIN_TAG = '20261021-pwa-3d-above-basemap';
     for (const asset of ['css/country-dock.css', 'css/map3d-terrain.css', 'js/country-dock.js']) {
-        const url = asset + '?v=' + TAG;
+        const tag = asset === 'css/map3d-terrain.css' ? SKIN_TAG : TAG;
+        const url = asset + '?v=' + tag;
         assert(html.indexOf(url) !== -1, 'index.html loads ' + url);
         assert(sw.indexOf("'" + url + "'") !== -1, 'sw.js precaches ' + url);
     }
