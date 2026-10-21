@@ -627,7 +627,22 @@
 //   laptop/PC and never on a phone. On ≤860px the video is ordered first in the
 //   stacked modal so it is on screen without scrolling past the steps. See
 //   IOS_INSTALL_VIDEO_MOBILE.md.
-const CACHE_NAME = 'detectlab-v246-ios-install-video-mobile';
+// v247: “Denmark LiDAR in 3D: ~200 tiles load, the relief shows at one zoom
+//   level and zooming in gives the base map”. js/dataforsyningen-dhm-layer.js
+//   is the one country product that paints its tiles ASYNCHRONOUSLY: its
+//   createTile() returns a blank canvas and calls done() only after the
+//   EPSG:25832 View1 mosaic has been fetched and warped into it. The 2D→3D
+//   mirror snapshotted every canvas tile on the next frame, i.e. before a
+//   single pixel existed, so the prepared disc was ~200 fully transparent
+//   tiles: the dialog counted them, 3D had nothing to drape, and only the
+//   coarse levels whose View1 sources were still in the layer's cache (painted
+//   within a microtask, ahead of that timer) ever appeared — “visible only at
+//   a certain zoom level”. js/map3d-mirror.js now follows Leaflet's own
+//   rule: a createTile() that declares `done` owns the moment the pixels exist
+//   (a one-argument createTile still settles on the next frame, as Leaflet
+//   does), with the tile timeout as the bound. Re-tags js/map3d-mirror.js.
+//   See DENMARK_LIDAR_3D_CANVAS.md.
+const CACHE_NAME = 'detectlab-v247-lidar-canvas-tiles';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -692,6 +707,7 @@ const PRECACHE_URLS = [
   'js/hist-shift.js?v=20261014-hist-shift',
   'css/hist-shift.css?v=20261014-hist-shift',
   'js/map3d-mirror.js?v=20261017-archeo-3d-projection',
+  'js/map3d-mirror.js?v=20261021-lidar-canvas-tiles',
   'js/map3d-mirror.js?v=20261020-3d-analysis-points',
   'js/map3d-mirror.js?v=20261014-lidar-3d-focus',
   'js/map3d-mirror.js?v=20261014-3d-vectors',
