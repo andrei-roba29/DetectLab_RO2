@@ -1,0 +1,420 @@
+/* other-maps.css — „Alte hărți / Other maps”: punctele verzi de pe hartă,
+   fereastra cu hărțile disponibile pentru un loc și panoul de aliniere
+   (mutare / rotație / scalare) al unei hărți ne-georeferențiate adăugate. */
+
+/* ── 1. Punctele verzi (canvasul stratului) ───────────────────────────── */
+.other-maps-canvas {
+    pointer-events: none;
+    image-rendering: auto;
+}
+
+/* ── 2. Suprapunerea transformabilă ───────────────────────────────────── */
+.om-overlay {
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.om-grid { pointer-events: none; }
+
+.om-tile {
+    display: block;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    user-select: none;
+    -webkit-user-drag: none;
+    -webkit-user-select: none;
+    image-rendering: auto;
+}
+
+/* Cadrul + mânerele există doar pentru harta activă, în modul aliniere. */
+.om-frame { pointer-events: none; }
+
+.om-box {
+    pointer-events: none;
+    outline: 1.5px dashed rgba(46, 204, 113, 0.95);
+    outline-offset: 0;
+    box-shadow: 0 0 0 1px rgba(6, 14, 30, 0.55) inset;
+}
+
+.om-handle {
+    position: absolute;
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    background: #2ecc71;
+    border: 2px solid #06111f;
+    border-radius: 3px;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.6);
+    pointer-events: auto;
+    touch-action: none;
+    box-sizing: border-box;
+    transform: translate(-50%, -50%);
+}
+
+.om-handle-nw { left: 0; top: 0; cursor: nwse-resize; }
+.om-handle-ne { left: 100%; top: 0; cursor: nesw-resize; }
+.om-handle-se { left: 100%; top: 100%; cursor: nwse-resize; }
+.om-handle-sw { left: 0; top: 100%; cursor: nesw-resize; }
+
+.om-handle-rot {
+    left: 50%;
+    top: 0;
+    margin-top: -32px;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    background: #c8a96e;
+    border-color: #06111f;
+    cursor: grab;
+    transform: translate(-50%, -50%);
+}
+
+.om-handle-rot::after {
+    content: '⟳';
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    line-height: 1;
+    color: #06111f;
+    font-weight: 700;
+}
+
+.om-rot-line {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 1.5px;
+    height: 32px;
+    margin-top: -32px;
+    margin-left: -0.75px;
+    background: linear-gradient(to bottom, rgba(200, 169, 110, 0.15), rgba(200, 169, 110, 0.95));
+    pointer-events: none;
+}
+
+/* În modul aliniere cursorul spune clar că drag-ul mișcă harta adăugată. */
+.om-align-active { cursor: move !important; }
+
+/* Harta activă primește cadrul auriu; celelalte rămîn doar cu verde. */
+.om-overlay.om-active .om-box {
+    outline-color: rgba(200, 169, 110, 0.95);
+    outline-width: 2px;
+}
+.om-align-active .leaflet-grab { cursor: move !important; }
+
+/* ── 3. Fereastra „Hărți disponibile” ─────────────────────────────────── */
+.om-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 3400;
+    background: rgba(3, 8, 18, 0.72);
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+    font-family: Outfit, system-ui, sans-serif;
+}
+
+.om-modal.show { display: flex; }
+
+.om-modal-card {
+    position: relative;
+    width: min(520px, 100%);
+    max-height: min(78vh, 640px);
+    display: flex;
+    flex-direction: column;
+    padding: 18px 18px 14px;
+    border-radius: 14px;
+    background: #0e1a2b;
+    border: 1px solid rgba(200, 169, 110, 0.4);
+    color: #f5f0eb;
+    box-shadow: 0 18px 60px rgba(0, 0, 0, 0.65);
+}
+
+.om-modal-title {
+    margin: 0;
+    font-size: 1.02rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+}
+
+.om-modal-sub {
+    margin-top: 3px;
+    font-size: 0.74rem;
+    color: rgba(245, 240, 235, 0.7);
+}
+
+.om-modal-close {
+    position: absolute;
+    right: 8px;
+    top: 4px;
+    background: none;
+    border: 0;
+    color: rgba(245, 240, 235, 0.8);
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 8px;
+}
+
+.om-modal-list {
+    margin-top: 12px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-right: 2px;
+}
+
+.om-card {
+    display: flex;
+    gap: 10px;
+    padding: 9px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.045);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.om-thumb {
+    flex: 0 0 64px;
+    width: 64px;
+    height: 82px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(200, 169, 110, 0.25);
+    display: block;
+}
+
+.om-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.om-card-body { flex: 1 1 auto; min-width: 0; }
+
+.om-card-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.om-card-subject {
+    margin-top: 3px;
+    font-size: 0.7rem;
+    line-height: 1.35;
+    color: rgba(245, 240, 235, 0.78);
+}
+
+.om-card-meta {
+    margin-top: 3px;
+    font-size: 0.64rem;
+    line-height: 1.3;
+    color: rgba(245, 240, 235, 0.52);
+}
+
+.om-card-actions {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+
+.om-btn {
+    border: 0;
+    border-radius: 7px;
+    padding: 8px 12px;
+    min-height: 34px;
+    font-family: Outfit, system-ui, sans-serif;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+    background: #2ecc71;
+    color: #06111f;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    touch-action: manipulation;
+}
+
+.om-btn:hover { filter: brightness(1.1); }
+
+.om-btn.is-on,
+.om-btn:disabled {
+    background: rgba(46, 204, 113, 0.18);
+    color: #9ff0c4;
+    border: 1px solid rgba(46, 204, 113, 0.45);
+    cursor: default;
+    filter: none;
+}
+
+.om-btn-ghost {
+    background: transparent;
+    border: 1px solid rgba(200, 169, 110, 0.5);
+    color: #f0e2c4;
+}
+
+.om-btn-danger {
+    background: transparent;
+    border: 1px solid rgba(226, 96, 96, 0.6);
+    color: #ff9d9d;
+}
+
+.om-modal-foot {
+    margin-top: 12px;
+    padding-top: 9px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 0.6rem;
+    line-height: 1.4;
+    color: rgba(245, 240, 235, 0.45);
+}
+
+/* ── 4. Panoul de aliniere ────────────────────────────────────────────── */
+.om-panel {
+    position: absolute;
+    left: 50%;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
+    transform: translateX(-50%);
+    z-index: 1300;
+    width: min(340px, calc(100vw - 24px));
+    box-sizing: border-box;
+    padding: 11px 13px 12px;
+    border-radius: 12px;
+    background: rgba(6, 14, 30, 0.95);
+    border: 1px solid rgba(200, 169, 110, 0.45);
+    color: #f5f0eb;
+    font-family: Outfit, system-ui, sans-serif;
+    box-shadow: 0 12px 38px rgba(0, 0, 0, 0.6);
+    pointer-events: auto;
+    display: none;
+}
+
+.om-panel.show { display: block; }
+.om-panel.is-align { border-color: rgba(46, 204, 113, 0.85); }
+
+.om-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 7px;
+}
+
+.om-panel-title { font-size: 0.8rem; font-weight: 700; }
+
+.om-panel-close {
+    background: none;
+    border: 0;
+    color: rgba(245, 240, 235, 0.75);
+    font-size: 1.15rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+}
+
+.om-panel-select {
+    width: 100%;
+    margin-bottom: 8px;
+    padding: 5px 6px;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #f5f0eb;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    font-size: 0.72rem;
+    max-width: 100%;
+}
+
+.om-panel-empty {
+    font-size: 0.7rem;
+    line-height: 1.4;
+    color: rgba(245, 240, 235, 0.6);
+    margin-bottom: 8px;
+}
+
+.om-panel-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 0.76rem;
+}
+
+.om-panel-switch { flex-shrink: 0; }
+
+.om-panel-hint {
+    margin-top: 6px;
+    font-size: 0.64rem;
+    line-height: 1.35;
+    color: rgba(245, 240, 235, 0.6);
+}
+
+.om-slider {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 4px 8px;
+    margin-top: 9px;
+}
+
+.om-slider-name { font-size: 0.7rem; color: rgba(245, 240, 235, 0.8); }
+.om-slider-value { font-size: 0.68rem; color: #c8a96e; font-variant-numeric: tabular-nums; }
+
+.om-range {
+    grid-column: 1 / -1;
+    width: 100%;
+    height: 4px;
+    margin: 2px 0 0;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(255, 255, 255, 0.16);
+    border-radius: 4px;
+    outline: none;
+}
+
+.om-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: #c8a96e;
+    border: 2px solid #06111f;
+    cursor: pointer;
+}
+
+.om-range::-moz-range-thumb {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: #c8a96e;
+    border: 2px solid #06111f;
+    cursor: pointer;
+}
+
+.om-panel-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 11px;
+}
+
+.om-panel-actions .om-btn {
+    padding: 6px 10px;
+    min-height: 30px;
+    font-size: 0.68rem;
+    flex: 1 1 auto;
+    justify-content: center;
+}
+
+/* Pe telefoane panoul stă deasupra benzii de jos, fără să acopere harta. */
+@media (max-width: 520px) {
+    .om-panel { width: calc(100vw - 20px); bottom: calc(env(safe-area-inset-bottom, 0px) + 74px); }
+    .om-modal-card { max-height: 82vh; }
+}

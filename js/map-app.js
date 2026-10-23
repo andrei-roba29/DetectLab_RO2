@@ -15054,7 +15054,11 @@
                 { id: 'kdr100kMapToggle', fnName: 'toggleKdr100kMap' },
                 { id: 'kdrGbMapToggle', fnName: 'toggleKdrGbMap' },
                 { id: 'wig100kMapToggle', fnName: 'toggleWig100kMap' },
-                { id: 'galicia1855MapToggle', fnName: 'toggleGalicia1855Map' }
+                { id: 'galicia1855MapToggle', fnName: 'toggleGalicia1855Map' },
+                /* „Alte hărți / Other maps” — hărți NE-georeferențiate
+                 * (Hungaricana). Oprirea grupului oprește și punctele verzi
+                 * și orice hartă deja suprapusă. */
+                { id: 'otherMapsToggle', fnName: 'toggleOtherMaps' }
             ];
 
             window.toggleHistPremiumLayer = function (on) {
