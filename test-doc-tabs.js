@@ -98,7 +98,7 @@ for (const [ro, en] of [[RO_TECH, EN_TECH], [RO_PROC, EN_PROC]]) {
 }
 
 /* ── 5. the four mandated topics, on BOTH pages of both languages ─────── */
-const SOURCES = ['Wikipedia', 'Wikidata', 'OpenStreetMap', 'Wikimedia Commons', 'DBpedia', 'Archive.org', 'Europeana', 'CIMEC'];
+const SOURCES = ['Wikipedia', 'Wikidata', 'OpenStreetMap', 'Wikimedia Commons', 'DBpedia', 'Archive.org', 'Europeana', 'ARIADNE', 'CIMEC'];
 for (const [file, html] of Object.entries(pages)) {
     /* 5a. Library of Babel: the sources it uses */
     SOURCES.forEach((s) => assert.ok(html.includes(s), `${file}: names the Babel source ${s}`));

@@ -696,7 +696,7 @@
 //   bar (--layer-dock-clearance / --country-exit-lift still apply there).
 //   Re-tags css/map3d-terrain.css and js/map3d-terrain.js.
 //   See MAP3D_SWITCH_BASE_LAYER_COLUMN.md.
-const CACHE_NAME = 'detectlab-v255-pwa-only-3d-column';
+const CACHE_NAME = 'detectlab-v256-babel-ariadne';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -955,6 +955,7 @@ const PRECACHE_URLS = [
   'js/library-of-babel.js?v=20260831-babel-cimec',
   'js/library-of-babel.js?v=20260831-babel-periods-lexicon',
   'js/library-of-babel.js?v=20260917-babel-epochs',
+  'js/library-of-babel.js?v=20261023-babel-ariadne',
   'js/vertical-opacity-control.js',
   'js/vertical-opacity-control.js?v=20260812',
   'js/vertical-opacity-control.js?v=20260918-layer-initials',

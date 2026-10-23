@@ -106,7 +106,7 @@ const osmThree = [
     let html = app.body();
 
     assert.ok(/Testville Roman fort/.test(html), 'results from the surviving sources still render');
-    assert.ok(/<b>5\/8<\/b>\s*surse active/.test(html), '5/8 sources stayed active (wikipedia, wikidata, osm, archive, cimec)');
+    assert.ok(/<b>5\/9<\/b>\s*surse active/.test(html), '5/9 sources stayed active (wikipedia, wikidata, osm, archive, cimec)');
     assert.ok(/parțial/.test(html), 'the wikipedia chip flags the partial ro-only answer');
     assert.ok(/fără răspuns \(timeout\)/.test(html), 'Commons timeout is named on its chip');
     assert.ok(/eroare server/.test(html), 'the DBpedia 500 is named on its chip');
@@ -120,7 +120,7 @@ const osmThree = [
     app = loadEngine(() => netFail(), { cimecData: false });
     await app.sandbox.window.DetectLabEvidenceEngine.research('Nowhere');
     html = app.body();
-    assert.ok(/Niciuna dintre cele 8 surse nu a răspuns/.test(html), 'RO: total outage is named');
+    assert.ok(/Niciuna dintre cele 9 surse nu a răspuns/.test(html), 'RO: total outage is named');
     assert.ok(/id="babelRetry"/.test(html), 'a retry action is offered');
     assert.ok(!/babel-result/.test(html), 'no result cards are invented from nothing');
 
@@ -129,7 +129,7 @@ const osmThree = [
     app.sandbox.window.setLang('en');
     await app.sandbox.window.DetectLabEvidenceEngine.research('Nowhere', { bypassCache: true });
     html = app.body();
-    assert.ok(/None of the 8 sources responded/.test(html), 'EN: total outage is translated');
+    assert.ok(/None of the 9 sources responded/.test(html), 'EN: total outage is translated');
 
     /* ── 3: zero results → suggested alternative searches ── */
     app = loadEngine((url) => {
@@ -148,7 +148,7 @@ const osmThree = [
     assert.ok(/Căutări sugerate/.test(html), 'alternative searches are suggested');
     assert.ok(/data-query="Xyzzyville arheologic"/.test(html), 'a locality-specific variant is suggested');
     assert.ok(/data-query="Xyzzyville archaeological"/.test(html), 'an English variant is suggested');
-    assert.ok(/7\/8/.test(html), 'the reachable sources all answered — a genuine zero, not an outage');
+    assert.ok(/7\/9/.test(html), 'the reachable sources all answered — a genuine zero, not an outage');
 
     /* ── 6: local cache — a repeated search does not re-query the APIs ── */
     app = loadEngine((url) => {

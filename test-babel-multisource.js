@@ -2,7 +2,7 @@
 'use strict';
 
 // End-to-end contract test of the multi-source archaeological search agent:
-// realistic responses from all 8 APIs (stubbed fetch + stubbed JSONP) → the real frontend
+// realistic responses from all 9 APIs (stubbed fetch + stubbed JSONP) → the real frontend
 // module (stubbed DOM) → aggregation, de-duplication, per-source provenance,
 // automatic period classification, statistics, filters and JSON/CSV exports.
 
@@ -71,6 +71,31 @@ const europeana = {
 };
 /* Realistic ArcGIS REST `find` response — an OBJECT with a `results` array
  * (the old code expected a bare array and silently discarded live data). */
+/* ARIADNE portal (d4science) — CORS-open JSON, one record per resource id.
+ * The two records below merge into findings that already exist upstream, so
+ * the 9th source proves de-duplication without inventing new cards. */
+const ariadne = {
+    total: { value: 2, relation: 'eq' },
+    aggregations: [],
+    hits: [
+        { id: 'a1b2c3', data: {
+            title: { text: 'Sarmizegetusa Regia', language: 'ro' },
+            description: { text: 'Cercetare arheologică în cetatea dacică Sarmizegetusa Regia din Munții Orăștiei.' },
+            spatial: [{ placeName: 'România. Județ: Hunedoara. Sarmizegetusa Regia.' }],
+            temporal: [{ periodName: 'epoca fierului' }],
+            publisher: [{ name: 'National Heritage Institute - Romania' }],
+            resourceType: 'dataset', issued: '2016-12-20'
+        } },
+        { id: 'd4e5f6', data: {
+            title: { text: 'Ulpia Traiana Sarmizegetusa', language: 'ro' },
+            description: { text: 'Raport de cercetare în colonia romană Ulpia Traiana Sarmizegetusa.' },
+            spatial: [{ placeName: 'România. Județ: Hunedoara. Sarmizegetusa.' }],
+            temporal: [{ periodName: 'epoca romană' }],
+            publisher: [{ name: 'National Heritage Institute - Romania' }],
+            resourceType: 'dataset', issued: '2012-08-09'
+        } }
+    ]
+};
 const cimec = {
     results: [
         { layerId: 5, attributes: { CodRAN: '97042.01', DenumireSit: 'Sarmizegetusa', Localitate: 'Sarmizegetusa', Judet: 'Hunedoara', Comuna: 'Sarmizegetusa', Tip: 'Cetate dacică' }, geometry: { x: 22.785, y: 45.516 } },
@@ -87,6 +112,7 @@ function route(url) {
     if (url.includes('lookup.dbpedia.org')) return dbpedia;
     if (url.includes('archive.org')) return archive;
     if (url.includes('europeana.eu')) return europeana;
+    if (url.includes('ariadne-portal.d4science.org')) return ariadne;
     throw new Error('unexpected URL: ' + url);
 }
 
@@ -147,8 +173,8 @@ function loadEngine() {
     /* ── STATISTICĂ: total results, active sources, duplicates removed ── */
     assert.ok(/„Sarmizegetusa”/.test(html), 'the head repeats the query');
     assert.ok(/<b>9<\/b>\s*rezultate/.test(html), `9 aggregated results (got: ${html.match(/<b>(\d+)<\/b>\s*rezultate/)})`);
-    assert.ok(/<b>8\/8<\/b>\s*surse active/.test(html), 'all 8 sources answered');
-    assert.ok(/<b>7<\/b>\s*duplicate eliminate/.test(html), '7 duplicates removed by cross-source merging (19 raw → 12)');
+    assert.ok(/<b>9\/9<\/b>\s*surse active/.test(html), 'all 9 sources answered');
+    assert.ok(/<b>9<\/b>\s*duplicate eliminate/.test(html), '9 duplicates removed by cross-source merging (21 raw → 12)');
     assert.ok(/<b>2<\/b>\s*irelevante eliminate/.test(html), '2 fuzzy-noise findings removed by the relevance guard');
 
     /* ── relevance guard: fuzzy noise never mentioning the locality is gone ── */
@@ -162,6 +188,7 @@ function loadEngine() {
     assert.ok(/Archive\.org <b>2<\/b>/.test(html), 'Archive.org chip reports 2 documents');
     assert.ok(/Europeana <b>2<\/b>/.test(html), 'Europeana chip reports 2 objects');
     assert.ok(/CIMEC \/ RAN <b>2<\/b>/.test(html), 'CIMEC/RAN chip reports 2 site records (find response parsed as {results:[…]})');
+    assert.ok(/ARIADNE <b>2<\/b>/.test(html), 'ARIADNE chip reports its 2 portal records');
 
     /* ── aggregation + dedup: one card per finding, multi-source provenance ── */
     const titles = [...html.matchAll(/<h3><a[^>]*>([^<]+)<\/a>/g)].map((m) => m[1]);
@@ -222,7 +249,7 @@ function loadEngine() {
     /* ── exports (JSON / CSV) ── */
     const json = JSON.parse(app.sandbox.window.DetectLabEvidenceEngine._export.json());
     assert.strictEqual(json.results.length, 9, 'JSON export contains all 9 aggregated results');
-    assert.strictEqual(json.stats.activeSources, '8/8', 'JSON export carries the source statistics');
+    assert.strictEqual(json.stats.activeSources, '9/9', 'JSON export carries the source statistics');
     for (const field of ['titlu', 'descriere', 'tip', 'sursa', 'perioade', 'url']) {
         assert.ok(field in json.results[0], `JSON export row has field ${field}`);
     }
