@@ -80,8 +80,8 @@ const skin = read('css/map3d-terrain.css');
 
 const TAG = '20261019-tile-order';              /* MapLibre itself (coveringTiles patch) */
 const TAG_3D = '20261021-lidar-canvas-tiles';    /* mirror (canvas tiles)          */
-const TAG_VIEWER = '20261021-3d-switch-baselayer-column'; /* viewer (js)                         */
-const TAG_CSS = '20261021-3d-switch-baselayer-column';    /* viewer skin (css)              */
+const TAG_VIEWER = '20261023-pwa-only-3d-column'; /* viewer (js)                         */
+const TAG_CSS = '20261023-pwa-only-3d-column';    /* viewer skin (css)              */
 const TAG_FOCUS = '20261020-lidar-disc-route';  /* LiDAR focus (3D, one disc)     */
 const TAG_REGISTRY = '20261021-albania-country-group'; /* shared registry (WMS audit) */
 

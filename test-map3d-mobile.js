@@ -291,8 +291,8 @@ assert(shellVersion >= 196,
  * the bottom-left control column, above the base-layer button. */
 const TAGS = {
     'js/layer-registry.js': '20261021-albania-country-group',
-    'js/map3d-terrain.js': '20261021-3d-switch-baselayer-column',
-    'css/map3d-terrain.css': '20261021-3d-switch-baselayer-column',
+    'js/map3d-terrain.js': '20261023-pwa-only-3d-column',
+    'css/map3d-terrain.css': '20261023-pwa-only-3d-column',
     'js/danish-layers.config.js': '20261019-danish-token-maps',
     'js/danish-layers.js': '20261019-danish-free-groups'
 };
