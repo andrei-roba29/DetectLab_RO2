@@ -18,3 +18,7 @@ __pycache__/
 # the CORONA Europe catalogue snapshot is baked fresh on every deploy by
 # tools/build-corona-europe-catalog.mjs.
 data/corona-europe-catalog.json
+
+# Geocoding cache written by tools/build-hungaricana-catalog.mjs —
+# per-machine answers from Nominatim, never part of the catalogue.
+data/other-maps/geocode-cache.json

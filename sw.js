@@ -696,7 +696,19 @@
 //   bar (--layer-dock-clearance / --country-exit-lift still apply there).
 //   Re-tags css/map3d-terrain.css and js/map3d-terrain.js.
 //   See MAP3D_SWITCH_BASE_LAYER_COLUMN.md.
-const CACHE_NAME = 'detectlab-v256-babel-ariadne';
+// v257: “Alte hărți / Other maps” — a new sub-layer of the premium historical
+//   maps group for the sheets that carry a place name but NO georeference
+//   (maps.hungaricana.hu). Switching it on paints every place that owns a
+//   sheet as a semi-transparent green dot, grouped with the same physical-
+//   distance rules as the Patrimoniu sites (js/patrimoniu-clustering.js); a
+//   tap lists the sheets recorded there and any of them can be dropped onto
+//   the map as a free-transform overlay — drag to move, corner handles to
+//   resize, a rotation handle to turn it, wheel / pinch for the same. New
+//   files js/other-maps-tiles.js (ECW pyramid reader), js/other-maps-overlay.js
+//   (the transform), js/other-maps.js (catalogue + dots + panel),
+//   css/other-maps.css, data/other-maps-catalog.json and the harvester
+//   tools/build-hungaricana-catalog.mjs. See OTHER_MAPS.md.
+const CACHE_NAME = 'detectlab-v257-other-maps';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -741,6 +753,7 @@ const PRECACHE_URLS = [
   'js/asig-albania-layers.js?v=20261021-albania-only',
   'js/layer-registry.js?v=20261017-albania-asig',
   'js/translations.js?v=20261017-albania-asig',
+  'js/translations.js?v=20261017-albania-asig',
   'js/wms-health.js?v=20261017-albania-asig',
   'js/wms-health.js?v=20261021-albania-country-group',
   'js/finland-tm35.js?v=20261019-finland-filter',
@@ -762,6 +775,12 @@ const PRECACHE_URLS = [
   'js/hist-shift.js?v=20261020-hist-shift-docked-slider',
   'js/hist-shift.js?v=20261014-hist-shift',
   'css/hist-shift.css?v=20261014-hist-shift',
+  'js/other-maps-tiles.js?v=20261023-other-maps',
+  'js/other-maps-overlay.js?v=20261023-other-maps',
+  'js/other-maps.js?v=20261023-other-maps',
+  'css/other-maps.css?v=20261023-other-maps',
+  'data/other-maps-catalog.json',
+  'js/translations.js?v=20261023-other-maps',
   'js/map3d-mirror.js?v=20261017-archeo-3d-projection',
   'js/map3d-mirror.js?v=20261021-lidar-canvas-tiles',
   'js/map3d-mirror.js?v=20261020-3d-analysis-points',
