@@ -3,7 +3,7 @@
 
 // Guards the "Biblioteca din Babel" multi-source search agent:
 //  1. every UI string exists in BOTH site language variants (ro + en);
-//  2. all 8 sources are named in both variants;
+//  2. all 9 sources are named in both variants;
 //  3. the agent specification's key sentences survive in both variants;
 //  4. the retired backend search (SIRUTA / biblioteca-digitala.ro dossier)
 //     is really gone from the module.
@@ -45,8 +45,8 @@ const missingInRo = [...en].filter((k) => !ro.has(k));
 assert.deepStrictEqual(missingInEn, [], `every ro key has an en translation (missing: ${missingInEn.join(', ')})`);
 assert.deepStrictEqual(missingInRo, [], `every en key has an ro translation (missing: ${missingInRo.join(', ')})`);
 
-// The 8 sources of the multi-source agent must be named in both variants.
-for (const id of ['wikipedia', 'wikidata', 'osm', 'commons', 'dbpedia', 'archive', 'europeana', 'cimec']) {
+// The 9 sources of the multi-source agent must be named in both variants.
+for (const id of ['wikipedia', 'wikidata', 'osm', 'commons', 'dbpedia', 'archive', 'europeana', 'ariadne', 'cimec']) {
     assert.ok(ro.has(`src_${id}`), `ro names source ${id}`);
     assert.ok(en.has(`src_${id}`), `en names source ${id}`);
 }
@@ -74,8 +74,8 @@ assert.ok(ro.has('srcTimeout') && ro.has('srcNetwork') && ro.has('srcHttp'), 'pe
 assert.ok(en.has('srcTimeout') && en.has('srcNetwork') && en.has('srcHttp'), 'per-failure wording exists (en)');
 
 // Canonical sentences.
-assert(source.includes("'Căutare arheologică multi-sursă · 8 surse deschise'"), 'ro subtitle names the 8-source mission');
-assert(source.includes("'Multi-source archaeological search · 8 open sources'"), 'en subtitle names the 8-source mission');
+assert(source.includes("'Căutare arheologică multi-sursă · 9 surse deschise'"), 'ro subtitle names the 9-source mission');
+assert(source.includes("'Multi-source archaeological search · 9 open sources'"), 'en subtitle names the 9-source mission');
 assert(source.includes("'LOCAȚIE AMBIGUĂ'"), 'ro ambiguous-location marker present');
 assert(source.includes("'AMBIGUOUS LOCATION'"), 'en ambiguous-location marker present');
 
@@ -97,5 +97,12 @@ for (const endpoint of [
 
 // Nominatim usage policy: max 1 request/second, respected client-side.
 assert(/NOMINATIM_MIN_INTERVAL\s*=\s*1100/.test(source), 'Nominatim is throttled to ~1 req/sec');
+
+// ARIADNE portal: the 9th source and its repaired query fan-out exist.
+assert.ok(source.includes("ariadne-portal.d4science.org/api"), 'the ARIADNE JSON API endpoint is wired in');
+assert.ok(/SOURCE_ORDER = \[[^\]]*'ariadne'/.test(source), 'ARIADNE is part of the source order (chips, stats, exports)');
+assert.ok(source.includes('function ariadneQueries'), 'the repaired query builder exists');
+assert.ok(source.includes('function ariadneStemQuery'), 'the wildcard stem builder exists');
+assert.ok(source.includes('function sourceAriadne'), 'the ARIADNE source adapter exists');
 
 console.log('✓ Biblioteca din Babel i18n + agent-spec tests passed');

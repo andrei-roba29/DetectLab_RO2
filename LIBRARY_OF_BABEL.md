@@ -2,7 +2,7 @@
 
 Premium layer **Biblioteca din Babel**. The user types a **locality or site**
 (ex. *Sarmizegetusa*, *Apulum*, *Grădiștea Muncelului*) and the agent queries
-**8 open knowledge sources in parallel, directly from the browser**, aggregates
+**9 open knowledge sources in parallel, directly from the browser**, aggregates
 and de-duplicates the findings, and renders them with per-source provenance.
 
 The previous implementation (SIRUTA register + `biblioteca-digitala.ro` crawl
@@ -11,7 +11,7 @@ failure and a hard dependency on one source. The backend dossier pipeline
 still exists as an API (see `HISTORICAL_DOSSIER.md`) but the UI no longer
 calls it.
 
-## The 8 sources
+## The 9 sources
 
 | # | Source | Endpoint | Result type | Rate limit |
 | --- | --- | --- | --- | --- |
@@ -22,11 +22,59 @@ calls it.
 | 5 | DBpedia Lookup | `lookup.dbpedia.org/api/search` | `structured` (semantic resource) | generous |
 | 6 | Archive.org | `archive.org/advancedsearch.php` | `document` / `image` / `audio` / `video` / `collection` | 7 req/s |
 | 7 | Europeana | `api.europeana.eu/record/v2/search.json` | heritage object | 10 req/s — **needs a free `wskey`** |
-| 8 | CIMEC / RAN | `eism.geo-spatial.ro/.../PatrimoniuWM/MapServer/find` (JSONP) | `structured` (fișă de sit, + coordinates) | ArcGIS REST generous |
+| 8 | ARIADNE portal | `ariadne-portal.d4science.org/api/search` (CORS `*`) | `document` / `image` / `map` (European catalogue record) | generous |
+| 9 | CIMEC / RAN | `eism.geo-spatial.ro/.../PatrimoniuWM/MapServer/find` (JSONP) | `structured` (fișă de sit, + coordinates) | ArcGIS REST generous |
+
+### ARIADNE portal (d4science) — and the portal's search-engine quirk
+
+Source 8 is the European ARIADNE catalogue (`https://ariadne-portal.d4science.org`).
+Its JSON API is CORS-open (`Access-Control-Allow-Origin: *`) and answers
+`GET /api/search?q=…&size=…` with `{ total:{value}, hits:[{id, data:{…}}] }`;
+every record carries title, description, `spatial.placeName`,
+`temporal`/`nativePeriod.periodName`, subjects, publisher, issued date and a
+landing page. The card links to
+`https://ariadne-portal.d4science.org/resource/<id>`.
+
+**The problem (reported 2026-10, reproduced against the live service).** The
+portal's own type-ahead knows the place after a partial name — “Moldovene”
+already suggests *Stejeriș. Moldovenești. Cluj (punct: Stejeriș 1 …) / anul:
+2014* — but the results page answers **“No resources found”** for the complete
+name typed without diacritics:
+
+| query (`/api/search?q=…`) | live answer |
+| --- | --- |
+| `Moldovenesti` | 0 hits — “No resources found” |
+| `Moldovene` | 0 hits (the results page has no prefix matching) |
+| `Moldovenești` | 36 hits |
+| `Moldovene*` | 81 hits (the Stejeriș record is hit #1) |
+
+The cause is in the portal's Elasticsearch layer: the index keeps **raw,
+non-folded whole tokens**, while the type-ahead alone appends `q*`
+(`server/classes/Elastic/Query.php`, `autocomplete()`), so prefix matching
+works there and nowhere else. `Moldovenesti` ≠ the indexed `moldovenești`.
+
+**The repair.** The adapter never forwards one literal query. It sends at most
+three repaired spellings and merges them by resource id:
+
+1. the **canonical spelling** resolved from the OSM gazetteer
+   (`Moldovenești`), which the index holds verbatim;
+2. a **wildcard stem cut in front of the last diacritic** of that spelling
+   (`Moldovene*`); when no canonical spelling is available (no gazetteer
+   match), the last three characters of what the user typed are dropped
+   instead (`Moldovenesti` → `Moldovene*`, `Turdas` → `Turd*`);
+3. **what the user actually typed**.
+
+Hits coming from the widened spellings are kept only when the record really
+mentions the locality (title, description, place name, periods or subjects),
+so `Moldovene*` cannot smuggle *Moldoveni, Ialomița* into the corpus of
+*Moldovenești, Cluj* — the cross-source relevance guard then applies as usual.
+One of the three requests failing degrades the chip to *parțial*, never to a
+dead source. ARIADNE records are exempt from the “unspecified period” drop,
+like the RAN records: they are archaeological by definition.
 
 ### CIMEC / RAN (Repertoriul Arheologic Național)
 
-Source 8 surfaces the **sites around the searched locality**, not just name
+Source 9 surfaces the **sites around the searched locality**, not just name
 matches. Resolution order:
 
 1. **Local heritage layers** — on the map page the RAN layers (0, 5, 6) are
@@ -93,7 +141,7 @@ The modal has a **Cheie API Europeana (opțional)** panel: the key is stored in
    coordinates and year are kept; every contributing source stays linked.
 3. Relevance score = `sources × 100 + rank bonus + image/coords bonuses` →
    multi-source findings rank first.
-4. Statistics: total results, **N/8 active sources**, duplicates removed,
+4. Statistics: total results, **N/9 active sources**, duplicates removed,
    duration — plus a live per-source chip row that doubles as a **source
    filter**.
 
@@ -139,7 +187,7 @@ licence/artist (Commons), data provider (Europeana), mediatype (Archive.org).
 | A source does not answer | the other 6 continue; the chip names the failure class; a note lists the failed sources |
 | 0 results | alternative searches suggested (diacritics-free variant, first word, `… arheologic`, `… archaeological`) |
 | Ambiguous locality | **LOCAȚIE AMBIGUĂ** banner with every OSM match (name · type · county) as one-click refined searches |
-| All 8 sources down | named error + retry + new-search buttons, never a hang |
+| All 9 sources down | named error + retry + new-search buttons, never a hang |
 | Europeana key rejected | `keyInvalid` note prompts the user to fix the stored key |
 
 ## Extensions already included
@@ -164,18 +212,19 @@ licence/artist (Commons), data provider (Europeana), mediatype (Archive.org).
 
 | Path | Role |
 | --- | --- |
-| `js/library-of-babel.js` | the agent: 8 source adapters, aggregation, rendering, filters, exports |
+| `js/library-of-babel.js` | the agent: 9 source adapters, aggregation, rendering, filters, exports |
 | `css/library-of-babel.css` | panel row, modal chrome, chips, epoch profile, timeline, cards, toolbar |
-| `index.html` | modal shell + panel row (crown names the 8 sources) |
-| `tehnologie.html` / `technology.html` | public documentation tab describing the 8 sources, the epoch profile and the other DetectLab modules (RO/EN) |
+| `index.html` | modal shell + panel row (crown names the 9 sources) |
+| `tehnologie.html` / `technology.html` | public documentation tab describing the 9 sources, the epoch profile and the other DetectLab modules (RO/EN) |
 | `proces.html` / `process.html` | public documentation tab: the workflow step by step, including the Babel epoch profile step (RO/EN) |
-| `sw.js` | cache `detectlab-v59-babel-multisource` + precached assets |
+| `sw.js` | cache `detectlab-v256-babel-ariadne` + precached assets |
 | `test-babel-i18n.js` | ro/en dictionary parity + agent-spec contract |
-| `test-babel-multisource.js` | full render with realistic fixtures for all 8 APIs: aggregation, dedup, provenance, periods, filters, exports |
+| `test-babel-multisource.js` | full render with realistic fixtures for all 9 APIs: aggregation, dedup, provenance, periods, filters, exports |
 | `test-babel-resilience.js` | failing sources, total outage, zero results, ambiguity, cache |
 | `test-babel-periods.js` | period-classification contract: unspecified exclusion + lexicon-driven *Roman* (no *român* false positive) |
 | `test-babel-osm-locality.js` | shared gazetteer matcher, canonical-name resolution |
 | `test-babel-nearby-sites.js` | locality + județ header, relevance guard (Miljan-Miljanić class), nearby RAN sites with distances, exact-phrase queries |
+| `test-babel-ariadne.js` | ARIADNE integration + the portal search quirk: emulated raw-token index, the repaired query set (`Moldovenești`, `Moldovene*`, typed), canonical/exact/without-gazetteer paths, look-alike locality dropped, partial degradation |
 
 ```bash
 node test-babel-i18n.js
@@ -184,6 +233,7 @@ node test-babel-resilience.js
 node test-babel-periods.js
 node test-babel-osm-locality.js
 node test-babel-nearby-sites.js
+node test-babel-ariadne.js
 ```
 
 ## Nominatim usage policy

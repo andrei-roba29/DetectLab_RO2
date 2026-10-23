@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Technology — the DetectLab modules: APM 2.0, Library of Babel, LiDAR, Archaeological Report</title>
-  <meta name="description" content="What powers DetectLab: the APM 2.0 archaeological prediction model, the Library of Babel (8 open sources plus the epoch profile with percentages), archaeological potential zones (site triangulation), the LIDAR Scanner (AI detections filtered in the database) and the archaeological report.">
+  <meta name="description" content="What powers DetectLab: the APM 2.0 archaeological prediction model, the Library of Babel (9 open sources plus the epoch profile with percentages), archaeological potential zones (site triangulation), the LIDAR Scanner (AI detections filtered in the database) and the archaeological report.">
   <meta name="robots" content="index, follow">
   <meta property="og:type" content="article">
   <meta property="og:title" content="The technology behind DetectLab">
@@ -38,7 +38,7 @@
     <p class="doc-lead">Five modules work together: the <strong>APM 2.0</strong> archaeological prediction model, the multi-source agent <strong>Library of Babel</strong>, the <strong>archaeological potential zones</strong>, the <strong>LIDAR Scanner</strong> — built on a machine-learning process — and the <strong>archaeological report</strong>. This page explains what each one is, which data it uses and how to read its output.</p>
     <div class="doc-hero-meta">
       <span class="doc-chip">5 modules</span>
-      <span class="doc-chip">8 open sources</span>
+      <span class="doc-chip">9 open sources</span>
       <span class="doc-chip">786 validated LiDAR objectives</span>
       <span class="doc-chip">APM score 1–5</span>
       <span class="doc-chip">RO / EN</span>
@@ -51,7 +51,7 @@
       <a href="#architecture">1. Platform architecture</a>
       <a href="#apm">2. APM 2.0</a>
       <a href="#babel">3. Library of Babel</a>
-      <a href="#babel-sources" class="sub">3.1 The 8 sources</a>
+      <a href="#babel-sources" class="sub">3.1 The 9 sources</a>
       <a href="#babel-epochs" class="sub">3.2 The epoch profile, with percentages</a>
       <a href="#potential">4. Archaeological potential zones</a>
       <a href="#lidar">5. LIDAR Scanner</a>
@@ -83,7 +83,7 @@
               </tr>
               <tr>
                 <td><strong>Library of Babel</strong></td>
-                <td>8 open sources queried in parallel, straight from the browser</td>
+                <td>9 open sources queried in parallel, straight from the browser</td>
                 <td>A corpus of finds and documents with per-source provenance, plus the <strong>epoch profile, with percentages</strong>, in the header</td>
               </tr>
               <tr>
@@ -141,10 +141,10 @@
 
       <section class="doc-section" id="babel">
         <h2>3. Library of Babel — the documentary corpus of a locality</h2>
-        <p>The Library of Babel is a <strong>multi-source search agent</strong>. You type a locality or a site (for example <em>Sarmizegetusa</em>, <em>Apulum</em>, <em>Grădiștea Muncelului</em>) and the agent queries 8 open sources at once, aggregates the results, removes duplicates and renders them with per-source provenance. The search runs <strong>directly in the browser</strong>, in Romanian and English.</p>
+        <p>The Library of Babel is a <strong>multi-source search agent</strong>. You type a locality or a site (for example <em>Sarmizegetusa</em>, <em>Apulum</em>, <em>Grădiștea Muncelului</em>) and the agent queries 9 open sources at once, aggregates the results, removes duplicates and renders them with per-source provenance. The search runs <strong>directly in the browser</strong>, in Romanian and English.</p>
         <p>Before querying the sources, the name is resolved against the OpenStreetMap gazetteer: the agent picks up the <strong>canonical name</strong> (with diacritics), the <strong>county</strong> and the <strong>coordinates</strong>, and the text sources receive the name as an exact phrase — otherwise an engine searching for “Miluani” would return “Miljan Miljanić”.</p>
 
-        <h3 id="babel-sources">3.1 The 8 sources</h3>
+        <h3 id="babel-sources">3.1 The 9 sources</h3>
         <div class="doc-table-wrap">
           <table class="doc-table">
             <caption>The sources queried in parallel</caption>
@@ -157,10 +157,12 @@
               <tr><td class="doc-num">5</td><td><strong>DBpedia</strong></td><td>semantic resources derived from Wikipedia</td><td>short descriptions, categories</td></tr>
               <tr><td class="doc-num">6</td><td><strong>Archive.org</strong></td><td>documents, books, digitised collections</td><td>mediatype shown on the card</td></tr>
               <tr><td class="doc-num">7</td><td><strong>Europeana</strong></td><td>cultural heritage objects</td><td>needs a free API key (optional)</td></tr>
-              <tr><td class="doc-num">8</td><td><strong>CIMEC / RAN</strong><br><small>National Archaeological Repertory</small></td><td>site records and the sites around the locality</td><td>spatial search over 10 km, the distance printed on each card, link to <code>ran.cimec.ro</code></td></tr>
+              <tr><td class="doc-num">8</td><td><strong>ARIADNE</strong><br><small>the European archaeology portal (d4science)</small></td><td>fieldwork reports, sites and monuments from the European catalogue</td><td>repaired search: canonical accented spelling + wildcard stem (the portal's engine does not match the diacritics-free word), link to the record in the portal</td></tr>
+              <tr><td class="doc-num">9</td><td><strong>CIMEC / RAN</strong><br><small>National Archaeological Repertory</small></td><td>site records and the sites around the locality</td><td>spatial search over 10 km, the distance printed on each card, link to <code>ran.cimec.ro</code></td></tr>
             </tbody>
           </table>
         </div>
+        <p class="doc-note"><strong>ARIADNE — why the query is never sent as typed.</strong> The portal's engine matches whole tokens and does not fold diacritics: its type-ahead already offers the record at “Moldovene” (it appends a wildcard), yet the results page answers “No resources found” for the complete, diacritics-free “Moldovenesti”, while “Moldovenești” returns 36 records and “Moldovene*” returns 81. The agent therefore repairs the query: it sends the canonical gazetteer spelling (accented), a wildcard stem cut in front of the last diacritic (“Moldovene*”) and the user's own spelling, then merges the answers by resource id. Hits coming from the widened variants are kept only when the record really mentions the locality, so “Moldoveni” (Ialomița) never lands in the corpus of “Moldovenești” (Cluj).</p>
         <p>When the same finding appears in several sources (“Ulpia Traiana Sarmizegetusa” in Wikipedia, Wikidata and DBpedia, say), it becomes <strong>a single card</strong> with badges for every contributing source and a relevance score that favours findings confirmed by multiple sources. The statistics show how many duplicates were removed and how many results were rejected as irrelevant.</p>
         <p class="doc-note">If one source does not answer, the others carry on: each source has a status chip naming the failure (timeout / HTTP / network / missing API key). Zero results always come with alternative-search suggestions, and an ambiguous locality (several OSM matches) is shown as a list of variants instead of being silently picked.</p>
 

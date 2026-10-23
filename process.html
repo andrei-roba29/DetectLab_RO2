@@ -73,7 +73,7 @@
           <li><strong>The data is collected</strong> — terrain, hydrography, geology, built-up mask, heritage registers, documentary corpus, validated LiDAR detections.</li>
           <li><strong>It is modelled in QGIS</strong> — the layers are weighted and combined into a probability raster.</li>
           <li><strong>APM 2.0 scores it</strong> — every patch of land receives a score class from 1 to 5.</li>
-          <li><strong>The epoch profile is built</strong> — the Library of Babel gathers 8 sources, removes duplicates and shows the epoch percentages in the header.</li>
+          <li><strong>The epoch profile is built</strong> — the Library of Babel gathers 9 sources, removes duplicates and shows the epoch percentages in the header.</li>
           <li><strong>The sites are triangulated</strong> — the archaeological potential zones score the gaps in the network of known sites.</li>
           <li><strong>The LiDAR objectives are validated</strong> — the raw AI detections were filtered in the database down to precise objectives.</li>
           <li><strong>The factors are fused</strong> — the archaeological report combines APM, potential and LiDAR and places every location in an epoch.</li>
@@ -101,7 +101,7 @@
           <li><strong>Heritage data:</strong> the site repertory (RAN/CIMEC) — points, polygons and, where available, the dating from the site record.</li>
           <li><strong>Built-up mask (UAT):</strong> separates open land from built-up areas.</li>
           <li><strong>Historical maps and satellite imagery:</strong> visual context for comparison, used directly on the map.</li>
-          <li><strong>The documentary corpus:</strong> the 8 open sources of the Library of Babel (Wikipedia ro/en, Wikidata, OpenStreetMap, Wikimedia Commons, DBpedia, Archive.org, Europeana, CIMEC/RAN).</li>
+          <li><strong>The documentary corpus:</strong> the 9 open sources of the Library of Babel (Wikipedia ro/en, Wikidata, OpenStreetMap, Wikimedia Commons, DBpedia, Archive.org, Europeana, ARIADNE, CIMEC/RAN).</li>
           <li><strong>The LiDAR objective database:</strong> the detections that passed the filtering process described in step 07.</li>
         </ul>
         <p class="doc-note">If a source does not answer, the flow <strong>does not stall</strong>: each module knows what to do when data is missing. The text sources carry on without the failed one, while spatial analyses that depend on a required raster (APM, for instance) stop explicitly with the reason shown — they never produce results from invented data.</p>
@@ -133,7 +133,7 @@
 
       <section class="doc-section" id="step5">
         <h2>05. Library of Babel: the locality's epoch profile</h2>
-        <p>The documentary step answers the question “<em>what do we already know about this place?</em>”. For a locality or a site, the agent queries <strong>8 sources in parallel</strong>, normalises the name (diacritics-insensitive, exact phrase to the search engines), removes duplicates across sources and renders every finding with provenance.</p>
+        <p>The documentary step answers the question “<em>what do we already know about this place?</em>”. For a locality or a site, the agent queries <strong>9 sources in parallel</strong>, normalises the name (diacritics-insensitive, exact phrase to the search engines), removes duplicates across sources and renders every finding with provenance.</p>
         <p>Automatic epoch classification then runs on an archaeological lexicon: <strong>Prehistory, Bronze Age, Iron Age, Dacian, Roman, Migration period, Medieval, Modern</strong>. For the Roman epoch the lexicon is strict (castrum, legion, oil lamp, burgus, villa, thermae, colonia, Ulpia, Trajan, “Roman Dacia”) precisely so that <em>român</em> (Romanian) or “Romania” are never confused with Rome. Findings that cannot be placed are dropped, while the locality itself and the CIMEC/RAN records always stay.</p>
         <h3>The header: percentages per epoch</h3>
         <p>The output of this step is a <strong>profile of the locality</strong>: the results header shows the percentage of each epoch, computed over the de-duplicated corpus from the total number of epoch attributions. You immediately see whether the place is predominantly Roman, medieval or prehistoric, and every percentage doubles as a filter for the list.</p>
@@ -224,7 +224,7 @@
             <caption>The outputs of the flow</caption>
             <thead><tr><th>You start from</th><th>You get</th></tr></thead>
             <tbody>
-              <tr><td>A locality or a site</td><td>A documentary corpus across 8 sources, with provenance, the <strong>epoch profile with percentages</strong> in the header, JSON/CSV export</td></tr>
+              <tr><td>A locality or a site</td><td>A documentary corpus across 9 sources, with provenance, the <strong>epoch profile with percentages</strong> in the header, JSON/CSV export</td></tr>
               <tr><td>A point and a radius (1–10 km)</td><td>Bubbles / a heat map with score percentages, a 5-star rating and the distance to the closest known site</td></tr>
               <tr><td>A point and a radius (10–50 km)</td><td>Validated LiDAR objectives from the database, with category and exact coordinates</td></tr>
               <tr><td>A point and a radius (1–10 km)</td><td><strong>3 ranked locations</strong>, placed in their epoch, with evidence and sources, plus a PDF in Romanian or English</td></tr>

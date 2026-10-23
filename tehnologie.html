@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tehnologie — modulele DetectLab: APM 2.0, Biblioteca Babel, LiDAR, Raport arheologic</title>
-  <meta name="description" content="Ce stă în spatele DetectLab: modelul de predicție arheologică APM 2.0, Biblioteca din Babel (8 surse deschise și profilul epocilor cu procente), zonele cu potențial arheologic (triangularea siturilor), LIDAR Scanner (detecție AI filtrată în baza de date) și raportul arheologic.">
+  <meta name="description" content="Ce stă în spatele DetectLab: modelul de predicție arheologică APM 2.0, Biblioteca din Babel (9 surse deschise și profilul epocilor cu procente), zonele cu potențial arheologic (triangularea siturilor), LIDAR Scanner (detecție AI filtrată în baza de date) și raportul arheologic.">
   <meta name="robots" content="index, follow">
   <meta property="og:type" content="article">
   <meta property="og:title" content="Tehnologia din spatele DetectLab">
@@ -38,7 +38,7 @@
     <p class="doc-lead">Cinci module lucrează împreună: modelul de predicție arheologică <strong>APM 2.0</strong>, agentul multi-sursă <strong>Biblioteca din Babel</strong>, <strong>zonele cu potențial arheologic</strong>, <strong>LIDAR Scanner</strong> — bazat pe un proces de machine learning — și <strong>raportul arheologic</strong>. Aici explicăm ce este fiecare, pe ce date se bazează și cum se citește rezultatul.</p>
     <div class="doc-hero-meta">
       <span class="doc-chip">5 module</span>
-      <span class="doc-chip">8 surse deschise</span>
+      <span class="doc-chip">9 surse deschise</span>
       <span class="doc-chip">786 obiective LiDAR validate</span>
       <span class="doc-chip">scor APM 1–5</span>
       <span class="doc-chip">RO / EN</span>
@@ -51,7 +51,7 @@
       <a href="#architecture">1. Arhitectura platformei</a>
       <a href="#apm">2. APM 2.0</a>
       <a href="#babel">3. Biblioteca din Babel</a>
-      <a href="#babel-surse" class="sub">3.1 Cele 8 surse</a>
+      <a href="#babel-surse" class="sub">3.1 Cele 9 surse</a>
       <a href="#babel-epoci" class="sub">3.2 Profilul epocilor, cu procente</a>
       <a href="#potential">4. Zone cu potențial arheologic</a>
       <a href="#lidar">5. LIDAR Scanner</a>
@@ -83,7 +83,7 @@
               </tr>
               <tr>
                 <td><strong>Biblioteca din Babel</strong></td>
-                <td>8 surse deschise interogate în paralel, direct din browser</td>
+                <td>9 surse deschise interogate în paralel, direct din browser</td>
                 <td>Corpus de descoperiri și documente, cu proveniență pe fiecare sursă și <strong>profilul epocilor, cu procente</strong>, în antet</td>
               </tr>
               <tr>
@@ -141,10 +141,10 @@
 
       <section class="doc-section" id="babel">
         <h2>3. Biblioteca din Babel — corpusul documentar al localității</h2>
-        <p>Biblioteca din Babel este un <strong>agent de căutare multi-sursă</strong>. Scrii o localitate sau un sit (de exemplu <em>Sarmizegetusa</em>, <em>Apulum</em>, <em>Grădiștea Muncelului</em>), iar agentul interoghează simultan 8 surse deschise, agregă rezultatele, elimină duplicatele și le afișează cu proveniență pe fiecare sursă. Căutarea rulează <strong>direct din browser</strong>, în română și engleză.</p>
+        <p>Biblioteca din Babel este un <strong>agent de căutare multi-sursă</strong>. Scrii o localitate sau un sit (de exemplu <em>Sarmizegetusa</em>, <em>Apulum</em>, <em>Grădiștea Muncelului</em>), iar agentul interoghează simultan 9 surse deschise, agregă rezultatele, elimină duplicatele și le afișează cu proveniență pe fiecare sursă. Căutarea rulează <strong>direct din browser</strong>, în română și engleză.</p>
         <p>Înainte de a interoga sursele, numele este rezolvat în gazetteerul OpenStreetMap: agentul preia <strong>numele canonic</strong> (cu diacritice), <strong>județul</strong> și <strong>coordonatele</strong>, iar sursele text primesc numele ca expresie exactă — altfel un motor căuta „Miluani” și returna „Miljan Miljanić”.</p>
 
-        <h3 id="babel-surse">3.1 Cele 8 surse</h3>
+        <h3 id="babel-surse">3.1 Cele 9 surse</h3>
         <div class="doc-table-wrap">
           <table class="doc-table">
             <caption>Sursele interogate în paralel</caption>
@@ -157,10 +157,12 @@
               <tr><td class="doc-num">5</td><td><strong>DBpedia</strong></td><td>resurse semantice derivate din Wikipedia</td><td>descrieri scurte, categorii</td></tr>
               <tr><td class="doc-num">6</td><td><strong>Archive.org</strong></td><td>documente, cărți, colecții digitalizate</td><td>mediatype afișat pe card</td></tr>
               <tr><td class="doc-num">7</td><td><strong>Europeana</strong></td><td>obiecte de patrimoniu cultural</td><td>necesită o cheie API gratuită (opțională)</td></tr>
-              <tr><td class="doc-num">8</td><td><strong>CIMEC / RAN</strong><br><small>Repertoriul Arheologic Național</small></td><td>fișe de sit și siturile din jurul localității</td><td>căutare spațială pe 10 km, distanța afișată pe fiecare card, link la <code>ran.cimec.ro</code></td></tr>
+              <tr><td class="doc-num">8</td><td><strong>ARIADNE</strong><br><small>portalul european de arheologie (d4science)</small></td><td>rapoarte de cercetare, situri și monumente din catalogul european</td><td>interogare reparată: formă canonică cu diacritice + stem wildcard (motorul portalului nu potrivește cuvintele fără diacritice), link la fișa din portal</td></tr>
+              <tr><td class="doc-num">9</td><td><strong>CIMEC / RAN</strong><br><small>Repertoriul Arheologic Național</small></td><td>fișe de sit și siturile din jurul localității</td><td>căutare spațială pe 10 km, distanța afișată pe fiecare card, link la <code>ran.cimec.ro</code></td></tr>
             </tbody>
           </table>
         </div>
+        <p class="doc-note"><strong>ARIADNE — de ce nu trimitem căutarea ca atare.</strong> Motorul portalului ARIADNE potrivește cuvintele întregi, fără să ignore diacriticele: sugestiile din bara de căutare apar la „Moldovene” (portalul adaugă un wildcard), dar pagina de rezultate pentru „Moldovenesti”, scris fără diacritice, răspunde „No resources found”, în timp ce „Moldovenești” returnează 36 de înregistrări, iar „Moldovene*” 81. Agentul repară deci interogarea: trimite forma canonică din gazetteer (cu diacritice), un stem wildcard tăiat înaintea ultimei diacritice („Moldovene*”) și forma scrisă de utilizator, apoi contopește răspunsurile după id-ul resursei. Rezultatele obținute din variantele lărgite sunt păstrate doar dacă înregistrarea menționează efectiv localitatea, astfel încât „Moldoveni” (Ialomița) nu ajunge în corpusul „Moldovenești” (Cluj).</p>
         <p>Când aceeași descoperire apare în mai multe surse (de exemplu „Ulpia Traiana Sarmizegetusa” în Wikipedia, Wikidata și DBpedia), ea devine <strong>un singur card</strong>, cu badge-uri pentru fiecare sursă contribuitoare și un scor de relevanță care favorizează rezultatele confirmate de mai multe surse. Statisticile afișează câte duplicate au fost eliminate și câte rezultate au fost respinse ca irelevante.</p>
         <p class="doc-note">Dacă o sursă nu răspunde, celelalte continuă: fiecare sursă are un chip de stare care arată eroarea (timeout / HTTP / rețea / lipsește cheia API). Un total de 0 rezultate vine întotdeauna cu sugestii de căutări alternative, iar o localitate ambiguă (mai multe potriviri OSM) este afișată ca listă de variante, nu aleasă tacit.</p>
 

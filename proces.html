@@ -73,7 +73,7 @@
           <li><strong>Se colectează datele</strong> — relief, hidrografie, geologie, intravilan, patrimoniu, corpus documentar, detecții LiDAR validate.</li>
           <li><strong>Se modelează în QGIS</strong> — straturile sunt ponderate și combinate într-un raster de probabilitate.</li>
           <li><strong>Se punctează cu APM 2.0</strong> — fiecare suprafață primește o clasă de scor de la 1 la 5.</li>
-          <li><strong>Se construiește profilul epocilor</strong> — Biblioteca din Babel adună 8 surse, elimină duplicatele și afișează în antet procentele pe epoci.</li>
+          <li><strong>Se construiește profilul epocilor</strong> — Biblioteca din Babel adună 9 surse, elimină duplicatele și afișează în antet procentele pe epoci.</li>
           <li><strong>Se triangulează siturile</strong> — zonele cu potențial arheologic punctează golurile din rețeaua siturilor cunoscute.</li>
           <li><strong>Se validează obiectivele LiDAR</strong> — detecțiile AI brute au fost filtrate în baza de date până la obiective precise.</li>
           <li><strong>Se fuzionează factorii</strong> — raportul arheologic combină APM, potențialul și LiDAR și încadrează fiecare locație într-o epocă.</li>
@@ -101,7 +101,7 @@
           <li><strong>Date de patrimoniu:</strong> repertoriul de situri (RAN/CIMEC) — puncte, poligoane și, acolo unde există, datarea din fișa de sit.</li>
           <li><strong>Masca de intravilan (UAT):</strong> separă terenul liber de zonele construite.</li>
           <li><strong>Hărți istorice și imagine satelit:</strong> context vizual pentru comparație, folosite direct pe hartă.</li>
-          <li><strong>Corpusul documentar:</strong> cele 8 surse deschise ale Bibliotecii din Babel (Wikipedia ro/en, Wikidata, OpenStreetMap, Wikimedia Commons, DBpedia, Archive.org, Europeana, CIMEC/RAN).</li>
+          <li><strong>Corpusul documentar:</strong> cele 9 surse deschise ale Bibliotecii din Babel (Wikipedia ro/en, Wikidata, OpenStreetMap, Wikimedia Commons, DBpedia, Archive.org, Europeana, ARIADNE, CIMEC/RAN).</li>
           <li><strong>Baza de obiective LiDAR:</strong> detecțiile trecute prin procesul de filtrare descris la pasul 07.</li>
         </ul>
         <p class="doc-note">Dacă o sursă nu răspunde, fluxul <strong>nu se blochează</strong>: fiecare modul știe ce să facă atunci când datele lipsesc. Sursele text continuă fără sursa căzută, iar analizele spațiale care depind de un raster obligatoriu (de exemplu APM) se opresc explicit, cu motivul afișat — nu produc rezultate pe date inventate.</p>
@@ -133,7 +133,7 @@
 
       <section class="doc-section" id="step5">
         <h2>05. Biblioteca din Babel: profilul epocilor localității</h2>
-        <p>Pasul documentar răspunde la întrebarea „<em>ce știm deja despre locul acesta?</em>”. Pentru o localitate sau un sit, agentul interoghează <strong>8 surse în paralel</strong>, normalizează numele (diacritice insensibile, expresie exactă către motoarele de căutare), elimină duplicatele între surse și afișează fiecare descoperire cu proveniență.</p>
+        <p>Pasul documentar răspunde la întrebarea „<em>ce știm deja despre locul acesta?</em>”. Pentru o localitate sau un sit, agentul interoghează <strong>9 surse în paralel</strong>, normalizează numele (diacritice insensibile, expresie exactă către motoarele de căutare), elimină duplicatele între surse și afișează fiecare descoperire cu proveniență.</p>
         <p>Apoi are loc clasificarea automată pe epoci, prin lexic arheologic: <strong>Preistorie, Epoca bronzului, Epoca fierului, Dacic, Roman, Epoca migrațiilor, Medieval, Modern</strong>. Pentru epoca romană lexicul este strict (castru, legiune, opaiț, burgus, villa, terme, colonia, Ulpia, Traian, „Dacia romană”), tocmai ca „român” sau „România” să nu fie confundate cu Roma. Descoperirile neîncadrabile sunt eliminate, iar localitatea însăși și fișele CIMEC/RAN rămân întotdeauna.</p>
         <h3>Antetul: procentele pe epoci</h3>
         <p>Rezultatul acestui pas este un <strong>profil al localității</strong>: în antetul rezultatelor apar procentele fiecărei epoci, calculate pe corpusul deduplicat, din totalul încadrărilor pe epoci. Vezi imediat dacă localitatea are dominantă romană, medievală sau preistorică, iar pentru fiecare procent poți filtra lista.</p>
@@ -224,7 +224,7 @@
             <caption>Livrabilele fluxului</caption>
             <thead><tr><th>Ai pornit de la</th><th>Primești</th></tr></thead>
             <tbody>
-              <tr><td>O localitate sau un sit</td><td>Corpus documentar pe 8 surse, cu proveniență, <strong>profilul epocilor cu procente</strong> în antet, export JSON/CSV</td></tr>
+              <tr><td>O localitate sau un sit</td><td>Corpus documentar pe 9 surse, cu proveniență, <strong>profilul epocilor cu procente</strong> în antet, export JSON/CSV</td></tr>
               <tr><td>Un punct și o rază (1–10 km)</td><td>Bule / hartă de căldură cu scor în procente, rating cu 5 stele și distanța până la cel mai apropiat sit cunoscut</td></tr>
               <tr><td>Un punct și o rază (10–50 km)</td><td>Obiective LiDAR validate din bază, cu categorie și coordonate exacte</td></tr>
               <tr><td>Un punct și o rază (1–10 km)</td><td><strong>3 locații clasate</strong>, încadrate în epocă, cu dovezi și surse, plus PDF în română sau engleză</td></tr>
