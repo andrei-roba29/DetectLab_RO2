@@ -1,7 +1,18 @@
-# PWA: the 2D⇄3D switch sits right above the base-layer button (v254)
+# PWA: the 2D⇄3D switch sits right above the base-layer button (v255)
 
 Date: 2026-10-21 · Files: `js/map3d-terrain.js`, `css/map3d-terrain.css`,
 `index.html`, `sw.js` · Test: `node test-pwa-3d-above-basemap.js`
+
+> **Supersedes the v254 release** (PR #332, cache
+> `detectlab-v254-3d-switch-baselayer-column`). v254 made the same move but did
+> it for **every** layout — it relocated the website's switch from bottom-centre
+> to bottom-left too — and placed it with offsets measured in JS at runtime
+> (`--m3d-anchor-bottom` / `--m3d-anchor-left` / `--m3d-stack-top`, with 146px
+> and 192px fallbacks, plus a `ResizeObserver`/`MutationObserver` watcher and a
+> 250 ms retry loop to keep re-measuring). That implementation and its test are
+> gone from this branch: the request was to move the button **only in the PWA**,
+> and the placement is now done by the column's own layout instead of by
+> measured pixel offsets.
 
 ---
 
@@ -150,9 +161,11 @@ Geometry on a physical phone should still be eyeballed once.
 
 `index.html` and `sw.js` carry `?v=20261021-pwa-3d-above-basemap` for
 `js/map3d-terrain.js` and `css/map3d-terrain.css`; `CACHE_NAME` is
-`detectlab-v254-pwa-3d-above-basemap`. Older tagged entries stay in
-`PRECACHE_URLS` (the list is a history; the install is best-effort and logs a
-warning instead of failing).
+`detectlab-v255-pwa-3d-above-basemap`. Older tagged entries — including the
+`?v=20261021-3d-switch-baselayer-column` pair that v254 shipped — stay in
+`PRECACHE_URLS`, because the list is a history of what an installed shell may
+still ask for, and the install is best-effort: it logs a warning instead of
+failing when an old tag is gone.
 
 ## Tests
 
@@ -165,4 +178,4 @@ warning instead of failing).
    and `<html class="is-pwa">` alone is enough;
 3. website → the group stays in the wrapper, no slot is created;
 4. `index.html`/`sw.js` request both files with the new tag and the cache is
-   v254 or newer.
+   v255 or newer.

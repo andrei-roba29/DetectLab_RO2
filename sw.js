@@ -682,17 +682,25 @@
 //   were visible under Romania's satellite/heritage sections and under the
 //   LiDAR group that hosts Denmark's DHM. Re-tags the ASIG config/module so a
 //   cached copy cannot keep the old placement alive. See ALBANIA_ASIG_LAYERS.md.
-// v254: in the installed app the 2D⇄3D switch floated bottom-centre, in the
-//   gap between the map's own bottom-left control column (compass / rotation
-//   lock / detect + the base-layer button above them) and the country “Exit
-//   view” pill. js/map3d-terrain.js now mounts it into #map3d-toggle-slot, a
-//   row inserted into Leaflet's bottom-left corner immediately BEFORE
-//   #arcgisBasemapCtrl, so the switch sits directly above the base-layer
-//   button on every PWA screen, rides up when the basemap list unfolds, and
-//   stays in the corner in 3D (clear of MapLibre's credit button). The website
-//   keeps its bottom-centre switch. Re-tags js/map3d-terrain.js and
+// v254: the “3D” switch moved out of the bottom-centre slot and into the map's
+//   bottom-left control column, directly above the base-layer button
+//   (#arcgisBasemapCtrl): switch → base layer → compass → rotation lock
+//   (+ Detect in the installed PWA). That release placed it with offsets
+//   measured from the control and published as --m3d-anchor-bottom /
+//   --m3d-anchor-left / --m3d-stack-top, and it did so on the website too, not
+//   only in the installed app.
+// v255: the move is narrowed to the installed PWA — which is what was asked
+//   for — and it no longer needs measured offsets. js/map3d-terrain.js mounts
+//   the group into #map3d-toggle-slot, a row inserted into Leaflet's
+//   bottom-left corner immediately BEFORE #arcgisBasemapCtrl, so the browser's
+//   own column layout puts the switch one row above the base-layer button on
+//   every screen, lets it ride up when the basemap list unfolds and keeps a
+//   rebuilt control from wedging in between. The website keeps its
+//   bottom-centre switch, untouched. In 3D the column is hidden, the slot
+//   survives (it is the way back to 2D) and the switch steps clear of
+//   MapLibre's credit button. Re-tags js/map3d-terrain.js and
 //   css/map3d-terrain.css. See PWA_3D_BUTTON_ABOVE_BASEMAP.md.
-const CACHE_NAME = 'detectlab-v254-pwa-3d-above-basemap';
+const CACHE_NAME = 'detectlab-v255-pwa-3d-above-basemap';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -783,6 +791,7 @@ const PRECACHE_URLS = [
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
   'js/map3d-terrain.js?v=20261021-pwa-3d-above-basemap',
+  'js/map3d-terrain.js?v=20261021-3d-switch-baselayer-column',
   'js/map3d-terrain.js?v=20261020-outline-camera-handoff',
   'js/map3d-terrain.js?v=20261020-1km-raster-refresh',
   'js/map3d-terrain.js?v=20261020-3d-basemap-selector',
@@ -808,6 +817,7 @@ const PRECACHE_URLS = [
    * rides in the map's bottom-left column, right above the base-layer button.
    * Re-tags the 3D skin (see the CACHE_NAME note below). */
   'css/map3d-terrain.css?v=20261021-pwa-3d-above-basemap',
+  'css/map3d-terrain.css?v=20261021-3d-switch-baselayer-column',
   /* v248: the 2D/3D switch and the country “Exit view” pill stopped sharing
    * the same bottom-centre slot in the installed PWA. Re-tags the 3D skin,
    * the country dock and its module. */

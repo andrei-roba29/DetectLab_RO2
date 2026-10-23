@@ -356,7 +356,10 @@ function bootMap(options) {
     assert(sw.includes("'" + cssUrl + "'"), 'sw.js pre-caches the re-tagged skin');
     assert(sw.includes("'" + jsUrl + "'"), 'sw.js pre-caches the re-tagged viewer');
     const version = Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1] || 0);
-    assert(version >= 254, 'the app-shell cache moved to v254+ (found v' + version + ')');
+    /* v254 shipped the same move for every layout; v255 narrows it to the
+     * installed app and drops the measured offsets. This change must land
+     * above both so an installed shell re-fetches the assets. */
+    assert(version >= 255, 'the app-shell cache moved past v254 (found v' + version + ')');
     assert(/detectlab-v\d+-pwa-3d-above-basemap/.test(sw),
         'the cache name names this change, so an installed PWA re-fetches the shell');
     console.log('  ✓ index.html + sw.js ship the change to installed PWAs (v' + version + ')');
