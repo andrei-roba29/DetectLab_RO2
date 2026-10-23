@@ -129,37 +129,36 @@ body.is-pwa.is-3d #map3d-surface {
 
 /* ── the 2D/3D switch and nearby tile refresh action ─────────────────── */
 .m3d-toggle-group {
-    /* Bottom-LEFT, in the map's own control column, directly above the
-     * base-layer button (#arcgisBasemapCtrl — the Leaflet control that folds
-     * the three ArcGIS base maps open). The column now reads, top to bottom:
-     * 2D/3D switch → base layer → compass → rotation lock (+ Detect in the
-     * installed PWA), so the switch joins the buttons it belongs with instead
-     * of floating in the bottom-centre slot the country “Exit view” pill, the
-     * analysis action dock, the offline ✕ and the APM/zoom hints all share
-     * (and which therefore needed --layer-dock-clearance /
-     * --country-exit-lift to dodge it).
-     *
-     * The offset cannot be a CSS constant: Leaflet stacks that corner in flow
-     * (the compass column carries a third button in the installed PWA),
-     * body.is-pwa .leaflet-bottom rides the home-indicator inset, and
-     * css/styles.css makes the corner position:fixed above the browser bar in
-     * mobile-web fullscreen. So js/map3d-terrain.js measures
-     * #arcgisBasemapCtrl against .map-wrapper and publishes three custom
-     * properties on the wrapper:
-     *   --m3d-anchor-bottom  wrapper bottom → the control's top edge + 8px gap
-     *   --m3d-anchor-left    wrapper left   → the control's left edge
-     *   --m3d-stack-top      wrapper bottom → the switch's own top edge
-     * The fallbacks below are the documented website stack (compass column
-     * 84px + two 10px Leaflet margins + the 34px control + an 8px gap = 146px,
-     * and a 44px switch) for as long as no measurement has run. */
-    position: absolute;
-    bottom: var(--m3d-anchor-bottom, 146px);
-    left: var(--m3d-anchor-left, 10px);
+    /* Box model only. The 2D/3D switch's position is environment-specific:
+     * bottom-left above the base-layer button in the installed PWA
+     * (body.is-pwa .m3d-toggle-group, measured by js/map3d-terrain.js), and
+     * bottom-centre on the website (body:not(.is-pwa) .m3d-toggle-group),
+     * clear of the country “Exit view” pill and the analysis dock that share
+     * the bottom-centre slot. */
     z-index: 960;               /* above the 3D surface, below the app chrome */
     display: flex;
     align-items: center;
     gap: 6px;
     pointer-events: none;
+}
+
+/* Installed PWA: the switch heads the bottom-left control column, directly
+ * above the base-layer button (#arcgisBasemapCtrl). The offset is measured
+ * and published by js/map3d-terrain.js (--m3d-anchor-*); the fallback is the
+ * documented PWA column (192px + home-indicator inset). */
+body.is-pwa .m3d-toggle-group {
+    position: absolute;
+    bottom: var(--m3d-anchor-bottom, calc(192px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px))));
+    left: var(--m3d-anchor-left, 10px);
+}
+
+/* Website: the switch floats bottom-centre (66 px on desktop, 58 px on
+ * phones), clear of the country “Exit view” pill and the analysis dock. */
+body:not(.is-pwa) .m3d-toggle-group {
+    position: absolute;
+    bottom: 66px;
+    left: 50%;
+    transform: translateX(-50%);
 }
 
 #map3d-toggle,
@@ -227,8 +226,6 @@ body.is-3d #map3d-refresh { display: inline-flex; }
      * switch stays visible in 3D — it is the way back to 2D — so the bar rides
      * on the same measured anchor, --m3d-stack-top, instead of a constant. */
     position: absolute;
-    left: var(--m3d-anchor-left, 10px);
-    bottom: calc(var(--m3d-stack-top, 190px) + 8px);
     z-index: 960;               /* above the 3D surface, below the app chrome */
     display: none;
     flex-direction: column;
@@ -245,8 +242,32 @@ body.is-3d #map3d-refresh { display: inline-flex; }
     /* No shared backdrop: only the individual slider strips are tinted.
      * Gaps between them remain transparent and let map gestures through. */
     pointer-events: none;
-    max-height: calc(100% - var(--m3d-stack-top, 190px) - 64px);
     overflow-y: auto;
+}
+
+/* Installed PWA: bar rides above the column switch, centred over it. The
+ * switch's own top edge (--m3d-stack-top) is measured by js/map3d-terrain.js. */
+body.is-pwa.is-3d #map3d-bar {
+    top: auto;
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(var(--m3d-stack-top, calc(236px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)))) + 8px);
+    width: 280px;
+    max-width: calc(100% - 100px);
+    max-height: calc(100% - var(--m3d-stack-top, calc(236px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)))) - 72px);
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+
+/* Website: bar above the bottom-centre switch. */
+body:not(.is-pwa).is-3d #map3d-bar {
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 34px;
+    width: 208px;
+    max-width: calc(100% - 20px);
+    max-height: calc(100% - 72px);
 }
 
 body.is-3d #map3d-bar { display: flex; }
@@ -369,15 +390,18 @@ body.is-3d #map3d-bar { display: flex; }
         padding: 5px 8px;
     }
     /* On phones the search bar owns the top of the map and the country pill the
-     * bottom centre: the bar tucks under the search bar on the left, and its
-     * max-height stops above the measured 2D/3D switch (which now heads the
-     * bottom-left control column), so the two never collide — not even in
-     * landscape, where the column eats most of the 390px of height. */
-    #map3d-bar {
+     * bottom centre: the bar tucks under the search bar on the left (installed
+     * PWA only — the column switch lives there), and its max-height stops above
+     * the measured 2D/3D switch. On the website the switch stays bottom-centre
+     * and the bar keeps its website placement. */
+    body.is-pwa #map3d-bar {
         top: 56px;
         left: 8px;
         bottom: auto;
         max-height: calc(100% - 64px - var(--m3d-stack-top, 190px));
+    }
+    body:not(.is-pwa) .m3d-toggle-group {
+        bottom: 58px;
     }
     /* Hide the scale widget on phones, not the compact source-credit button. */
     #map3d-surface .maplibregl-ctrl-bottom-left .maplibregl-ctrl-scale { display: none; }
@@ -403,18 +427,6 @@ body.is-3d #map3d-bar { display: flex; }
  * pill in step; exposing it as a custom property also lets layout tests
  * simulate the home-indicator inset. */
 body.is-pwa { --map3d-safe-area-bottom: env(safe-area-inset-bottom, 0px); }
-
-/* Installed-PWA fallback for the measured anchor: the compass column carries a
- * third button there (Detect) and body.is-pwa .leaflet-bottom rides the
- * home-indicator inset, so the base-layer control's top edge sits 130 + 10 +
- * 10 + 34 + 8 = 192px + inset above the wrapper's bottom. As soon as
- * js/map3d-terrain.js has measured #arcgisBasemapCtrl the custom property wins
- * and this constant is never read. The switch no longer shares the
- * bottom-centre slot with the country “Exit view” pill or the folded LiDAR
- * pill, so neither --country-exit-lift nor a phone-only 3D rule is needed. */
-body.is-pwa .m3d-toggle-group {
-    bottom: var(--m3d-anchor-bottom, calc(192px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px))));
-}
 
 @media (max-height: 420px) {
     #map3d-bar { max-height: calc(100% - var(--m3d-stack-top, 190px) - 72px); }
@@ -463,28 +475,6 @@ body.is-pwa.is-3d #map3d-bar .m3d-bearing-row { display: none; }
 /* Keep safe controls visible even if the bar was collapsed before entering PWA. */
 body.is-pwa.is-3d #map3d-bar.collapsed .m3d-row:not(.m3d-exag-row):not(.m3d-pitch-row):not(.m3d-bearing-row),
 body.is-pwa.is-3d #map3d-bar.collapsed .m3d-actions { display: flex; }
-
-/* Centre the compact bar above the 2D/3D switch and the bottom actions. The
- * switch heads the bottom-left control column now, so the bar rides on the
- * same measured anchor (--m3d-stack-top, published by js/map3d-terrain.js)
- * instead of a 108px constant: on a phone the 280px bar reaches across the
- * switch's column and has to start above the switch's top edge, not over it.
- * max-height takes the same anchor, so the bar's top edge does not creep into
- * the search bar on short/landscape screens — it scrolls instead. The
- * fallback is the installed-PWA column (192px + inset, plus the switch's own
- * 44px touch height) for the moment before the first measurement. */
-body.is-pwa.is-3d #map3d-bar {
-    top: auto;
-    right: auto;
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: calc(var(--m3d-stack-top, calc(236px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)))) + 8px);
-    width: 280px;
-    max-width: calc(100% - 100px);
-    max-height: calc(100% - var(--m3d-stack-top, calc(236px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)))) - 72px);
-    overflow-y: auto;
-    scrollbar-width: thin;
-}
 
 /* ══════════════════════════════════════════════════════════════════════════
  * The LiDAR focus (js/lidar-3d-focus.js)

@@ -83,70 +83,89 @@ console.log('[Test] the 2D/3D switch sits right above the base-layer button…')
 /* ══════════════════════════════════════════════════════════════════════════
  * 1. The stylesheet places the switch by the measured anchor
  * ══════════════════════════════════════════════════════════════════════════ */
-{
-    /* Assertions run against the comment-stripped sheet: the rule's own
-     * comment names the variables the switch no longer reads. */
-    const group = ruleOf(skinFlat, '.m3d-toggle-group');
-    assert(/position:\s*absolute/.test(group), 'the switch is still absolutely placed in .map-wrapper');
-    assert(/bottom:\s*var\(--m3d-anchor-bottom, 146px\)/.test(group),
-        'the switch reads --m3d-anchor-bottom, falling back to the documented website column');
-    assert(/left:\s*var\(--m3d-anchor-left, 10px\)/.test(group),
-        'and --m3d-anchor-left, so it lines up with the base-layer button’s left edge');
-    assert(!/left:\s*50%/.test(group) && !/translateX\(-50%\)/.test(group),
-        'the switch is no longer centred in the bottom-centre slot');
-    assert(!/--country-exit-lift|--layer-dock-clearance/.test(group),
-        'and it no longer needs the bottom-centre lift variables');
+    {
+        /* The shared rule is box model only now: position, bottom and left are
+         * environment-specific (PWA column above the base layer vs the
+         * website’s bottom-centre switch). */
+        const group = ruleOf(skinFlat, '.m3d-toggle-group');
+        assert(!/position:/.test(group) && !/bottom:/.test(group) && !/left:/.test(group),
+            'the shared rule carries no positioning — placement is environment-specific');
+        assert(/z-index:\s*960/.test(group) && /display:\s*flex/.test(group) && /gap:\s*6px/.test(group),
+            'and keeps z-index 960, flex layout and the 6px gap');
 
-    /* The documented fallbacks are the real column, not round numbers. */
-    assert.strictEqual(ANCHOR_WEB, 146, 'website: 84 + 10 + 34 + 10 + 8 = 146px');
-    assert.strictEqual(ANCHOR_PWA, 192, 'installed PWA: 130 + 10 + 34 + 10 + 8 = 192px');
+        const pwa = ruleOf(skinFlat, 'body.is-pwa .m3d-toggle-group');
+        assert(/position:\s*absolute/.test(pwa),
+            'in the installed PWA the switch is absolutely placed');
+        assert(/bottom:\s*var\(--m3d-anchor-bottom, calc\(192px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\)\)\)/.test(pwa),
+            'reading --m3d-anchor-bottom with the 192px + inset fallback');
+        assert(/left:\s*var\(--m3d-anchor-left, 10px\)/.test(pwa),
+            'and --m3d-anchor-left, left-aligned with the base-layer button');
 
-    const pwa = ruleOf(skinFlat, 'body.is-pwa .m3d-toggle-group');
-    assert(/bottom:\s*var\(--m3d-anchor-bottom, calc\(192px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\)\)\)/.test(pwa),
-        'the installed-PWA fallback keeps the 192px column and the home-indicator inset');
+        const web = ruleOf(skinFlat, 'body:not(.is-pwa) .m3d-toggle-group');
+        assert(/position:\s*absolute/.test(web),
+            'on the website the switch stays absolutely placed');
+        assert(/bottom:\s*66px/.test(web),
+            'bottom-centre, 66px up, unchanged from before this re-scope');
+        assert(/left:\s*50%/.test(web) && /translateX\(-50%\)/.test(web),
+            'centred over the bottom slot');
 
-    /* Nothing may resurrect the centred anchors the switch used to read. */
-    assert(!/\.m3d-toggle-group\s*\{[^}]*bottom:\s*calc\((58|64|66)px/.test(skinFlat),
-        'no 58/64/66px bottom-centre anchor survives for the switch');
-    console.log('  ✓ .m3d-toggle-group: bottom-left, anchored to the base-layer button (146px / 192px + inset fallbacks)');
-}
+        /* The documented column numbers still drive the measurement and the PWA fallback. */
+        assert.strictEqual(ANCHOR_WEB, 146, 'website: 84 + 10 + 34 + 10 + 8 = 146px');
+        assert.strictEqual(ANCHOR_PWA, 192, 'installed PWA: 130 + 10 + 34 + 10 + 8 = 192px');
+
+        /* Neither environment reads the bottom-centre lift variables. */
+        assert(!/--country-exit-lift|--layer-dock-clearance/.test(pwa) &&
+               !/--country-exit-lift|--layer-dock-clearance/.test(web),
+            'no environment resurrects the bottom-centre lift variables');
+
+        /* The phone bump is website-only: the PWA column keeps measuring. */
+        assert(!/body\.is-pwa\s*\.m3d-toggle-group\s*\{[^}]*bottom:\s*(58|64|66)px/.test(skinFlat),
+            'no hard-coded phone bottom survives in the PWA rule');
+        console.log('  ✓ .m3d-toggle-group: PWA column above the base layer; website bottom-centre untouched');
+    }
 
 /* ══════════════════════════════════════════════════════════════════════════
  * 2. The 3D bar rides above the switch instead of over it
  * ══════════════════════════════════════════════════════════════════════════ */
-{
-    const STACK_WEB = ANCHOR_WEB + SWITCH_H_TOUCH;    // 190px, the CSS fallback
-    const STACK_PWA = ANCHOR_PWA + SWITCH_H_TOUCH + SAFE_AREA;   // 236px + inset
+    {
+        const STACK_WEB = ANCHOR_WEB + SWITCH_H_TOUCH;    // 190px, the CSS fallback
+        const STACK_PWA = ANCHOR_PWA + SWITCH_H_TOUCH + SAFE_AREA;   // 236px + inset
 
-    const bar = ruleOf(skinFlat, '#map3d-bar');
-    assert(/bottom:\s*calc\(var\(--m3d-stack-top, 190px\) \+ 8px\)/.test(bar),
-        'the desktop bar starts 8px above the switch’s measured top edge');
-    assert(/left:\s*var\(--m3d-anchor-left, 10px\)/.test(bar),
-        'and shares the column’s left edge with the switch');
-    assert(/max-height:\s*calc\(100% - var\(--m3d-stack-top, 190px\) - 64px\)/.test(bar),
-        'its max-height reserves the column, so a tall bar scrolls instead of covering the switch');
-    assert(!/bottom:\s*34px/.test(bar), 'the old fixed 34px bar anchor is gone');
+        /* The shared bar rule is box model only now: no left, bottom or
+         * max-height — those are environment-specific. */
+        const bar = ruleOf(skinFlat, '#map3d-bar');
+        assert(!/left:/.test(bar) && !/bottom:/.test(bar) && !/max-height:/.test(bar),
+            'the shared rule carries no anchors — placement is environment-specific');
+        assert(/display:\s*none/.test(bar) && /flex-direction:\s*column/.test(bar) && /width:\s*208px/.test(bar),
+            'and keeps display none, column layout and the 208px width');
 
-    /* Phones hang the bar under the search bar; it must stop above the switch,
-     * which is what keeps landscape (390px of height) usable. */
-    const phoneBar = /@media \(max-width: 720px\) \{([\s\S]*?)\n\}/.exec(skin)[1];
-    assert(/#map3d-bar \{[^}]*top: 56px;[^}]*max-height: calc\(100% - 64px - var\(--m3d-stack-top, 190px\)\)/.test(flatten(phoneBar)),
-        'the phone bar keeps its top anchor and caps its height above the switch');
+        const pwaBar = ruleOf(skinFlat, 'body.is-pwa.is-3d #map3d-bar');
+        assert(/bottom:\s*calc\(var\(--m3d-stack-top, calc\(236px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\)\)\) \+ 8px\)/.test(pwaBar),
+            'in the installed PWA the bar rides --m3d-stack-top (236px + inset fallback)');
+        assert(/max-height:\s*calc\(100% - var\(--m3d-stack-top, calc\(236px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\)\)\) - 72px\)/.test(pwaBar),
+            'and caps its height the same way');
+        assert(/left:\s*50%/.test(pwaBar) && /translateX\(-50%\)/.test(pwaBar),
+            'the compact PWA bar stays centred over the column');
 
-    const pwaBar = ruleOf(skinFlat, 'body.is-pwa.is-3d #map3d-bar');
-    assert(/bottom:\s*calc\(var\(--m3d-stack-top, calc\(236px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\)\)\) \+ 8px\)/.test(pwaBar),
-        'the installed-PWA bar rides the same anchor, with the 236px + inset fallback');
-    assert(/max-height:\s*calc\(100% - var\(--m3d-stack-top, calc\(236px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\)\)\) - 72px\)/.test(pwaBar),
-        'and caps its height the same way');
-    assert(/left:\s*50%/.test(pwaBar) && /translateX\(-50%\)/.test(pwaBar),
-        'the compact PWA bar stays centred over the bottom actions');
+        const webBar = ruleOf(skinFlat, 'body:not(.is-pwa).is-3d #map3d-bar');
+        assert(/bottom:\s*34px/.test(webBar),
+            'on the website the bar keeps its fixed bottom: 34px anchor');
+        assert(/left:\s*50%/.test(webBar) && /translateX\(-50%\)/.test(webBar) && /width:\s*208px/.test(webBar),
+            'centred over the bottom-centre switch');
 
-    /* The arithmetic the layout stands on. */
-    assert.strictEqual(STACK_WEB, 190, 'website column top: 146 + 44 = 190px');
-    assert.strictEqual(STACK_PWA - SAFE_AREA, 236, 'PWA column top: 192 + 44 = 236px + inset');
-    assert.ok(190 + 8 + 60 < 560, 'a 560px map still has room for the bar above the column');
-    console.log('  ✓ #map3d-bar: above the switch on desktop, capped on phones, centred + above it in the PWA');
-}
+        /* Phones hang the PWA bar under the search bar; the website switch and
+         * bar keep their website placement on phones too (58px / bottom: 34px). */
+        assert(/body\.is-pwa\s*#map3d-bar\s*\{[^}]*top:\s*56px;[^}]*max-height:\s*calc\(100% - 64px - var\(--m3d-stack-top, 190px\)\)/.test(skinFlat),
+            'the phone PWA bar tucks under the search bar and stops above the switch');
+        assert(/@media\s*\(max-width:\s*720px\)[\s\S]*?body:not\(.is-pwa\)\s*\.m3d-toggle-group\s*\{[^}]*bottom:\s*58px/.test(skinFlat),
+            'phones keep the website switch at 58px');
+
+        /* The arithmetic the layout stands on. */
+        assert.strictEqual(STACK_WEB, 190, 'website column top: 146 + 44 = 190px');
+        assert.strictEqual(STACK_PWA - SAFE_AREA, 236, 'PWA column top: 192 + 44 = 236px + inset');
+        assert.ok(190 + 8 + 60 < 560, 'a 560px map still has room for the bar above the column');
+        console.log('  ✓ #map3d-bar: PWA rides the measured column; website bottom: 34px centred; phone PWA tucked under the search bar');
+    }
 
 /* ══════════════════════════════════════════════════════════════════════════
  * 3. The viewer measures the base-layer button and follows it
@@ -361,14 +380,14 @@ console.log('[Test] the 2D/3D switch sits right above the base-layer button…')
  * 6. Assets are re-tagged and precached
  * ══════════════════════════════════════════════════════════════════════════ */
 {
-    const TAG = '20261021-3d-switch-baselayer-column';
+    const TAG = '20261023-pwa-only-3d-column';
     for (const asset of ['css/map3d-terrain.css', 'js/map3d-terrain.js']) {
         const url = asset + '?v=' + TAG;
         assert(html.includes(url), 'index.html loads ' + url);
         assert(sw.includes("'" + url + "'"), 'sw.js precaches ' + url);
     }
     const version = Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1] || 0);
-    assert(version >= 254, 'the app-shell cache moved past v253 (found v' + version + ')');
+    assert(version >= 255, 'the app-shell cache moved past v254 (found v' + version + ')');
     assert(/Re-tags css\/map3d-terrain\.css and js\/map3d-terrain\.js\./.test(sw),
         'sw.js logs the change the way the other shell bumps do');
     console.log('  ✓ re-tagged ?v=' + TAG + ' and CACHE_NAME v' + version);
@@ -445,7 +464,7 @@ async function browserChecks() {
                 const group = box(document.getElementById('map3d-toggle-group'));
                 return { offset: Math.round(wrapper.bottom - group.bottom), height: Math.round(group.height) };
             });
-            const expectedFallback = pwa ? 192 : 146;
+            const expectedFallback = pwa ? 192 : 66;
             assert(Math.abs(fallback.offset - expectedFallback) < 1.5,
                 label + ': the CSS fallback puts the switch ' + expectedFallback + 'px up (found ' + fallback.offset + ')');
 
@@ -477,13 +496,24 @@ async function browserChecks() {
                 };
             });
 
-            assert(Math.abs((geometry.control.top - 8) - geometry.group.bottom) < 1.5,
-                label + ': the switch sits 8px above the base-layer button (gap '
-                + (geometry.control.top - geometry.group.bottom).toFixed(1) + 'px)');
-            assert(Math.abs(geometry.group.left - geometry.control.left) < 1.5,
-                label + ': the switch is left-aligned with the base-layer button');
-            assert(geometry.group.bottom < geometry.control.top && geometry.group.top > geometry.wrapper.top,
-                label + ': the switch is inside the map, above the control');
+            if (pwa) {
+                assert(Math.abs((geometry.control.top - 8) - geometry.group.bottom) < 1.5,
+                    label + ': the switch sits 8px above the base-layer button (gap '
+                    + (geometry.control.top - geometry.group.bottom).toFixed(1) + 'px)');
+                assert(Math.abs(geometry.group.left - geometry.control.left) < 1.5,
+                    label + ': the switch is left-aligned with the base-layer button');
+                assert(geometry.group.bottom < geometry.control.top && geometry.group.top > geometry.wrapper.top,
+                    label + ': the switch is inside the map, above the control');
+            } else {
+                /* Website: the switch stays bottom-centre (66 px) — the
+                 * measurement is published but the website never consumes it. */
+                assert(Math.abs((geometry.wrapper.bottom - 66) - geometry.group.bottom) < 1.5,
+                    label + ': the website switch stays bottom-centre, 66 px up (bottom ' + Math.round(geometry.group.bottom) + ')');
+                assert(Math.abs(geometry.group.left + geometry.group.width / 2 - (geometry.wrapper.left + geometry.wrapper.width / 2)) < 1.5,
+                    label + ': the website switch stays centred');
+                assert(geometry.group.top > geometry.wrapper.top && geometry.group.bottom < geometry.wrapper.bottom,
+                    label + ': the switch stays inside the map');
+            }
             if (!threeD) {
                 assert(geometry.toggleHit, label + ': the switch takes its own tap');
             }

@@ -25,15 +25,15 @@
  *       rides on top of it (108px + inset), so the whole column steps up
  *       together instead of the switch sliding under the bar.
  *
- * SINCE v254 the 2D/3D switch no longer lives in this bottom-centre column at
- * all: it heads the map's bottom-left control column, directly above the
+ * In the installed PWA (body.is-pwa) the switch left this bottom-centre
+ * column: it heads the map's bottom-left control column, directly above the
  * base-layer button (#arcgisBasemapCtrl), placed by the custom properties
  * js/map3d-terrain.js measures — see MAP3D_SWITCH_BASE_LAYER_COLUMN.md and
- * test-3d-switch-base-layer-column.js. §3 below therefore asserts the new
- * arrangement (nothing in the pill's column needs the lift any more, and the
- * pill can never be covered or out-tapped again), while the hook itself stays:
- * the country dock still publishes it and the bottom-centre 3D bar can still
- * read it.
+ * test-3d-switch-base-layer-column.js. On the website (body:not(.is-pwa)) the
+ * switch stays bottom-centre and the pill keeps its 18px slot, so nothing in
+ * the pill's column needs the lift any more and the pill can never be covered
+ * or out-tapped again; the hook itself stays (the country dock still publishes
+ * it and the bottom-centre 3D bar can still read it).
  *
  * Run:  node test-country-exit-3d-stack.js
  * Optional real-DOM geometry checks:
@@ -104,9 +104,9 @@ console.log('[Test] “Exit view” and the 2D/3D switch share the bottom-centre
  * 3. The switch left this column, so the pill cannot be covered again
  * ══════════════════════════════════════════════════════════════════════════ */
 {
-    /* v254: the switch is placed by the base-layer button it sits above, not
-       by a bottom-centre constant — so no rule that positions it may still
-       read the pill's lift or the action dock's clearance. */
+    /* PWA-only: the switch sits above the base-layer button in the installed
+       PWA (measured anchor); the website keeps its bottom-centre switch, and
+       neither environment reads the pill's lift or the dock's clearance. */
     const switchRules = skinFlat.match(/\.m3d-toggle-group\s*\{[^}]*\}/g) || [];
     assert(switchRules.length >= 1, 'the skin still places .m3d-toggle-group');
     switchRules.forEach(function (rule) {
@@ -114,18 +114,22 @@ console.log('[Test] “Exit view” and the 2D/3D switch share the bottom-centre
             'no switch rule reads --country-exit-lift any more: ' + rule.trim());
         assert(!/--layer-dock-clearance/.test(rule),
             'no switch rule reads --layer-dock-clearance any more: ' + rule.trim());
-        assert(!/left:\s*50%/.test(rule),
-            'the switch is no longer centred in the pill’s column: ' + rule.trim());
     });
-
-    const desktop = ruleOf(skinCss, '.m3d-toggle-group');
-    assert(/bottom:\s*var\(--m3d-anchor-bottom, 146px\)/.test(desktop) &&
-           /left:\s*var\(--m3d-anchor-left, 10px\)/.test(desktop),
-        'the switch reads the measured base-layer anchor, with the documented left column as fallback');
-
+    const website = ruleOf(skinCss, 'body:not(.is-pwa) .m3d-toggle-group');
+    assert(/position:\s*absolute/.test(website) && /bottom:\s*66px/.test(website) &&
+           /left:\s*50%/.test(website) && /translateX\(-50%\)/.test(website),
+        'the website switch stays bottom-centre, untouched by this re-scope');
     const pwa = ruleOf(skinCss, 'body.is-pwa .m3d-toggle-group');
+    assert(!/left:\s*50%/.test(pwa),
+        'the PWA switch is not centred: ' + pwa.trim());
     assert(/bottom:\s*var\(--m3d-anchor-bottom, calc\(192px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\)\)\)/.test(pwa),
         'the installed-PWA fallback keeps the home-indicator inset (192px + inset)');
+    assert(/left:\s*var\(--m3d-anchor-left, 10px\)/.test(pwa),
+        'and --m3d-anchor-left, left-aligned with the base-layer button');
+    const shared = ruleOf(skinCss, '.m3d-toggle-group');
+    assert(!/position:/.test(shared) && !/bottom:/.test(shared) && !/left:/.test(shared),
+        'the shared rule is box model only; placement is environment-specific');
+    console.log('  ✓ the PWA switch lives in the bottom-left column; the website stays bottom-centre');
 
     /* The 3D bar is the one piece of 3D chrome still bottom-centred in the
        installed PWA, and it now rides on the switch's measured top edge. */
@@ -163,7 +167,7 @@ console.log('[Test] “Exit view” and the 2D/3D switch share the bottom-centre
      * the precache so an installed shell still finds the copy it references. */
     assert(sw.indexOf("'" + 'css/map3d-terrain.css?v=' + TAG + "'") !== -1,
         'sw.js still precaches the v248 skin an installed shell may ask for');
-    const SKIN_TAG = '20261021-3d-switch-baselayer-column';
+    const SKIN_TAG = '20261023-pwa-only-3d-column';
     assert(html.indexOf('css/map3d-terrain.css?v=' + SKIN_TAG) !== -1 &&
         sw.indexOf("'" + 'css/map3d-terrain.css?v=' + SKIN_TAG + "'") !== -1,
         'index.html loads and sw.js precaches the re-tagged 3D skin');
