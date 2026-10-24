@@ -380,7 +380,7 @@ console.log('[Test] the 2D/3D switch sits right above the base-layer button…')
  * 6. Assets are re-tagged and precached
  * ══════════════════════════════════════════════════════════════════════════ */
 {
-    const TAG = '20261023-pwa-only-3d-column';
+    const TAG = '20261024-gesture-only-camera';
     for (const asset of ['css/map3d-terrain.css', 'js/map3d-terrain.js']) {
         const url = asset + '?v=' + TAG;
         assert(html.includes(url), 'index.html loads ' + url);

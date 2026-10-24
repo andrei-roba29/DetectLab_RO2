@@ -35,7 +35,7 @@ for (const file of ['css/styles.css', 'css/map3d-terrain.css']) {
     /* Each asset carries the tag of whatever last changed it: styles.css by
      * the ASIG catalogue panel, and the terrain skin by the 2D/3D switch
      * moving into the bottom-left control column. */
-    const tag = file === 'css/styles.css' ? '20261024-asig-catalogue' : '20261023-pwa-only-3d-column';
+    const tag = file === 'css/styles.css' ? '20261024-asig-catalogue' : '20261024-gesture-only-camera';
     const url = file + '?v=' + tag;
     assert(html.includes(url) && sw.includes("'" + url + "'"), 'cache-busted and precached: ' + file);
 }

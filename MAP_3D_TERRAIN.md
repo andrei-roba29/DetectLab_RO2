@@ -35,9 +35,13 @@ map: a MapLibre GL JS view in which every layer that is switched on in the 2D pa
 * **Layers** – the *same* checkboxes decide what 3D draws. Switch a historical map on in
   2D, and it is draped in 3D; drag its opacity slider, and 3D follows live.
 * **Controls** – a 3D-view basemap picker (Imagery / Topographic / Terrain),
-  oblique pitch, bearing, terrain exaggeration (0.5–4× on web; hidden in the
-  installed PWA because changing DEM exaggeration can crash it), reset view,
-  plus MapLibre's source credits and scale at bottom-left. The picker uses the
+  the reset / ↑ N / 2D ⤓ shortcut buttons, plus MapLibre's source credits and
+  scale at bottom-left. **Pitch, bearing and terrain exaggeration have no
+  controls on the desktop website**: the camera is moved by gestures only
+  (drag to pan, right-drag or Ctrl/⌘+drag to pitch and rotate, two fingers on
+  touch, Shift+arrows from the keyboard, wheel to zoom) and the DEM
+  exaggeration is the fixed `CONFIG.terrain.exaggeration`. See
+  `MAP3D_GESTURE_CAMERA.md`. The picker uses the
   same ArcGIS basemap stack as 2D, so its choice stays in sync and the mirrored
   3D deck updates without leaving the view. Beside the bottom-centre **2D**
   switch, the **refresh** button preloads every source-supported zoom for the
@@ -46,10 +50,11 @@ map: a MapLibre GL JS view in which every layer that is switched on in the 2D pa
   progress, can be stopped, and reloads the visible sources from the warmed
   cache. LiDAR stays on its separate prepared-disc flow (§6.4). There is **no
   terrain on/off button** (MapLibre's `TerrainControl`, titled “Disable terrain”):
-  3D is draped over the DEM by the style itself, and on web the only terrain knob
-  is the exaggeration slider. The camera sliders are separate semi-transparent
-  strips with no shared panel background. Layer/provider diagnostics are available
-  via `window.DetectLabMap3D.status()` / `.report()`, not in the visible controls.
+  3D is draped over the DEM by the style itself, at a fixed exaggeration.
+  Layer/provider diagnostics are available via
+  `window.DetectLabMap3D.status()` / `.report()`, not in the visible controls.
+  (`setExaggeration()` / `setPitch()` / `setBearing()` remain on the public API
+  for diagnostics and automation; nothing in the UI calls them.)
 * **Layout while 3D is on** – the Leaflet panes stop painting and Leaflet's own controls
   (zoom, locate, measure — they move the *2D* camera) are hidden, so nobody clicks a
   button that changes a map they cannot see; MapLibre contributes only the source
@@ -57,7 +62,7 @@ map: a MapLibre GL JS view in which every layer that is switched on in the 2D pa
   “?” help button. The 3D bar sits bottom-left and the 2D⇄3D toggle plus raster-refresh
   button sit bottom-centre as one group; the refresh action is visible only while 3D is
   open. The search bar, the layer panel and the opacity mirror keep their exact 2D
-  position and stay fully usable. In the installed PWA, the slider strips instead
+  position and stay fully usable. In the installed PWA, the control strips instead
   sit horizontally centred in the lower half, above the bottom actions; short
   screens can scroll them. PWA zoom buttons sit top-left (14px + top safe area),
   mirroring the top-right help button. Web navigation remains bottom-right.
@@ -105,7 +110,7 @@ window.DETECTLAB_MAP3D = {
   terrain: {
     provider: 'maptiler',            // 'aws-terrarium' (default) | 'maptiler' | 'custom'
     key: 'YOUR_MAPTILER_KEY',        // injected at deploy time — never committed
-    exaggeration: 1.4                // 0.5 … 4
+    exaggeration: 1.4                // fixed in the UI (0.5 … 4): no slider on web
   },
   hillshade: { mode: 'dem' },        // 'dem' (from the DEM) | 'service' | 'off'
   sky: { enabled: true },
@@ -286,8 +291,9 @@ never from the layer provider — a WMS only ever contributes flat imagery.
 1. **Historical maps do not line up with modern terrain.** A 1855 sheet is draped on
    today's SRTM/ETOPO DEM; where the landscape changed (quarries, mines, drained
    marshes, river regulation) the relief will not match the printed map. That is a
-   property of the data, not of the viewer. On web, raise/lower **terrain
-   exaggeration** to make the draping easier to judge.
+   property of the data, not of the viewer. The exaggeration is a fixed config
+   constant (`CONFIG.terrain.exaggeration`); pitch and bearing change with the
+   drag gesture so the draping can be judged from an angle.
 2. **The two EPSG:2180 city plans are re-projected approximately** (Warsaw 1822, Prague
    1796). The proxy converts the Web-Mercator tile bbox into PL-1992 (GRS80 transverse
    Mercator, k0 = 0.9993, λ0 = 19° E) and requests the tile in `crs=EPSG:2180`; the
@@ -731,7 +737,8 @@ cache).
   (`@media (max-width: 720px)`), the control bar moves under the search bar and keeps its
   own scroll, the device pixel ratio is capped *in the constructor* and the DEM zoom
   ceiling is lowered; the 3D button stays reachable bottom-centre. Terrain + hillshade at
-  a 3× exaggeration is the expensive combination on old phones — prefer 1.0–1.5× there.
+  a 3× exaggeration is the expensive combination on old phones — the shipping
+  constant is 1.4×, which is in that range.
   See §7 for the phone budget (pixel ratio, canvas ceiling, tile cache, MSAA).
 * Per-tile layers (`dl3d://`) cost one extra URL build per tile in the browser — a
   function call, no extra request. Through the proxy they are one hop like any other

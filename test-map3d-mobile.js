@@ -291,8 +291,8 @@ assert(shellVersion >= 196,
  * the bottom-left control column, above the base-layer button. */
 const TAGS = {
     'js/layer-registry.js': '20261024-asig-catalogue',
-    'js/map3d-terrain.js': '20261023-pwa-only-3d-column',
-    'css/map3d-terrain.css': '20261023-pwa-only-3d-column',
+    'js/map3d-terrain.js': '20261024-gesture-only-camera',
+    'css/map3d-terrain.css': '20261024-gesture-only-camera',
     'js/danish-layers.config.js': '20261024-danish-heritage-proxy',
     'js/danish-layers.js': '20261019-danish-free-groups'
 };

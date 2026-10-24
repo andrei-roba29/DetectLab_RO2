@@ -57,7 +57,9 @@ exactly where the report came from.
   the 3D bar keeps calling `map.setTerrain({ source, exaggeration })`, and
   `style.terrain.exaggeration` follows `state.exaggeration`. Follow-up: the
   installed PWA hides this slider (v243) because changing DEM exaggeration can
-  crash the app; web controls remain unchanged.
+  crash the app. *(Later follow-up, v264: the slider is gone from the desktop
+  web bar as well — the exaggeration is the fixed constant
+  `CONFIG.terrain.exaggeration`; see `MAP3D_GESTURE_CAMERA.md`.)*
 * **A DEM that cannot load is still handled.** `terrainSource().missingKey`
   warns once and the view runs flat; the `map.on('error')` handler and the
   veil/report diagnostics are untouched.
@@ -79,3 +81,8 @@ Manually: open the app on a desktop-width window, press **3D** — the top-right
 corner shows only the “?” help button (and the fullscreen ✕ in fullscreen), the
 bottom-left keeps the credits and the scale, and the 3D bar still has the
 *Terrain exaggeration* slider.
+
+> **Superseded (v264).** That slider — together with the pitch and bearing
+> sliders — was removed from the desktop website afterwards: the 3D camera is
+> gesture-only and the exaggeration is a fixed config constant. See
+> `MAP3D_GESTURE_CAMERA.md`. The terrain toggle described here is still absent.

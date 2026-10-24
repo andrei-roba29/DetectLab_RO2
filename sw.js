@@ -762,7 +762,7 @@
 //   transparent: the dark rgba(6,14,30) panel gradients stop above it so layer
 //   rows and actions stay clear of the native bottom bar without painting a
 //   second bar over the map. Re-cache the updated index.html shell.
-const CACHE_NAME = 'detectlab-v263-pwa-transparent-bottom-clearance';
+const CACHE_NAME = 'detectlab-v264-gesture-only-3d-camera';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -867,6 +867,7 @@ const PRECACHE_URLS = [
   'js/map3d-mirror.js?v=20261013-3d-mobile',
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
+  'js/map3d-terrain.js?v=20261024-gesture-only-camera',
   'js/map3d-terrain.js?v=20261023-pwa-only-3d-column',
   'js/map3d-terrain.js?v=20261020-outline-camera-handoff',
   'js/map3d-terrain.js?v=20261020-1km-raster-refresh',
@@ -892,6 +893,7 @@ const PRECACHE_URLS = [
   /* v248: the 2D/3D switch and the country “Exit view” pill stopped sharing
    * the same bottom-centre slot in the installed PWA (see the CACHE_NAME note
    * below). Re-tags the 3D skin, the country dock and its module. */
+  'css/map3d-terrain.css?v=20261024-gesture-only-camera',
   'css/map3d-terrain.css?v=20261023-pwa-only-3d-column',
   'css/map3d-terrain.css?v=20261021-country-exit-3d-stack',
   'css/map3d-terrain.css?v=20261020-1km-raster-refresh',
