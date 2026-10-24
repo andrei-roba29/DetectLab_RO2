@@ -238,9 +238,9 @@ After regenerating: bump the `?v=` tags for the data + config + module in
 ```sh
 node test-albania-asig-layers.js            # catalogue + panel + WMS/WMTS + registry (offline)
 node test-asig-catalogue-generator.mjs      # generator: title folding, names, strict mode, artefacts
-node test-asig-catalogue-generator.mjs      # generator: resolution, keyword rule, strict mode
 node test-wms-layer-audit.js                # offline audit of every WMS/WMTS layer
 node test-asig-production-probe.mjs         # mock-only probe regression
+node test-wms-health.js                     # the availability guard, incl. the ASIG rows
 node tools/audit-wms-layers.mjs             # the audit itself (0 errors expected)
 node tools/audit-wms-layers.mjs --write=WMS_WMTS_LAYER_AUDIT.md   # refresh the report
 ```
