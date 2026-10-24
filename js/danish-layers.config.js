@@ -97,7 +97,7 @@
     /* Read at *runtime* by the proxy functions and in the audit; a layer is
      * only credential-gated when the deployment really needs a variable. */
     var CONFIG = {
-        version: '20261019-danish-v4',
+        version: '20261024-danish-v5',
 
         /* Country this group belongs to. Drives the country filter (rows are
          * shown when Denmark is the selected country) and the coverage check. */
@@ -122,7 +122,7 @@
         /* Free app layers; provider credentials are injected only by the proxy. */
         panelGroups: [
             { id: 'heritage', title: { da: 'Kulturarv', en: 'Heritage' },
-                layers: ['fortidsminder_punkt_ikkefredet', 'fortidsminder_punkt_fredet'] },
+                layers: ['naturtyper', 'fortidsminder', 'fortidsminder_punkt_ikkefredet', 'fortidsminder_punkt_fredet'] },
             { id: 'historical', title: { da: 'Historiske kort', en: 'Historical maps' },
                 layers: ['topo4cm_1980_2001', 'topo4cm_1953_1976', 'hist_lave', 'hist_hoeje', 'hist_preussen'] },
             { id: 'orthophoto', title: { da: 'Ortofoto', en: 'Ortophoto' },
@@ -226,6 +226,7 @@
             /* ── 3. Protected nature types (NBL § 3) overlay ──────────────── */
             {
                 id: 'naturtyper',
+                panelGroup: 'heritage',
                 title: {
                     da: 'Danmark · Beskyttede naturtyper (NBL § 3)',
                     en: 'Denmark · Protected nature types (NBL § 3)'
@@ -352,6 +353,7 @@
             /* ── 6. Fund og Fortidsminder — official service, overlay ────── */
             {
                 id: 'fortidsminder',
+                panelGroup: 'heritage',
                 title: {
                     da: 'Danmark · Fredede fortidsminder (arealer)',
                     en: 'Denmark · Scheduled ancient monuments (areas)'

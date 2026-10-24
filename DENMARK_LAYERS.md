@@ -2,8 +2,10 @@
 
 The Danish panel now includes three collapsible groups, with no premium gate:
 
-- **Heritage**: Not protected ancient monuments; Protected ancient monuments.
-  These reuse the official Kulturarv public WMS point layers (CC0).
+- **Heritage**: Protected nature types (NBL § 3); Scheduled ancient monuments
+  (areas); Not protected ancient monuments; Protected ancient monuments.
+  The monument layers reuse the official Kulturarv public services (CC0), while
+  the nature overlay comes from Danmarks Miljøportal.
 - **Historical maps**: Topographic map 1980–2001; Topographic map 1953–1976;
   Low measuring table leaves 1901–1971; High measuring table leaves 1842–1899;
   Prussian measuring table leaves 1877–1920.
@@ -73,6 +75,13 @@ node tools/sync-danish-config.mjs --check  # what the test suite runs
 
 It is a `.cjs` file because `backend/package.json` is `"type": "module"`: a `.js`
 copy there would be parsed as ESM and `require()` would return an empty object.
+The proxy library imports it with a **static**
+`import danishLayerConfig from './danish-layers.config.cjs'`. Do not replace that
+with a runtime `createRequire(path.resolve(...))` lookup: Netlify could not trace
+that lookup, omitted the config from the deployed Danish function bundles, and
+made every LiDAR, historical-map and orthophoto request fail with
+`MODULE_NOT_FOUND`. The static import works in both the Netlify and Railway
+deployments.
 `test-danish-layers.js` enforces both rules — it scans every `backend/` source for
 a relative `import`/`require` that resolves outside `backend/`, and it runs the
 `--check` above, so neither the crash nor a stale mirror can come back unnoticed.
