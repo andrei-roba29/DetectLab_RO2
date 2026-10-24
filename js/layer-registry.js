@@ -231,7 +231,12 @@
          * 409), above the Danish (399/406) stacks. Albania ASIG entries reuse
          * their existing thematic groups (sat-hist, lidar, patrimoniu, hist-free). */
         'finland-raster': { label: { ro: 'Finlanda · raster', en: 'Finland · raster' }, z: 408 },
-        'finland-vector': { label: { ro: 'Finlanda · vectori', en: 'Finland · vectors' }, z: 409 }
+        'finland-vector': { label: { ro: 'Finlanda · vectori', en: 'Finland · vectors' }, z: 409 },
+        /* The two Albania ASIG catalogue sections that have no thematic home in
+         * the shared catalogue (the other four reuse sat-hist, lidar, uat and
+         * hist-free). Panel placement is still the single Albania group. */
+        'asig-env': { label: { ro: 'Albania · mediu', en: 'Albania · environment' }, z: 618 },
+        'asig-plan': { label: { ro: 'Albania · amenajare/minerit', en: 'Albania · planning/mining' }, z: 646 }
     };
 
     /* ═══════════════════════════════════════════════════════════════════════
@@ -2176,14 +2181,23 @@
         verify2d: verify2d
     };
     /* ═══════════════════════════════════════════════════════════════════════
-     *  ALBANIA ASIG LAYERS — mirrored from the single ASIG config.
-     *  Each layer keeps the shared catalogue group/z-order it draws in
-     *  (Historical, Satellite, LiDAR or Heritage); the PANEL, however, mounts
-     *  all nine rows in one Albania-only group (#albaniaRow) and the country
+     *  ALBANIA ASIG CATALOGUE — mirrored from data/asig-layers.json.
+     *  The catalogue holds the sections, titles and exact service names; the
+     *  config (js/asig-albania-layers.config.js) adds the request rules. Each
+     *  entry keeps the shared catalogue group/z-order it belongs to; the PANEL
+     *  mounts every row in one Albania-only group (#albaniaRow) and the country
      *  filter shows them only while AL is the selected country — hence the
      *  `countries: ['AL']` attribution below.
-     *  The renderer owns CRS fallback and per-row failure reporting, so the
-     *  global availability guard must not flip these independent switches.
+     *
+     *  Only rows the service can actually answer through WMS are registered:
+     *    • the three tile-only products (Hillshade 2015 group, Dsm Hill Group,
+     *      italiane 100k) are WMTS-only — there is no WMS layer to audit and
+     *      the browser reprojects their tiles, so they are deliberately absent;
+     *    • rows whose name is not in the catalogue yet (resolved at run time
+     *      from GetCapabilities) have no LAYERS value, so they are skipped
+     *      until the catalogue is regenerated from the export.
+     *  The renderer owns the CRS fallback and the per-row failure reporting, so
+     *  the global availability guard must not flip these independent switches.
      * ═══════════════════════════════════════════════════════════════════════ */
     (function registerAlbaniaLayers() {
         var cfg = null;
@@ -2196,9 +2210,14 @@
             'the configured EPSG:3857 error burst, and reports persistent fallback failures on that layer row; ' +
             'the global guard must not toggle its independent control.';
         try {
+            var skipped = [];
             cfg.enabledLayers().forEach(function (layer) {
                 var id = 'albania.' + layer.id;
                 if (BY_ID[id]) return;
+                /* Tile-only rows and rows without a resolved name cannot be
+                 * audited or proxied through WMS — see the block comment. */
+                if (layer.kind === 'wmts') { skipped.push(layer.id + ' (WMTS-only)'); return; }
+                if (!layer.layers) { skipped.push(layer.id + ' (name not in the catalogue yet)'); return; }
                 API.register({
                     id: id,
                     group: layer.registryGroup,
@@ -2238,10 +2257,12 @@
                         pct: 'albaniaPct_' + layer.id,
                         selfGuarded: true,
                         configId: layer.id,
-                        section: layer.section
+                        section: layer.section,
+                        heritage: layer.kind === 'group'
                     }
                 });
             });
+            API.asigCatalogueSkips = function () { return skipped.slice(); };
         } catch (e) { /* a broken config must not take the catalogue down */ }
     }());
 

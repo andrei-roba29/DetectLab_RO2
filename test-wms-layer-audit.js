@@ -83,24 +83,32 @@ expect('vegfp.ppi', 'watch', 'VITO');
 });
 console.log('  ✓ every family names its provider (CENAGIS, eHarta, IGN, Copernicus, CAST, VITO, …)');
 
-// ASIG's nine exact registry names stay attributed to Albania in the registry
-// (the panel groups them in one Albania-only panel row). This
-// is an offline URL audit only; production status is established by the probe.
-const ASIG_NAMES = [
-    'Topografike:50K_Topografike', 'Orthophoto:Ortofoto_1999',
-    'orthophoto_2015:OrthoImagery_20cm', 'DSM:Dsm_Hill_Group',
-    'Dtm_2015:Hillshade_2015_group',
-    'iktk:zonatembrojturatetrashegimisekulturore22_07_2026',
-    'akzm:zonat_mbrojtura_081124',
-    'iktk:zonatembrojturatetrashegimisekulturore_pike13_05_2026',
-    'akzm:monumentet_natyrore_07032023'
-];
-const asig = report.layers.filter((l) => l.id.startsWith('albania.'));
+// ASIG's catalogue rows stay attributed to Albania in the registry (the panel
+// groups them in one Albania-only panel row). This is an offline URL audit
+// only; production status is established by the probe. The registry mirrors
+// only rows the WMS can answer, so the audit follows the catalogue
+// (data/asig-layers.json): tile-only WMTS rows and rows whose name is not
+// baked yet are deliberately absent.
 const layerRegistry = require('./js/layer-registry.js');
-assert.strictEqual(asig.length, 9, 'the audit contains all nine ASIG registry rows');
-assert.deepStrictEqual(asig.map((l) => l.layer).sort(), ASIG_NAMES.slice().sort(), 'ASIG WMS Names remain exact');
-assert(asig.every((l) => { const def = layerRegistry.get(l.id); return def && JSON.stringify(def.countries) === JSON.stringify(['AL']) && def.selfGuarded === true && def.guard === false && def.selfGuardedReason; }),
-    'all ASIG registry rows are attributed to Albania alone and stay self-guarded');
+const asigRegistry = layerRegistry.list().filter((def) => def.id.startsWith('albania.'));
+const asigConfig = require('./js/asig-albania-layers.config.js');
+const asig = report.layers.filter((l) => l.id.startsWith('albania.'));
+assert.strictEqual(asig.length, asigRegistry.length, 'the audit contains every answerable ASIG registry row');
+assert.deepStrictEqual(asig.map((l) => l.layer).sort(),
+    asigRegistry.map((def) => def.layer).sort(), 'ASIG WMS Names remain exact');
+const skipped = layerRegistry.asigCatalogueSkips();
+const wmtsRows = asigConfig.layers.filter((layer) => layer.kind === 'wmts');
+const unnamedRows = asigConfig.layers.filter((layer) => layer.kind === 'wms' && !layer.layers);
+assert.strictEqual(skipped.length, wmtsRows.length + unnamedRows.length,
+    'the audit names every catalogue row it cannot probe');
+wmtsRows.forEach((layer) => assert(skipped.some((text) => text.indexOf(layer.id + ' (WMTS-only)') === 0),
+    layer.id + ' is skipped as WMTS-only'));
+asig.forEach((l) => {
+    const def = layerRegistry.get(l.id);
+    assert(def && JSON.stringify(def.countries) === JSON.stringify(['AL']) &&
+        def.selfGuarded === true && def.guard === false && def.selfGuardedReason,
+        l.id + ' is attributed to Albania alone and stays self-guarded');
+});
 assert(asig.every((l) => l.sampleTile === '12/2273/1530 (Tirana)'), 'ASIG offline samples use Tirana tile 12/2273/1530');
 assert(asig.every((l) => l.sample2d.includes('STYLES=&') && /crs=EPSG%3A3857/i.test(l.sample2d)),
     'offline WMS URL construction preserves empty style and the existing 3857 path');
@@ -110,7 +118,7 @@ assert(!layerRegistry.GROUPS['albania-raster'] && !layerRegistry.GROUPS['albania
 assert(report.warnings.length === 0 && report.errors.length === 0, 'offline audit remains clean: 0 errors, 0 warnings');
 assert(/offline URL construction does not verify production acceptance/.test(asig[0].findings.map((f) => f.message).join(' ')),
     'audit explicitly distinguishes URL construction from live verification');
-console.log('  ✓ nine exact ASIG Names, Tirana sample, thematic groups and proxy/self-guard invariants');
+console.log('  ✓ ASIG catalogue rows: exact Names, Tirana sample, thematic groups, WMTS/unnamed skips and proxy/self-guard invariants');
 
 // ══════════════════════════════════════════════════════════════
 // 3. The sample requests are real requests
