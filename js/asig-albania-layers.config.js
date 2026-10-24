@@ -69,7 +69,7 @@
      * mean anything. */
     var SECTION_META = {
         orthophotos: { registryGroup: 'sat-hist', registryZ: 400 },
-        terrain: { registryGroup: 'lidar', registryZ: 610 },
+        lidar: { registryGroup: 'lidar', registryZ: 610 },
         cadastre: { registryGroup: 'uat', registryZ: 402 },
         maps: { registryGroup: 'hist-free', registryZ: 640 },
         environment: { registryGroup: 'asig-env', registryZ: 618 },
@@ -80,7 +80,7 @@
     var SECTION_NOTES = {
         orthophotos: 'National orthophoto mosaics served by the ASIG WMS. Opaque products are best used ' +
             'instead of the basemap; the CIR products are colour-infrared and read vegetation differently.',
-        terrain: 'Hillshades derived from the national DTM/DSM. Tile-only: the WMS service answers ' +
+        lidar: 'LiDAR-derived hillshades (national DTM/DSM). Tile-only: the WMS service answers ' +
             'LayerNotDefined for these names, so they are read from the WMTS plate-carrée grid and ' +
             'reprojected in the browser.',
         cadastre: 'Cadastral zones and parcels (ASHK). Transparent overlays on top of an orthophoto.',

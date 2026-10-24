@@ -112,9 +112,9 @@ const CATALOGUE_SPEC = [
         ]
     },
     {
-        id: 'terrain',
-        title: 'Terrain',
-        note: 'Hillshade and surface model. Both are published as WMTS tiles only.',
+        id: 'lidar',
+        title: 'LiDAR',
+        note: 'LiDAR-derived hillshade and surface model. Both are published as WMTS tiles only.',
         registry: { group: 'lidar', z: 610 },
         layers: [
             { id: 'hillshade_2015', title: 'Hillshade 2015', kind: 'wmts', name: 'Dtm_2015:Hillshade_2015_group', opacity: 0.5 },

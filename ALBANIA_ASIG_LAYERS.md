@@ -20,15 +20,23 @@ Gratis / Free tab.
 ## The catalogue
 
 Section order in the panel: **Heritage (one toggle)** first, then Orthophotos
-(14), Terrain (2), Cadastre (3), Maps (2), Environment (1), Planning & mining (6)
-— 28 catalogue rows, and the only Albanian content the site has. Three of them
-are tile-only (WMTS) and cannot be drawn through the WMS:
+(14), **LiDAR** (2), Cadastre (3), Maps (2), Environment (1), Planning & mining
+(6) — 28 catalogue rows, and the only Albanian content the site has.
+
+The section used to be labelled *Terrain*; it is now **LiDAR** (id `lidar`), which
+is what its two products actually are — DTM/DSM-derived hillshades — and what the
+rest of the site calls that kind of layer. The label and the section id are
+separate things: the id keys the DOM (`#albaniaSection_lidar`), the registry's
+`ui.section` and the saved collapsed state, so it was renamed together with the
+label rather than left behind.
+
+Three rows are tile-only (WMTS) and cannot be drawn through the WMS:
 
 | Title | Name | Kind |
 |---|---|---|
-| Hillshade 2015 group | `Dtm_2015:Hillshade_2015_group` | WMTS only |
-| Dsm Hill Group | `DSM:Dsm_Hill_Group` | WMTS only |
-| italiane 100k | `hartat_historike:italiane_100k` | WMTS only |
+| Hillshade 2015 group (LiDAR) | `Dtm_2015:Hillshade_2015_group` | WMTS only |
+| Dsm Hill Group (LiDAR) | `DSM:Dsm_Hill_Group` | WMTS only |
+| italiane 100k (Maps) | `hartat_historike:italiane_100k` | WMTS only |
 
 Display titles are the portal's own, kept verbatim — including the misspelled
 **“Mineral Resouces”**, which is also the title the export uses, so resolution
@@ -257,9 +265,10 @@ the proxy) returned a tile.
 ## Manual QA
 
 - Default view (no country): there is **no** Albania group.
-- Select Albania: the group appears between the LiDAR group and the Denmark
-  group, expanded, with the search box, the active list, the Heritage toggle and
-  six collapsible sections. Counts per section: 14 / 2 / 3 / 3 / 1 / 6.
+- Select Albania: the group appears between Romania's LiDAR group and the
+  Denmark group, expanded, with the search box, the active list, the Heritage
+  toggle and six collapsible sections — Orthophotos · **LiDAR** · Cadastre ·
+  Maps · Environment · Planning & mining. Counts per section: 14 / 2 / 3 / 2 / 1 / 6.
 - Search `arkeolog`: only the Heritage toggle remains visible; search `durres`:
   one orthophoto row. Clear: everything returns.
 - Switch on two orthophotos and reorder them with ↑/↓: the upper list entry

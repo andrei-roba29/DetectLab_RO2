@@ -33,10 +33,10 @@ check(JSON.stringify(CATALOGUE.bounds) === JSON.stringify([[39.538, 18.773], [42
 /* Section order and the requested row counts. The catalogue is the ONLY
  * Albanian content: no pre-catalogue row is kept alongside it. */
 assert.deepStrictEqual(CATALOGUE.sections.map((s) => s.title),
-    ['Orthophotos', 'Terrain', 'Cadastre', 'Maps', 'Environment', 'Planning & mining']);
+    ['Orthophotos', 'LiDAR', 'Cadastre', 'Maps', 'Environment', 'Planning & mining']);
 const counts = {};
 CATALOGUE.sections.forEach((section) => { counts[section.title] = section.layers.length; });
-assert.deepStrictEqual(counts, { Orthophotos: 14, Terrain: 2, Cadastre: 3, Maps: 2, Environment: 1, 'Planning & mining': 6 });
+assert.deepStrictEqual(counts, { Orthophotos: 14, LiDAR: 2, Cadastre: 3, Maps: 2, Environment: 1, 'Planning & mining': 6 });
 const requested = CATALOGUE.sections.reduce((sum, section) => sum + section.layers.length, 0);
 check(requested === 28, 'the catalogue holds exactly the 28 requested layers');
 check(!CONFIG.byId('topo50k') && !/Topografike:50K_Topografike/.test(JSON.stringify(CATALOGUE)),
@@ -364,7 +364,7 @@ check(!sections.some((section) => section.attributes['data-albania-section'] ===
     'Heritage is not a collapsible section of parts');
 check(sections.length === 6, 'the six catalogue sections render as collapsible blocks');
 assert.deepStrictEqual(sections.map((section) => section.attributes['data-albania-section']),
-    ['orthophotos', 'terrain', 'cadastre', 'maps', 'environment', 'planning']);
+    ['orthophotos', 'lidar', 'cadastre', 'maps', 'environment', 'planning']);
 sections.forEach((section) => {
     const head = section.children[0];
     const body = section.children[1];
@@ -552,10 +552,12 @@ check(worldPlan.cols.length === 2 && worldPlan.rows[0].r === 0,
 
     /* ── the HTML/assets that carry all of this ──────────────────────────── */
     const html = read('index.html');
-    check(html.includes('data/asig-layers.data.js?v=20261024-asig-catalogue'),
+    check(html.includes('data/asig-layers.data.js?v=20261024-asig-lidar'),
         'index.html loads the generated catalogue before the config');
+    /* Each asset carries the tag of whatever last changed it: the data file and
+     * the config by the “LiDAR” rename, the module by the catalogue itself. */
     check(/js\/asig-albania-layers\.js\?v=20261024-asig-catalogue/.test(html) &&
-        /js\/asig-albania-layers\.config\.js\?v=20261024-asig-catalogue/.test(html),
+        /js\/asig-albania-layers\.config\.js\?v=20261024-asig-lidar/.test(html),
         'index.html loads the re-tagged module and config');
     check(html.includes('id="albaniaSubLayers"'), 'the single Albania mount is still in the shell');
     check(/data-key="albania_group_title"/.test(html), 'the group title keeps its translation key');

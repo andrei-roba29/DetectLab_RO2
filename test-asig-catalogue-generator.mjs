@@ -47,7 +47,7 @@ check(SPEC_ROWS.length === 28, '28 rows are curated — the catalogue is the who
 check(SPEC_ROWS.filter((row) => row.kind === 'wmts').length === 3, 'three rows are tile-only');
 check(new Set(SPEC_ROWS.map((row) => row.id)).size === SPEC_ROWS.length, 'every row id is unique');
 check(CATALOGUE_SPEC.map((section) => section.title).join(',') ===
-    'Orthophotos,Terrain,Cadastre,Maps,Environment,Planning & mining',
+    'Orthophotos,LiDAR,Cadastre,Maps,Environment,Planning & mining',
     'section order is the owner’s order');
 
 /* Titles are the portal's own — the misspelt one included. */

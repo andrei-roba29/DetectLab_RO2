@@ -50,9 +50,9 @@
         "ro": "Orthophotos",
         "en": "Orthophotos"
       },
-      "terrain": {
-        "ro": "Terrain",
-        "en": "Terrain"
+      "lidar": {
+        "ro": "LiDAR",
+        "en": "LiDAR"
       },
       "cadastre": {
         "ro": "Cadastre",
@@ -354,9 +354,9 @@
         ]
       },
       {
-        "id": "terrain",
-        "title": "Terrain",
-        "note": "Hillshade and surface model. Both are published as WMTS tiles only.",
+        "id": "lidar",
+        "title": "LiDAR",
+        "note": "LiDAR-derived hillshade and surface model. Both are published as WMTS tiles only.",
         "registry": {
           "group": "lidar",
           "z": 610
