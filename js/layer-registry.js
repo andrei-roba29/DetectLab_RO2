@@ -78,6 +78,38 @@
             encoding: '',                // ← overrides the provider when non-empty
             tileSize: 0
         },
+        /* ── “Cesium” — the alternative 3D engine (CesiumJS globe) ──────────
+         * NOT a MapLibre raster-dem source: MapTiler's
+         * terrain-quantized-mesh-v2 is a binary quantized-mesh-1.0 TIN that
+         * only a CesiumJS CesiumTerrainProvider can read, so js/map3d-terrain.js
+         * lazy-loads CesiumJS and hands it `tilesJson` (fromUrl resolves the
+         * `tiles` template, `available` ranges and `extensions` itself).
+         * The key below is the same public MapTiler key the MapTiler
+         * hillshade layers already ship in js/map-app.js; a deployment can
+         * override any of this via window.DETECTLAB_MAP3D.cesium. */
+        cesium: {
+            label: 'Cesium',
+            tilesJson: 'https://api.maptiler.com/tiles/terrain-quantized-mesh-v2/tiles.json?key=lJtTFcjiimg8ZwMPUfpf',
+            tileTemplate: 'https://api.maptiler.com/tiles/terrain-quantized-mesh-v2/{z}/{x}/{y}.quantized-mesh-1.0?key=lJtTFcjiimg8ZwMPUfpf',
+            format: 'quantized-mesh-1.0',
+            extensions: ['octvertexnormals'],
+            projection: 'EPSG:4326',
+            minzoom: 0,
+            maxzoom: 15,
+            attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
+            sdk: {
+                version: '1.131.0',
+                js: 'https://cdn.jsdelivr.net/npm/cesium@1.131.0/Build/Cesium/Cesium.js',
+                jsFallbacks: [
+                    'https://unpkg.com/cesium@1.131.0/Build/Cesium/Cesium.js',
+                    'https://cesium.com/downloads/cesiumjs/releases/1.131/Build/Cesium/Cesium.js'
+                ],
+                css: 'https://cdn.jsdelivr.net/npm/cesium@1.131.0/Build/Cesium/Widgets/widgets.css',
+                baseUrl: 'https://cdn.jsdelivr.net/npm/cesium@1.131.0/Build/Cesium/',
+                timeoutMs: 30000,
+                timeoutMsMobile: 60000
+            }
+        },
         hillshade: {
             enabled: true,
             mode: 'dem',                 // 'dem' (from the DEM above) | 'service' | 'off'
@@ -196,6 +228,40 @@
             attribution: (t.attribution || preset.attribution || ''),
             requiresKey: preset.requiresKey || null,
             missingKey: !!(preset.requiresKey && !key)
+        };
+    }
+
+    /* Resolved “Cesium” alternative: the MapTiler terrain-quantized-mesh-v2
+     * TileJSON for CesiumJS. Deliberately separate from terrainSource() —
+     * that one resolves MapLibre raster-dem sources (terrarium/mapbox
+     * encodings), which cannot decode quantized-mesh tiles. */
+    function cesiumTerrain() {
+        var cfg = config();
+        var c = cfg.cesium || {};
+        var sdk = c.sdk || {};
+        return {
+            id: 'cesium',
+            name: 'Cesium',
+            label: c.label || 'Cesium',
+            engine: 'cesium',
+            format: c.format || 'quantized-mesh-1.0',
+            extensions: (c.extensions || ['octvertexnormals']).slice(),
+            projection: c.projection || 'EPSG:4326',
+            tilesJson: c.tilesJson || '',
+            tiles: c.tileTemplate ? [c.tileTemplate] : [],
+            tileTemplate: c.tileTemplate || '',
+            minzoom: c.minzoom == null ? 0 : c.minzoom,
+            maxzoom: c.maxzoom == null ? 15 : c.maxzoom,
+            attribution: c.attribution || '',
+            sdk: {
+                version: sdk.version || '',
+                js: sdk.js || '',
+                jsFallbacks: (sdk.jsFallbacks || []).slice(),
+                css: sdk.css || '',
+                baseUrl: sdk.baseUrl || '',
+                timeoutMs: sdk.timeoutMs || 30000,
+                timeoutMsMobile: sdk.timeoutMsMobile || 60000
+            }
         };
     }
 
@@ -2074,6 +2140,7 @@
         return {
             version: VERSION,
             terrain: terrainSource(),
+            cesium: cesiumTerrain(),
             exaggeration: cfg.terrain.exaggeration,
             hillshade: cfg.hillshade,
             proxy: cfg.proxy,
@@ -2128,6 +2195,7 @@
         DEFAULTS: MAP3D_DEFAULT,
         config: config,
         terrainSource: terrainSource,
+        cesiumTerrain: cesiumTerrain,
         get: get,
         list: list,
         all: list,
