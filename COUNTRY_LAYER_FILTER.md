@@ -20,6 +20,14 @@ layers** and keeps the selection visible on the map:
     **no** France/Switzerland rows (their boxes reach Italy's bbox but the
     services carry zero Italian data); Denmark selected → **no** Sweden/Poland
     rows (their boxes clip Denmark's bbox at Bornholm/Zealand).
+  - Every European country also gets a generic **Hillshade LiDAR derivate**
+    row (MapTiler Terrain RGB, `api.maptiler.com/tiles/terrain-rgb-v2`,
+    elevation encoded into RGB), attributed to its own ISO in `LAYER_COUNTRIES`
+    with a coverage box from `data/countries-50m.json` restricted to the
+    European box. Rows live in `js/map-app.js` (`LIDAR_SUB_LAYERS` keys
+    `derivate<ISO>` plus `LIDAR_DERIVATE_BOUNDS`) and render as panel rows
+    in `index.html` (`lidarEuropeanSubLayers`), gated by the same country
+    filter as the national services.
   - **Romanian national layers** (county LiDAR grids, APM, UAT, patrimoniu,
     Biblioteca din Babel, the free historical sheets, battles, scanner, archeo
     tools, Amprenta Vegetației) are attributed `['RO']` and disappear for every
