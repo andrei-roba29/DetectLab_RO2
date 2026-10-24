@@ -85,6 +85,17 @@ sus. Rezultatul se păstrează în `localStorage` (`dlOtherMaps.pyramid.v1`).
 * Hit-testul rulează pe evenimentul de click al hărții, nu pe canvas: pane-ul e
   `pointer-events: none`, ca să nu fure clickurile markerelor de dedesubt (aceeași
   soluție ca la stratul Patrimoniu).
+* **Punctele rămîn blocate de tile-uri la zoom** (animații + pinch): pe timpul
+  animației de zoom, Leaflet ține pane-ul hărții pe loc 250 ms și scalează prin CSS
+  doar containerele de tile-uri. Canvas-ul punctelor (ca și rădăcinile foielor, vezi
+  §4) primește aceeași transformare pe care o au deja canvas-urile Patrimoniu
+  (`map-app.js`, `_updateCanvasTransform`): `zoomanim` (buton/dublu-click/scroll) și
+  `zoom` cu `e.pinch` (pinch pe touch) aplică
+  `translate(scale·ancoră − nouaOrigine) scale(scale)` — în spațiul de proiecție
+  Web Mercator (liniar în zoom) fiecare pixel desenat ajunge exact la poziția lui la
+  zoom-ul țintă. Glisa de 250 ms vine din `.leaflet-zoom-anim .leaflet-zoom-animated`
+  (`css/leaflet.css`); redraw-ul la stabilire (move/zoomend) șterge transformarea.
+  Fără aceasta, punctele „se mișcă sacadat” de la locul lor la zoom in/out.
 
 ## 4. Fereastra „Hărți disponibile” și suprapunerea
 
@@ -92,7 +103,26 @@ Fereastra listează hărțile locului (miniatură, titlu, subiect, colecție, an
 două acțiuni: **„Adaugă pe hartă”** și **„Deschide pe Hungaricana”**.
 
 După adăugare, harta devine o suprapunere liberă (`js/other-maps-overlay.js`) și se
-deschide panoul de aliniere:
+deschide panoul de aliniere. Din prima încărcare foia apare **stabili și lizibilă, cu
+proporțiile ei naturale** — nu ca un punct difuz care „schimbă formatul” la zoom:
+
+* **Încadrare la adăugare** — o foie nouă e pusă la scara la care latura ei lungă
+  ocupă ~70 % din marginea mai mică a ferestrei (aceeași regulă ca „Încadrează”), nu la
+  o scară pe teren arbitrar de ~4 km care, la zoom de comitat, o desena ca un punct de
+  cîțiva pixeli.
+* **Nivelul din piramidă e ales ca să micșoreze, nu să mărimească** — cel mai apropiat
+  nivel la care 1 pixel de nivel ≈ 1 pixel de ecran, urcat cu un nivel (k ≤ 1 = lizibil)
+  cînd fereastra de tile-uri vizibile rămîne sub plafonul de 16 tile-uri.
+* **Grila e tăiată la conturul foii** — tile-urile de 512 px ale serverului au margini
+  în afara foiei la nivelurile groase; fără clip, acele margini se desenează peste baza
+  și făceau forma vizibilă să se schimbe odată cu nivelul (ex. 4:3 → 9:16).
+* **Fără goluri la schimbarea nivelului** — la zoom spre un nivel mai fin, tile-urile
+  vechi rămân ca fundal estompat (replasate cu 2^Δ) pînă termină să se încarce cele noi;
+  la zoom spre un nivel mai gros se refac direct cele 1–2 tile-uri groase.
+* **Foiile stau blocate de tile-uri la zoom** — la fel ca punctele (§3): rădăcina fiecărei
+  foi are clasa `leaflet-zoom-animated`, iar `zoomanim`/pinch aplică
+  `translate(scale·(proiecțiaAncorei − ancora) − nouaOrigine) scale(scale)
+  translate(ancora)`; redraw-ul la stabilire o reîntoarce la plasarea obișnuită.
 
 | Gest | Efect |
 | --- | --- |
@@ -138,7 +168,7 @@ Alinierea supraviețuiește reîncărcării paginii și repornirii stratului. C�
 | `tools/build-hungaricana-catalog.mjs` | re-generează/extinde catalogul de pe portal |
 | `test-other-maps.js` | regresia (rulează fără rețea) |
 | `index.html` | rîndul din panoul „Hărți istorice” + tagurile de asset |
-| `sw.js` | cache `detectlab-v257-other-maps` |
+| `sw.js` | cache `detectlab-v261-other-maps-fit` |
 
 ## 7. Cum extinzi catalogul
 
@@ -180,15 +210,27 @@ coordonatele de comitat sînt aproximative).
 node test-other-maps.js
 ```
 
-213 de verificări, fără rețea:
+274 de verificări, fără rețea:
 
 * hash-ul tile-ului reproduce vectorul publicat de dezoomify (ambele ordini);
-* matematica transformării: alegerea nivelului din piramidă, păstrarea proporțiilor,
-  limitele de scală, inversa transformării (fereastra de tile-uri acoperă viewportul la
-  0°, 90°, 37° și −128°);
+* matematica transformării: alegerea nivelului din piramidă, **scara de încadrare
+  (fitScale) și preferința pentru nivelul mai fin lizibil (cu plafon de tile-uri)**,
+  păstrarea proporțiilor, limitele de scală, inversa transformării (fereastra de
+  tile-uri acoperă viewportul la 0°, 90°, 37° și −128°);
 * fiecare înregistrare din catalog are id, cale ECW și coordonate plauzibile;
 * gruparea: hărțile unui loc rămîn un singur punct, două locuri la 1,4 km sînt un punct
-  la z6 și două puncte la z11 — cu aceeași configurție ca Patrimoniu.
+  la z6 și două puncte la z11 — cu aceeași configurție ca Patrimoniu;
+* **managerul de suprapunere** (mapă falsă + mini-DOM): o foie nouă e încadrată la
+  `fitScale(viewport, zoom)`, la zoom spre un nivel mai fin tile-urile vechi rămân ca
+  fundal estompat (replasate cu 2^Δ, cu timer de rezervă) pînă se încarcă cele noi, la
+  zoom spre un nivel mai gros se refac direct, iar reset/ștergere curăță totul;
+* **blocarea la zoom animat** (mapă falsă cu convențiile de proiecție Web Mercator):
+  un redraw stabilizat înregistrează ancora din spațiul de proiecție; `zoomanim`
+  aplică `translate(scale·ancoră − nouaOrigine) scale(scale)` pe canvas și
+  `translate(scale·(proiecțiaAncorei − ancora) − nouaOrigine) scale(scale)
+  translate(ancora)` pe foi, fiecare punct desenat ajungând exact la poziția lui la
+  zoom-ul țintă; pinch-ul (zoom 13→14, `touchZoom._zooming`) rescalează cadrul
+  stabilizat fără redraw, iar la stabilire transformarea se șterge.
 
-Asset-urile sînt versionate `20261023-other-maps`; cache-ul service-worker-ului e
-`detectlab-v257-other-maps`.
+Asset-urile modificate sînt versionate `20261024-other-maps-zoomlock`; cache-ul
+service-worker-ului e `detectlab-v262-other-maps-zoomlock`.

@@ -15,7 +15,16 @@
     -webkit-user-select: none;
 }
 
-.om-grid { pointer-events: none; }
+/* The grid is clipped to the sheet's own wL×hL box: the server's 512 px
+   tiles carry padding OUTSIDE the sheet at every level (at the root level
+   the whole sheet sits in one 512 px square), and without this clip that
+   padding is painted over the basemap — which made the sheet's apparent
+   shape change as the pyramid level changed. Clipping keeps the painted
+   shape exactly the sheet's natural aspect ratio at every zoom. */
+.om-grid {
+    pointer-events: none;
+    overflow: hidden;
+}
 
 .om-tile {
     display: block;

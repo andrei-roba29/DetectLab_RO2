@@ -15,7 +15,11 @@
  *   4. the clustering contract: the dots must group EXACTLY like the
  *      Patrimoniu sites (same helper, same config, same distances);
  *   5. js/other-maps.js — a group of sheets on one place opens the list, a
- *      group spread over the map zooms in instead.
+ *      group spread over the map zooms in instead;
+ *   6. the overlay manager against a fake map + mini DOM — a fresh sheet is
+ *      framed into the viewport, zooming in keeps the old tiles as a stand-in
+ *      until the finer level loads (and the fallback retires it), zooming out
+ *      refetches the coarser level, reset/ remove clean up.
  */
 
 const assert = require('assert');
@@ -60,6 +64,94 @@ function webCryptoStub() {
     };
 }
 
+/* ── mini DOM + manual timers (for the manager simulation, §6) ───────── */
+/* Timers never fire on their own: the test flushes them explicitly, so the
+ * stand-in's 6 s fallback is exercised on demand and node never waits. */
+const pendingTimers = new Map();
+let nextTimerId = 1;
+function flushTimers() {
+    const list = Array.from(pendingTimers.values());
+    pendingTimers.clear();
+    list.forEach((timer) => timer.fn());
+}
+
+function fakeEl(tag) {
+    const el = {
+        nodeType: 1,
+        tagName: String(tag).toUpperCase(),
+        className: '',
+        style: {},
+        attributes: Object.create(null),
+        children: [],
+        parentNode: null,
+        listeners: Object.create(null),
+        appendChild(child) { child.parentNode = el; el.children.push(child); return child; },
+        removeChild(child) {
+            const i = el.children.indexOf(child);
+            if (i >= 0) el.children.splice(i, 1);
+            child.parentNode = null;
+            return child;
+        },
+        addEventListener(type, fn) { (el.listeners[type] = el.listeners[type] || []).push(fn); },
+        removeEventListener(type, fn) {
+            el.listeners[type] = (el.listeners[type] || []).filter((f) => f !== fn);
+        },
+        dispatch(type) { (el.listeners[type] || []).slice().forEach((fn) => fn({ type })); },
+        getAttribute(name) { return el.attributes[name] == null ? null : el.attributes[name]; },
+        setAttribute(name, value) { el.attributes[name] = String(value); },
+        matches: () => false,
+        setPointerCapture: () => {},
+        getContext: () => (el._ctx2d = el._ctx2d || {
+            clearRect: () => {}, save: () => {}, restore: () => {}, translate: () => {},
+            beginPath: () => {}, arc: () => {}, fill: () => {}, stroke: () => {}, fillText: () => {},
+            lineWidth: 0, globalAlpha: 1, fillStyle: '', strokeStyle: '', font: '',
+            textAlign: '', textBaseline: ''
+        })
+    };
+    el.classList = {
+        _set: new Set(),
+        add(c) { el.classList._set.add(c); },
+        remove(c) { el.classList._set.delete(c); },
+        toggle(c, on) {
+            const should = (on == null) ? !el.classList._set.has(c) : !!on;
+            if (should) el.classList._set.add(c);
+            else el.classList._set.delete(c);
+        },
+        contains(c) { return el.classList._set.has(c); }
+    };
+    return el;
+}
+
+/* A Leaflet stand-in: the anchor is pinned to the centre of a 400×800
+ * viewport, layer points are identity, and the test drives zooms by
+ * rewriting `_state.zoom` and firing 'zoomend'. */
+function fakeMap(initial) {
+    const state = Object.assign({}, initial);
+    const panes = Object.create(null);
+    const events = Object.create(null);
+    const container = fakeEl('div');
+    return {
+        _animatingZoom: false,
+        _state: state,
+        getZoom: () => state.zoom,
+        getSize: () => ({ x: state.size.x, y: state.size.y }),
+        getCenter: () => state.center,
+        getContainer: () => container,
+        getPane: (name) => panes[name] || null,
+        createPane: (name) => {
+            const pane = fakeEl('div');
+            panes[name] = pane;
+            container.appendChild(pane);
+            return pane;
+        },
+        latLngToLayerPoint: () => ({ x: 200, y: 400 }),
+        containerPointToLayerPoint: (pt) => ({ x: pt.x, y: pt.y }),
+        on: (type, fn) => { (events[type] = events[type] || []).push(fn); },
+        off: (type, fn) => { events[type] = (events[type] || []).filter((f) => f !== fn); },
+        fire: (type) => { (events[type] || []).slice().forEach((fn) => fn({ type })); }
+    };
+}
+
 const sandbox = {
     console,
     Math,
@@ -72,13 +164,56 @@ const sandbox = {
     isFinite,
     TextEncoder,
     Uint8Array,
-    setTimeout: (fn) => setTimeout(fn, 0),
+    setTimeout: (fn, ms) => { pendingTimers.set(nextTimerId, { fn, ms }); return nextTimerId++; },
+    clearTimeout: (id) => { pendingTimers.delete(id); },
     clearInterval: () => {},
     setInterval: () => 0,
+    addEventListener: () => {},
+    removeEventListener: () => {},
     localStorage: storageStub(),
     crypto: webCryptoStub(),
-    document: { readyState: 'loading', addEventListener: () => {}, documentElement: { lang: 'ro' } }
+    document: {
+        readyState: 'loading',
+        addEventListener: () => {},
+        getElementById: () => null,
+        documentElement: { lang: 'ro' },
+        createElement: (tag) => fakeEl(tag)
+    },
+    /* The same string form L.DomUtil writes in the browser, so the test can
+     * assert the exact transform the user would see. */
+    L: {
+        point: (x, y) => (x != null && typeof x === 'object'
+            && typeof x.x === 'number' && typeof x.y === 'number')
+            ? x
+            : pt(x, y),
+        latLng: (lat, lng) => (lat != null && typeof lat === 'object' && 'lat' in lat)
+            ? lat
+            : { lat, lng },
+        DomUtil: {
+            setPosition: (el, p) => {
+                el.style.transform = 'translate3d(' + p.x + 'px,' + p.y + 'px,0)';
+            },
+            setTransform: (el, p, s) => {
+                el.style.transform = 'translate3d(' + p.x + 'px,' + p.y + 'px,0) scale(' + s + ')';
+            }
+        }
+    }
 };
+/* A plain {x,y} with the vector ops the zoom-animation maths leans on —
+ * the point instances L.point() would hand back in the browser. */
+function pt(x, y) {
+    return {
+        x, y,
+        add(p) { return pt(this.x + p.x, this.y + p.y); },
+        subtract(p) { return pt(this.x - p.x, this.y - p.y); },
+        multiplyBy(k) { return pt(this.x * k, this.y * k); },
+        _round() { this.x = Math.round(this.x); this.y = Math.round(this.y); return this; }
+    };
+}
+/* loadCatalog() fetches the JSON catalogue; serve it from disk so the dots
+ * test can run the real attach → enable → redraw path without a network. */
+let fakeCatalogJson = null;
+sandbox.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(fakeCatalogJson) });
 sandbox.window = sandbox;
 vm.createContext(sandbox);
 
@@ -159,6 +294,59 @@ const OtherMaps = sandbox.DetectLabOtherMaps;
     eq(tiny.level, 0, 'the smallest scale clamps to the pyramid root');
     const huge = Overlay.planGeometry({ lat: 47, zoom: 14, w: 10000, h: 7000, mpp: 400, maxZoom: 5 });
     eq(huge.level, 5, 'the largest scale clamps to the deepest level');
+
+    /* The “frame it” scale: longest side ≈ FIT_FRACTION of the smaller
+     * viewport edge, in metres per natural pixel. */
+    const res12 = Overlay.resolutionAt(47, 12);
+    const fitMppPhone = Overlay.fitScale(8000, 6000, res12, 400, 800);
+    eq(fitMppPhone, 0.7 * 400 * res12 / 8000,
+        'fitScale sizes the sheet to 70% of the smaller viewport edge');
+    eq(Overlay.fitScale(8000, 6000, res12, 800, 400), fitMppPhone,
+        'fitScale uses the smaller edge regardless of orientation');
+    eq(Overlay.fitScale(6000, 8000, res12, 400, 800), 0.7 * 400 * res12 / 8000,
+        'fitScale follows the longest side for portrait sheets');
+    eq(Overlay.fitScale(0, 0, res12, 400, 800), null, 'fitScale gives up without a size');
+    eq(Overlay.fitScale(8000, 6000, res12, 0, 0), null, 'fitScale gives up without a viewport');
+
+    /* A freshly added sheet is framed, so its on-screen size IS the fit:
+     * longest side on screen = FIT_FRACTION of the smaller edge, natural
+     * aspect, a level inside the pyramid and a bounded tile window. */
+    const fitted = Overlay.planGeometry(
+        { lat: 47, zoom: 12, w: 8000, h: 6000, mpp: fitMppPhone, maxZoom: 4 },
+        { anchor: { x: 200, y: 400 }, rotation: 0, topLeft: { x: 0, y: 0 }, bottomRight: { x: 400, y: 800 } }
+    );
+    ok(Math.abs(fitted.dW - 0.7 * 400) < 1e-9, 'the fitted sheet spans 70% of the smaller edge');
+    ok(Math.abs(fitted.dW / fitted.dH - 8000 / 6000) < 1e-6, 'the fitted sheet keeps its natural 4:3 format');
+    ok(fitted.level >= 0 && fitted.level <= 4, 'the fitted sheet stays inside the pyramid');
+    ok(fitted.k <= 1 + 1e-9, 'the fitted sheet is never upscaled past its own pixels');
+    const fittedRange = Overlay.visibleTileRange(fitted, { x: 200, y: 400 }, 0,
+        { x: 0, y: 0 }, { x: 400, y: 800 });
+    ok((fittedRange.x1 - fittedRange.x0 + 1) * (fittedRange.y1 - fittedRange.y0 + 1) <= Overlay.maxSharpTiles,
+        'the fitted tile window respects the budget');
+
+    /* The sharp-level preference: one level finer downscaling (k ≤ 1, crisp)
+     * instead of upscaling (k > 1, soft) — with a view that says the extra
+     * tiles are affordable (a small window). */
+    const sharpMpp = Math.pow(2, 0.3 - 3) * res12;   // base = 0.3 → round 0, ceil 1
+    const sharp = Overlay.planGeometry(
+        { lat: 47, zoom: 12, w: 4000, h: 3000, mpp: sharpMpp, maxZoom: 3 },
+        { anchor: { x: 200, y: 400 }, rotation: 0, topLeft: { x: 0, y: 0 }, bottomRight: { x: 400, y: 800 } }
+    );
+    const sharpNoView = Overlay.planGeometry({ lat: 47, zoom: 12, w: 4000, h: 3000, mpp: sharpMpp, maxZoom: 3 });
+    eq(sharpNoView.level, 0, 'without a viewport the planner keeps the 1:1 level');
+    ok(sharpNoView.k > 1, '…which means a mild upscale there');
+    eq(sharp.level, 1, 'with an affordable window the planner steps up one level');
+    ok(sharp.k <= 1 + 1e-9, 'the stepped-up level downscales (crisp, no blur)');
+
+    /* …but a viewport whose fine window would exceed the tile budget keeps
+     * the 1:1 level — no tile storm for a wall-sized sheet. */
+    const wideMpp = 0.2625 * res12;                  // base ≈ 2.07 → round 2, ceil 3
+    const wide = Overlay.planGeometry(
+        { lat: 47, zoom: 12, w: 8000, h: 6000, mpp: wideMpp, maxZoom: 4 },
+        { anchor: { x: 1500, y: 1000 }, rotation: 0, topLeft: { x: 0, y: 0 }, bottomRight: { x: 3000, y: 2000 } }
+    );
+    eq(wide.level, 2, 'an over-budget fine window keeps the 1:1 level');
+    ok(wide.k > 1 && wide.k < 1.1, '…accepting the mild 1:1 upscale rather than hundreds of tiles');
 
     // …and the visible tile window must always contain every tile the
     // viewport actually looks at — that is the whole point of the inverse
@@ -284,8 +472,264 @@ const OtherMaps = sandbox.DetectLabOtherMaps;
     eq(OtherMaps.sliderFromMppLimits(limits.mppMin, limits), 0, 'the scale slider starts at the minimum');
     eq(OtherMaps.sliderFromMppLimits(limits.mppMax, limits), 1000, 'the scale slider ends at the maximum');
 
+    /* ══ 6. the manager: framing on add + level crossfade ═════════════ */
+    /* The overlay manager against a fake map + mini DOM. The sheet's
+     * natural size comes from the catalogue hint (no network), tile <img>s
+     * load only when the test dispatches 'load', and the stand-in's
+     * fallback timer is flushed on demand. */
+    const simMap = fakeMap({ zoom: 12, size: { x: 400, y: 800 }, center: { lat: 47.933, lng: 23.892 } });
+    const mgr = Overlay.createManager(simMap, { pane: 'om_test_pane', opacity: 0.8 });
+    const rec = {
+        id: 'TST/1',
+        path: 'maps/mol/s011/s11_0647/s11_0647.ecw',
+        lat: 47.933,
+        lng: 23.892,
+        w: 8000,
+        h: 6000
+    };
+    const ov = await mgr.add(rec);
+    await new Promise((r) => setImmediate(r));   // let the tile-URL promises set src
+
+    // A fresh sheet is framed into the viewport, not dropped at an
+    // arbitrary ground size.
+    const fitMpp12 = Overlay.fitScale(8000, 6000, Overlay.resolutionAt(47.933, 12), 400, 800);
+    ok(Math.abs(ov.state.mpp - fitMpp12) / fitMpp12 < 1e-9,
+        'a fresh sheet is framed: mpp = fitScale(viewport, zoom)');
+    eq(ov.geom.level, 0, 'the fitted sheet sits at the pyramid root at county zoom');
+    const gridTiles = () => ov.gridEl.children.filter((el) => el.tagName === 'IMG');
+    eq(gridTiles().length, 1, 'the whole fitted sheet is one root-level tile');
+
+    // Zoom in → finer level: the old tiles stay as a blurred stand-in,
+    // repositioned by 2^Δ, until the new level loads.
+    simMap._state.zoom = 13;
+    simMap.fire('zoomend');
+    await new Promise((r) => setImmediate(r));
+    eq(ov.geom.level, 1, 'zooming in moves the sheet to a finer pyramid level');
+    ok(ov.stale && Object.keys(ov.stale.imgs).length === 1,
+        'the old level is kept as a stand-in while the finer one loads');
+    eq(gridTiles().length, 5, 'stand-in tiles and new tiles coexist on the grid');
+    const standin = ov.stale.imgs['0:0:0'];
+    eq(standin.style.left, '0px', 'the stand-in tile keeps its ground position');
+    eq(standin.style.width, '1024.6px', '…scaled 2^Δ to cover the same ground at the finer level');
+    ok(standin.className.indexOf('om-tile-stale') >= 0, 'stand-in tiles are tagged as such');
+    eq(pendingTimers.size, 1, 'the stand-in carries a fallback timer');
+
+    // Nothing loads → the fallback drops the stand-in (no forever blur).
+    flushTimers();
+    ok(!ov.stale, 'the fallback timer retires the stand-in');
+    eq(gridTiles().length, 4, '…leaving exactly the new-level window');
+    eq(pendingTimers.size, 0, '…and the fallback timer is gone');
+
+    // Zoom out → coarser level: the finer tiles are dropped, no stand-in.
+    simMap._state.zoom = 11;
+    simMap.fire('zoomend');
+    await new Promise((r) => setImmediate(r));
+    eq(ov.geom.level, 0, 'zooming out returns to the coarser level');
+    ok(!ov.stale, 'going coarser drops the finer tiles (nothing can stand in)');
+    eq(gridTiles().length, 1, 'the coarser window is refetched');
+
+    // Zoom in again, and this time the tiles load: the stand-in retires
+    // the moment every wanted tile has settled.
+    simMap._state.zoom = 13;
+    simMap.fire('zoomend');
+    await new Promise((r) => setImmediate(r));
+    ok(ov.stale, 'the stand-in is back for the second zoom-in');
+    gridTiles().filter((el) => el.className.indexOf('stale') < 0)
+        .forEach((img) => img.dispatch('load'));
+    ok(!ov.stale, 'every new tile settled → the stand-in retires');
+    eq(gridTiles().length, 4, '…and the grid holds exactly the new-level window');
+
+    // Reset returns to the framed state of the current view (zoom 13 here).
+    mgr.reset('TST/1');
+    const fitMpp13 = Overlay.fitScale(8000, 6000, Overlay.resolutionAt(47.933, 13), 400, 800);
+    ok(Math.abs(ov.state.mpp - fitMpp13) / fitMpp13 < 1e-9, 'reset returns the framed scale');
+    eq(ov.state.rotation, 0, 'reset clears the rotation');
+    ok(ov.state.lat === rec.lat && ov.state.lng === rec.lng, 'reset restores the sheet position');
+
+    // Removal cleans up tiles and leaves no timer behind.
+    mgr.remove('TST/1');
+    eq(gridTiles().length, 0, 'remove empties the grid');
+    eq(pendingTimers.size, 0, '…and no stand-in timer is left behind');
+
+    /* ══ 7. zoom animation: dots and sheets stay locked to the tiles ════
+     * The reported glitch: while Leaflet animates a zoom it leaves the map
+     * pane stationary for 250 ms and CSS-scales ONLY the tile containers.
+     * The dots canvas and the sheet roots have to apply the matching
+     * transform themselves — otherwise they sit still, drift away from
+     * their places, and snap back at zoomend (“se mișcă sacadat”).  This
+     * section drives a fake map with the real Web Mercator conventions
+     * (project space linear in zoom, layer = project − pixelOrigin,
+     * container = layer + mapPanePos, map pane at a constant pan offset)
+     * and checks the exact transform string plus the geometry: every
+     * painted pixel must land at its target-zoom position. */
+    const BASE = 1000;
+    const projectAt = (ll, z) => pt(BASE * Math.pow(2, z) * ll.lng, BASE * Math.pow(2, z) * ll.lat);
+    const PANE_POS = pt(17, 9);   // a non-zero pan drift, so anchors aren't trivial
+    function makeProjMap(initial) {
+        const state = Object.assign({}, initial);
+        const panes = Object.create(null);
+        const events = Object.create(null);
+        const containerEl = fakeEl('div');
+        const originAt = (center, z) => projectAt(center, z)
+            .subtract(pt(state.size.x / 2, state.size.y / 2)).add(PANE_POS);
+        return {
+            _animatingZoom: false,
+            _state: state,
+            getZoom: () => state.zoom,
+            getSize: () => pt(state.size.x, state.size.y),
+            getCenter: () => state.center,
+            getContainer: () => containerEl,
+            getPane: (name) => panes[name] || null,
+            createPane: (name) => {
+                const p = fakeEl('div');
+                panes[name] = p;
+                containerEl.appendChild(p);
+                return p;
+            },
+            project: (ll, z) => projectAt(ll, z == null ? state.zoom : z),
+            getPixelOrigin: () => originAt(state.center, state.zoom),
+            _getNewPixelOrigin: (center, z) => originAt(center, z),
+            getZoomScale: (to, from) => Math.pow(2, to - from),
+            latLngToLayerPoint: (ll) => projectAt(ll, state.zoom).subtract(originAt(state.center, state.zoom))._round(),
+            containerPointToLayerPoint: (cp) => cp.subtract(PANE_POS),
+            getBounds: () => {
+                const scale = BASE * Math.pow(2, state.zoom);
+                const halfW = state.size.x / 2 / scale, halfH = state.size.y / 2 / scale;
+                return {
+                    getSouth: () => state.center.lat - halfH,
+                    getNorth: () => state.center.lat + halfH,
+                    getWest: () => state.center.lng - halfW,
+                    getEast: () => state.center.lng + halfW
+                };
+            },
+            on: (type, fn) => { (events[type] = events[type] || []).push(fn); },
+            off: (type, fn) => { events[type] = (events[type] || []).filter((f) => f !== fn); },
+            fire: (type, ev) => { (events[type] || []).slice().forEach((fn) => fn(Object.assign({ type }, ev))); }
+        };
+    }
+    const projMap = makeProjMap({ zoom: 12, size: { x: 800, y: 600 }, center: { lat: 47.933, lng: 23.892 } });
+    const originAt = (z) => projectAt(projMap.getCenter(), z)
+        .subtract(pt(400, 300)).add(PANE_POS);
+    const TOP_LEFT = pt(0, 0).subtract(PANE_POS);   // containerPointToLayerPoint(0,0)
+
+    // ── the dots canvas ─────────────────────────────────────────────────
+    fakeCatalogJson = catalog;
+    OtherMaps.attach(projMap);
+    OtherMaps.setEnabled(true);
+    await new Promise((r) => setImmediate(r));   // loadCatalog → ensureCanvas → redraw
+    ok(OtherMaps.isEnabled(), 'the layer turns on with the fake map attached');
+    ok(OtherMaps.state.canvas && /leaflet-zoom-animated/.test(OtherMaps.state.canvas.className),
+        'the dots canvas carries the zoom-anim class (0.25 s transition, 0 0 origin)');
+    ok(OtherMaps.state.hits.length > 0, 'dots are painted at the settled zoom');
+
+    const omState = OtherMaps.state;
+    const anchor12 = originAt(12).add(TOP_LEFT);
+    ok(Math.abs(omState.lastAnchor.x - anchor12.x) < 1e-6 && Math.abs(omState.lastAnchor.y - anchor12.y) < 1e-6,
+        'a settled redraw records the project-space anchor of the painted frame');
+    eq(omState.lastZoom, 12, '…and the zoom it was painted at');
+    eq(omState.canvas.style.transform, 'translate3d(-17px,-9px,0)',
+        'a settled canvas is placed plainly (no zoom transform lingers)');
+
+    // Animated zoom in (button / double-tap / wheel): no move events fire
+    // for 250 ms — the zoomanim handler must scale the settled frame.
+    projMap.fire('zoomanim', { center: projMap.getCenter(), zoom: 13 });
+    const p1_13 = originAt(13);
+    const expOff = anchor12.multiplyBy(2).subtract(p1_13)._round();
+    eq(omState.canvas.style.transform,
+        'translate3d(' + expOff.x + 'px,' + expOff.y + 'px,0) scale(2)',
+        'zoomanim applies translate(2·anchor − newOrigin) scale(2)');
+
+    // The geometry: after the transform, every painted dot sits exactly
+    // where the settled z13 view would paint it (container coordinates).
+    omState.hits.forEach(function (hit) {
+        const drawn = projectAt(hit.latlng, 12).subtract(originAt(12));   // layer point as painted
+        const local = drawn.subtract(TOP_LEFT);                          // canvas pixel
+        const got = PANE_POS.add(pt(expOff.x + 2 * local.x, expOff.y + 2 * local.y));
+        const want = projectAt(hit.latlng, 13).subtract(originAt(13)).add(PANE_POS);
+        ok(Math.abs(got.x - want.x) < 1e-4 && Math.abs(got.y - want.y) < 1e-4,
+            'a dot stays on its place through the animated zoom (' + hit.cluster.count + ' sheets)');
+    });
+
+    // Settling (zoomend): a plain redraw resets the transform and re-records.
+    projMap._state.zoom = 13;
+    projMap.fire('move');
+    projMap.fire('zoomend');
+    eq(omState.lastZoom, 13, 'the settled redraw re-records the frame at the new zoom');
+    eq(omState.canvas.style.transform, 'translate3d(-17px,-9px,0)',
+        '…and the canvas goes back to a plain placement (no lingering scale)');
+
+    // Pinch: 'zoom' events fire per frame and the origin already moves —
+    // the transform must track the live center/zoom from the settled frame,
+    // and 'move' events must NOT redraw mid-pinch (they would fight it).
+    projMap.touchZoom = { _zooming: true };
+    const anchor13 = originAt(13).add(TOP_LEFT);
+    projMap.fire('move');
+    ok(Math.abs(omState.lastAnchor.x - anchor13.x) < 1e-6 && Math.abs(omState.lastAnchor.y - anchor13.y) < 1e-6,
+        'mid-pinch move events do not repaint (guard)');
+    projMap._state.zoom = 14;
+    projMap.fire('zoom', { pinch: true });
+    const expOffPinch = anchor13.multiplyBy(2).subtract(originAt(14))._round();
+    eq(omState.canvas.style.transform,
+        'translate3d(' + expOffPinch.x + 'px,' + expOffPinch.y + 'px,0) scale(2)',
+        'a pinch rescales the settled frame live (zoom 13 → 14)');
+    projMap.touchZoom._zooming = false;
+    projMap.fire('move');
+    projMap.fire('zoomend');
+    eq(omState.lastZoom, 14, 'after the pinch settles, the frame is re-recorded at 14');
+    eq(omState.canvas.style.transform, 'translate3d(-17px,-9px,0)',
+        '…and the plain placement is restored');
+
+    // ── the sheet overlays ──────────────────────────────────────────────
+    const mgr2 = OtherMaps.state.manager;   // created by attach() on projMap
+    const rec7 = {
+        id: 'TST/7',
+        path: 'maps/mol/s011/s11_0647/s11_0647.ecw',
+        /* Deliberately OFF the map centre: a centre point keeps the same
+         * layer position at every zoom, which would hide re-anchoring. */
+        lat: 47.95,
+        lng: 23.91,
+        w: 8000,
+        h: 6000
+    };
+    const ov7 = await mgr2.add(rec7);
+    await new Promise((r) => setImmediate(r));
+    ok(/leaflet-zoom-animated/.test(ov7.root.className),
+        'the sheet root carries the zoom-anim class');
+    eq(ov7.root.style.transform,
+        'translate3d(' + ov7.anchor.x + 'px,' + ov7.anchor.y + 'px,0)',
+        'a settled sheet is placed at its anchor (no zoom transform)');
+
+    // Animated zoom out → in by two: the root gets
+    // translate(s·(projectAnchor − anchor) − newOrigin) scale(s) translate(anchor).
+    projMap.fire('zoomanim', { center: projMap.getCenter(), zoom: 15 });
+    const a14 = pt(ov7.anchor.x, ov7.anchor.y);
+    const local7 = ov7.projectAnchor.subtract(a14);
+    const off7 = local7.multiplyBy(2).subtract(originAt(15))._round();
+    eq(ov7.root.style.transform,
+        'translate3d(' + off7.x + 'px,' + off7.y + 'px,0) scale(2) translate3d(' + a14.x + 'px,' + a14.y + 'px,0)',
+        'zoomanim scales the sheet around its project anchor (14 → 15)');
+
+    // …and the sheet's anchor point stays on the ground: container of the
+    // anchor after the transform = the settled z15 container of its LatLng.
+    const anchorContainer15 = projectAt(rec7, 15).subtract(originAt(15)).add(PANE_POS);
+    // The anchor is the root's local (0,0): translate(off7)·scale(2)·translate(a14)
+    // maps it to off7 + 2·a14 in pane coordinates.
+    const gotAnchor = PANE_POS.add(pt(off7.x + 2 * a14.x, off7.y + 2 * a14.y));
+    ok(Math.abs(gotAnchor.x - anchorContainer15.x) < 1e-4 && Math.abs(gotAnchor.y - anchorContainer15.y) < 1e-4,
+        'the sheet anchor stays on its ground point through the animation');
+
+    // Settle: render() resets the root transform and re-records the frame.
+    projMap._state.zoom = 15;
+    projMap.fire('move');
+    projMap.fire('zoomend');
+    ok(ov7.anchor.x !== a14.x || ov7.anchor.y !== a14.y,
+        'settling at z15 re-anchors the sheet (layer points changed)');
+    eq(ov7.root.style.transform,
+        'translate3d(' + ov7.anchor.x + 'px,' + ov7.anchor.y + 'px,0)',
+        '…and the plain placement is restored');
+
     console.log('✓ other-maps: ' + checks + ' checks passed ' +
-        '(' + catalog.maps.length + ' catalogue records, ' + locations.length + ' places)');
+        ('(' + catalog.maps.length + ' catalogue records, ' + locations.length + ' places)'));
 })().catch((err) => {
     console.error('✗ other-maps test failed:', err && err.message);
     process.exit(1);

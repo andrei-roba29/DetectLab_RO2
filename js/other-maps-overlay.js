@@ -14,6 +14,19 @@
  * while the user stays in full control of where, how big and how rotated it
  * sits, exactly like dragging one image over another in Photoshop.
  *
+ * Quality and framing (the “it looks blurry and changes format on zoom” fix):
+ *   * a FRESH sheet is framed into the viewport (longest side ≈ 70 % of the
+ *     smaller edge, same rule as fitToView) instead of at an arbitrary
+ *     ~4 km ground size that rendered as a blur at county zooms — so it
+ *     loads in its natural format, at its best available sharpness;
+ *   * the pyramid level is the one closest to 1 level pixel ≈ 1 screen
+ *     pixel, upgraded one level (downscaling = crisp) when the visible tile
+ *     window stays within MAX_SHARP_TILES;
+ *   * when a zoom moves the sheet to a FINER level, the old tiles are kept
+ *     as a blurred stand-in (repositioned by 2^Δ) until the new level has
+ *     loaded, so the sheet never vanishes mid-zoom; going coarser just
+ *     refetches the one or two coarse tiles.
+ *
  * Public API: window.DetectLabOtherMapsOverlay.createManager(map, opts) →
  *   add(record, state) / remove(id) / get(id) / list() / setActive(id)
  *   setAlignMode(on) / isAlignMode() / setOpacity(id, v) / setState(id, patch)
@@ -32,7 +45,10 @@
      * a whole region; nothing useful lives outside that window. */
     var MPP_MIN = 0.02;
     var MPP_MAX = 400;
-    var DEFAULT_GROUND_WIDTH_M = 4000;   // used when a sheet is added fresh
+    var DEFAULT_GROUND_WIDTH_M = 4000;   // last-resort ground size (no viewport)
+    var FIT_FRACTION = 0.7;              // “Încadrează”: longest side over the smaller viewport edge
+    var MAX_SHARP_TILES = 16;            // tile-window budget for the sharp-level preference
+    var STALE_FALLBACK_MS = 6000;        // stand-in tiles are dropped after this even if no tile settles
     var SNAP_DEG = 1.5;                  // rotation snaps near 0/90/180/270
 
     var UI_SELECTOR = 'button, a, input, select, textarea, label, .leaflet-control, ' +
@@ -66,13 +82,34 @@
      * Everything the painter needs for one frame, as pure maths.
      * `mpp` is metres per NATURAL image pixel; the pyramid level is chosen so
      * that one level pixel lands as close as possible to one screen pixel.
+     *
+     * When `view` (anchor + viewport rectangle in layer pixels) is given, the
+     * planner may step UP one level — the one that DOWNSCALES the sheet onto
+     * the screen (k ≤ 1, crisp) instead of upscaling it (k > 1, soft) — but
+     * only while the tile window that implies stays within MAX_SHARP_TILES,
+     * so a whole-viewport crop of a 40 000 px sheet at native scale never
+     * means hundreds of requests.
      */
-    function planGeometry(o) {
+    function planGeometry(o, view) {
         var res = resolutionAt(o.lat, o.zoom);
         var dW = o.w * o.mpp / res;
         var dH = o.h * o.mpp / res;
-        var level = Math.round(o.maxZoom + Math.log(o.mpp / res) / Math.LN2);
-        level = clamp(level, 0, o.maxZoom);
+        var base = o.maxZoom + Math.log(o.mpp / res) / Math.LN2;
+        var level = clamp(Math.round(base), 0, o.maxZoom);
+        if (view) {
+            var sharp = clamp(Math.ceil(base - 1e-9), 0, o.maxZoom);
+            if (sharp > level) {
+                var fine = geometryAt(o, res, dW, dH, sharp);
+                var range = visibleTileRange(fine, view.anchor, view.rotation, view.topLeft, view.bottomRight);
+                if ((range.x1 - range.x0 + 1) * (range.y1 - range.y0 + 1) <= MAX_SHARP_TILES) {
+                    level = sharp;
+                }
+            }
+        }
+        return geometryAt(o, res, dW, dH, level);
+    }
+
+    function geometryAt(o, res, dW, dH, level) {
         var factor = Math.pow(2, level - o.maxZoom);
         var wL = Math.max(1, Math.round(o.w * factor));
         var hL = Math.max(1, Math.round(o.h * factor));
@@ -87,6 +124,19 @@
             cols: Math.max(1, Math.ceil(wL / TILE)),
             rows: Math.max(1, Math.ceil(hL / TILE))
         };
+    }
+
+    /**
+     * Metres per natural pixel that make the sheet's longest side span
+     * `FIT_FRACTION` of the smaller viewport edge at ground resolution `res`
+     * — the same rule the “Încadrează / Fit” button applies. `null` when the
+     * inputs cannot frame anything (missing size or empty viewport).
+     */
+    function fitScale(w, h, res, viewW, viewH) {
+        var longest = Math.max(Number(w) || 0, Number(h) || 0);
+        var target = Math.min(Number(viewW) || 0, Number(viewH) || 0) * FIT_FRACTION;
+        if (!(longest > 0) || !(res > 0) || !(target > 0)) return null;
+        return target * res / longest;
     }
 
     /**
@@ -153,10 +203,19 @@
             activeId: null
         };
 
+        /* The settled zoom the overlays were last painted at (render runs
+         * only on settled views — see renderAll), so the zoom-animation
+         * transform can express every scale relative to it. */
+        var lastZoom = null;
+
         /* ── overlay construction ─────────────────────────────────────── */
         function build(record) {
             var root_ = document.createElement('div');
-            root_.className = 'om-overlay';
+            /* leaflet-zoom-animated: the 250 ms transform transition (and 0 0
+             * origin) from css/leaflet.css, so applyZoomTransform's scale
+             * glides with the tiles during a zoom animation, like the dots
+             * canvas in js/other-maps.js. */
+            root_.className = 'om-overlay leaflet-zoom-animated';
             root_.style.position = 'absolute';
             root_.style.left = '0';
             root_.style.top = '0';
@@ -227,8 +286,11 @@
                 boxEl: boxEl,
                 handles: handles,
                 tiles: Object.create(null),
+                stale: null,           // previous-level stand-in while a finer level loads
                 meta: null,
                 geom: null,
+                anchor: null,          // anchor LatLng in layer pixels (last paint)
+                projectAnchor: null,   // anchor in project space (last paint)
                 token: 0,
                 state: {
                     lat: Number(record.lat),
@@ -242,7 +304,16 @@
         }
 
         /* ── geometry ─────────────────────────────────────────────────── */
-        function geometryFor(ov) {
+        /* The viewport in layer pixels, so the planner can bound the tile
+         * window it asks for (the sharp-level preference). */
+        function viewportRect() {
+            return {
+                topLeft: map.containerPointToLayerPoint(L.point(0, 0)),
+                bottomRight: map.containerPointToLayerPoint(map.getSize())
+            };
+        }
+
+        function geometryFor(ov, anchor, view) {
             return planGeometry({
                 lat: ov.state.lat,
                 zoom: map.getZoom(),
@@ -250,6 +321,11 @@
                 h: ov.meta.h,
                 mpp: ov.state.mpp,
                 maxZoom: ov.meta.maxZoom
+            }, {
+                anchor: anchor,
+                rotation: ov.state.rotation,
+                topLeft: view.topLeft,
+                bottomRight: view.bottomRight
             });
         }
 
@@ -258,13 +334,10 @@
         }
 
         /* ── tiles ────────────────────────────────────────────────────── */
-        function syncTiles(ov) {
+        function syncTiles(ov, view) {
             var g = ov.geom;
             if (!g) return;
-            var size = map.getSize();
-            var topLeft = map.containerPointToLayerPoint(L.point(0, 0));
-            var bottomRight = map.containerPointToLayerPoint(size);
-            var range = visibleTileRange(g, ov.anchor, ov.state.rotation, topLeft, bottomRight);
+            var range = visibleTileRange(g, ov.anchor, ov.state.rotation, view.topLeft, view.bottomRight);
             var x0 = range.x0, x1 = range.x1, y0 = range.y0, y1 = range.y1;
 
             var wanted = Object.create(null);
@@ -295,8 +368,15 @@
             img.style.height = (TILE + 0.6) + 'px';
             img.draggable = false;
             img.alt = '';
+            /* Where this tile lives in the pyramid — the stand-in promotion
+             * repositions the old level's tiles by these coordinates. */
+            img._om = { x: x, y: y, level: level };
             ov.tiles[key] = img;
             ov.gridEl.appendChild(img);
+            /* Settling (loaded, or failed for good) is what retires the
+             * previous level's stand-in — see markStaleSettled. */
+            img.addEventListener('load', function () { markStaleSettled(ov, key); });
+            img.addEventListener('error', function () { markStaleSettled(ov, key); });
             if (!Tiles || typeof Tiles.tileUrl !== 'function') return;
             function stale() { return ov.token !== token || !img.parentNode; }
             function fallback() {
@@ -318,7 +398,51 @@
             }).catch(fallback);
         }
 
+        /* ── the previous level, as a blurred stand-in ───────────────────
+         * Switching pyramid levels used to delete every tile and refetch, so
+         * the sheet vanished (or half-redrew) mid-zoom — the “unstable” part
+         * of the first impression.  When the level goes FINER, the old tiles
+         * are kept: repositioned by 2^Δ they cover exactly the same ground,
+         * just softer, until the new level's tiles have all settled.  When it
+         * goes coarser there is nothing finer to stand in, so the old tiles
+         * are dropped (the coarser level is one or two fast requests). */
+        function promoteStale(ov, oldLevel) {
+            dropStale(ov);
+            var stale = { level: oldLevel, imgs: ov.tiles, settled: {} };
+            ov.tiles = Object.create(null);
+            var d = Math.pow(2, ov.geom.level - oldLevel);
+            Object.keys(stale.imgs).forEach(function (key) {
+                var img = stale.imgs[key];
+                if (!img || !img._om) return;
+                img.className = 'om-tile om-tile-stale';
+                img.style.left = (img._om.x * TILE * d) + 'px';
+                img.style.top = (img._om.y * TILE * d) + 'px';
+                img.style.width = (TILE * d + 0.6) + 'px';
+                img.style.height = (TILE * d + 0.6) + 'px';
+            });
+            stale.timer = root.setTimeout(function () { dropStale(ov); }, STALE_FALLBACK_MS);
+            ov.stale = stale;
+        }
+
+        function dropStale(ov) {
+            if (!ov.stale) return;
+            if (ov.stale.timer) root.clearTimeout(ov.stale.timer);
+            Object.keys(ov.stale.imgs).forEach(function (key) {
+                var img = ov.stale.imgs[key];
+                if (img && img.parentNode) img.parentNode.removeChild(img);
+            });
+            ov.stale = null;
+        }
+
+        function markStaleSettled(ov, key) {
+            if (!ov.stale || !ov.tiles[key]) return;
+            ov.stale.settled[key] = true;
+            var pending = Object.keys(ov.tiles).some(function (k) { return !ov.stale.settled[k]; });
+            if (!pending) dropStale(ov);
+        }
+
         function clearTiles(ov) {
+            dropStale(ov);
             Object.keys(ov.tiles).forEach(function (key) {
                 var img = ov.tiles[key];
                 if (img && img.parentNode) img.parentNode.removeChild(img);
@@ -330,11 +454,21 @@
         /* ── painting ─────────────────────────────────────────────────── */
         function render(ov) {
             if (!ov || !ov.meta || !ov.root.parentNode) return;
-            var g = geometryFor(ov);
+            var view = viewportRect();
             var a = anchorPoint(ov);
+            var g = geometryFor(ov, a, view);
             var levelChanged = !ov.geom || ov.geom.level !== g.level;
+            var oldLevel = ov.geom ? ov.geom.level : null;
             ov.geom = g;
             ov.anchor = a;
+            /* Project-space position of the anchor as just painted (render
+             * only runs on settled views).  applyZoomTransform scales around
+             * it, the same contract the dots canvas uses — it also absorbs
+             * the half-pixel rounding latLngToLayerPoint bakes into `a`. */
+            if (typeof map.project === 'function') {
+                ov.projectAnchor = map.project(L.latLng(ov.state.lat, ov.state.lng), map.getZoom());
+            }
+            lastZoom = map.getZoom();
 
             ov.root.style.transform = 'translate3d(' + a.x + 'px,' + a.y + 'px,0)';
             ov.root.style.opacity = String(ov.state.opacity);
@@ -344,7 +478,15 @@
             ov.gridEl.style.transform = 'scale(' + g.k + ') translate(' +
                 (-g.wL / 2) + 'px,' + (-g.hL / 2) + 'px)';
 
-            if (levelChanged) clearTiles(ov);
+            if (levelChanged) {
+                if (oldLevel != null && g.level > oldLevel) {
+                    // Finer: the old tiles stay as a soft stand-in.
+                    promoteStale(ov, oldLevel);
+                } else {
+                    // First paint or coarser: start from a clean grid.
+                    clearTiles(ov);
+                }
+            }
 
             if (ov.frameEl.style.display !== 'none') {
                 ov.frameEl.style.transform = 'rotate(' + ov.state.rotation + 'deg)';
@@ -353,11 +495,40 @@
                 ov.boxEl.style.left = (-g.dW / 2) + 'px';
                 ov.boxEl.style.top = (-g.dH / 2) + 'px';
             }
-            syncTiles(ov);
+            syncTiles(ov, view);
+        }
+
+        /* Keep the sheets locked to the tiles during a zoom animation, the
+         * same way the dots canvas does (js/other-maps.js): the map pane is
+         * stationary while the tile containers CSS-scale for 250 ms, so each
+         * sheet root gets the matching transform
+         *     translate(scale·(projectAnchor − anchor) − newPixelOrigin) ·
+         *     scale · translate(anchor)
+         * — Web Mercator project space is linear in zoom, so every point of
+         * the sheet lands at its exact target-zoom position.  The 250 ms
+         * glide comes from `.leaflet-zoom-anim .leaflet-zoom-animated`
+         * (css/leaflet.css).  A settled render() resets the root transform,
+         * so it never lingers. */
+        function applyZoomTransform(center, zoom) {
+            if (lastZoom == null || typeof map._getNewPixelOrigin !== 'function') return;
+            var scale = map.getZoomScale(zoom, lastZoom);
+            var newOrigin = map._getNewPixelOrigin(center, zoom);
+            order.forEach(function (id) {
+                var ov = overlays[id];
+                if (!ov || !ov.anchor || !ov.projectAnchor) return;
+                var local = ov.projectAnchor.subtract(ov.anchor);
+                var offset = local.multiplyBy(scale).subtract(newOrigin)._round();
+                ov.root.style.transform = 'translate3d(' + offset.x + 'px,' + offset.y + 'px,0) ' +
+                    'scale(' + scale + ') translate3d(' + ov.anchor.x + 'px,' + ov.anchor.y + 'px,0)';
+            });
         }
 
         function renderAll() {
             if (map._animatingZoom) return;
+            /* A pinch is rescaled from the last settled frame by
+             * applyZoomTransform on every 'zoom' event; redrawing mid-pinch
+             * would fight that transform (same guard as the dots canvas). */
+            if (map.touchZoom && map.touchZoom._zooming) return;
             order.forEach(function (id) { render(overlays[id]); });
         }
 
@@ -380,9 +551,15 @@
             return Tiles.resolve(record.path, hint).then(function (meta) {
                 ov.meta = meta;
                 if (ov.state.mpp == null || !isFinite(ov.state.mpp)) {
-                    // Fresh sheet: make it cover ~4 km on the ground, then let
-                    // the user dial it in.
-                    ov.state.mpp = clamp(DEFAULT_GROUND_WIDTH_M / Math.max(meta.w, meta.h), MPP_MIN, MPP_MAX);
+                    // Fresh sheet: frame it into the viewport (longest side ≈
+                    // FIT_FRACTION of the smaller edge) so it loads in its
+                    // natural format and at the best quality the current view
+                    // allows — instead of at an arbitrary ~4 km ground size
+                    // that, at county zooms, renders as a small blur.
+                    var fit = fitMppFor(ov);
+                    ov.state.mpp = fit != null
+                        ? fit
+                        : clamp(DEFAULT_GROUND_WIDTH_M / Math.max(meta.w, meta.h, 1), MPP_MIN, MPP_MAX);
                 }
                 render(ov);
                 emitChange(ov);
@@ -391,7 +568,12 @@
             }).catch(function (err) {
                 console.warn('[OtherMaps] cannot read pyramid for', record.id, err);
                 ov.meta = { w: 4000, h: 3000, maxZoom: 4 };
-                if (ov.state.mpp == null) ov.state.mpp = 1;
+                if (ov.state.mpp == null || !isFinite(ov.state.mpp)) {
+                    // Even an unresolvable sheet is framed with its guessed
+                    // size rather than dropped at an arbitrary ground scale.
+                    var fit = fitMppFor(ov);
+                    ov.state.mpp = fit != null ? fit : 1;
+                }
                 render(ov);
                 return ov;
             });
@@ -496,16 +678,23 @@
             setState(id, { lat: center.lat, lng: center.lng });
         }
 
+        /* The “Încadrează” scale for this overlay right now: the sheet's
+         * longest side spans FIT_FRACTION of the smaller viewport edge. */
+        function fitMppFor(ov) {
+            if (!ov || !ov.meta) return null;
+            var size = map.getSize();
+            var mpp = fitScale(ov.meta.w, ov.meta.h, resolution(map, ov.state.lat), size.x, size.y);
+            if (mpp == null) {
+                // The map has no viewport yet — fall back to the old default.
+                mpp = DEFAULT_GROUND_WIDTH_M / Math.max(ov.meta.w, ov.meta.h, 1);
+            }
+            return clamp(mpp, MPP_MIN, MPP_MAX);
+        }
+
         function fitToView(id) {
             var ov = overlays[id];
-            if (!ov || !ov.meta) return;
-            var size = map.getSize();
-            var res = resolution(map, ov.state.lat);
-            // 70% of the smaller viewport edge.
-            var targetPx = Math.min(size.x, size.y) * 0.7;
-            var longestSide = Math.max(ov.meta.w, ov.meta.h);
-            var mpp = targetPx * res / longestSide;
-            return setState(id, { mpp: clamp(mpp, MPP_MIN, MPP_MAX) });
+            if (!ov || !ov.meta) return null;
+            return setState(id, { mpp: fitMppFor(ov) });
         }
 
         function groundWidth(id) {
@@ -515,15 +704,19 @@
         }
 
         /* Back to the day it was added: the sheet's own coordinates, no
-         * rotation and the default “about four kilometres wide”. */
+         * rotation and framed into the viewport (the fit is the fresh state). */
         function reset(id) {
             var ov = overlays[id];
             if (!ov) return null;
-            var base = ov.meta ? Math.max(ov.meta.w, ov.meta.h) : 4000;
             ov.state.lat = Number(ov.record.lat);
             ov.state.lng = Number(ov.record.lng);
             ov.state.rotation = 0;
-            ov.state.mpp = clamp(DEFAULT_GROUND_WIDTH_M / base, MPP_MIN, MPP_MAX);
+            var fit = fitMppFor(ov);
+            if (fit == null) {
+                var base = ov.meta ? Math.max(ov.meta.w, ov.meta.h) : 4000;
+                fit = DEFAULT_GROUND_WIDTH_M / base;
+            }
+            ov.state.mpp = clamp(fit, MPP_MIN, MPP_MAX);
             render(ov);
             emitChange(ov);
             return ov.state;
@@ -733,7 +926,20 @@
         /* ── map wiring ───────────────────────────────────────────────── */
         function onMove() { renderAll(); }
 
-        function onZoomStart() { /* the pane is CSS-scaled while animating */ }
+        /* Zoom animations keep the sheets locked to the tiles — the same
+         * contract as the dots canvas in js/other-maps.js: button /
+         * double-tap / wheel arrive as zoomanim, touch pinch as 'zoom' with
+         * e.pinch (Leaflet fires no move/zoom events during the 250 ms
+         * animation, so without these handlers the sheets sit still and
+         * snap back at zoomend).  onMove redraws and resets the transforms
+         * once the view settles. */
+        function onZoomAnim(e) {
+            if (e && e.center != null && e.zoom != null) applyZoomTransform(e.center, e.zoom);
+        }
+
+        function onZoom(e) {
+            if (e && e.pinch) applyZoomTransform(map.getCenter(), map.getZoom());
+        }
 
         function onResize() { renderAll(); }
 
@@ -742,7 +948,8 @@
         map.on('zoomend', onMove);
         map.on('viewreset', onMove);
         map.on('resize', onResize);
-        map.on('zoomstart', onZoomStart);
+        map.on('zoomanim', onZoomAnim);
+        map.on('zoom', onZoom);
 
         container.addEventListener('pointerdown', onPointerDown, true);
         root.addEventListener('pointermove', onPointerMove, { passive: true });
@@ -757,7 +964,8 @@
             map.off('zoomend', onMove);
             map.off('viewreset', onMove);
             map.off('resize', onResize);
-            map.off('zoomstart', onZoomStart);
+            map.off('zoomanim', onZoomAnim);
+            map.off('zoom', onZoom);
             container.removeEventListener('pointerdown', onPointerDown, true);
             root.removeEventListener('pointermove', onPointerMove);
             root.removeEventListener('pointerup', onPointerUp);
@@ -804,9 +1012,12 @@
         resolutionAt: resolutionAt,
         planGeometry: planGeometry,
         visibleTileRange: visibleTileRange,
+        fitScale: fitScale,
         normalizeDegrees: normalizeDegrees,
         snapDegrees: snapDegrees,
         tileSize: TILE,
+        fitFraction: FIT_FRACTION,
+        maxSharpTiles: MAX_SHARP_TILES,
         limits: { mppMin: MPP_MIN, mppMax: MPP_MAX }
     };
 }(typeof window !== 'undefined' ? window : this));

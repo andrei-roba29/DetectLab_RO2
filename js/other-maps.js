@@ -139,7 +139,14 @@
         modal: null,
         panel: null,
         loading: null,
-        lang: 'en'
+        lang: 'en',
+        /* The settled frame the canvas was last painted for — the zoom
+         * animation transform (applyZoomTransform) scales around exactly this
+         * anchor, the same contract the Patrimoniu canvases use in
+         * map-app.js (_canvasAnchor / _updateCanvasTransform). */
+        lastCenter: null,
+        lastZoom: null,
+        lastAnchor: null
     };
 
     /* ── i18n ─────────────────────────────────────────────────────────── */
@@ -315,7 +322,12 @@
         pane.style.pointerEvents = 'none';
         if (!state.canvas) {
             state.canvas = document.createElement('canvas');
-            state.canvas.className = 'other-maps-canvas';
+            /* leaflet-zoom-animated: while the map pane carries
+             * .leaflet-zoom-anim, css/leaflet.css gives the element the same
+             * 250 ms transform transition (and 0 0 transform-origin) as the
+             * tile containers — applyZoomTransform below rides it, so the dots
+             * glide exactly with the tiles during a zoom animation. */
+            state.canvas.className = 'other-maps-canvas leaflet-zoom-animated';
             state.canvas.style.position = 'absolute';
             state.canvas.style.left = '0';
             state.canvas.style.top = '0';
@@ -439,6 +451,38 @@
         }
         ctx.restore();
         ctx.globalAlpha = 1;
+
+        /* Remember exactly what was painted: the project-space coordinate of
+         * bitmap pixel (0,0) is pixelOrigin + topLeft, because the context
+         * was translated by -topLeft.  applyZoomTransform() may only scale
+         * around this anchor — mirroring the Patrimoniu canvases. */
+        state.lastCenter = map.getCenter();
+        state.lastZoom = map.getZoom();
+        state.lastAnchor = L.point(map.getPixelOrigin()).add(topLeft);
+    }
+
+    /* Keep the dots locked to the tiles during a zoom animation.  While
+     * Leaflet animates a zoom it leaves the map pane stationary for 250 ms
+     * and CSS-scales the tile containers; a canvas that is a child of the
+     * pane but has no zoomanim transform of its own sits still — the dots
+     * appear to slide away from their places and snap back at zoomend (the
+     * “se mișcă sacadat” glitch).  This applies the same transform the
+     * Patrimoniu canvases use (map-app.js _updateCanvasTransform):
+     *     translate(scale·anchor − newPixelOrigin) · scale
+     * which, in Web Mercator project space (linear in zoom), lands every
+     * painted pixel at its exact target-zoom layer position.  The 250 ms
+     * glide comes from `.leaflet-zoom-anim .leaflet-zoom-animated`
+     * (css/leaflet.css).  A settled redraw (onMapMoved) replaces the
+     * transform with a plain setPosition, so it never lingers. */
+    function applyZoomTransform(center, zoom) {
+        if (!state.enabled || !state.canvas || !state.lastAnchor || state.lastZoom == null) return;
+        if (zoom == null || typeof state.map._getNewPixelOrigin !== 'function') return;
+        var scale = state.map.getZoomScale(zoom, state.lastZoom);
+        var topLeftOffset = L.point(state.lastAnchor).multiplyBy(scale)
+            .subtract(state.map._getNewPixelOrigin(center, zoom))._round();
+        if (L.DomUtil && typeof L.DomUtil.setTransform === 'function') {
+            L.DomUtil.setTransform(state.canvas, topLeftOffset, scale);
+        }
     }
 
     /* The clustering helper projects every record it indexes. This is only
@@ -460,7 +504,14 @@
 
     function onMapMoved() {
         if (!state.enabled) return;
+        /* Both transient states are handled by applyZoomTransform instead:
+         * during _animatingZoom the pixels are CSS-scaled from the last
+         * settled frame, and during a pinch they are rescaled from it on
+         * every 'zoom' event.  Redrawing now would jump the dots to the
+         * final pixels (or fight the transform) — the same reason the
+         * Patrimoniu canvases skip it. */
         if (state.map._animatingZoom) return;
+        if (state.map.touchZoom && state.map.touchZoom._zooming) return;
         var canvas = state.canvas;
         if (!canvas) return;
         L.DomUtil.setPosition(canvas, state.map.containerPointToLayerPoint(L.point(0, 0)));
@@ -903,6 +954,16 @@
         map.on('viewreset', onMapMoved);
         map.on('resize', onMapMoved);
         map.on('click', onMapClick);
+        /* Zoom animations: button / double-tap / wheel come in as zoomanim,
+         * touch pinch as 'zoom' with e.pinch — the same split the Patrimoniu
+         * canvases in map-app.js use.  onMapMoved (move/zoomend) redraws and
+         * resets the transform once the view has settled. */
+        map.on('zoomanim', function (e) {
+            if (e && e.center != null && e.zoom != null) applyZoomTransform(e.center, e.zoom);
+        });
+        map.on('zoom', function (e) {
+            if (e && e.pinch) applyZoomTransform(state.map.getCenter(), state.map.getZoom());
+        });
 
         root.toggleOtherMaps = function (on) { return setEnabled(on); };
         root.setOtherMapsOpacity = function (value) { return setOpacity(value); };
