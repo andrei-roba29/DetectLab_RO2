@@ -7033,406 +7033,356 @@
                         'Terrängskuggning © Lantmäteriet',
                     leafletLayer: null
                 },
-                // Hillshade LiDAR derivate (MapTiler Terrain RGB) — one row per
-                // European country; same global terrain-rgb-v2 tiles everywhere,
+                // Hillshade LiDAR derivate (MapTiler Hillshade) — one row per
+                // European country; same global hillshade tiles everywhere,
                 // country-scoped by LAYER_COUNTRIES / LIDAR_DERIVATE_BOUNDS.
                 derivateAD: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateAL: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateAM: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateAT: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateAZ: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateBA: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateBE: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateBG: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateBY: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateCH: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateCY: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateCZ: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateDE: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateDK: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateEE: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateES: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateFI: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateFR: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateGB: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateGE: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateGR: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateHR: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateHU: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateIE: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateIS: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateIT: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateLI: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateLT: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateLU: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateLV: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateMC: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateMD: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateME: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateMK: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateMT: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateNL: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateNO: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivatePL: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivatePT: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateRO: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateRS: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateRU: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateSE: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateSI: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateSK: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateSM: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateTR: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateUA: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateVA: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
                 derivateXK: {
                     label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
                     type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/terrain-rgb-v2/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    maxNativeZoom: 14,
+                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
                     attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
                     leafletLayer: null
                 },
