@@ -38,9 +38,17 @@ mută titlul înapoi înăuntru.
 `height: 560px`, ultimii 22px din jos erau fundalul panoului, vizibil ca o fâșie
 albastru-închis sub ultimul rând.
 
-**Reparația.** `padding: 22px 16px 0` în `css/styles.css` (panoul își face singur spațiul
+**Reparația inițială.** `padding: 22px 16px 0` în `css/styles.css` (panoul își face singur spațiul
 între rânduri), plus `padding-bottom: 0 !important` în override-ul PWA din `index.html`, care
 altfel moștenea fâșia veche.
+
+**Corecție după testarea pe telefon (v263, 24 octombrie 2026).** Eliminarea întregului padding
+jos făcea ultimele rânduri și butoane să ajungă sub bara nativă de jos, fără să elimine banda
+închisă. În PWA, fereastra păstrează acum `bottom: 0`, dar adaugă o rezervă de minimum 44px
+(sau inset-ul safe-area dacă e mai mare). Gradientele bleumarin sunt dimensionate să se oprească
+înaintea acestei rezerve, deci spațiul rămâne transparent și harta se vede dedesubt:
+`body.is-pwa .transp-panel` din `index.html`. Testul actualizat este
+`node test-pwa-layer-panel.js`.
 
 ## 3. Fereastra de straturi nu mai se oprește la jumătate
 
@@ -52,10 +60,16 @@ ajungea pe telefon.
 
 ```css
 .transp-panel { top: 0; bottom: 0; height: auto; max-height: none; }
-body.is-pwa .transp-panel { bottom: env(safe-area-inset-bottom, 0px); }
+body.is-pwa .transp-panel {
+  bottom: 0;
+  min-height: max(100vh, var(--dl-vvh, 100vh));
+  padding-bottom: var(--pwa-panel-bottom-clearance);
+}
 ```
 
-Măsurat în Chromium la 412×915: `top = 0`, `bottom = 915`, `padding: 22px 16px 0`. În
+Ultima regulă include rezerva transparentă introdusă în v263 (detaliată mai sus), nu mai
+oprește panoul la `env(safe-area-inset-bottom)`. Măsurat în Chromium la 412×915:
+`top = 0`, `bottom = 915`, `padding: 22px 16px 0`. În
 plus, cât timp fereastra e deschisă, stiva flotantă din dreapta-jos (locație live + cont) se
 mută pe marginea stângă
 (`body.is-pwa.transp-panel-open #pwa-br-stack { left: max(10px, …); right: auto; }`), ca să

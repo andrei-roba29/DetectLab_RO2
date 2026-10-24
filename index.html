@@ -217,20 +217,17 @@
             box-shadow: none !important;
         }
 
-        /* ── Transparency panel: flush to every screen edge in PWA ──
-           position:fixed so a leftover 560px map-frame cannot crop the window.
-           bottom:0 (not the safe-area inset) so there is no navy gap under it.
-           Square corners so the rounded bottom-left no longer looks cropped.
-           z-index above the standalone live-location control so it stays
-           behind the panel instead of jumping onto the left map buttons.
-           min-height:100vh for the same reason as #map-section: this box is
-           position:fixed too, so top:0 / bottom:0 resolve against the initial
-           containing block, which the viewport-fit=cover + black-translucent
-           combination leaves ~safe-area-inset-top shorter than the physical
-           screen on iOS. Without the floor the layers window would stop above
-           the bottom edge and show the very navy strip it was made flush to
-           avoid. Where the ICB already is the screen this changes nothing. */
+        /* ── Transparency panel: full-height shell + transparent bottom inset ──
+           Keep the panel itself anchored to the viewport so the full layer
+           catalogue remains available, but do NOT paint its dark gradient into
+           the device's bottom safe area. The previous padding-bottom:0 pushed
+           the last layer rows/buttons under the OS bar; restore a 44px (or
+           larger device safe-area) scroll clearance, and size the panel's two
+           gradient layers to stop exactly above that transparent clearance.
+           The panel still reaches bottom:0, so no page-background strip is
+           introduced below it. */
         body.is-pwa .transp-panel {
+            --pwa-panel-bottom-clearance: max(var(--pwa-bottom-controls-clearance, 44px), env(safe-area-inset-bottom, 0px));
             position: fixed !important;
             top: 0 !important;
             right: 0 !important;
@@ -239,7 +236,14 @@
             min-height: 100vh !important;
             min-height: max(100vh, var(--dl-vvh, 100vh)) !important;
             max-height: none !important;
-            padding-bottom: 0 !important;
+            padding-bottom: var(--pwa-panel-bottom-clearance) !important;
+            background:
+                radial-gradient(circle at 100% 0%, rgba(107,63,160,0.16), transparent 55%) top right / 100% calc(100% - var(--pwa-panel-bottom-clearance)) no-repeat,
+                linear-gradient(180deg, rgba(10,20,42,0.97) 0%, rgba(6,14,30,0.97) calc(100% - 14px), rgba(6,14,30,0) 100%) top right / 100% calc(100% - var(--pwa-panel-bottom-clearance)) no-repeat !important;
+            background-color: transparent !important;
+            -webkit-backdrop-filter: none !important;
+            backdrop-filter: none !important;
+            border-bottom-color: transparent !important;
             border-radius: 0 !important;
             z-index: 2100 !important;
         }

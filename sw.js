@@ -757,7 +757,12 @@
 //   translate(scale·anchor − newPixelOrigin) scale(scale) — exact in Web
 //   Mercator project space — and a settled redraw resets it. Re-tags
 //   js/other-maps.js + js/other-maps-overlay.js. See OTHER_MAPS.md.
-const CACHE_NAME = 'detectlab-v262-other-maps-zoomlock';
+// v263: the PWA layer panel keeps its full-height viewport, but restores a
+//   44px/device-safe-area content gutter at the bottom. The gutter is truly
+//   transparent: the dark rgba(6,14,30) panel gradients stop above it so layer
+//   rows and actions stay clear of the native bottom bar without painting a
+//   second bar over the map. Re-cache the updated index.html shell.
+const CACHE_NAME = 'detectlab-v263-pwa-transparent-bottom-clearance';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';

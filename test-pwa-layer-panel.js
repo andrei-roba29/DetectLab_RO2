@@ -1,4 +1,5 @@
-// Regression test — the layers window in the installed PWA must fill the screen.
+// Regression test — the PWA layers window fills the screen, while a transparent
+// safe-area gutter keeps its last controls above the device's bottom system bar.
 //
 // What was broken
 // ---------------
@@ -6,15 +7,18 @@
 //   website that is exactly the height of the map frame, so nothing looked wrong
 //   — but the installed PWA paints the map edge to edge (100dvh), and 560px on a
 //   ~900px phone is "the window stops after the lower half of the screen".
-// · A later PWA override stopped the panel at `env(safe-area-inset-bottom)`,
-//   which left a navy strip of padding under the window and made it look cropped.
-// · Stretching the panel to the bottom could put floating controls over the
-//   last rows. Keep the live-location button at its bottom-right anchor, but
-//   hide it in place while the layers window is open; never teleport it over
-//   compass / Detect / nearby. The account stack itself stays removed.
+// · Removing all bottom padding made the final layer rows/buttons run into the
+//   native PWA safe-area bar. The panel's dark gradient also painted that area,
+//   leaving the rgba(6, 14, 30) strip visible.
+// · Stretching the panel to the bottom can put floating controls over the last
+//   rows. Keep the live-location button at its bottom-right anchor, but hide it
+//   in place while the layers window is open; never teleport it over compass /
+//   Detect / nearby.
 //
-// The fix pins the panel with position:fixed to the true viewport edges
-// (bottom: 0, no padding, no radius crop) and hides the controls in place.
+// The fix pins the panel with position:fixed to the true viewport edges, restores
+// a 44px-or-device-safe-area padding at the bottom, and clips the dark panel
+// background above that padding so the gutter stays transparent. Floating
+// controls are hidden in place while the panel is open.
 //
 // Run: node test-pwa-layer-panel.js
 
@@ -44,22 +48,30 @@ assert(/height:\s*auto/.test(panel) && /max-height:\s*none/.test(panel),
     'no hardcoded 560px length any more — the frame decides the height');
 assert(!/height:\s*560px/.test(panel), 'the old 560px cap must be gone');
 assert(/padding:\s*22px 16px 0/.test(panel),
-    'the bottom padding (the dark blue strip under the last row) must be removed');
+    'the desktop panel keeps its compact zero-bottom-padding layout');
 
-/* 2. The PWA override pins the window to the true bottom — no safe-area gap. */
-const pwa = ruleOf(html.replace(/\n\s*/g, ' '), 'body.is-pwa .transp-panel');
+/* 2. The PWA override reaches the viewport bottom while content clears the
+   native bar in transparent space (not a dark gradient strip). */
+const flatHtml = html.replace(/\n\s*/g, ' ');
+const pwa = ruleOf(flatHtml, 'body.is-pwa .transp-panel');
 assert(/position:\s*fixed\s*!important/.test(pwa),
     'the PWA panel is fixed to the viewport so a 560px map-frame cannot crop it');
 assert(/bottom:\s*0\s*!important/.test(pwa),
-    'in the installed app the panel reaches the true bottom, not a safe-area gap');
-assert(!/bottom:\s*env\(safe-area-inset-bottom/.test(pwa),
-    'the leftover safe-area inset under the window is the padding the user still saw');
+    'the panel shell still reaches the true viewport bottom');
 assert(/height:\s*auto\s*!important/.test(pwa) && /max-height:\s*none\s*!important/.test(pwa),
     'the PWA rule keeps the anchor-driven height instead of a computed one');
-assert(/padding-bottom:\s*0\s*!important/.test(pwa),
-    'and it carries no bottom padding either');
+assert(/--pwa-panel-bottom-clearance:\s*max\(var\(--pwa-bottom-controls-clearance,\s*44px\),\s*env\(safe-area-inset-bottom,\s*0px\)\)/.test(pwa),
+    'the bottom clearance is at least 44px and grows to the device safe-area when needed');
+assert(/padding-bottom:\s*var\(--pwa-panel-bottom-clearance\)\s*!important/.test(pwa),
+    'the final layer rows and buttons receive the restored bottom clearance');
+assert(/background:[\s\S]*?calc\(100% - var\(--pwa-panel-bottom-clearance\)\)[\s\S]*?calc\(100% - var\(--pwa-panel-bottom-clearance\)\)/.test(pwa),
+    'both dark gradient layers stop above the clearance, leaving it transparent');
+assert(/background-color:\s*transparent\s*!important/.test(pwa)
+    && /backdrop-filter:\s*none\s*!important/.test(pwa)
+    && /border-bottom-color:\s*transparent\s*!important/.test(pwa),
+    'the safe-area gutter must not be painted or blurred by the dark panel');
 assert(!/100% - var\(--pwa-bottom-controls-clearance/.test(pwa),
-    'the panel must no longer be shortened by the bottom-controls clearance');
+    'the panel height itself must not be shortened by the bottom-controls clearance');
 
 /* 3. Fullscreen still owns its own geometry. */
 const full = ruleOf(css, '.map-frame.is-fullscreen .transp-panel');
@@ -72,7 +84,6 @@ assert(/classList\.toggle\('transp-panel-open', transpPanelOpen\)/.test(mapApp),
     'the open state is published on <body>');
 const openClose = /if \(!panel\.contains\(e\.target\) && !tab\.contains\(e\.target\)\)\s*\{\s*markTranspPanelOpen\(false\);/.test(mapApp);
 assert(openClose, 'the click-outside close must go through the same helper');
-const flatHtml = html.replace(/\n\s*/g, ' ');
 const hideRule = (flatHtml.match(/body\.is-pwa\.transp-panel-open #pwa-br-stack,[^{]*\{([^}]*)\}/) || [])[1] || '';
 assert(/body\.is-pwa\.transp-panel-open #pwa-br-stack,\s*body\.is-pwa\.transp-panel-open \.pwa-live-location-control\s*\{/.test(flatHtml),
     'the separate live-location button must be included in the in-place hide rule');
@@ -84,15 +95,20 @@ assert(!/left:\s*max\(10px/.test(hideRule) && !/right:\s*auto/.test(hideRule),
     'no right-side control may teleport left over compass / Detect / nearby');
 
 /* 5. Installed PWAs must actually receive it. */
-const cacheName = (read('sw.js').match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1];
-assert(Number(cacheName) >= 101, 'the SW cache must be bumped (got v' + cacheName + ')');
+const sw = read('sw.js');
+const cacheName = (sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1];
+assert(Number(cacheName) >= 263, 'the SW cache must be bumped to v263+ (got v' + cacheName + ')');
+assert(/\/\/ v263: the PWA layer panel keeps its full-height viewport/.test(sw)
+    && /transparent: the dark rgba\(6,14,30\) panel gradients stop above it/.test(sw),
+    'the SW changelog must describe the transparent bottom clearance');
+assert(/['\"]index\.html['\"]/.test(sw), 'the current shell must remain in the service-worker precache');
 ['css/styles.css', 'js/map-app.js'].forEach(function (file) {
     const tag = (html.match(new RegExp('(?:src|href)="(' + file + '\\?v=[^"]+)"')) || [])[1];
     assert(tag, file + ' must be cache-busted on the page');
     assert(read('sw.js').includes("'" + tag + "'"), file + ' must be pre-cached under that exact URL');
 });
 
-console.log('✓ the layers window is anchored top→bottom (no 560px cap, no bottom padding)');
-console.log('✓ the PWA panel is flush to the screen bottom and hides right-side controls in place');
-console.log('✓ the fullscreen geometry and the service-worker rollout are intact');
-console.log('OK — the layers window reaches the bottom of the screen in the installed PWA.');
+console.log('✓ the layers window is anchored top→bottom (no 560px cap)');
+console.log('✓ the PWA panel restores a transparent safe-area gutter above the system bar');
+console.log('✓ the panel hides floating controls in place and the updated shell is pre-cached');
+console.log('OK — the PWA layers panel reaches the screen edge without painting the dark bottom strip.');
