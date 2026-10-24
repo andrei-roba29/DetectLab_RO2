@@ -23,7 +23,7 @@ console.log('[Test] Lazy ArcGIS country gate...');
 const adapterUrl = 'js/globe-arcgis-gate.js?v=20261013-handoff-zoom';
 const pickerUrl = 'js/globe-country-picker.js?v=20261017-outline-zoom-settle';
 const cssUrl = 'css/globe-country-picker.css?v=20261021-gate-safe-area';
-const translationsUrl = 'js/translations.js?v=20261017-albania-asig';
+const translationsUrl = 'js/translations.js?v=20261024-uk-historical-maps';
 for (const asset of [adapterUrl, pickerUrl, cssUrl, translationsUrl]) {
     assert(html.includes(asset), 'index.html references ' + asset);
     assert(sw.includes("'" + asset + "'"), 'sw.js precaches ' + asset);
@@ -262,7 +262,7 @@ const countries = [
 
     api.setSelected('DE');
     const selectedFill = instance.layers.focus.graphics[0].symbol;
-    assert.deepEqual(Array.from(selectedFill.color), [57, 255, 20, 0.5]);
+    assert.deepEqual(Array.from(selectedFill.color), [160, 80, 220, 0.5]);
     assert.equal(selectedFill.outline.width, 1.8);
     assert.equal(instance.layers.focusCasing.graphics[0].symbol.outline.width, 3.75);
     assert.equal(instance.layers.labels.graphics[0].symbol.font.size, 9);

@@ -695,6 +695,15 @@
         'toggleSatellite60sMap',     // standalone premium layer (CORONA 60's)
         'toggleTransylvania1859Map', // Harta Transilvaniei 1859 (ArcGIS tiles)
         'toggleGalicia1855Map',      // Galiția și Lodomeria 1855 (ArcGIS tiles)
+        // UK Ordnance Survey / Bartholomew historical maps (MapTiler / NLS)
+        'toggleUkOsLondon1893Map',   // Ordnance Survey 1893-1896 (London five-foot)
+        'toggleUkOs1919Map',         // Ordnance Survey Historical Maps 1919-1947
+        'toggleUkOs10k1888Map',      // Ordnance Survey 1888-1913 (County Series six-inch)
+        'toggleUkOs25k1937Map',      // Ordnance Survey 1937-1961 (Provisional 1:25,000)
+        'toggleUkOsHills1885Map',    // Ordnance Survey 'Hills' edition 1885-1903
+        'toggleUkOs63k1955Map',      // Ordnance Survey 1955-1961 (Seventh Series)
+        'toggleUkOs1900sMap',        // Ordnance Survey 1900s (seamless multi-scale)
+        'toggleUkBaire1940Map',      // UK Bartholomew Ireland 1940s
         'toggleMitteleuropaMap',     // Übersichtskarte von Mitteleuropa (CENAGIS WMS)
         'toggleChrzanowskiMap',      // Harta Wojciech Chrzanowski 1859 (CENAGIS WMS)
         'toggleReymannMap',          // Harta Central-Europa – Reymann (CENAGIS WMS)

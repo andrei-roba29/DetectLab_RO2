@@ -981,6 +981,104 @@
             notes: 'Premium wrapper around CENAGIS wig100k_3857.'
         },
 
+        /* ─────────── premium historical maps — United Kingdom (MapTiler) ──── */
+        /* Eight Ordnance Survey / Bartholomew pyramids of the British Isles,
+         * hosted by MapTiler from the National Library of Scotland collection
+         * (maps.nls.uk). The MapTiler key is the same public key the 3D
+         * terrain presets use. Zoom windows and bounds are read off each
+         * service's TileJSON; the two PNG 'overlay' products carry
+         * transparency, the JPG 'baselayer' products are opaque sheets. */
+        {
+            id: 'premium.uk-os-london-1893', group: 'hist-premium', z: 660, kind: 'xyz',
+            title: { ro: 'Ordnance Survey 1893-1896', en: 'Ordnance Survey 1893-1896' },
+            url: 'https://api.maptiler.com/tiles/uk-oslondon1k1893/{z}/{x}/{y}.jpg?key=lJtTFcjiimg8ZwMPUfpf',
+            tileSize: 256, minZoom: 9, maxZoom: 20, maxNativeZoom: 20, opacity: 0.80,
+            bounds: [[51.347988, -0.370763], [51.6159, 0.1047]],
+            attribution: '© <a href="https://maps.nls.uk/projects/subscription-api/" target="_blank" rel="noopener noreferrer">National Library of Scotland</a> · Ordnance Survey 1893–1896 · MapTiler',
+            cors: 'yes', proxy: 'never',
+            ui: { toggle: 'ukOsLondon1893MapToggle', slider: 'ukOsLondon1893MapOpacitySlider', pct: 'ukOsLondon1893MapPct', fn: 'toggleUkOsLondon1893Map', var2d: '_ukOsLondon1893MapLayer', parent: 'histPremiumToggle', maxNativeZoomGlobal: 'UKOSLONDON1893_TILE_MAX_NATIVE_Z' },
+            notes: 'MapTiler uk-oslondon1k1893 — OS five-foot London (1:1,056), 729 sheets, survey of 1891–5. JPG baselayer, native z9–20.'
+        },
+        {
+            id: 'premium.uk-os-gb-1919', group: 'hist-premium', z: 661, kind: 'xyz',
+            title: { ro: 'Ordnance Survey Historical Maps 1919-1947', en: 'Ordnance Survey Historical Maps 1919-1947' },
+            url: 'https://api.maptiler.com/tiles/uk-osgb1919/{z}/{x}/{y}.jpg?key=lJtTFcjiimg8ZwMPUfpf',
+            tileSize: 256, minZoom: 1, maxZoom: 20, maxNativeZoom: 14, opacity: 0.80,
+            bounds: [[49.84945588, -9.25728709], [60.89106986, 2.12770424]],
+            attribution: '© <a href="https://maps.nls.uk/projects/subscription-api/" target="_blank" rel="noopener noreferrer">National Library of Scotland</a> · Ordnance Survey 1919–1947 · MapTiler',
+            cors: 'yes', proxy: 'never',
+            ui: { toggle: 'ukOs1919MapToggle', slider: 'ukOs1919MapOpacitySlider', pct: 'ukOs1919MapPct', fn: 'toggleUkOs1919Map', var2d: '_ukOs1919MapLayer', parent: 'histPremiumToggle', maxNativeZoomGlobal: 'UKOS1919_TILE_MAX_NATIVE_Z' },
+            notes: 'MapTiler uk-osgb1919 — UK Ordnance Survey Historical Maps 1919–1947. JPG baselayer, native z1–14.'
+        },
+        {
+            id: 'premium.uk-os-10k-1888', group: 'hist-premium', z: 662, kind: 'xyz',
+            title: { ro: 'Ordnance Survey 1888-1913', en: 'Ordnance Survey 1888-1913' },
+            url: 'https://api.maptiler.com/tiles/uk-osgb10k1888/{z}/{x}/{y}.jpg?key=lJtTFcjiimg8ZwMPUfpf',
+            tileSize: 256, minZoom: 1, maxZoom: 20, maxNativeZoom: 17, opacity: 0.80,
+            bounds: [[49.852539, -7.793077], [60.894042, 1.790425]],
+            attribution: '© <a href="https://maps.nls.uk/projects/subscription-api/" target="_blank" rel="noopener noreferrer">National Library of Scotland</a> · Ordnance Survey County Series six-inch 1888–1913 · MapTiler',
+            cors: 'yes', proxy: 'never',
+            ui: { toggle: 'ukOs10k1888MapToggle', slider: 'ukOs10k1888MapOpacitySlider', pct: 'ukOs10k1888MapPct', fn: 'toggleUkOs10k1888Map', var2d: '_ukOs10k1888MapLayer', parent: 'histPremiumToggle', maxNativeZoomGlobal: 'UKOS10K1888_TILE_MAX_NATIVE_Z' },
+            notes: 'MapTiler uk-osgb10k1888 — OS County Series six-inch to the mile (1:10,560), 2nd edition. JPG baselayer, native z1–17.'
+        },
+        {
+            id: 'premium.uk-os-25k-1937', group: 'hist-premium', z: 663, kind: 'xyz',
+            title: { ro: 'Ordnance Survey 1937-1961', en: 'Ordnance Survey 1937-1961' },
+            url: 'https://api.maptiler.com/tiles/uk-osgb25k1937/{z}/{x}/{y}.jpg?key=lJtTFcjiimg8ZwMPUfpf',
+            tileSize: 256, minZoom: 1, maxZoom: 20, maxNativeZoom: 16, opacity: 0.80,
+            bounds: [[49.79634, -6.48436], [58.718087, 1.856328]],
+            attribution: '© <a href="https://maps.nls.uk/projects/subscription-api/" target="_blank" rel="noopener noreferrer">National Library of Scotland</a> · Ordnance Survey Provisional edition 1:25,000 1937–1961 · MapTiler',
+            cors: 'yes', proxy: 'never',
+            ui: { toggle: 'ukOs25k1937MapToggle', slider: 'ukOs25k1937MapOpacitySlider', pct: 'ukOs25k1937MapPct', fn: 'toggleUkOs25k1937Map', var2d: '_ukOs25k1937MapLayer', parent: 'histPremiumToggle', maxNativeZoomGlobal: 'UKOS25K1937_TILE_MAX_NATIVE_Z' },
+            notes: 'MapTiler uk-osgb25k1937 — OS Provisional edition 1:25,000 (forerunner of Explorer/Outdoor Leisure). JPG baselayer, native z1–16.'
+        },
+        {
+            id: 'premium.uk-os-hills-1885', group: 'hist-premium', z: 664, kind: 'xyz',
+            title: { ro: "Ordnance Survey, 'Hills' edition, 1885-1903", en: "Ordnance Survey, 'Hills' edition, 1885-1903" },
+            url: 'https://api.maptiler.com/tiles/uk-osgb63k1885/{z}/{x}/{y}.png?key=lJtTFcjiimg8ZwMPUfpf',
+            tileSize: 256, minZoom: 1, maxZoom: 20, maxNativeZoom: 16, opacity: 0.80,
+            bounds: [[49.767508, -8.208189], [61.003313, 1.885168]],
+            attribution: '© <a href="https://maps.nls.uk/projects/subscription-api/" target="_blank" rel="noopener noreferrer">National Library of Scotland</a> · Ordnance Survey one-inch Hills edition 1885–1903 · MapTiler',
+            cors: 'yes', proxy: 'never',
+            ui: { toggle: 'ukOsHills1885MapToggle', slider: 'ukOsHills1885MapOpacitySlider', pct: 'ukOsHills1885MapPct', fn: 'toggleUkOsHills1885Map', var2d: '_ukOsHills1885MapLayer', parent: 'histPremiumToggle', maxNativeZoomGlobal: 'UKOSHILLS1885_TILE_MAX_NATIVE_Z' },
+            notes: 'MapTiler uk-osgb63k1885 — OS one-inch (1:63,360) Revised New Series / Scotland 2nd edition (Hills). Transparent PNG overlay, native z1–16.'
+        },
+        {
+            id: 'premium.uk-os-63k-1955', group: 'hist-premium', z: 665, kind: 'xyz',
+            title: { ro: 'Ordnance Survey 1955-1961', en: 'Ordnance Survey 1955-1961' },
+            url: 'https://api.maptiler.com/tiles/uk-osgb63k1955/{z}/{x}/{y}.jpg?key=lJtTFcjiimg8ZwMPUfpf',
+            tileSize: 256, minZoom: 1, maxZoom: 20, maxNativeZoom: 15, opacity: 0.80,
+            bounds: [[49.853151, -8.684076], [60.87018, 1.845546]],
+            attribution: '© <a href="https://maps.nls.uk/projects/subscription-api/" target="_blank" rel="noopener noreferrer">National Library of Scotland</a> · Ordnance Survey Seventh Series 1:63,360 1955–1961 · MapTiler',
+            cors: 'yes', proxy: 'never',
+            ui: { toggle: 'ukOs63k1955MapToggle', slider: 'ukOs63k1955MapOpacitySlider', pct: 'ukOs63k1955MapPct', fn: 'toggleUkOs63k1955Map', var2d: '_ukOs63k1955MapLayer', parent: 'histPremiumToggle', maxNativeZoomGlobal: 'UKOS63K1955_TILE_MAX_NATIVE_Z' },
+            notes: 'MapTiler uk-osgb63k1955 — OS One-Inch Seventh Series (forerunner of Landranger). JPG baselayer, native z1–15.'
+        },
+        {
+            id: 'premium.uk-os-1900s', group: 'hist-premium', z: 666, kind: 'xyz',
+            title: { ro: 'Ordnance Survey 1900s', en: 'Ordnance Survey 1900s' },
+            /* 'hybrid' product: the TileJSON ships an extensionless template,
+             * MapTiler content-negotiates the image format per tile. */
+            url: 'https://api.maptiler.com/tiles/uk-osgb1888/{z}/{x}/{y}?key=lJtTFcjiimg8ZwMPUfpf',
+            tileSize: 256, minZoom: 1, maxZoom: 20, maxNativeZoom: 17, opacity: 0.80,
+            bounds: [[49.205882, -14.169172], [61.483786, 4.393046]],
+            attribution: '© <a href="https://maps.nls.uk/projects/subscription-api/" target="_blank" rel="noopener noreferrer">National Library of Scotland</a> · Ordnance Survey seamless multi-scale series c.1900 · MapTiler',
+            cors: 'yes', proxy: 'never',
+            ui: { toggle: 'ukOs1900sMapToggle', slider: 'ukOs1900sMapOpacitySlider', pct: 'ukOs1900sMapPct', fn: 'toggleUkOs1900sMap', var2d: '_ukOs1900sMapLayer', parent: 'histPremiumToggle', maxNativeZoomGlobal: 'UKOS1900S_TILE_MAX_NATIVE_Z' },
+            notes: 'MapTiler uk-osgb1888 — five seamless OS scales (1:1m–1:10,560) from around 1900. Hybrid format, extensionless tile template, native z1–17.'
+        },
+        {
+            id: 'premium.uk-bartholomew-ireland-1940', group: 'hist-premium', z: 667, kind: 'xyz',
+            title: { ro: 'UK Bartholomew Ireland 1940s', en: 'UK Bartholomew Ireland 1940s' },
+            url: 'https://api.maptiler.com/tiles/uk-baire250k1940/{z}/{x}/{y}.png?key=lJtTFcjiimg8ZwMPUfpf',
+            tileSize: 256, minZoom: 5, maxZoom: 20, maxNativeZoom: 12, opacity: 0.80,
+            bounds: [[51.312374, -10.670794], [55.451952, -5.358557]],
+            attribution: '© <a href="https://maps.nls.uk/projects/subscription-api/" target="_blank" rel="noopener noreferrer">National Library of Scotland</a> · Bartholomew Ireland Quarter-Inch 1940s · MapTiler',
+            cors: 'yes', proxy: 'never',
+            ui: { toggle: 'ukBaire1940MapToggle', slider: 'ukBaire1940MapOpacitySlider', pct: 'ukBaire1940MapPct', fn: 'toggleUkBaire1940Map', var2d: '_ukBaire1940MapLayer', parent: 'histPremiumToggle', maxNativeZoomGlobal: 'UKBAIRE1940_TILE_MAX_NATIVE_Z' },
+            notes: 'MapTiler uk-baire250k1940 — Bartholomew Quarter-Inch Ireland, maps published 1940. Transparent PNG overlay, native z5–12.'
+        },
+
         /* ───────────────────────── CORONA (1960s) ──────────────────────────── */
         {
             id: 'sat.corona-60s', group: 'hist-sat', z: 648, kind: 'dynamic',

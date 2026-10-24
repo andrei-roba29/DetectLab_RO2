@@ -762,7 +762,12 @@
 //   transparent: the dark rgba(6,14,30) panel gradients stop above it so layer
 //   rows and actions stay clear of the native bottom bar without painting a
 //   second bar over the map. Re-cache the updated index.html shell.
-const CACHE_NAME = 'detectlab-v264-gesture-only-3d-camera';
+// v265: eight premium UK historical maps (Ordnance Survey / Bartholomew,
+//   MapTiler tiles from the National Library of Scotland collection) join the
+//   Historical Maps premium group; re-cache the registry, map app, panel
+//   translations, subscription guard, the offline-maps catalogue and the
+//   vertical opacity mirror's slider→switch map.
+const CACHE_NAME = 'detectlab-v265-uk-historical-maps';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -812,6 +817,13 @@ const PRECACHE_URLS = [
   'js/asig-albania-layers.config.js?v=20261024-asig-lidar',
   'js/asig-albania-layers.js?v=20261024-asig-catalogue',
   'js/layer-registry.js?v=20261024-asig-catalogue',
+  // v265: premium UK historical maps (Ordnance Survey / Bartholomew, MapTiler).
+  'js/layer-registry.js?v=20261024-uk-historical-maps',
+  'js/map-app.js?v=20261024-uk-historical-maps',
+  'js/translations.js?v=20261024-uk-historical-maps',
+  'js/subscriptions.js?v=20261024-uk-historical-maps',
+  'js/offline-maps.js?v=20261024-uk-historical-maps',
+  'js/vertical-opacity-control.js?v=20261024-uk-historical-maps',
   'css/styles.css?v=20261024-asig-catalogue',
   'js/layer-registry.js?v=20261017-albania-asig',
   'js/translations.js?v=20261017-albania-asig',

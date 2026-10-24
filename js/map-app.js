@@ -13539,6 +13539,74 @@
                     layerVar: '_wig100kMapLayer'
                 },
 
+                // ── United Kingdom · Ordnance Survey / Bartholomew (MapTiler, National Library of Scotland) ──
+                // coverageMinZoom/MaxZoom = each service's TileJSON zoom window;
+                // outside it the red coverage rectangle replaces the tiles.
+                ukOsLondon1893: {
+                    // OS five-foot London (1:1,056), 729 sheets, survey 1891–5.
+                    bounds: [[51.347988, -0.370763], [51.6159, 0.1047]],
+                    label: 'Ordnance Survey 1893-1896',
+                    layerVar: '_ukOsLondon1893MapLayer',
+                    coverageMinZoom: 9,
+                    coverageMaxZoom: 20
+                },
+                ukOs1919: {
+                    // UK Ordnance Survey Historical Maps 1919–1947.
+                    bounds: [[49.84945588, -9.25728709], [60.89106986, 2.12770424]],
+                    label: 'Ordnance Survey Historical Maps 1919-1947',
+                    layerVar: '_ukOs1919MapLayer',
+                    coverageMinZoom: 1,
+                    coverageMaxZoom: 14
+                },
+                ukOs10k1888: {
+                    // OS County Series six-inch to the mile (1:10,560), 2nd edition.
+                    bounds: [[49.852539, -7.793077], [60.894042, 1.790425]],
+                    label: 'Ordnance Survey 1888-1913',
+                    layerVar: '_ukOs10k1888MapLayer',
+                    coverageMinZoom: 1,
+                    coverageMaxZoom: 17
+                },
+                ukOs25k1937: {
+                    // OS Provisional edition 1:25,000 — forerunner of Explorer / Outdoor Leisure.
+                    bounds: [[49.79634, -6.48436], [58.718087, 1.856328]],
+                    label: 'Ordnance Survey 1937-1961',
+                    layerVar: '_ukOs25k1937MapLayer',
+                    coverageMinZoom: 1,
+                    coverageMaxZoom: 16
+                },
+                ukOsHills1885: {
+                    // OS one-inch (1:63,360) Revised New Series / Scotland 2nd ed. (Hills).
+                    bounds: [[49.767508, -8.208189], [61.003313, 1.885168]],
+                    label: "Ordnance Survey, 'Hills' edition, 1885-1903",
+                    layerVar: '_ukOsHills1885MapLayer',
+                    coverageMinZoom: 1,
+                    coverageMaxZoom: 16
+                },
+                ukOs63k1955: {
+                    // OS One-Inch Seventh Series (1:63,360) — forerunner of Landranger.
+                    bounds: [[49.853151, -8.684076], [60.87018, 1.845546]],
+                    label: 'Ordnance Survey 1955-1961',
+                    layerVar: '_ukOs63k1955MapLayer',
+                    coverageMinZoom: 1,
+                    coverageMaxZoom: 15
+                },
+                ukOs1900s: {
+                    // Five seamless OS scales (1:1m–1:10,560), c.1900 — covers GB and the whole of Ireland.
+                    bounds: [[49.205882, -14.169172], [61.483786, 4.393046]],
+                    label: 'Ordnance Survey 1900s',
+                    layerVar: '_ukOs1900sMapLayer',
+                    coverageMinZoom: 1,
+                    coverageMaxZoom: 17
+                },
+                ukBaire1940: {
+                    // Bartholomew Quarter-Inch Ireland, published 1940 (WWII-era overview).
+                    bounds: [[51.312374, -10.670794], [55.451952, -5.358557]],
+                    label: 'UK Bartholomew Ireland 1940s',
+                    layerVar: '_ukBaire1940MapLayer',
+                    coverageMinZoom: 5,
+                    coverageMaxZoom: 12
+                },
+
                 vegfpPpi: {
                     // Amprenta Vegetației — PPI (CLMS HR-VPP, 10 m, la fiecare
                     // 10 zile). Acoperire: România pe .ro, toată Europa pe .eu.
@@ -13872,7 +13940,19 @@
                     premium_ww1: ['RO', 'MD', 'UA', 'BG', 'HU', 'RS'],
                     premium_ww2: ['RO', 'MD', 'UA', 'BG', 'HU', 'RS'],
                     premium_banat: ['RO', 'HU', 'RS'],
-                    premium_transylvania1859: ['RO']
+                    premium_transylvania1859: ['RO'],
+                    // United Kingdom · Ordnance Survey / Bartholomew sheets
+                    // (MapTiler / National Library of Scotland). The seamless
+                    // c.1900 pyramid and the Bartholomew Ireland sheet both
+                    // cover the whole island of Ireland, hence IE too.
+                    premium_ukOsLondon1893: ['GB'],
+                    premium_ukOs1919: ['GB'],
+                    premium_ukOs10k1888: ['GB'],
+                    premium_ukOs25k1937: ['GB'],
+                    premium_ukOsHills1885: ['GB'],
+                    premium_ukOs63k1955: ['GB'],
+                    premium_ukOs1900s: ['GB', 'IE'],
+                    premium_ukBaire1940: ['IE', 'GB']
                 };
                 Object.keys(LIDAR_COUNTY_BOUNDS).forEach(function (k) {
                     LAYER_COUNTRIES['lidar_' + k] = ['RO'];
@@ -14136,7 +14216,16 @@
                     { key: 'kdr100k', toggle: 'kdr100kMapToggle', row: 'kdr100kRow' },
                     { key: 'kdr_gb', toggle: 'kdrGbMapToggle', row: 'kdrGbRow' },
                     { key: 'wig100k', toggle: 'wig100kMapToggle', row: 'wig100kRow' },
-                    { key: 'galicia1855', toggle: 'galicia1855MapToggle', row: 'galicia1855Row' }
+                    { key: 'galicia1855', toggle: 'galicia1855MapToggle', row: 'galicia1855Row' },
+                    // United Kingdom · Ordnance Survey / Bartholomew (MapTiler / NLS)
+                    { key: 'ukOsLondon1893', toggle: 'ukOsLondon1893MapToggle', row: 'ukOsLondon1893Row' },
+                    { key: 'ukOs1919', toggle: 'ukOs1919MapToggle', row: 'ukOs1919Row' },
+                    { key: 'ukOs10k1888', toggle: 'ukOs10k1888MapToggle', row: 'ukOs10k1888Row' },
+                    { key: 'ukOs25k1937', toggle: 'ukOs25k1937MapToggle', row: 'ukOs25k1937Row' },
+                    { key: 'ukOsHills1885', toggle: 'ukOsHills1885MapToggle', row: 'ukOsHills1885Row' },
+                    { key: 'ukOs63k1955', toggle: 'ukOs63k1955MapToggle', row: 'ukOs63k1955Row' },
+                    { key: 'ukOs1900s', toggle: 'ukOs1900sMapToggle', row: 'ukOs1900sRow' },
+                    { key: 'ukBaire1940', toggle: 'ukBaire1940MapToggle', row: 'ukBaire1940Row' }
                 ];
                 premiumKeys.forEach(function(item) {
                     var b = premiumMapCoverageBounds[item.key] ? premiumMapCoverageBounds[item.key].bounds : [[43.5,19.5],[48.5,30.5]];
@@ -15301,6 +15390,72 @@
                 };
             })();
 
+            // ── UNITED KINGDOM — ORDNANCE SURVEY / BARTHOLOMEW HISTORICAL MAPS (MapTiler) ──
+            // Eight premium georeferenced pyramids of the British Isles, served
+            // by MapTiler from the National Library of Scotland collection
+            // (maps.nls.uk). Every service fact (URL, native zoom window,
+            // coverage bounds, attribution) lives ONCE in the shared registry
+            // (js/layer-registry.js, ids premium.uk-* / premium.uk-bartholomew-*),
+            // so the 2D map, the 3D terrain view and the tile proxy all read the
+            // same definition. The table below only names the per-layer UI
+            // wiring; the native ceiling stays tunable live from the console
+            // via the window.<NAME>_TILE_MAX_NATIVE_Z constants.
+            (function () {
+                var UK_OS_LAYERS = [
+                    { key: 'ukOsLondon1893', reg: 'premium.uk-os-london-1893', maxNative: 20, minZoom: 9, z: 660 },
+                    { key: 'ukOs1919',       reg: 'premium.uk-os-gb-1919',      maxNative: 14, minZoom: 1, z: 661 },
+                    { key: 'ukOs10k1888',    reg: 'premium.uk-os-10k-1888',     maxNative: 17, minZoom: 1, z: 662 },
+                    { key: 'ukOs25k1937',    reg: 'premium.uk-os-25k-1937',     maxNative: 16, minZoom: 1, z: 663 },
+                    { key: 'ukOsHills1885',  reg: 'premium.uk-os-hills-1885',   maxNative: 16, minZoom: 1, z: 664 },
+                    { key: 'ukOs63k1955',    reg: 'premium.uk-os-63k-1955',     maxNative: 15, minZoom: 1, z: 665 },
+                    { key: 'ukOs1900s',      reg: 'premium.uk-os-1900s',        maxNative: 17, minZoom: 1, z: 666 },
+                    { key: 'ukBaire1940',    reg: 'premium.uk-bartholomew-ireland-1940', maxNative: 12, minZoom: 5, z: 667 }
+                ];
+
+                UK_OS_LAYERS.forEach(function (cfg) {
+                    var paneName = 'pane_' + cfg.key;
+                    map.createPane(paneName);
+                    map.getPane(paneName).style.zIndex = cfg.z;
+                    map.getPane(paneName).style.pointerEvents = 'none';
+
+                    // Live override without redeploy, e.g. window.UKOS1919_TILE_MAX_NATIVE_Z = 13.
+                    // ukOs10k1888 → UKOS10K1888_TILE_MAX_NATIVE_Z, ukBaire1940 → UKBAIRE1940_TILE_MAX_NATIVE_Z, …
+                    var constName = cfg.key.replace(/^[a-z]/, function (c) { return c.toUpperCase(); }).toUpperCase() + '_TILE_MAX_NATIVE_Z';
+                    if (window[constName] === undefined) window[constName] = cfg.maxNative;
+
+                    var def = DL.get(cfg.reg);
+                    var layerBounds = L.latLngBounds(def.bounds);
+
+                    window['_' + cfg.key + 'MapLayer'] = L.tileLayer(DL.url2d(cfg.reg), DL.tile2dOptions(cfg.reg, {
+                        minZoom: cfg.minZoom, maxZoom: 20,
+                        maxNativeZoom: window[constName],
+                        bounds: layerBounds,
+                        pane: paneName
+                    }));
+
+                    window['toggle' + cfg.key.replace(/^[a-z]/, function (c) { return c.toUpperCase(); }) + 'Map'] = function (on) {
+                        var layer = window['_' + cfg.key + 'MapLayer'];
+                        if (on) {
+                            var histPremToggle = document.getElementById('histPremiumToggle');
+                            if (histPremToggle && !histPremToggle.checked) {
+                                histPremToggle.checked = true;
+                                window.toggleHistPremiumLayer(true);
+                            }
+                            layer.addTo(map);
+                        } else {
+                            map.hasLayer(layer) && map.removeLayer(layer);
+                        }
+                        window.updatePremiumMapCoverageVisibility && window.updatePremiumMapCoverageVisibility();
+                    };
+
+                    window['set' + cfg.key.replace(/^[a-z]/, function (c) { return c.toUpperCase(); }) + 'MapOpacity'] = function (val) {
+                        var pct = document.getElementById(cfg.key + 'MapPct');
+                        if (pct) pct.textContent = val + '%';
+                        window['_' + cfg.key + 'MapLayer'].setOpacity(val / 100);
+                    };
+                });
+            })();
+
             // ── SATELIT 60s (CORONA) — the Corona Atlas logic, Europe-wide ──
             // Port of how https://corona.cast.uark.edu/atlas fetches its tiles
             // (read from the atlas's own source: assets/libraries/custom/
@@ -15564,6 +15719,15 @@
                 { id: 'kdrGbMapToggle', fnName: 'toggleKdrGbMap' },
                 { id: 'wig100kMapToggle', fnName: 'toggleWig100kMap' },
                 { id: 'galicia1855MapToggle', fnName: 'toggleGalicia1855Map' },
+                // United Kingdom · Ordnance Survey / Bartholomew (MapTiler / NLS)
+                { id: 'ukOsLondon1893MapToggle', fnName: 'toggleUkOsLondon1893Map' },
+                { id: 'ukOs1919MapToggle', fnName: 'toggleUkOs1919Map' },
+                { id: 'ukOs10k1888MapToggle', fnName: 'toggleUkOs10k1888Map' },
+                { id: 'ukOs25k1937MapToggle', fnName: 'toggleUkOs25k1937Map' },
+                { id: 'ukOsHills1885MapToggle', fnName: 'toggleUkOsHills1885Map' },
+                { id: 'ukOs63k1955MapToggle', fnName: 'toggleUkOs63k1955Map' },
+                { id: 'ukOs1900sMapToggle', fnName: 'toggleUkOs1900sMap' },
+                { id: 'ukBaire1940MapToggle', fnName: 'toggleUkBaire1940Map' },
                 /* „Alte hărți / Other maps” — hărți NE-georeferențiate
                  * (Hungaricana). Oprirea grupului oprește și punctele verzi
                  * și orice hartă deja suprapusă. */

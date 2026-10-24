@@ -149,8 +149,8 @@ for (const id of ['transylvania1859', 'galicia1855']) {
         'offline-maps description for ' + id + ' carries the digitization credit + source');
 }
 // The popup renderer turns the source domain into a link (no innerHTML).
-assert.ok(html.includes('renderLayerInfoAttribution') && html.includes("LAYER_INFO_SOURCE_DOMAINS = ['bukowina1856.eu']"),
-    'ⓘ popup renders bukowina1856.eu as a clickable source link');
+assert.ok(html.includes('renderLayerInfoAttribution') && html.includes("LAYER_INFO_SOURCE_DOMAINS = ['bukowina1856.eu', 'maps.nls.uk']"),
+    'ⓘ popup renders bukowina1856.eu and maps.nls.uk as clickable source links');
 
 // ── 4. Premium gating wiring ────────────────────────────────────────
 assert.match(mapApp, /\{\s*key:\s*'transylvania1859',\s*toggle:\s*'transylvania1859MapToggle',\s*row:\s*'transylvania1859Row'\s*\}/,
