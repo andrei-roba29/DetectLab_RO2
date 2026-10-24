@@ -545,8 +545,32 @@
         if (!L || !L.SVG || typeof L.SVG.extend !== 'function') return null;
         if (!BoundsSVG) BoundsSVG = L.SVG.extend({
             _update: function () {
+                // L.SVG._update skips recomputing _bounds/_center/_zoom while a
+                // zoom animation is in flight (map._animatingZoom && _bounds).
+                // The outline's pixel anchor must be captured under exactly the
+                // same condition: never mid-flight, so a layer added, refreshed
+                // or re-fitted during an animation never scales the whole
+                // outline around an anchor belonging to a different zoom
+                // (which would make the border drift against the tiles / LiDAR
+                // imagery while the user zooms in or out).
+                var skip = !!(this._map && this._map._animatingZoom && this._bounds);
                 L.SVG.prototype._update.call(this);
+                if (this._map && !skip) {
+                    this._outlinePixelOrigin = this._map.getPixelOrigin().clone();
+                }
                 this._syncOutlineZoomVisibility();
+            },
+            /* Re-implements L.Renderer._updateTransform so the country outline
+               scales around the pixelOrigin + _bounds.min anchor captured at
+               the last bounds recompute (see _update above). The translate is
+               deliberately left unrounded: rounding it would quantise the
+               border independently of the tile grid and put it up to a pixel
+               off the LiDAR / satellite imagery while zooming. */
+            _updateTransform: function (center, zoom) {
+                var scale = this._map.getZoomScale(zoom, this._zoom);
+                var offset = this._outlinePixelOrigin.add(this._bounds.min)
+                    .multiplyBy(scale).subtract(this._map._getNewPixelOrigin(center, zoom));
+                L.DomUtil.setTransform(this._container, offset, scale);
             },
             /* A renderer that is born while a zoom animation is already in
                flight (the globe hand-off fit still running when the selection
