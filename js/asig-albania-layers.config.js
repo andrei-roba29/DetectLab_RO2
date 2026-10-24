@@ -1,65 +1,102 @@
 /* ══════════════════════════════════════════════════════════════════════════
- * DetectLab — Albania (ASIG geoportal) data layers · THE CONFIG
+ * DetectLab — Albania (ASIG geoportal) layer catalogue · THE CONFIG
  * ──────────────────────────────────────────────────────────────────────────
- * Every Albania ASIG layer rendered by this module is described here.
- * js/asig-albania-layers.js renders the panel rows, builds the Leaflet layers
- * and runs the raster/overlay logic from this list; adding, removing or
- * re-labelling a layer is a change to this file only — no map code has to be
- * touched. js/layer-registry.js mirrors the enabled entries (ids
- * `albania.<id>`) so the layers are also catalogued for the diagnostics, the
- * 3D status report and the offline audit (tools/audit-wms-layers.mjs).
+ * Every Albania ASIG layer rendered by js/asig-albania-layers.js is
+ * described here: the panel sections, the per-layer WMS/WMTS identity and
+ * the parts of the single "Heritage" toggle. Adding, removing or
+ * re-labelling a layer is a change to this file only — no map code has to
+ * be touched. js/layer-registry.js mirrors the statically-named WMS
+ * entries (ids `albania.<id>`) for diagnostics, the 3D deck and the
+ * offline audit (tools/audit-wms-layers.mjs). `node tools/build-asig-
+ * catalogue.mjs` regenerates the interchange copy data/asig-catalogue.json.
  *
- * PANEL PLACEMENT — one Albania-only group
- *   All nine rows are mounted in a single group row (`#albaniaRow` →
- *   `#albaniaSubLayers`) that belongs to Albania exclusively. They are NOT
- *   rendered inside the Romanian/Denmark/Finland sections any more (an
- *   orthophoto used to appear between Romania's satellite periods, the
- *   heritage rows under Romania's Heritage Sites and the two hillshades
- *   under the LiDAR group that hosts Denmark's DHM). `section` still decides
- *   the Leaflet pane/z-order and the small caption inside the group; it no
- *   longer decides where the row is mounted. The group and every row are
- *   hidden unless Albania (ISO2 `AL`) is the selected country — see
- *   `country` below. `js/asig-albania-layers.js` also sweeps any surviving
- *   pre-group mount or stray Albanian row on every panel build, so the group
- *   stays the single place these layers exist.
+ * CATALOGUE SHAPE (owner's prototype viewer, ported faithfully)
+ *   Heritage (ONE toggle; its parts are never panel rows), then six
+ *   sections: Orthophotos (14), Terrain (2), Cadastre (3), Maps (2),
+ *   Environment (1), Planning & mining (6). All 28 rows + the Heritage
+ *   toggle are mounted in the single Albania-only group (#albaniaRow →
+ *   #albaniaSubLayers) and shown only while Albania (ISO2 `AL`) is the
+ *   selected country. Display titles (`title.en`) are the geoportal titles
+ *   exactly as the owner listed them — including the portal's own
+ *   misspelling "Mineral Resouces". `title.ro` repeats the same string:
+ *   these are product names, not sentences.
+ *
+ * WHERE THE NAMES COME FROM (provenance, per entry in `notes`)
+ *   - "prototype" — the exact `workspace:name` was built into the owner's
+ *     prototype viewer (its WANTED table, cross-checked against the
+ *     portal's WMTS list).
+ *   - "repo" — the name was already served by this site's previous
+ *     9-layer Albania module (the IKTK cultural sites). The owner chose
+ *     to keep them as Heritage's cultural point/polygon parts.
+ *   - "resolve-by-title" — only the portal Title is known in this repo;
+ *     `layers` is null and `resolveTitle` carries the exact title.
+ *     js/asig-albania-layers.js resolves it in the visitor's browser from
+ *     the live WMS GetCapabilities (exact normalised Title match, then
+ *     local Name match), exactly like the prototype's discover(). No name
+ *     is ever guessed: until resolution succeeds the row is shown
+ *     disabled with an explanation. To bake a name in, set `layers` from
+ *     the owner's asig-layers.json export (or tools/resolve_layers.py on
+ *     a browser-saved capabilities file) and delete `resolveTitle`.
+ *
+ * HERITAGE
+ *   One toggle, several WMS parts (see CONFIG.heritage): the two AKZM
+ *   layers, the two IKTK cultural layers, plus — at runtime — every WMS
+ *   layer whose Title/Name matches /archaeolog|archeolog|arkeolog/i
+ *   (the DCM archaeological zones). Parts have `panel:false`; they are
+ *   switched, faded, reordered and queried together by the one row.
+ *   `staticDiscovered` is the bake-in list for keyword matches once the
+ *   owner supplies asig-layers.json (`heritage.parts`).
+ *
+ * TILE-ONLY LAYERS (kind:'wmts')
+ *   DSM:Dsm_Hill_Group, Dtm_2015:Hillshade_2015_group and
+ *   hartat_historike:italiane_100k are NOT WMS layers (GeoServer answers
+ *   LayerNotDefined as an XML body with HTTP 200). The owner-supplied WMTS
+ *   GetCapabilities (2026-10-24) confirms those layers link only the
+ *   EPSG:6870 (levels 0–12) and EPSG:4326 (levels 0–21, top-left −180, 90,
+ *   256 px tiles, matrix width 2^(z+1) / height 2^z) TileMatrixSets. The
+ *   service also *defines* EPSG:900913 / GoogleCRS84Quad TileMatrixSets,
+ *   but the target layers do not advertise a link to them, so a direct
+ *   Web-Mercator GetTile is unproven. js/asig-albania-layers.js therefore
+ *   reprojects the EPSG:4326 tiles to Web Mercator on canvas, stepping
+ *   down to shallower cached levels instead of going blank at deep zoom.
+ *
+ * RETIRED WITH THE EXACT CATALOGUE (owner decision, 2026-10-24)
+ *   `topo50k` (Topografike:50K_Topografike) — the previous module's 1:50k
+ *   topographic row is not in the prototype catalogue and was removed.
+ *   The old `heritage` tile id (the IKTK zone layer) is now the Heritage
+ *   GROUP id; the layer itself is the part `culturalZone`.
  *
  * Source: geoportal.asig.gov.al — Autoriteti Shtetëror për Informacionin
- * Gjeohapësinor (ASIG, the Albanian State Authority for Geospatial
- * Information). GeoServer + GeoWebCache, public, no key, no token, HTTPS.
+ * Gjeohapësinor (ASIG, Albanian State Authority for Geospatial
+ * Information). GeoServer + GeoWebCache, public, no key, HTTPS.
+ * LICENCE: not stated in the capabilities supplied — verify ASIG's reuse
+ * terms before relying on them (see CONFIG.licence).
  *
- * Projection notes
- *   The owner-supplied GetCapabilities excerpt advertises WMS 1.3.0, EPSG:6870,
- *   EPSG:4326, EPSG:900913 and CRS:84. EPSG:6870 is native and the WMTS matrix
- *   set; no XYZ grid is inferred from it. Existing 2D requests keep EPSG:3857
- *   as the first path and fall back to EPSG:4326 after repeated tile errors.
- *   The excerpt does not literally list EPSG:3857, so acceptance is not claimed
- *   without the required same-origin production proxy probe.
+ * WARNING — dated layer names (…_081124, …22_07_2026, …) are publication
+ * snapshots. If one stops drawing, re-check the name in a browser at
+ *   https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&REQUEST=GetCapabilities
+ * and update ONLY this file. (ASIG blacklists datacenter IPs; a normal
+ * browser works, an automated fetch from CI may not.)
  *
- * WARNING — the protected-sites layer names embed SNAPSHOT DATES
- *   (e.g. ...22_07_2026, ...13_05_2026). ASIG publishes new versions under
- *   new names. When a protected layer stops drawing, re-check the names:
- *     https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&REQUEST=GetCapabilities
- *   and update ONLY this file (search for "snapshot").
- *
- * Field reference (every entry carries all of them):
- *   id              stable id; the panel row, the registry entry
- *                   (`albania.<id>`) and localStorage all use it
- *   title           { ro, en } — the row label and the info popup title
- *   section         theme inside the single Albania group, and the Leaflet
- *                   pane: historical/satellite/lidar/heritage
- *   registryGroup   existing shared catalogue group/z-order
- *   layers          WMS LAYERS value, exactly as published
- *   format          WMS FORMAT (image/jpeg only where the product is JPEG-only)
- *   transparent     WMS TRANSPARENT (true for hillshades + vector overlays)
- *   opacity         initial opacity (0–1); the LiDAR hillshade starts at 0.5
- *                   so an orthophoto stacked underneath stays readable
- *   order           draw order inside the Albanian stack, bottom → top
- *   minZoom         when the row may draw
- *   maxNativeZoom   last level with real data; beyond it the browser upscales
- *   defaultOn       legacy migration metadata; no row is enabled on a fresh install
- *   attributionRow  short credit for the row's ⓘ popup
- *   description     one-paragraph ⓘ popup text (plain text, no markup)
- *   notes           developer note
+ * Field reference (tile entries):
+ *   id              stable id; row, registry (`albania.<id>`), localStorage
+ *   kind            'wms' | 'wmts' (tile-only, canvas-reprojected)
+ *   title           { ro, en } display name (en = portal title, verbatim)
+ *   section         catalogue section id (see CONFIG.sections)
+ *   registryGroup   shared catalogue group/z-order for registry & 3D
+ *   registryZ       z within that group
+ *   layers          exact WMS/WMTS `workspace:name`, or null
+ *   resolveTitle    exact portal Title to resolve at runtime (when null name)
+ *   url/fallbackUrl optional explicit endpoints (owner export shape);
+ *                   default: per-workspace /service/<ws>/wms, then global
+ *   queryable       false only where GetFeatureInfo is meaningless (wmts)
+ *   format          GetMap FORMAT (image/png throughout, per prototype)
+ *   transparent     GetMap TRANSPARENT (true, per prototype)
+ *   opacity         initial opacity 0–1
+ *   order           catalogue order inside the Albania group
+ *   minZoom/maxNativeZoom  Leaflet zoom window (map ceiling is 20)
+ *   panel           true = own panel row; false = Heritage part
+ *   attributionRow/user popup credit, description ⓘ popup text, notes
  * ══════════════════════════════════════════════════════════════════════════ */
 (function (root, factory) {
     'use strict';
@@ -77,263 +114,277 @@
     'use strict';
 
     var ATTRIBUTION = 'Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)';
+    var SERVICE_ROOT = 'https://geoportal.asig.gov.al/service/';
+
+    function protoDesc(what) {
+        return what + ', rendered live from the ASIG geoportal (geoportal.asig.gov.al). ' +
+            'Requests are limited to the ASIG coverage of Albania.';
+    }
+    function resolveDesc(title) {
+        return 'ASIG layer “' + title + '”. Its exact WMS name is resolved from the geoportal ' +
+            'layer list in your browser (by exact title) — until that lookup succeeds the row stays ' +
+            'disabled and nothing is requested under a guessed name.';
+    }
 
     var CONFIG = {
-        version: '20261021-albania-only',
+        version: '20261024-asig-catalogue',
         provider: 'ASIG — Autoriteti Shtetëror për Informacionin Gjeohapësinor',
-        licence: 'ASIG terms of use (no explicit licence in the capabilities — verify redistribution terms)',
+        /* The owner does not know ASIG's reuse terms and neither do we: do
+         * not present this as a licence grant. Verify before redistribution. */
+        licence: 'ASIG terms unknown — no explicit licence in the supplied capabilities; verify reuse/redistribution terms with ASIG',
 
-        /* ISO2 of the only country these rows belong to. The panel group and
-         * every row are hidden (and their tile layers taken off the map) for
-         * any other selection, including the global view with no country. */
+        /* ISO2 of the only country these rows belong to. */
         country: 'AL',
         groupLabel: { ro: 'Albania · geoportalul ASIG', en: 'Albania · ASIG geoportal' },
-        groupInfo: 'Nine public ASIG WMS products for Albania: the 1:50,000 topographic map, the 1999 ' +
-            'and 2015 (20 cm) orthophotos, the DSM and 2015 DTM hillshades, and the four protected-site ' +
-            'overlays (cultural heritage zones, protected cultural points, protected natural areas and ' +
-            'natural monuments). Every request is clipped to the ASIG footprint, so the rows belong to ' +
-            'Albania only and appear only in the Albania view. Source: geoportal.asig.gov.al.',
+        groupInfo: 'The ASIG geoportal catalogue for Albania: one Heritage toggle (all archaeological, ' +
+            'cultural and natural protected-area layers together), 14 orthophotos (1957–2018, incl. CIR), ' +
+            'the two terrain hillshades (tile-only, reprojected in the browser), cadastral zones/parcels, ' +
+            'two map series, water courses, and the planning & mining layers. Tiles load directly from ' +
+            'geoportal.asig.gov.al in your browser — nothing is proxied or pre-downloaded. Catalogue: ' +
+            'js/asig-albania-layers.config.js.',
 
-        /* WGS84 coverage used to clip each WMS BBOX (west, south, east, north).
-         * Geography, not a selector: the panel rows are scoped by `country`. */
+        /* WGS84 coverage of the ASIG footprint [[south,west],[north,east]]. */
         countryBounds: [[39.538, 18.773], [42.758, 21.179]],
         view: { center: [41.3275, 19.8187], zoom: 9, label: { ro: 'Tirana', en: 'Tirana' } },
 
-        /* Captions inside the single Albania group. `section` keeps its job of
-         * choosing the Leaflet pane/z-order; these labels spell out the theme
-         * of the rows that follow them. */
+        /* Panel sections in the prototype's order. `heritage` holds the
+         * single Heritage row; the rest hold one row per layer. */
+        sections: [
+            { id: 'heritage', kind: 'group', title: { ro: 'Patrimoniu', en: 'Heritage' } },
+            { id: 'orthophotos', kind: 'layers', title: { ro: 'Ortofoto', en: 'Orthophotos' } },
+            { id: 'terrain', kind: 'layers', title: { ro: 'Relief', en: 'Terrain' } },
+            { id: 'cadastre', kind: 'layers', title: { ro: 'Cadastru', en: 'Cadastre' } },
+            { id: 'maps', kind: 'layers', title: { ro: 'Hărți', en: 'Maps' } },
+            { id: 'environment', kind: 'layers', title: { ro: 'Mediu', en: 'Environment' } },
+            { id: 'planning', kind: 'layers', title: { ro: 'Planificare și minerit', en: 'Planning & mining' } }
+        ],
+        /* Back-compat captions (older code/tests read sectionLabels). */
         sectionLabels: {
-            historical: { ro: 'Hărți istorice', en: 'Historical maps' },
-            satellite: { ro: 'Satelit', en: 'Satellite' },
-            lidar: { ro: 'LiDAR', en: 'LiDAR' },
-            heritage: { ro: 'Patrimoniu', en: 'Heritage sites' }
+            heritage: { ro: 'Patrimoniu', en: 'Heritage' },
+            orthophotos: { ro: 'Ortofoto', en: 'Orthophotos' },
+            terrain: { ro: 'Relief', en: 'Terrain' },
+            cadastre: { ro: 'Cadastru', en: 'Cadastre' },
+            maps: { ro: 'Hărți', en: 'Maps' },
+            environment: { ro: 'Mediu', en: 'Environment' },
+            planning: { ro: 'Planificare și minerit', en: 'Planning & mining' }
+        },
+
+        /* ── Heritage: ONE toggle, many WMS parts ─────────────────────
+         * Part ids refer to `panel:false` entries in `layers` below.
+         * `keyword` is the prototype's rule, applied to Title + Name of
+         * every WMS layer at discovery time. `legalNoticePlaceholder` is
+         * deliberately a placeholder for the site OWNER — the parts draw
+         * protected zones; they are not a permission map and this site
+         * must not state detecting rules it has not verified. */
+        heritage: {
+            id: 'heritage',
+            title: { ro: 'Patrimoniu', en: 'Heritage' },
+            partIds: ['culturalZone', 'cultural', 'natural', 'monument'],
+            keyword: 'archaeolog|archeolog|arkeolog',
+            /* Bake-in list once the owner exports heritage.parts from the
+             * prototype: [{ title: '…', layers: 'workspace:name' }, …] */
+            staticDiscovered: [],
+            opacity: 0.85,
+            description: 'Switches on every ASIG protected-heritage layer at once: cultural protected ' +
+                'sites (points and polygons), natural protected areas and natural monuments, plus every ' +
+                'archaeological zone the geoportal publishes (found by the keyword archaeolog*/' +
+                'archeolog*/arkeolog* in the WMS layer list, exactly as in the owner\u2019s prototype). ' +
+                'One opacity slider controls all parts; map clicks query all of them.\n' +
+                '[OWNER PLACEHOLDER: legal notice about protected areas to be written by the site owner. ' +
+                'These layers show protected zones only — they are not a permission map.]'
         },
 
         endpoints: {
-            /* The app currently calls a tiled WMS GetMap endpoint. */
-            wms: 'https://geoportal.asig.gov.al/service/wms',
+            serviceRoot: SERVICE_ROOT,
+            wms: SERVICE_ROOT + 'wms',
+            wmts: SERVICE_ROOT + 'wmts',
             capabilities: {
-                wms: 'https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&REQUEST=GetCapabilities',
+                wms: SERVICE_ROOT + 'wms?SERVICE=WMS&REQUEST=GetCapabilities',
+                wmts: SERVICE_ROOT + 'wmts?service=WMTS&request=GetCapabilities',
                 wmsVersion: '1.3.0',
                 getMapFormats: ['image/png', 'image/jpeg'],
                 rootCrs: ['EPSG:6870', 'EPSG:4326', 'EPSG:900913', 'CRS:84'],
+                /* WMTS grids from the owner-supplied GetCapabilities. The
+                 * EPSG:900913 / GoogleCRS84Quad sets are defined by the
+                 * service, but the catalogue's WMTS layers link only the
+                 * two grids listed in `wmtsGrids`. */
+                wmtsGrids: ['EPSG:6870', 'EPSG:4326'],
+                wmtsDefinedButUnlinked: ['EPSG:900913', 'GoogleCRS84Quad', 'GlobalCRS84Pixel', 'GlobalCRS84Scale'],
                 defaultStyle: ''
             },
-            nativeCrs: 'EPSG:6870',       /* ETRS89 / Albania TM 2010; owner-supplied capabilities */
-            nativeTileMatrixSet: 'EPSG:6870' /* no hand-built XYZ grid */
+            nativeCrs: 'EPSG:6870',
+            nativeTileMatrixSet: 'EPSG:6870'
         },
 
-        /* Shared WMS request parameters for every layer below. */
+        /* Shared request parameters.
+         * GetMap (2D): the owner's prototype-verified shape — WMS 1.1.1,
+         * SRS=EPSG:3857, transparent PNG, 512 px tiles with zoomOffset −1,
+         * per-workspace endpoint first, one retry through the global
+         * endpoint — plus this module's older EPSG:4326 safety net.
+         * `version`/`tileSize` stay 1.3.0/256: they are what the shared
+         * registry/3D proxy has always used for these layer ids. */
         wms: {
-            url: 'https://geoportal.asig.gov.al/service/wms',
+            url: SERVICE_ROOT + 'wms',
             version: '1.3.0',
-            /* The current map path requests Web Mercator. The owner-supplied
-             * capabilities list EPSG:900913, not EPSG:3857; keep this request
-             * path but require live proxy evidence before claiming acceptance. */
+            getMapVersion: '1.1.1',
             crs: 'EPSG:3857',
             fallbackCrs: 'EPSG:4326',
+            endpointFallbackAfterErrors: 2,
             fallbackAfterErrors: 6,
             styles: '',
             tileSize: 256,
-            keepBuffer: 1            /* public government service: barely preload */
+            getMapTileSize: 512,
+            keepBuffer: 1
+        },
+        wmts: {
+            url: SERVICE_ROOT + 'wmts',
+            tileMatrixSet: 'EPSG:4326',
+            /* Owner-supplied WMTS capabilities: EPSG:4326 has TileMatrix
+             * EPSG:4326:0 … EPSG:4326:21, top-left corner (-180, 90),
+             * 256×256 tiles and MatrixWidth=2^(z+1), MatrixHeight=2^z.
+             * planTile() in the renderer uses exactly that grid; the
+             * real deepest *cached* level is still discovered at runtime
+             * by stepping down when a level returns no tiles. */
+            grid: { crs: 'EPSG:4326', topLeft: [-180, 90], tileSize: 256, minZoom: 0, maxZoom: 21 },
+            maxSourceZoom: 21,
+            stepDownMax: 10,
+            lostAfter: 3
+        },
+        discovery: {
+            /* In-browser GetCapabilities lookup for resolve-by-title and
+             * archaeology-keyword layers (the prototype's discover()). */
+            enabled: true,
+            capabilitiesUrl: SERVICE_ROOT + 'wms?service=WMS&version=1.3.0&request=GetCapabilities'
         },
 
         attribution: ATTRIBUTION,
 
+        /* Every tile-layer definition. Panel rows appear in section order
+         * then `order`; Heritage parts (panel:false) never appear as rows. */
         layers: [
-            /* Mounted in the single Albania-only group (#albaniaSubLayers); the
-             * registry groups keep the shared catalogue z-order. */
+            /* ── Heritage parts (panel:false — switched only by Heritage) ── */
             {
-                id: 'topo50k',
-                section: 'historical',
-                registryGroup: 'hist-free',
-                registryZ: 640,
-                title: { ro: 'Hartă topografică 1:50k', en: 'Topographic map 1:50k' },
-
-                layers: 'Topografike:50K_Topografike',
-                format: 'image/png',
-                transparent: false,
-                opacity: 1,
-                order: 10,
-                minZoom: 7,
-                maxNativeZoom: 17,
-                defaultOn: false,
-                attributionRow: ATTRIBUTION,
-                description: 'Albanian 1:50,000 topographic map, rendered live by the ASIG WMS. Opaque; ' +
-                    'requests are clipped to the ASIG coverage bounds.',
-                notes: 'Owner-supplied WMS capabilities list this exact Name and image/png.'
-            },
-            {
-                id: 'ortho1999',
-                section: 'satellite',
-                registryGroup: 'sat-hist',
-                registryZ: 400,
-                title: { ro: 'Ortofoto 1999', en: 'Orthophoto 1999' },
-
-                layers: 'Orthophoto:Ortofoto_1999',
-                format: 'image/png',
-                transparent: false,
-                opacity: 1,
-                order: 20,
-                minZoom: 7,
-                maxNativeZoom: 18,
-                defaultOn: false,
-                attributionRow: ATTRIBUTION,
-                description: 'The 1999 national orthophoto mosaic of Albania, rendered live by the ASIG WMS ' +
-                    '(layer Orthophoto:Ortofoto_1999). Opaque: use it instead of the basemap, possibly with a ' +
-                    'hillshade at ~50% on top. Requests are clipped to the ASIG coverage bounds.',
-                notes: 'Owner-supplied WMS capabilities list this exact Name and image/png.'
-            },
-            {
-                id: 'ortho1994',
-                section: 'satellite',
-                registryGroup: 'sat-hist',
-                registryZ: 401,
-                title: { ro: 'Ortofoto 20 cm (2015)', en: 'Orthophoto 20 cm (2015)' },
-                layers: 'orthophoto_2015:OrthoImagery_20cm',
-                format: 'image/jpeg',
-                transparent: false,
-                opacity: 1,
-                order: 30,
-                minZoom: 7,
-                maxNativeZoom: 19,
-                defaultOn: false,
-                attributionRow: ATTRIBUTION,
-                description: 'Catalogued 2015 national orthophoto at 20 cm resolution, served by the ASIG WMS as ' +
-                    'orthophoto_2015:OrthoImagery_20cm. JPEG and opaque; use with a hillshade above it.',
-                notes: 'Owner-supplied WMS capabilities list image/jpeg; this is the catalogued 2015 20 cm product.'
-            },
-            {
-                id: 'dsm',
-                section: 'lidar',
-                registryGroup: 'lidar',
-                registryZ: 610,
-                title: { ro: 'DSM (hillshade)', en: 'DSM (hillshade)' },
-
-                layers: 'DSM:Dsm_Hill_Group',
-                format: 'image/png',
-                transparent: true,
-                opacity: 0.6,
-                order: 40,
-                minZoom: 7,
-                maxNativeZoom: 18,
-                defaultOn: false,
-                attributionRow: ATTRIBUTION,
-                description: 'Hillshade of the Albanian digital SURFACE model (canopy and buildings), ' +
-                    'rendered live by the ASIG WMS (layer DSM:Dsm_Hill_Group). Semi-transparent by default ' +
-                    'so it can tone an orthophoto or the topographic map underneath. Requests are clipped to the ASIG coverage bounds.',
-                notes: 'Owner-supplied WMS capabilities list this exact Name and image/png.'
-            },
-            {
-                id: 'lidar',
-                section: 'lidar',
-                registryGroup: 'lidar',
-                registryZ: 611,
-                /* Not a point cloud: a hillshade derived from the 2015 DTM. */
-                title: { ro: 'LiDAR', en: 'LiDAR' },
-
-                layers: 'Dtm_2015:Hillshade_2015_group',
-                format: 'image/png',
-                transparent: true,
-                opacity: 0.5,
-                order: 50,
-                minZoom: 7,
-                maxNativeZoom: 18,
-                defaultOn: false,
-                attributionRow: ATTRIBUTION,
-                description: '“LiDAR” is a hillshade derived from the national 2015 LiDAR digital terrain ' +
-                    'model (ASIG layer Dtm_2015:Hillshade_2015_group), rendered live by the WMS. Starts at ' +
-                    '50% opacity — the intended read is over an orthophoto or the topographic map. ' +
-                    'Requests are clipped to the ASIG coverage bounds.',
-                notes: 'Owner-supplied WMS capabilities list this exact Name and image/png.'
-            },
-
-            /* Four independent heritage rows. Snapshot dates stay explicit in titles,
-             * notes and info text so stale source names are discoverable. */
-            {
-                id: 'heritage',
-                section: 'heritage',
-                registryGroup: 'patrimoniu',
-                registryZ: 620,
-                title: { ro: 'Situri de patrimoniu', en: 'Heritage Sites' },
-
+                id: 'culturalZone', kind: 'wms', panel: false, heritagePart: true,
+                section: 'heritage', registryGroup: 'patrimoniu', registryZ: 620,
+                title: { ro: 'Cultural protected sites (polygon)', en: 'Cultural protected sites (polygon)' },
                 layers: 'iktk:zonatembrojturatetrashegimisekulturore22_07_2026',
-                format: 'image/png',
-                transparent: true,
-                opacity: 0.85,
-                order: 60,
-                minZoom: 7,
-                maxNativeZoom: 19,
-                defaultOn: false,
-                attributionRow: ATTRIBUTION,
-                description: 'Protected cultural-heritage zones (IKTK — Instituti i Kulturës), polygons ' +
-                    'drawn on top of every Albanian raster. Transparent ASIG WMS overlay; the layer name ' +
-                    'carries the publication snapshot (22 July 2026; _22_07_2026).',
-                notes: 'SNAPSHOT name: iktk:zonatembrojturatetrashegimisekulturore22_07_2026.'
+                format: 'image/png', transparent: true, opacity: 0.85, order: 1,
+                minZoom: 7, maxNativeZoom: 19, defaultOn: false, attributionRow: ATTRIBUTION,
+                description: protoDesc('Heritage part: protected cultural-heritage ZONES (IKTK polygons; ' +
+                    'layer name carries the 22 July 2026 snapshot, _22_07_2026)'),
+                notes: 'repo: served by the previous Albania module as "Heritage Sites"; owner chose it ' +
+                    'as the cultural-polygon Heritage part (title mapping repo-sourced, not export-verified). ' +
+                    'SNAPSHOT name — re-check on failure.'
             },
             {
-                id: 'natural',
-                section: 'heritage',
-                registryGroup: 'patrimoniu',
-                registryZ: 621,
-                title: { ro: 'Arii naturale protejate', en: 'Natural Protected Sites' },
-
-                layers: 'akzm:zonat_mbrojtura_081124',
-                format: 'image/png',
-                transparent: true,
-                opacity: 0.85,
-                order: 70,
-                minZoom: 7,
-                maxNativeZoom: 19,
-                defaultOn: false,
-                attributionRow: ATTRIBUTION,
-                description: 'Legally protected natural areas (AKZM — Agjencia e Zonave të Mbrojtura / ' +
-                    'National Agency of Protected Areas), polygons over every Albanian raster. Transparent ' +
-                    'ASIG WMS overlay; the layer name carries the publication snapshot (8 November 2024; _081124).',
-                notes: 'SNAPSHOT name: akzm:zonat_mbrojtura_081124.'
-            },
-            {
-                id: 'cultural',
-                section: 'heritage',
-                registryGroup: 'patrimoniu',
-                registryZ: 622,
-                title: { ro: 'Situri culturale protejate', en: 'Cultural Protected Sites' },
-
+                id: 'cultural', kind: 'wms', panel: false, heritagePart: true,
+                section: 'heritage', registryGroup: 'patrimoniu', registryZ: 622,
+                title: { ro: 'Cultural protected sites (point)', en: 'Cultural protected sites (point)' },
                 layers: 'iktk:zonatembrojturatetrashegimisekulturore_pike13_05_2026',
-                format: 'image/png',
-                transparent: true,
-                opacity: 0.85,
-                order: 80,
-                minZoom: 7,
-                maxNativeZoom: 19,
-                defaultOn: false,
-                attributionRow: ATTRIBUTION,
-                description: 'Protected cultural-heritage POINTS (IKTK), over every Albanian raster. ' +
-                    'Transparent ASIG WMS overlay; the layer name carries the publication snapshot ' +
-                    '(13 May 2026; _13_05_2026).',
-                notes: 'SNAPSHOT name: iktk:zonatembrojturatetrashegimisekulturore_pike13_05_2026.'
+                format: 'image/png', transparent: true, opacity: 0.85, order: 2,
+                minZoom: 7, maxNativeZoom: 19, defaultOn: false, attributionRow: ATTRIBUTION,
+                description: protoDesc('Heritage part: protected cultural-heritage POINTS (IKTK, "pike"; ' +
+                    'layer name carries the 13 May 2026 snapshot, _13_05_2026)'),
+                notes: 'repo: served by the previous Albania module as "Cultural Protected Sites"; owner ' +
+                    'chose it as the cultural-point Heritage part (title mapping repo-sourced). SNAPSHOT name.'
             },
             {
-                id: 'monument',
-                section: 'heritage',
-                registryGroup: 'patrimoniu',
-                registryZ: 623,
-                title: { ro: 'Monumente ale naturii', en: 'Environment: Natural monument' },
-
+                id: 'natural', kind: 'wms', panel: false, heritagePart: true,
+                section: 'heritage', registryGroup: 'patrimoniu', registryZ: 621,
+                title: { ro: 'Natural Protected Areas', en: 'Natural Protected Areas' },
+                layers: 'akzm:zonat_mbrojtura_081124',
+                format: 'image/png', transparent: true, opacity: 0.85, order: 3,
+                minZoom: 7, maxNativeZoom: 19, defaultOn: false, attributionRow: ATTRIBUTION,
+                description: protoDesc('Heritage part: legally protected natural areas (AKZM; layer name ' +
+                    'carries the 8 November 2024 snapshot, _081124)'),
+                notes: 'prototype HERITAGE_KNOWN. SNAPSHOT name.'
+            },
+            {
+                id: 'monument', kind: 'wms', panel: false, heritagePart: true,
+                section: 'heritage', registryGroup: 'patrimoniu', registryZ: 623,
+                title: { ro: 'Natural monument', en: 'Natural monument' },
                 layers: 'akzm:monumentet_natyrore_07032023',
-                format: 'image/png',
-                transparent: true,
-                opacity: 0.85,
-                order: 90,
-                minZoom: 7,
-                maxNativeZoom: 19,
-                defaultOn: false,
-                attributionRow: ATTRIBUTION,
-                description: 'Natural monuments (environment category, AKZM), over every Albanian raster. ' +
-                    'Transparent ASIG WMS overlay; the layer name carries the publication snapshot ' +
-                    '(7 March 2023; _07032023).',
-                notes: 'SNAPSHOT name: akzm:monumentet_natyrore_07032023.'
-            }
+                format: 'image/png', transparent: true, opacity: 0.85, order: 4,
+                minZoom: 7, maxNativeZoom: 19, defaultOn: false, attributionRow: ATTRIBUTION,
+                description: protoDesc('Heritage part: natural monuments (AKZM; layer name carries the ' +
+                    '7 March 2023 snapshot, _07032023)'),
+                notes: 'prototype HERITAGE_KNOWN. SNAPSHOT name.'
+            },
+
+            /* ── Orthophotos (14) — exact names from the prototype ── */
+            { id: 'ortho7686', kind: 'wms', panel: true, section: 'orthophotos', registryGroup: 'sat-hist', registryZ: 400, title: { ro: 'Ortofoto 76 86 25k', en: 'Ortofoto 76 86 25k' }, layers: 'Orthophoto:Ortofoto_76_86_25k', format: 'image/png', transparent: true, opacity: 1, order: 10, minZoom: 7, maxNativeZoom: 18, defaultOn: false, attributionRow: ATTRIBUTION, description: protoDesc('ASIG orthophoto “Ortofoto 76 86 25k”'), notes: 'prototype exact name.' },
+            { id: 'ortho94', kind: 'wms', panel: true, section: 'orthophotos', registryGroup: 'sat-hist', registryZ: 401, title: { ro: 'ortofoto 94', en: 'ortofoto 94' }, layers: 'Orthophoto:ortofoto_94', format: 'image/png', transparent: true, opacity: 1, order: 20, minZoom: 7, maxNativeZoom: 18, defaultOn: false, attributionRow: ATTRIBUTION, description: protoDesc('ASIG orthophoto “ortofoto 94”'), notes: 'prototype exact name.' },
+            { id: 'ortho2007', kind: 'wms', panel: true, section: 'orthophotos', registryGroup: 'sat-hist', registryZ: 402, title: { ro: 'OrthoImagery (2007)', en: 'OrthoImagery (2007)' }, layers: 'orthophoto_2007:OrthoImagery', format: 'image/png', transparent: true, opacity: 1, order: 30, minZoom: 7, maxNativeZoom: 18, defaultOn: false, attributionRow: ATTRIBUTION, description: protoDesc('ASIG 2007 orthophoto imagery'), notes: 'prototype exact name.' },
+            { id: 'ortho2015', kind: 'wms', panel: true, section: 'orthophotos', registryGroup: 'sat-hist', registryZ: 403, title: { ro: 'OrthoImagery (2015)', en: 'OrthoImagery (2015)' }, layers: 'orthophoto_2015:OrthoImagery', format: 'image/png', transparent: true, opacity: 1, order: 40, minZoom: 7, maxNativeZoom: 18, defaultOn: false, attributionRow: ATTRIBUTION, description: protoDesc('ASIG 2015 orthophoto imagery'), notes: 'prototype exact name.' },
+            { id: 'ortho1994', kind: 'wms', panel: true, section: 'orthophotos', registryGroup: 'sat-hist', registryZ: 404, title: { ro: 'OrthoImagery 20cm', en: 'OrthoImagery 20cm' }, layers: 'orthophoto_2015:OrthoImagery_20cm', format: 'image/png', transparent: true, opacity: 1, order: 50, minZoom: 7, maxNativeZoom: 19, defaultOn: false, attributionRow: ATTRIBUTION, description: protoDesc('ASIG 2015 orthophoto imagery at 20 cm'), notes: 'prototype exact name. Legacy id "ortho1994" kept (previous module; the product is the catalogued 2015 20 cm orthophoto, not 1994). Previous module requested image/jpeg; the prototype requests transparent image/png — config follows the prototype.' },
+            { id: 'ortho8cm', kind: 'wms', panel: true, section: 'orthophotos', registryGroup: 'sat-hist', registryZ: 405, title: { ro: 'OrthoImagery 8cm', en: 'OrthoImagery 8cm' }, layers: 'orthophoto_2015:OrthoImagery_8cm', format: 'image/png', transparent: true, opacity: 1, order: 60, minZoom: 7, maxNativeZoom: 19, defaultOn: false, attributionRow: ATTRIBUTION, description: protoDesc('ASIG 2015 orthophoto imagery at 8 cm'), notes: 'prototype exact name.' },
+            { id: 'orthoCir', kind: 'wms', panel: true, section: 'orthophotos', registryGroup: 'sat-hist', registryZ: 406, title: { ro: 'Orthophoto CIR', en: 'Orthophoto CIR' }, layers: 'Orthophoto_cir:Orthophoto_CIR', format: 'image/png', transparent: true, opacity: 1, order: 70, minZoom: 7, maxNativeZoom: 18, defaultOn: false, attributionRow: ATTRIBUTION, description: protoDesc('ASIG colour-infrared (CIR) orthophoto'), notes: 'prototype exact name.' },
+            { id: 'orthoCir8cm', kind: 'wms', panel: true, section: 'orthophotos', registryGroup: 'sat-hist', registryZ: 407, title: { ro: 'Orthophoto CIR 8cm', en: 'Orthophoto CIR 8cm' }, layers: 'Orthophoto_cir:Orthophoto_CIR_8cm', format: 'image/png', transparent: true, opacity: 1, order: 80, minZoom: 7, maxNativeZoom: 19, defaultOn: false, attributionRow: ATTRIBUTION, description: protoDesc('ASIG colour-infrared (CIR) orthophoto at 8 cm'), notes: 'prototype exact name.' },
+            { id: 'ortho2018', kind: 'wms', panel: true, section: 'orthophotos', registryGroup: 'sat-hist', registryZ: 408, title: { ro: 'Ortofoto 2018', en: 'Ortofoto 2018' }, layers: 'ortofoto_2018:Ortofoto_2018', format: 'image/png', transparent: true, opacity: 1, order: 90, minZoom: 7, maxNativeZoom: 18, defaultOn: false, attributionRow: ATTRIBUTION, description: protoDesc('ASIG 2018 orthophoto'), notes: 'prototype exact name.' },
+            { id: 'ortho2001', kind: 'wms', panel: true, section: 'orthophotos', registryGroup: 'sat-hist', registryZ: 409, title: { ro: 'Ortofoto 2001', en: 'Ortofoto 2001' }, layers: 'Orthophoto:Ortofoto_2001', format: 'image/png', transparent: true, opacity: 1, order: 100, minZoom: 7, maxNativeZoom: 18, defaultOn: false, attributionRow: ATTRIBUTION, description: protoDesc('ASIG 2001 orthophoto'), notes: 'prototype exact name.' },
+            { id: 'ortho1999', kind: 'wms', panel: true, section: 'orthophotos', registryGroup: 'sat-hist', registryZ: 410, title: { ro: 'Ortofoto 1999', en: 'Ortofoto 1999' }, layers: 'Orthophoto:Ortofoto_1999', format: 'image/png', transparent: true, opacity: 1, order: 110, minZoom: 7, maxNativeZoom: 18, defaultOn: false, attributionRow: ATTRIBUTION, description: protoDesc('ASIG 1999 orthophoto'), notes: 'prototype exact name; same layer/id as the previous Albania module.' },
+            { id: 'ortho1957', kind: 'wms', panel: true, section: 'orthophotos', registryGroup: 'sat-hist', registryZ: 411, title: { ro: 'Ortofoto 1957', en: 'Ortofoto 1957' }, layers: 'Orthophoto:Ortofoto_1957', format: 'image/png', transparent: true, opacity: 1, order: 120, minZoom: 7, maxNativeZoom: 18, defaultOn: false, attributionRow: ATTRIBUTION, description: protoDesc('ASIG 1957 orthophoto'), notes: 'prototype exact name.' },
+            { id: 'ortho19761980', kind: 'wms', panel: true, section: 'orthophotos', registryGroup: 'sat-hist', registryZ: 412, title: { ro: 'Orthofoto 1976 1980', en: 'Orthofoto 1976 1980' }, layers: 'Orthophoto:Orthofoto_1976_1980', format: 'image/png', transparent: true, opacity: 1, order: 130, minZoom: 7, maxNativeZoom: 18, defaultOn: false, attributionRow: ATTRIBUTION, description: protoDesc('ASIG 1976–1980 orthophoto'), notes: 'prototype exact name (display title spells "Orthofoto", as in the prototype table).' },
+            { id: 'fragmentDurres1986', kind: 'wms', panel: true, section: 'orthophotos', registryGroup: 'sat-hist', registryZ: 413, title: { ro: 'Fragment Durres 1986', en: 'Fragment Durres 1986' }, layers: 'Orthophoto:Fragment_Durres_1986', format: 'image/png', transparent: true, opacity: 1, order: 140, minZoom: 7, maxNativeZoom: 18, defaultOn: false, attributionRow: ATTRIBUTION, description: protoDesc('ASIG orthophoto fragment of Durrës, 1986'), notes: 'prototype exact name.' },
+
+            /* ── Terrain (2) — TILE-ONLY (WMTS, canvas-reprojected) ── */
+            {
+                id: 'lidar', kind: 'wmts', panel: true, queryable: false,
+                section: 'terrain', registryGroup: 'lidar', registryZ: 611,
+                title: { ro: 'Hillshade 2015 group', en: 'Hillshade 2015 group' },
+                layers: 'Dtm_2015:Hillshade_2015_group', url: SERVICE_ROOT + 'wmts',
+                format: 'image/png', transparent: true, opacity: 0.5, order: 150,
+                minZoom: 7, maxNativeZoom: 18, defaultOn: false, attributionRow: ATTRIBUTION,
+                description: 'Hillshade of the 2015 digital terrain model. Tile-only product: ' +
+                    'ASIG serves it as pre-rendered WMTS tiles (EPSG:4326 grid), reprojected to ' +
+                    'Web Mercator in your browser; where the tile cache ends, shallower tiles are enlarged.',
+                notes: 'prototype WMTS_ONLY (WMS GetMap answers LayerNotDefined). Same id/layer as the ' +
+                    'previous module, which wrongly drew it through WMS. Not mirrored in the registry: ' +
+                    'it has no WMS GetMap for the proxy to serve — the 3D mirror drapes the live 2D canvas tiles.'
+            },
+            {
+                id: 'dsm', kind: 'wmts', panel: true, queryable: false,
+                section: 'terrain', registryGroup: 'lidar', registryZ: 610,
+                title: { ro: 'Dsm Hill Group', en: 'Dsm Hill Group' },
+                layers: 'DSM:Dsm_Hill_Group', url: SERVICE_ROOT + 'wmts',
+                format: 'image/png', transparent: true, opacity: 0.6, order: 160,
+                minZoom: 7, maxNativeZoom: 18, defaultOn: false, attributionRow: ATTRIBUTION,
+                description: 'Hillshade of the digital surface model (DSM). Tile-only product: ' +
+                    'ASIG serves it as pre-rendered WMTS tiles (EPSG:4326 grid), reprojected to ' +
+                    'Web Mercator in your browser; where the tile cache ends, shallower tiles are enlarged.',
+                notes: 'prototype WMTS_ONLY (WMS GetMap answers LayerNotDefined). Not registry-mirrored — see lidar note.'
+            },
+
+            /* ── Cadastre (3) — resolve by exact title at runtime ── */
+            { id: 'cadastralZone', kind: 'wms', panel: true, section: 'cadastre', registryGroup: 'patrimoniu', registryZ: 624, title: { ro: 'Cadastral Zone', en: 'Cadastral Zone' }, layers: null, resolveTitle: 'Cadastral Zone', format: 'image/png', transparent: true, opacity: 0.85, order: 170, minZoom: 7, maxNativeZoom: 19, defaultOn: false, attributionRow: ATTRIBUTION, description: resolveDesc('Cadastral Zone'), notes: 'resolve-by-title: exact name is in the owner\u2019s asig-layers.json (not yet supplied). Bake into `layers` when supplied.' },
+            { id: 'cadastralParcels', kind: 'wms', panel: true, section: 'cadastre', registryGroup: 'patrimoniu', registryZ: 625, title: { ro: 'Cadastral Parcels', en: 'Cadastral Parcels' }, layers: null, resolveTitle: 'Cadastral Parcels', format: 'image/png', transparent: true, opacity: 0.85, order: 180, minZoom: 7, maxNativeZoom: 19, defaultOn: false, attributionRow: ATTRIBUTION, description: resolveDesc('Cadastral Parcels'), notes: 'resolve-by-title: see cadastralZone.' },
+            { id: 'cadastralParcelsAshk', kind: 'wms', panel: true, section: 'cadastre', registryGroup: 'patrimoniu', registryZ: 626, title: { ro: 'Cadastral Parcels (ASHK)', en: 'Cadastral Parcels (ASHK)' }, layers: null, resolveTitle: 'Cadastral Parcels (ASHK)', format: 'image/png', transparent: true, opacity: 0.85, order: 190, minZoom: 7, maxNativeZoom: 19, defaultOn: false, attributionRow: ATTRIBUTION, description: resolveDesc('Cadastral Parcels (ASHK)'), notes: 'resolve-by-title: see cadastralZone.' },
+
+            /* ── Maps (2) ── */
+            {
+                id: 'italiane100k', kind: 'wmts', panel: true, queryable: false,
+                section: 'maps', registryGroup: 'hist-free', registryZ: 640,
+                title: { ro: 'italiane 100k', en: 'italiane 100k' },
+                layers: 'hartat_historike:italiane_100k', url: SERVICE_ROOT + 'wmts',
+                format: 'image/png', transparent: true, opacity: 1, order: 200,
+                minZoom: 7, maxNativeZoom: 18, defaultOn: false, attributionRow: ATTRIBUTION,
+                description: 'Historical Italian 1:100,000 map. Tile-only product: ASIG serves it as ' +
+                    'pre-rendered WMTS tiles (EPSG:4326 grid), reprojected to Web Mercator in your ' +
+                    'browser; at deep zoom enlarged tiles are shown instead of blank ones.',
+                notes: 'prototype WMTS_ONLY (the owner\u2019s LayerNotDefined example). Not registry-mirrored — see lidar note.'
+            },
+            { id: 'topo25k', kind: 'wms', panel: true, section: 'maps', registryGroup: 'hist-free', registryZ: 641, title: { ro: '25k_krgjsh_1', en: '25k_krgjsh_1' }, layers: null, resolveTitle: '25k_krgjsh_1', format: 'image/png', transparent: true, opacity: 1, order: 210, minZoom: 7, maxNativeZoom: 18, defaultOn: false, attributionRow: ATTRIBUTION, description: resolveDesc('25k_krgjsh_1'), notes: 'resolve-by-title (the wanted string looks like a local layer Name; the resolver tries Title first, then Name, like the prototype).' },
+
+            /* ── Environment (1) ── */
+            { id: 'waterCourseLink', kind: 'wms', panel: true, section: 'environment', registryGroup: 'patrimoniu', registryZ: 627, title: { ro: 'Water course link', en: 'Water course link' }, layers: null, resolveTitle: 'Water course link', format: 'image/png', transparent: true, opacity: 0.9, order: 220, minZoom: 7, maxNativeZoom: 19, defaultOn: false, attributionRow: ATTRIBUTION, description: resolveDesc('Water course link'), notes: 'resolve-by-title: see cadastralZone.' },
+
+            /* ── Planning & mining (6) — resolve by exact title ── */
+            { id: 'areasPlanned347', kind: 'wms', panel: true, section: 'planning', registryGroup: 'patrimoniu', registryZ: 628, title: { ro: 'Areas Planned by (DCM 347)', en: 'Areas Planned by (DCM 347)' }, layers: null, resolveTitle: 'Areas Planned by (DCM 347)', format: 'image/png', transparent: true, opacity: 0.85, order: 230, minZoom: 7, maxNativeZoom: 19, defaultOn: false, attributionRow: ATTRIBUTION, description: resolveDesc('Areas Planned by (DCM 347)'), notes: 'resolve-by-title: see cadastralZone.' },
+            { id: 'miningHazardous726', kind: 'wms', panel: true, section: 'planning', registryGroup: 'patrimoniu', registryZ: 629, title: { ro: 'Mining Hazardous Areas (DCM 726)', en: 'Mining Hazardous Areas (DCM 726)' }, layers: null, resolveTitle: 'Mining Hazardous Areas (DCM 726)', format: 'image/png', transparent: true, opacity: 0.85, order: 240, minZoom: 7, maxNativeZoom: 19, defaultOn: false, attributionRow: ATTRIBUTION, description: resolveDesc('Mining Hazardous Areas (DCM 726)'), notes: 'resolve-by-title: see cadastralZone.' },
+            { id: 'miningHazardous347', kind: 'wms', panel: true, section: 'planning', registryGroup: 'patrimoniu', registryZ: 630, title: { ro: 'Mining Hazardous Areas (DCM 347)', en: 'Mining Hazardous Areas (DCM 347)' }, layers: null, resolveTitle: 'Mining Hazardous Areas (DCM 347)', format: 'image/png', transparent: true, opacity: 0.85, order: 250, minZoom: 7, maxNativeZoom: 19, defaultOn: false, attributionRow: ATTRIBUTION, description: resolveDesc('Mining Hazardous Areas (DCM 347)'), notes: 'resolve-by-title: see cadastralZone.' },
+            { id: 'oldMiningAreas', kind: 'wms', panel: true, section: 'planning', registryGroup: 'patrimoniu', registryZ: 631, title: { ro: 'Old Mining Areas', en: 'Old Mining Areas' }, layers: null, resolveTitle: 'Old Mining Areas', format: 'image/png', transparent: true, opacity: 0.85, order: 260, minZoom: 7, maxNativeZoom: 19, defaultOn: false, attributionRow: ATTRIBUTION, description: resolveDesc('Old Mining Areas'), notes: 'resolve-by-title: see cadastralZone.' },
+            { id: 'mineralResouces', kind: 'wms', panel: true, section: 'planning', registryGroup: 'patrimoniu', registryZ: 632, title: { ro: 'Mineral Resouces', en: 'Mineral Resouces' }, layers: null, resolveTitle: 'Mineral Resouces', format: 'image/png', transparent: true, opacity: 0.85, order: 270, minZoom: 7, maxNativeZoom: 19, defaultOn: false, attributionRow: ATTRIBUTION, description: resolveDesc('Mineral Resouces'), notes: 'resolve-by-title: "Resouces" is the portal\u2019s own spelling of the Title — keep it for matching.' },
+            { id: 'miningPermits', kind: 'wms', panel: true, section: 'planning', registryGroup: 'patrimoniu', registryZ: 633, title: { ro: 'Mining exploitation permits', en: 'Mining exploitation permits' }, layers: null, resolveTitle: 'Mining exploitation permits', format: 'image/png', transparent: true, opacity: 0.85, order: 280, minZoom: 7, maxNativeZoom: 19, defaultOn: false, attributionRow: ATTRIBUTION, description: resolveDesc('Mining exploitation permits'), notes: 'resolve-by-title: see cadastralZone.' }
         ]
     };
 
@@ -348,9 +399,46 @@
         return CONFIG.layers.filter(function (layer) { return layer.enabled !== false; });
     };
 
-    /* The Albanian stack, bottom → top, exactly as `order` sorts it. */
-    CONFIG.drawOrder = function () {
-        return CONFIG.enabledLayers().slice().sort(function (a, b) { return a.order - b.order; });
+    /* Panel tile rows (Heritage parts excluded), in display order. */
+    CONFIG.panelLayers = function () {
+        var sectionRank = {};
+        CONFIG.sections.forEach(function (section, i) { sectionRank[section.id] = i; });
+        return CONFIG.enabledLayers().filter(function (layer) { return layer.panel !== false; })
+            .slice().sort(function (a, b) {
+                return ((sectionRank[a.section] || 0) - (sectionRank[b.section] || 0)) || (a.order - b.order);
+            });
+    };
+
+    /* The catalogue, bottom → top as `order` sorts the panel rows. The
+     * Heritage group is represented by a pseudo-entry in panelOrder(). */
+    CONFIG.drawOrder = function () { return CONFIG.panelLayers(); };
+
+    /* Panel entries exactly as the visitor sees them: the Heritage group
+     * toggle plus the 28 layer rows, in section order. */
+    CONFIG.panelOrder = function () {
+        var entries = [];
+        CONFIG.sections.forEach(function (section) {
+            if (section.kind === 'group') {
+                entries.push({
+                    id: CONFIG.heritage.id, kind: 'group', panel: true, section: section.id,
+                    title: CONFIG.heritage.title, opacity: CONFIG.heritage.opacity,
+                    partIds: CONFIG.heritage.partIds, order: 0
+                });
+            } else {
+                CONFIG.panelLayers().forEach(function (layer) {
+                    if (layer.section === section.id) entries.push(layer);
+                });
+            }
+        });
+        return entries;
+    };
+
+    /* Row counts per section (Heritage counts its one toggle row). */
+    CONFIG.countsBySection = function () {
+        var counts = {};
+        CONFIG.sections.forEach(function (section) { counts[section.id] = 0; });
+        CONFIG.panelOrder().forEach(function (entry) { counts[entry.section] = (counts[entry.section] || 0) + 1; });
+        return counts;
     };
 
     return CONFIG;

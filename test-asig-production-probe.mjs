@@ -8,7 +8,13 @@ import path from 'node:path';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const probe = path.join(root, 'tools/probe-asig-production.mjs');
-const ids = ['topo50k', 'ortho1999', 'ortho1994', 'dsm', 'lidar', 'heritage', 'natural', 'cultural', 'monument'];
+const ids = [
+  'culturalZone', 'cultural', 'natural', 'monument',
+  'ortho7686', 'ortho94', 'ortho2007', 'ortho2015',
+  'ortho1994', 'ortho8cm', 'orthoCir', 'orthoCir8cm',
+  'ortho2018', 'ortho2001', 'ortho1999', 'ortho1957',
+  'ortho19761980', 'fragmentDurres1986'
+];
 const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000b49444154789c636000020000050001a5f645400000000049454e44ae426082', 'hex');
 
 function runProbe(origin) {
@@ -28,7 +34,7 @@ const server = http.createServer((req, res) => {
   requests.push(url);
   if (url.pathname !== '/api/map3d/tile') { res.writeHead(404).end(); return; }
   const id = url.searchParams.get('layer') || '';
-  const invalid = id === 'albania.topo50k';
+  const invalid = id === 'albania.culturalZone';
   const mode = url.searchParams.get('mock') || process.env.ASIG_PROBE_MOCK || 'pass';
   // Scenarios come from the server path so the probe still tests the production URL shape.
   if (invalid && mode === 'xml') { res.writeHead(200, { 'Content-Type': 'text/xml' }).end('<ServiceExceptionReport/>'); return; }
@@ -48,7 +54,7 @@ try {
     process.env.ASIG_PROBE_MOCK = scenario;
     const result = await runProbe(origin);
     if (previous === undefined) delete process.env.ASIG_PROBE_MOCK; else process.env.ASIG_PROBE_MOCK = previous;
-    assert.equal(requests.length, 9, `${scenario}: probes all nine registry IDs; child=${result.code} ${result.stderr} ${result.stdout}`);
+    assert.equal(requests.length, 18, `${scenario}: probes all 18 registry IDs; child=${result.code} ${result.stderr} ${result.stdout}`);
     requests.forEach((url) => {
       assert.equal(url.pathname, '/api/map3d/tile');
       assert.equal(url.searchParams.get('z'), '12');
@@ -58,12 +64,12 @@ try {
     ids.forEach((id) => assert.ok(requests.some((url) => url.searchParams.get('layer') === 'albania.' + id), `${scenario}: includes albania.${id}`));
     if (scenario === 'pass') {
       assert.equal(result.code, 0, result.stderr + result.stdout);
-      assert.match(result.stdout, /Probe summary: 9\/9 passed/);
+      assert.match(result.stdout, /Probe summary: 18\/18 passed/);
       assert.match(result.stdout, /HTTP 200\timage\/png\t\d+ bytes\tX-Map3D-Upstream: <absent>/);
     } else {
       assert.equal(result.code, 1, `${scenario}: invalid response must fail the gate`);
-      assert.match(result.stdout, /Probe summary: 8\/9 passed/);
-      const failed = result.stdout.split('\n').find((line) => line.startsWith('FAIL albania.topo50k'));
+      assert.match(result.stdout, /Probe summary: 17\/18 passed/);
+      const failed = result.stdout.split('\n').find((line) => line.startsWith('FAIL albania.culturalZone'));
       assert.ok(failed, `${scenario}: the bad layer is identified in output`);
       if (scenario === 'xml' || scenario === 'html') assert.match(failed, /XML\/HTML exception body/);
       if (scenario === 'short') assert.match(failed, /3 bytes/);

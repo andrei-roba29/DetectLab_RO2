@@ -88,10 +88,12 @@ layers** and keeps the selection visible on the map:
   Albania-only group: `filterForCountry(iso)` shows `#albaniaRow` only for `AL`,
   marks the group and every row `country-layer-unavailable` otherwise, and parks
   the tile layers. `buildPanel()` sweeps the old per-section mounts and any
-  stray `data-albania-row` node before re-rendering the nine rows, so the only
-  Albanian rows in the panel are the ones inside `#albaniaSubLayers`.
+  stray `data-albania-row` node before re-rendering the ASIG catalogue
+  (Heritage as one toggle + 28 rows), so the only Albanian rows in the panel
+  are the ones inside `#albaniaSubLayers`.
   `js/map-app.js` calls it on selection and on exit;
-  `js/layer-registry.js` mirrors the rows with `countries: ['AL']`.
+  `js/layer-registry.js` mirrors the statically-named WMS layers with
+  `countries: ['AL']`.
 - `js/map-app.js` — `LAYER_COUNTRIES` (per-row ISO attribution, Romanian
   county LiDAR keys added programmatically), `SHARED_PREMIUM_CATALOG_KEYS` /
   `SHARED_PREMIUM_COUNTRIES` (static mirror of the catalog's curated coverage

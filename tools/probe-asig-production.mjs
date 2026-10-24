@@ -1,16 +1,23 @@
 #!/usr/bin/env node
 /*
- * Live production check for the nine Albania ASIG registry layers.
+ * Live production check for the 18 statically-named Albania ASIG WMS layers
+ * in the shared registry (the 14 orthophotos + the four Heritage parts).
  * This calls DetectLab's same-origin tile proxy only; it never calls ASIG
  * directly. HTTP 200 is insufficient unless the proxy returns a real image.
+ * The three WMTS-only layers and the resolve-by-title entries have no static
+ * WMS name for the proxy to serve — the 2D panel loads them directly from
+ * ASIG in the visitor's browser, so they are intentionally not probed here.
  */
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const registry = require('../js/layer-registry.js');
 const expectedIds = [
-  'albania.topo50k', 'albania.ortho1999', 'albania.ortho1994', 'albania.dsm',
-  'albania.lidar', 'albania.heritage', 'albania.natural', 'albania.cultural', 'albania.monument'
+  'albania.culturalZone', 'albania.cultural', 'albania.natural', 'albania.monument',
+  'albania.ortho7686', 'albania.ortho94', 'albania.ortho2007', 'albania.ortho2015',
+  'albania.ortho1994', 'albania.ortho8cm', 'albania.orthoCir', 'albania.orthoCir8cm',
+  'albania.ortho2018', 'albania.ortho2001', 'albania.ortho1999', 'albania.ortho1957',
+  'albania.ortho19761980', 'albania.fragmentDurres1986'
 ];
 
 function option(name, fallback) {

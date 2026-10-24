@@ -2177,13 +2177,17 @@
     };
     /* ═══════════════════════════════════════════════════════════════════════
      *  ALBANIA ASIG LAYERS — mirrored from the single ASIG config.
-     *  Each layer keeps the shared catalogue group/z-order it draws in
-     *  (Historical, Satellite, LiDAR or Heritage); the PANEL, however, mounts
-     *  all nine rows in one Albania-only group (#albaniaRow) and the country
-     *  filter shows them only while AL is the selected country — hence the
-     *  `countries: ['AL']` attribution below.
-     *  The renderer owns CRS fallback and per-row failure reporting, so the
-     *  global availability guard must not flip these independent switches.
+     *  The panel mounts the prototype catalogue (Heritage as ONE toggle,
+     *  then 28 rows in six sections) in one Albania-only group
+     *  (#albaniaRow), shown only while AL is the selected country — hence
+     *  `countries: ['AL']` below. Only STATICALLY-NAMED WMS entries are
+     *  mirrored here (14 orthophotos + the 4 Heritage parts): the three
+     *  tile-only WMTS layers have no WMS GetMap for the proxy to serve
+     *  (the 3D mirror drapes their live 2D canvas tiles instead), and the
+     *  resolve-by-title layers get their exact names only in the
+     *  visitor's browser (or by baking them into the config).
+     *  The renderer owns endpoint/CRS fallback, discovery and per-row
+     *  failure reporting, so the global guard must not flip its controls.
      * ═══════════════════════════════════════════════════════════════════════ */
     (function registerAlbaniaLayers() {
         var cfg = null;
@@ -2192,13 +2196,18 @@
             if (!cfg && typeof require === 'function') cfg = require('./asig-albania-layers.config.js');
         } catch (e) { cfg = null; }
         if (!cfg || typeof cfg.enabledLayers !== 'function') return;
-        var SELF_GUARD = 'js/asig-albania-layers.js detects image decode/tile errors, retries EPSG:4326 after ' +
-            'the configured EPSG:3857 error burst, and reports persistent fallback failures on that layer row; ' +
-            'the global guard must not toggle its independent control.';
+        var SELF_GUARD = 'js/asig-albania-layers.js detects image decode/tile errors, retries once through the ' +
+            'alternate WMS endpoint, then EPSG:4326 after the configured EPSG:3857 error burst, and reports ' +
+            'persistent failures on that catalogue row; the global guard must not toggle its independent control.';
         try {
             cfg.enabledLayers().forEach(function (layer) {
+                /* No guessed names, no fake WMS: unresolved and tile-only
+                 * catalogue entries stay out of the WMS registry. */
+                if (!layer.layers || layer.kind !== 'wms') return;
                 var id = 'albania.' + layer.id;
                 if (BY_ID[id]) return;
+                var isPart = layer.panel === false;
+                var entryId = isPart ? ((cfg.heritage && cfg.heritage.id) || 'heritage') : layer.id;
                 API.register({
                     id: id,
                     group: layer.registryGroup,
@@ -2233,12 +2242,15 @@
                     selfGuardedReason: SELF_GUARD,
                     notes: layer.notes,
                     ui: {
-                        toggle: 'albaniaToggle_' + layer.id,
-                        slider: 'albaniaOpacity_' + layer.id,
-                        pct: 'albaniaPct_' + layer.id,
+                        /* Heritage parts have no row of their own: their
+                         * switch/slider are the Heritage group's. */
+                        toggle: 'albaniaToggle_' + entryId,
+                        slider: 'albaniaOpacity_' + entryId,
+                        pct: 'albaniaPct_' + entryId,
                         selfGuarded: true,
                         configId: layer.id,
-                        section: layer.section
+                        section: layer.section,
+                        partOf: isPart ? entryId : undefined
                     }
                 });
             });

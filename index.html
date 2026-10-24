@@ -26,7 +26,7 @@
     <link rel="stylesheet" href="css/leaflet.photon.css">
     <link rel="stylesheet" href="css/leaflet-measure.css">
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
-    <link rel="stylesheet" href="css/styles.css?v=20261021-viewport-layer-filter">
+    <link rel="stylesheet" href="css/styles.css?v=20261024-asig-catalogue">
     <!-- 3D TERRAIN VIEW (2D ⇄ 3D) — MapLibre GL JS, vendored like Leaflet.
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
@@ -2562,16 +2562,23 @@
 
                     </div><!-- /lidar transp-layer-row -->
 
-                    <!-- Shqipëria / Albania — the ASIG layers for Albania ONLY. Every
-                         entry (title in RO+EN, WMS Name, format, opacity, zoom
-                         limits, attribution, snapshot dates) lives in
-                         js/asig-albania-layers.config.js; js/asig-albania-layers.js
-                         builds these rows from it. All nine rows are mounted in this
-                         single group — never inside another country's section — and
-                         the group plus its rows are visible ONLY while Albania is
-                         the selected country (the country filter hides them for every
-                         other ISO, including the global view). Sources, exact WMS
-                         names and the CRS fallback: ALBANIA_ASIG_LAYERS.md. -->
+                    <!-- Shqipëria / Albania — the ASIG geoportal catalogue for
+                         Albania ONLY. Every entry (portal title, WMS/WMTS Name or
+                         resolve-by-title rule, opacity, zoom limits, attribution,
+                         snapshot dates) lives in js/asig-albania-layers.config.js;
+                         js/asig-albania-layers.js builds the rows from it:
+                         Heritage as ONE toggle (its parts are never rows), then
+                         Orthophotos 14 · Terrain 2 · Cadastre 3 · Maps 2 ·
+                         Environment 1 · Planning & mining 6. All rows are mounted
+                         in this single group — never inside another country's
+                         section — and the group plus its rows are visible ONLY
+                         while Albania is the selected country (the country filter
+                         hides them for every other ISO, including the global view).
+                         OWNER PLACEHOLDER: the legal notice about protected areas
+                         lives in the Heritage ⓘ text in the config — the layers
+                         show protected zones only, they are not a permission map,
+                         and no detecting rules are stated here.
+                         Sources/names/fallbacks: ALBANIA_ASIG_LAYERS.md. -->
                     <div class="transp-layer-row albania-out-of-country" data-category="free" id="albaniaRow">
                         <div class="transp-layer-label" style="margin-bottom:6px">
                             <span style="display:flex;align-items:center;gap:7px;min-width:0">
@@ -2596,9 +2603,16 @@
                             </span>
                         </div>
 
-                        <!-- The nine ASIG rows (and their small Historical / Satellite /
-                             LiDAR / Heritage captions) are generated here. -->
-                        <div id="albaniaSubLayers" class="asig-section-mount" style="display:flex;flex-direction:column;gap:8px;overflow:hidden;transition:max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;max-height:4000px;opacity:1;"></div>
+                        <!-- Filter for the 29 catalogue entries (Heritage + 28 rows);
+                             js/asig-albania-layers.js wires #albaniaLayerSearch. It
+                             sits outside the generated mount so panel rebuilds do
+                             not erase the visitor's query. -->
+                        <input type="search" id="albaniaLayerSearch" class="albania-layer-search" autocomplete="off" spellcheck="false" aria-label="Search ASIG layers" placeholder="Search ASIG layers…">
+
+                        <!-- The ASIG catalogue sections/rows are generated here from
+                             js/asig-albania-layers.config.js (Heritage is ONE row;
+                             its parts are never listed individually). -->
+                        <div id="albaniaSubLayers" class="asig-section-mount" style="display:flex;flex-direction:column;gap:8px;overflow:hidden;transition:max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;max-height:8000px;opacity:1;"></div>
                     </div>
 
                     <!-- Danmark / Denmark — the Danish layers. Every entry (title in
@@ -5059,7 +5073,7 @@
          change) and it is loaded before the registry, which mirrors it.
          js/asig-albania-layers.js (below, after map-app.js) draws them and
          gates the whole group to the Albania view (country: 'AL'). -->
-    <script src="js/asig-albania-layers.config.js?v=20261021-albania-only"></script>
+    <script src="js/asig-albania-layers.config.js?v=20261024-asig-catalogue"></script>
     <!-- The Finnish layers: the CONFIG is the single description of every
          Finnish layer (endpoints, kinds, zoom limits, attributions) and it is
          loaded before the registry, which mirrors it. js/finland-tm35.js is
@@ -5068,7 +5082,7 @@
          depend on. -->
     <script src="js/finland-tm35.js?v=20261019-finland-filter"></script>
     <script src="js/finland-layers.config.js?v=20261019-finland-filter"></script>
-    <script src="js/layer-registry.js?v=20261021-albania-country-group"></script>
+    <script src="js/layer-registry.js?v=20261024-asig-catalogue"></script>
     <!-- Roman roads („Drumuri romane”): the parser owns the record/geometry
          format, the layer paints the road network on canvas tiles, and the
          worker streams + parses the NDJSON off the main thread. map-app.js
@@ -5080,11 +5094,12 @@
     <!-- Danish layers: panel rows, basemap-control buttons and the lazy
          Leaflet layers, all built from js/danish-layers.config.js. -->
     <script src="js/danish-layers.js?v=20261019-danish-free-groups"></script>
-    <!-- Albanian layers (ASIG): the nine rows of the single Albania group
-         (#albaniaRow) plus their lazy Leaflet layers, all built from
+    <!-- Albanian layers (ASIG): the Heritage toggle + 28 catalogue rows of
+         the single Albania group (#albaniaRow), their lazy Leaflet layers,
+         in-browser title resolution and click feature-info, all built from
          js/asig-albania-layers.config.js. The group is shown only while
          Albania is the selected country. -->
-    <script src="js/asig-albania-layers.js?v=20261021-albania-only"></script>
+    <script src="js/asig-albania-layers.js?v=20261024-asig-catalogue"></script>
     <!-- Finnish layers: panel rows and the lazy Leaflet layers — canvas
          reprojection from the ETRS-TM35FIN grid, MVT cadastral decoding,
          WMS tiles, debounced WFS, local GeoJSON — all built from

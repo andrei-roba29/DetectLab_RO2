@@ -83,7 +83,7 @@ const TAG_3D = '20261021-lidar-canvas-tiles';    /* mirror (canvas tiles)       
 const TAG_VIEWER = '20261023-pwa-only-3d-column'; /* viewer (js)                         */
 const TAG_CSS = '20261023-pwa-only-3d-column';    /* viewer skin (css)              */
 const TAG_FOCUS = '20261020-lidar-disc-route';  /* LiDAR focus (3D, one disc)     */
-const TAG_REGISTRY = '20261021-albania-country-group'; /* shared registry (WMS audit) */
+const TAG_REGISTRY = '20261024-asig-catalogue'; /* shared registry (ASIG catalogue)  */
 
 // ══════════════════════════════════════════════════════════════
 // 1. Static wiring — the viewer must be reachable in the app

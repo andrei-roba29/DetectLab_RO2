@@ -322,7 +322,9 @@ function dynamicSampleUrl(def, z, x, y) {
 }
 
 /* ASIG's regression tile is fixed on Tirana, not the Romanian audit default.
- * Build it through the renderer's own request builder (including bbox clip). */
+ * Build it through the renderer's own request builder (WMS 1.1.1 shape; tiles
+ * outside the ASIG footprint short-circuit to the blank pixel, intersecting
+ * tiles keep their full bbox). */
 const ASIG_SAMPLE_TILE = { z: 12, x: 2273, y: 1530 };
 function asigSampleUrl(def) {
   const api = moduleSandbox.AsigAlbaniaLayers;
@@ -347,7 +349,7 @@ function auditWms(def) {
   }
   if (!DL.layerOf(def)) err('W_LAYERS', 'no LAYERS value — GetMap would be answered with an exception');
   if (String(def.id || '').startsWith('albania.')) {
-    info('ASIG_OFFLINE_ONLY', 'owner-supplied capabilities advertise EPSG:900913, not EPSG:3857; this offline URL construction does not verify production acceptance');
+    info('ASIG_OFFLINE_ONLY', 'the 2D panel requests WMS 1.1.1 / SRS=EPSG:3857 (the owner prototype-verified shape), while ASIG capabilities also name EPSG:900913; this offline URL construction does not verify production acceptance');
   }
   if (!WMS_VERSIONS.has(version)) warn('W_VERSION', 'unusual WMS version "' + version + '"');
   if (!TILE_FORMATS.has(String(def.format || '').toLowerCase())) {
@@ -503,10 +505,15 @@ function auditDynamic(def) {
 }
 
 /* Modules that already turn their own failures into something visible (a
-   notice, a blank tile instead of a broken image, a documented error path). */
+   notice, a blank tile instead of a broken image, a documented error path).
+   The ASIG module is self-guarded by design: its layers carry
+   _detectlabNoGuard, tile failures surface as a persistent status on the
+   catalogue row (with a link to the failing request) after the endpoint/CRS
+   fallbacks, and WMTS failures still finish through Leaflet's `tileerror`. */
 const OWN_ERROR_PATHS = [
   'js/dataforsyningen-dhm-layer.js',
-  'js/lantmateriet-hojdmodell-layer.js'
+  'js/lantmateriet-hojdmodell-layer.js',
+  'js/asig-albania-layers.js'
 ];
 function path2dHasOwnErrorPath(def) {
   const st = moduleStatus[def.builder && def.builder.module];
@@ -694,20 +701,30 @@ const SIGNATURES = [
   {
     host: 'geoportal.asig.gov.al',
     provider: 'ASIG / geoportal.asig.gov.al',
-    request: 'WMS 1.3.0 GetMap (CRS=EPSG:3857, STYLES=) for the nine exact Names: ' +
-      'Topografike:50K_Topografike, Orthophoto:Ortofoto_1999, orthophoto_2015:OrthoImagery_20cm, ' +
-      'DSM:Dsm_Hill_Group, Dtm_2015:Hillshade_2015_group, iktk:zonatembrojturatetrashegimisekulturore22_07_2026, ' +
-      'akzm:zonat_mbrojtura_081124, iktk:zonatembrojturatetrashegimisekulturore_pike13_05_2026, ' +
-      'akzm:monumentet_natyrore_07032023',
-    what: 'HTTP 200 with XML/HTML or a body that is not a decodable image is a tile error; the same-origin ' +
-      'production probe separately requires HTTP 200, image/*, at least 32 bytes, no exception body and no ' +
-      'X-Map3D-Upstream failure marker. EPSG:3857 is retained as the request path but is not listed literally ' +
-      'in the owner-supplied capabilities excerpt (which advertises EPSG:900913).',
+    request: 'WMS GetMap for the 18 statically-named registry layers (14 orthophotos + 4 Heritage parts): ' +
+      'iktk:zonatembrojturatetrashegimisekulturore22_07_2026, iktk:zonatembrojturatetrashegimisekulturore_pike13_05_2026, ' +
+      'akzm:zonat_mbrojtura_081124, akzm:monumentet_natyrore_07032023, Orthophoto:Ortofoto_76_86_25k, ' +
+      'Orthophoto:ortofoto_94, orthophoto_2007:OrthoImagery, orthophoto_2015:OrthoImagery, ' +
+      'orthophoto_2015:OrthoImagery_20cm, orthophoto_2015:OrthoImagery_8cm, Orthophoto_cir:Orthophoto_CIR, ' +
+      'Orthophoto_cir:Orthophoto_CIR_8cm, ortofoto_2018:Ortofoto_2018, Orthophoto:Ortofoto_2001, ' +
+      'Orthophoto:Ortofoto_1999, Orthophoto:Ortofoto_1957, Orthophoto:Orthofoto_1976_1980, ' +
+      'Orthophoto:Fragment_Durres_1986. The 2D panel uses WMS 1.1.1 (SRS=EPSG:3857, STYLES=, transparent PNG, ' +
+      '512 px), per-workspace endpoint first, then the global endpoint, then an EPSG:4326 safety net; the ' +
+      'registry/proxy sample follows each registry def. The three WMTS-only layers (DSM:Dsm_Hill_Group, ' +
+      'Dtm_2015:Hillshade_2015_group, hartat_historike:italiane_100k) and the resolve-by-title entries have no ' +
+      'static WMS GetMap and are excluded from this registry audit by design.',
+    what: 'HTTP 200 with XML/HTML (e.g. a LayerNotDefined ServiceException) or a body that is not a decodable ' +
+      'image is a tile error; the same-origin production probe separately requires HTTP 200, image/*, at least ' +
+      '32 bytes, no exception body and no X-Map3D-Upstream failure marker. The owner-supplied WMTS capabilities ' +
+      'confirm the tile-only layers link only the EPSG:6870/EPSG:4326 grids (EPSG:900913 is defined but unlinked), ' +
+      'which is why the panel reprojects EPSG:4326 WMTS tiles on canvas.',
     owner: 'external (the agency GeoServer; government host, no SLA)',
-    app: 'rows are rendered in one Albania-only group (#albaniaRow, with Historical/Satellite/LiDAR/Heritage ' +
-      'captions) and are shown only while Albania is selected; a runtime sweep removes any surviving pre-group ' +
-      'mount or stray Albanian row; renderer owns error handling, retries EPSG:4326 after the configured ' +
-      'EPSG:3857 error burst, then reports a persistent fallback failure on that layer row'
+    app: 'the full ASIG catalogue renders in one Albania-only group (#albaniaRow: Heritage as ONE toggle, then ' +
+      'Orthophotos/Terrain/Cadastre/Maps/Environment/Planning sections) and is shown only while Albania is ' +
+      'selected; a runtime sweep removes any surviving pre-group mount or stray Albanian row; the renderer owns ' +
+      'error handling (workspace → global endpoint → EPSG:4326), reports persistent failures on the row with a ' +
+      'link to the failing request, resolves title-only layers in-browser from GetCapabilities, and answers map ' +
+      'clicks with grouped GetFeatureInfo in sandboxed iframes'
   },
   {
     host: 'paikkatiedot.ymparisto.fi', provider: 'SYKE / Finnish Environment Institute',

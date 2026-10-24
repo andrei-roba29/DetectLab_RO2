@@ -708,7 +708,16 @@
 //   (the transform), js/other-maps.js (catalogue + dots + panel),
 //   css/other-maps.css, data/other-maps-catalog.json and the harvester
 //   tools/build-hungaricana-catalog.mjs. See OTHER_MAPS.md.
-const CACHE_NAME = 'detectlab-v257-other-maps';
+// v258: the Albania group becomes the full ASIG geoportal catalogue — Heritage
+//   as ONE toggle (its WMS parts are never rows), 14 orthophotos, the two
+//   tile-only terrain hillshades + the Italian 1:100k map reprojected from the
+//   EPSG:4326 WMTS grid on canvas, cadastre, maps, water courses and the
+//   planning & mining layers. Layers known only by portal Title are resolved
+//   in the visitor's browser from the live WMS GetCapabilities (never guessed);
+//   the panel gains collapsible sections, a search box and active-layer
+//   reordering. Re-tags css/styles.css, js/asig-albania-layers.config.js,
+//   js/asig-albania-layers.js and js/layer-registry.js. See ALBANIA_ASIG_LAYERS.md.
+const CACHE_NAME = 'detectlab-v258-asig-catalogue';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -751,6 +760,10 @@ const PRECACHE_URLS = [
   'js/asig-albania-layers.js?v=20261021-albania-country-group',
   'js/asig-albania-layers.config.js?v=20261021-albania-only',
   'js/asig-albania-layers.js?v=20261021-albania-only',
+  'js/asig-albania-layers.config.js?v=20261024-asig-catalogue',
+  'js/asig-albania-layers.js?v=20261024-asig-catalogue',
+  'js/layer-registry.js?v=20261024-asig-catalogue',
+  'css/styles.css?v=20261024-asig-catalogue',
   'js/layer-registry.js?v=20261017-albania-asig',
   'js/translations.js?v=20261017-albania-asig',
   'js/translations.js?v=20261017-albania-asig',

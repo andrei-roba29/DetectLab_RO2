@@ -1,0 +1,1281 @@
+{
+  "generatedBy": "node tools/build-asig-catalogue.mjs",
+  "sourceOfTruth": "js/asig-albania-layers.config.js",
+  "doNotEditByHand": "Regenerate this file; edit the JS config instead.",
+  "version": "20261024-asig-catalogue",
+  "provider": "ASIG — Autoriteti Shtetëror për Informacionin Gjeohapësinor",
+  "country": "AL",
+  "countryBounds": [
+    [
+      39.538,
+      18.773
+    ],
+    [
+      42.758,
+      21.179
+    ]
+  ],
+  "attribution": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+  "licence": "ASIG terms unknown — no explicit licence in the supplied capabilities; verify reuse/redistribution terms with ASIG",
+  "endpoints": {
+    "serviceRoot": "https://geoportal.asig.gov.al/service/",
+    "wms": "https://geoportal.asig.gov.al/service/wms",
+    "wmts": "https://geoportal.asig.gov.al/service/wmts",
+    "capabilities": {
+      "wms": "https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&REQUEST=GetCapabilities",
+      "wmts": "https://geoportal.asig.gov.al/service/wmts?service=WMTS&request=GetCapabilities",
+      "wmsVersion": "1.3.0",
+      "getMapFormats": [
+        "image/png",
+        "image/jpeg"
+      ],
+      "rootCrs": [
+        "EPSG:6870",
+        "EPSG:4326",
+        "EPSG:900913",
+        "CRS:84"
+      ],
+      "wmtsGrids": [
+        "EPSG:6870",
+        "EPSG:4326"
+      ],
+      "wmtsDefinedButUnlinked": [
+        "EPSG:900913",
+        "GoogleCRS84Quad",
+        "GlobalCRS84Pixel",
+        "GlobalCRS84Scale"
+      ],
+      "defaultStyle": ""
+    },
+    "nativeCrs": "EPSG:6870",
+    "nativeTileMatrixSet": "EPSG:6870"
+  },
+  "wms": {
+    "url": "https://geoportal.asig.gov.al/service/wms",
+    "version": "1.3.0",
+    "getMapVersion": "1.1.1",
+    "crs": "EPSG:3857",
+    "fallbackCrs": "EPSG:4326",
+    "endpointFallbackAfterErrors": 2,
+    "fallbackAfterErrors": 6,
+    "styles": "",
+    "tileSize": 256,
+    "getMapTileSize": 512,
+    "keepBuffer": 1
+  },
+  "wmts": {
+    "url": "https://geoportal.asig.gov.al/service/wmts",
+    "tileMatrixSet": "EPSG:4326",
+    "grid": {
+      "crs": "EPSG:4326",
+      "topLeft": [
+        -180,
+        90
+      ],
+      "tileSize": 256,
+      "minZoom": 0,
+      "maxZoom": 21
+    },
+    "maxSourceZoom": 21,
+    "stepDownMax": 10,
+    "lostAfter": 3
+  },
+  "discovery": {
+    "enabled": true,
+    "capabilitiesUrl": "https://geoportal.asig.gov.al/service/wms?service=WMS&version=1.3.0&request=GetCapabilities"
+  },
+  "sections": [
+    {
+      "id": "heritage",
+      "kind": "group",
+      "title": {
+        "ro": "Patrimoniu",
+        "en": "Heritage"
+      }
+    },
+    {
+      "id": "orthophotos",
+      "kind": "layers",
+      "title": {
+        "ro": "Ortofoto",
+        "en": "Orthophotos"
+      }
+    },
+    {
+      "id": "terrain",
+      "kind": "layers",
+      "title": {
+        "ro": "Relief",
+        "en": "Terrain"
+      }
+    },
+    {
+      "id": "cadastre",
+      "kind": "layers",
+      "title": {
+        "ro": "Cadastru",
+        "en": "Cadastre"
+      }
+    },
+    {
+      "id": "maps",
+      "kind": "layers",
+      "title": {
+        "ro": "Hărți",
+        "en": "Maps"
+      }
+    },
+    {
+      "id": "environment",
+      "kind": "layers",
+      "title": {
+        "ro": "Mediu",
+        "en": "Environment"
+      }
+    },
+    {
+      "id": "planning",
+      "kind": "layers",
+      "title": {
+        "ro": "Planificare și minerit",
+        "en": "Planning & mining"
+      }
+    }
+  ],
+  "countsBySection": {
+    "heritage": 1,
+    "orthophotos": 14,
+    "terrain": 2,
+    "cadastre": 3,
+    "maps": 2,
+    "environment": 1,
+    "planning": 6
+  },
+  "totals": {
+    "panelEntries": 29,
+    "panelTileRows": 28,
+    "tileDefinitions": 32,
+    "staticWmsNames": 18,
+    "wmtsOnly": [
+      "Dtm_2015:Hillshade_2015_group",
+      "DSM:Dsm_Hill_Group",
+      "hartat_historike:italiane_100k"
+    ],
+    "resolveByTitle": [
+      "Cadastral Zone",
+      "Cadastral Parcels",
+      "Cadastral Parcels (ASHK)",
+      "25k_krgjsh_1",
+      "Water course link",
+      "Areas Planned by (DCM 347)",
+      "Mining Hazardous Areas (DCM 726)",
+      "Mining Hazardous Areas (DCM 347)",
+      "Old Mining Areas",
+      "Mineral Resouces",
+      "Mining exploitation permits"
+    ]
+  },
+  "heritage": {
+    "id": "heritage",
+    "title": {
+      "ro": "Patrimoniu",
+      "en": "Heritage"
+    },
+    "partIds": [
+      "culturalZone",
+      "cultural",
+      "natural",
+      "monument"
+    ],
+    "keyword": "archaeolog|archeolog|arkeolog",
+    "staticDiscovered": [],
+    "opacity": 0.85,
+    "description": "Switches on every ASIG protected-heritage layer at once: cultural protected sites (points and polygons), natural protected areas and natural monuments, plus every archaeological zone the geoportal publishes (found by the keyword archaeolog*/archeolog*/arkeolog* in the WMS layer list, exactly as in the owner’s prototype). One opacity slider controls all parts; map clicks query all of them.\n[OWNER PLACEHOLDER: legal notice about protected areas to be written by the site owner. These layers show protected zones only — they are not a permission map.]"
+  },
+  "panelEntries": [
+    {
+      "id": "heritage",
+      "kind": "group",
+      "section": "heritage",
+      "title": {
+        "ro": "Patrimoniu",
+        "en": "Heritage"
+      },
+      "partIds": [
+        "culturalZone",
+        "cultural",
+        "natural",
+        "monument"
+      ],
+      "keyword": "archaeolog|archeolog|arkeolog",
+      "note": "ONE panel toggle; its WMS parts are the layers[] entries with heritagePart:true plus every capabilities layer matching the keyword at runtime. Parts are never panel rows."
+    },
+    {
+      "id": "ortho7686",
+      "kind": "wms",
+      "section": "orthophotos",
+      "title": {
+        "ro": "Ortofoto 76 86 25k",
+        "en": "Ortofoto 76 86 25k"
+      },
+      "layers": "Orthophoto:Ortofoto_76_86_25k",
+      "resolveTitle": null
+    },
+    {
+      "id": "ortho94",
+      "kind": "wms",
+      "section": "orthophotos",
+      "title": {
+        "ro": "ortofoto 94",
+        "en": "ortofoto 94"
+      },
+      "layers": "Orthophoto:ortofoto_94",
+      "resolveTitle": null
+    },
+    {
+      "id": "ortho2007",
+      "kind": "wms",
+      "section": "orthophotos",
+      "title": {
+        "ro": "OrthoImagery (2007)",
+        "en": "OrthoImagery (2007)"
+      },
+      "layers": "orthophoto_2007:OrthoImagery",
+      "resolveTitle": null
+    },
+    {
+      "id": "ortho2015",
+      "kind": "wms",
+      "section": "orthophotos",
+      "title": {
+        "ro": "OrthoImagery (2015)",
+        "en": "OrthoImagery (2015)"
+      },
+      "layers": "orthophoto_2015:OrthoImagery",
+      "resolveTitle": null
+    },
+    {
+      "id": "ortho1994",
+      "kind": "wms",
+      "section": "orthophotos",
+      "title": {
+        "ro": "OrthoImagery 20cm",
+        "en": "OrthoImagery 20cm"
+      },
+      "layers": "orthophoto_2015:OrthoImagery_20cm",
+      "resolveTitle": null
+    },
+    {
+      "id": "ortho8cm",
+      "kind": "wms",
+      "section": "orthophotos",
+      "title": {
+        "ro": "OrthoImagery 8cm",
+        "en": "OrthoImagery 8cm"
+      },
+      "layers": "orthophoto_2015:OrthoImagery_8cm",
+      "resolveTitle": null
+    },
+    {
+      "id": "orthoCir",
+      "kind": "wms",
+      "section": "orthophotos",
+      "title": {
+        "ro": "Orthophoto CIR",
+        "en": "Orthophoto CIR"
+      },
+      "layers": "Orthophoto_cir:Orthophoto_CIR",
+      "resolveTitle": null
+    },
+    {
+      "id": "orthoCir8cm",
+      "kind": "wms",
+      "section": "orthophotos",
+      "title": {
+        "ro": "Orthophoto CIR 8cm",
+        "en": "Orthophoto CIR 8cm"
+      },
+      "layers": "Orthophoto_cir:Orthophoto_CIR_8cm",
+      "resolveTitle": null
+    },
+    {
+      "id": "ortho2018",
+      "kind": "wms",
+      "section": "orthophotos",
+      "title": {
+        "ro": "Ortofoto 2018",
+        "en": "Ortofoto 2018"
+      },
+      "layers": "ortofoto_2018:Ortofoto_2018",
+      "resolveTitle": null
+    },
+    {
+      "id": "ortho2001",
+      "kind": "wms",
+      "section": "orthophotos",
+      "title": {
+        "ro": "Ortofoto 2001",
+        "en": "Ortofoto 2001"
+      },
+      "layers": "Orthophoto:Ortofoto_2001",
+      "resolveTitle": null
+    },
+    {
+      "id": "ortho1999",
+      "kind": "wms",
+      "section": "orthophotos",
+      "title": {
+        "ro": "Ortofoto 1999",
+        "en": "Ortofoto 1999"
+      },
+      "layers": "Orthophoto:Ortofoto_1999",
+      "resolveTitle": null
+    },
+    {
+      "id": "ortho1957",
+      "kind": "wms",
+      "section": "orthophotos",
+      "title": {
+        "ro": "Ortofoto 1957",
+        "en": "Ortofoto 1957"
+      },
+      "layers": "Orthophoto:Ortofoto_1957",
+      "resolveTitle": null
+    },
+    {
+      "id": "ortho19761980",
+      "kind": "wms",
+      "section": "orthophotos",
+      "title": {
+        "ro": "Orthofoto 1976 1980",
+        "en": "Orthofoto 1976 1980"
+      },
+      "layers": "Orthophoto:Orthofoto_1976_1980",
+      "resolveTitle": null
+    },
+    {
+      "id": "fragmentDurres1986",
+      "kind": "wms",
+      "section": "orthophotos",
+      "title": {
+        "ro": "Fragment Durres 1986",
+        "en": "Fragment Durres 1986"
+      },
+      "layers": "Orthophoto:Fragment_Durres_1986",
+      "resolveTitle": null
+    },
+    {
+      "id": "lidar",
+      "kind": "wmts",
+      "section": "terrain",
+      "title": {
+        "ro": "Hillshade 2015 group",
+        "en": "Hillshade 2015 group"
+      },
+      "layers": "Dtm_2015:Hillshade_2015_group",
+      "resolveTitle": null
+    },
+    {
+      "id": "dsm",
+      "kind": "wmts",
+      "section": "terrain",
+      "title": {
+        "ro": "Dsm Hill Group",
+        "en": "Dsm Hill Group"
+      },
+      "layers": "DSM:Dsm_Hill_Group",
+      "resolveTitle": null
+    },
+    {
+      "id": "cadastralZone",
+      "kind": "wms",
+      "section": "cadastre",
+      "title": {
+        "ro": "Cadastral Zone",
+        "en": "Cadastral Zone"
+      },
+      "layers": null,
+      "resolveTitle": "Cadastral Zone"
+    },
+    {
+      "id": "cadastralParcels",
+      "kind": "wms",
+      "section": "cadastre",
+      "title": {
+        "ro": "Cadastral Parcels",
+        "en": "Cadastral Parcels"
+      },
+      "layers": null,
+      "resolveTitle": "Cadastral Parcels"
+    },
+    {
+      "id": "cadastralParcelsAshk",
+      "kind": "wms",
+      "section": "cadastre",
+      "title": {
+        "ro": "Cadastral Parcels (ASHK)",
+        "en": "Cadastral Parcels (ASHK)"
+      },
+      "layers": null,
+      "resolveTitle": "Cadastral Parcels (ASHK)"
+    },
+    {
+      "id": "italiane100k",
+      "kind": "wmts",
+      "section": "maps",
+      "title": {
+        "ro": "italiane 100k",
+        "en": "italiane 100k"
+      },
+      "layers": "hartat_historike:italiane_100k",
+      "resolveTitle": null
+    },
+    {
+      "id": "topo25k",
+      "kind": "wms",
+      "section": "maps",
+      "title": {
+        "ro": "25k_krgjsh_1",
+        "en": "25k_krgjsh_1"
+      },
+      "layers": null,
+      "resolveTitle": "25k_krgjsh_1"
+    },
+    {
+      "id": "waterCourseLink",
+      "kind": "wms",
+      "section": "environment",
+      "title": {
+        "ro": "Water course link",
+        "en": "Water course link"
+      },
+      "layers": null,
+      "resolveTitle": "Water course link"
+    },
+    {
+      "id": "areasPlanned347",
+      "kind": "wms",
+      "section": "planning",
+      "title": {
+        "ro": "Areas Planned by (DCM 347)",
+        "en": "Areas Planned by (DCM 347)"
+      },
+      "layers": null,
+      "resolveTitle": "Areas Planned by (DCM 347)"
+    },
+    {
+      "id": "miningHazardous726",
+      "kind": "wms",
+      "section": "planning",
+      "title": {
+        "ro": "Mining Hazardous Areas (DCM 726)",
+        "en": "Mining Hazardous Areas (DCM 726)"
+      },
+      "layers": null,
+      "resolveTitle": "Mining Hazardous Areas (DCM 726)"
+    },
+    {
+      "id": "miningHazardous347",
+      "kind": "wms",
+      "section": "planning",
+      "title": {
+        "ro": "Mining Hazardous Areas (DCM 347)",
+        "en": "Mining Hazardous Areas (DCM 347)"
+      },
+      "layers": null,
+      "resolveTitle": "Mining Hazardous Areas (DCM 347)"
+    },
+    {
+      "id": "oldMiningAreas",
+      "kind": "wms",
+      "section": "planning",
+      "title": {
+        "ro": "Old Mining Areas",
+        "en": "Old Mining Areas"
+      },
+      "layers": null,
+      "resolveTitle": "Old Mining Areas"
+    },
+    {
+      "id": "mineralResouces",
+      "kind": "wms",
+      "section": "planning",
+      "title": {
+        "ro": "Mineral Resouces",
+        "en": "Mineral Resouces"
+      },
+      "layers": null,
+      "resolveTitle": "Mineral Resouces"
+    },
+    {
+      "id": "miningPermits",
+      "kind": "wms",
+      "section": "planning",
+      "title": {
+        "ro": "Mining exploitation permits",
+        "en": "Mining exploitation permits"
+      },
+      "layers": null,
+      "resolveTitle": "Mining exploitation permits"
+    }
+  ],
+  "layers": [
+    {
+      "id": "culturalZone",
+      "kind": "wms",
+      "panel": false,
+      "heritagePart": true,
+      "section": "heritage",
+      "registryGroup": "patrimoniu",
+      "registryZ": 620,
+      "title": {
+        "ro": "Cultural protected sites (polygon)",
+        "en": "Cultural protected sites (polygon)"
+      },
+      "layers": "iktk:zonatembrojturatetrashegimisekulturore22_07_2026",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 0.85,
+      "order": 1,
+      "minZoom": 7,
+      "maxNativeZoom": 19,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "Heritage part: protected cultural-heritage ZONES (IKTK polygons; layer name carries the 22 July 2026 snapshot, _22_07_2026), rendered live from the ASIG geoportal (geoportal.asig.gov.al). Requests are limited to the ASIG coverage of Albania.",
+      "notes": "repo: served by the previous Albania module as \"Heritage Sites\"; owner chose it as the cultural-polygon Heritage part (title mapping repo-sourced, not export-verified). SNAPSHOT name — re-check on failure."
+    },
+    {
+      "id": "cultural",
+      "kind": "wms",
+      "panel": false,
+      "heritagePart": true,
+      "section": "heritage",
+      "registryGroup": "patrimoniu",
+      "registryZ": 622,
+      "title": {
+        "ro": "Cultural protected sites (point)",
+        "en": "Cultural protected sites (point)"
+      },
+      "layers": "iktk:zonatembrojturatetrashegimisekulturore_pike13_05_2026",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 0.85,
+      "order": 2,
+      "minZoom": 7,
+      "maxNativeZoom": 19,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "Heritage part: protected cultural-heritage POINTS (IKTK, \"pike\"; layer name carries the 13 May 2026 snapshot, _13_05_2026), rendered live from the ASIG geoportal (geoportal.asig.gov.al). Requests are limited to the ASIG coverage of Albania.",
+      "notes": "repo: served by the previous Albania module as \"Cultural Protected Sites\"; owner chose it as the cultural-point Heritage part (title mapping repo-sourced). SNAPSHOT name."
+    },
+    {
+      "id": "natural",
+      "kind": "wms",
+      "panel": false,
+      "heritagePart": true,
+      "section": "heritage",
+      "registryGroup": "patrimoniu",
+      "registryZ": 621,
+      "title": {
+        "ro": "Natural Protected Areas",
+        "en": "Natural Protected Areas"
+      },
+      "layers": "akzm:zonat_mbrojtura_081124",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 0.85,
+      "order": 3,
+      "minZoom": 7,
+      "maxNativeZoom": 19,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "Heritage part: legally protected natural areas (AKZM; layer name carries the 8 November 2024 snapshot, _081124), rendered live from the ASIG geoportal (geoportal.asig.gov.al). Requests are limited to the ASIG coverage of Albania.",
+      "notes": "prototype HERITAGE_KNOWN. SNAPSHOT name."
+    },
+    {
+      "id": "monument",
+      "kind": "wms",
+      "panel": false,
+      "heritagePart": true,
+      "section": "heritage",
+      "registryGroup": "patrimoniu",
+      "registryZ": 623,
+      "title": {
+        "ro": "Natural monument",
+        "en": "Natural monument"
+      },
+      "layers": "akzm:monumentet_natyrore_07032023",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 0.85,
+      "order": 4,
+      "minZoom": 7,
+      "maxNativeZoom": 19,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "Heritage part: natural monuments (AKZM; layer name carries the 7 March 2023 snapshot, _07032023), rendered live from the ASIG geoportal (geoportal.asig.gov.al). Requests are limited to the ASIG coverage of Albania.",
+      "notes": "prototype HERITAGE_KNOWN. SNAPSHOT name."
+    },
+    {
+      "id": "ortho7686",
+      "kind": "wms",
+      "panel": true,
+      "section": "orthophotos",
+      "registryGroup": "sat-hist",
+      "registryZ": 400,
+      "title": {
+        "ro": "Ortofoto 76 86 25k",
+        "en": "Ortofoto 76 86 25k"
+      },
+      "layers": "Orthophoto:Ortofoto_76_86_25k",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 1,
+      "order": 10,
+      "minZoom": 7,
+      "maxNativeZoom": 18,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG orthophoto “Ortofoto 76 86 25k”, rendered live from the ASIG geoportal (geoportal.asig.gov.al). Requests are limited to the ASIG coverage of Albania.",
+      "notes": "prototype exact name."
+    },
+    {
+      "id": "ortho94",
+      "kind": "wms",
+      "panel": true,
+      "section": "orthophotos",
+      "registryGroup": "sat-hist",
+      "registryZ": 401,
+      "title": {
+        "ro": "ortofoto 94",
+        "en": "ortofoto 94"
+      },
+      "layers": "Orthophoto:ortofoto_94",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 1,
+      "order": 20,
+      "minZoom": 7,
+      "maxNativeZoom": 18,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG orthophoto “ortofoto 94”, rendered live from the ASIG geoportal (geoportal.asig.gov.al). Requests are limited to the ASIG coverage of Albania.",
+      "notes": "prototype exact name."
+    },
+    {
+      "id": "ortho2007",
+      "kind": "wms",
+      "panel": true,
+      "section": "orthophotos",
+      "registryGroup": "sat-hist",
+      "registryZ": 402,
+      "title": {
+        "ro": "OrthoImagery (2007)",
+        "en": "OrthoImagery (2007)"
+      },
+      "layers": "orthophoto_2007:OrthoImagery",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 1,
+      "order": 30,
+      "minZoom": 7,
+      "maxNativeZoom": 18,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG 2007 orthophoto imagery, rendered live from the ASIG geoportal (geoportal.asig.gov.al). Requests are limited to the ASIG coverage of Albania.",
+      "notes": "prototype exact name."
+    },
+    {
+      "id": "ortho2015",
+      "kind": "wms",
+      "panel": true,
+      "section": "orthophotos",
+      "registryGroup": "sat-hist",
+      "registryZ": 403,
+      "title": {
+        "ro": "OrthoImagery (2015)",
+        "en": "OrthoImagery (2015)"
+      },
+      "layers": "orthophoto_2015:OrthoImagery",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 1,
+      "order": 40,
+      "minZoom": 7,
+      "maxNativeZoom": 18,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG 2015 orthophoto imagery, rendered live from the ASIG geoportal (geoportal.asig.gov.al). Requests are limited to the ASIG coverage of Albania.",
+      "notes": "prototype exact name."
+    },
+    {
+      "id": "ortho1994",
+      "kind": "wms",
+      "panel": true,
+      "section": "orthophotos",
+      "registryGroup": "sat-hist",
+      "registryZ": 404,
+      "title": {
+        "ro": "OrthoImagery 20cm",
+        "en": "OrthoImagery 20cm"
+      },
+      "layers": "orthophoto_2015:OrthoImagery_20cm",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 1,
+      "order": 50,
+      "minZoom": 7,
+      "maxNativeZoom": 19,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG 2015 orthophoto imagery at 20 cm, rendered live from the ASIG geoportal (geoportal.asig.gov.al). Requests are limited to the ASIG coverage of Albania.",
+      "notes": "prototype exact name. Legacy id \"ortho1994\" kept (previous module; the product is the catalogued 2015 20 cm orthophoto, not 1994). Previous module requested image/jpeg; the prototype requests transparent image/png — config follows the prototype."
+    },
+    {
+      "id": "ortho8cm",
+      "kind": "wms",
+      "panel": true,
+      "section": "orthophotos",
+      "registryGroup": "sat-hist",
+      "registryZ": 405,
+      "title": {
+        "ro": "OrthoImagery 8cm",
+        "en": "OrthoImagery 8cm"
+      },
+      "layers": "orthophoto_2015:OrthoImagery_8cm",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 1,
+      "order": 60,
+      "minZoom": 7,
+      "maxNativeZoom": 19,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG 2015 orthophoto imagery at 8 cm, rendered live from the ASIG geoportal (geoportal.asig.gov.al). Requests are limited to the ASIG coverage of Albania.",
+      "notes": "prototype exact name."
+    },
+    {
+      "id": "orthoCir",
+      "kind": "wms",
+      "panel": true,
+      "section": "orthophotos",
+      "registryGroup": "sat-hist",
+      "registryZ": 406,
+      "title": {
+        "ro": "Orthophoto CIR",
+        "en": "Orthophoto CIR"
+      },
+      "layers": "Orthophoto_cir:Orthophoto_CIR",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 1,
+      "order": 70,
+      "minZoom": 7,
+      "maxNativeZoom": 18,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG colour-infrared (CIR) orthophoto, rendered live from the ASIG geoportal (geoportal.asig.gov.al). Requests are limited to the ASIG coverage of Albania.",
+      "notes": "prototype exact name."
+    },
+    {
+      "id": "orthoCir8cm",
+      "kind": "wms",
+      "panel": true,
+      "section": "orthophotos",
+      "registryGroup": "sat-hist",
+      "registryZ": 407,
+      "title": {
+        "ro": "Orthophoto CIR 8cm",
+        "en": "Orthophoto CIR 8cm"
+      },
+      "layers": "Orthophoto_cir:Orthophoto_CIR_8cm",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 1,
+      "order": 80,
+      "minZoom": 7,
+      "maxNativeZoom": 19,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG colour-infrared (CIR) orthophoto at 8 cm, rendered live from the ASIG geoportal (geoportal.asig.gov.al). Requests are limited to the ASIG coverage of Albania.",
+      "notes": "prototype exact name."
+    },
+    {
+      "id": "ortho2018",
+      "kind": "wms",
+      "panel": true,
+      "section": "orthophotos",
+      "registryGroup": "sat-hist",
+      "registryZ": 408,
+      "title": {
+        "ro": "Ortofoto 2018",
+        "en": "Ortofoto 2018"
+      },
+      "layers": "ortofoto_2018:Ortofoto_2018",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 1,
+      "order": 90,
+      "minZoom": 7,
+      "maxNativeZoom": 18,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG 2018 orthophoto, rendered live from the ASIG geoportal (geoportal.asig.gov.al). Requests are limited to the ASIG coverage of Albania.",
+      "notes": "prototype exact name."
+    },
+    {
+      "id": "ortho2001",
+      "kind": "wms",
+      "panel": true,
+      "section": "orthophotos",
+      "registryGroup": "sat-hist",
+      "registryZ": 409,
+      "title": {
+        "ro": "Ortofoto 2001",
+        "en": "Ortofoto 2001"
+      },
+      "layers": "Orthophoto:Ortofoto_2001",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 1,
+      "order": 100,
+      "minZoom": 7,
+      "maxNativeZoom": 18,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG 2001 orthophoto, rendered live from the ASIG geoportal (geoportal.asig.gov.al). Requests are limited to the ASIG coverage of Albania.",
+      "notes": "prototype exact name."
+    },
+    {
+      "id": "ortho1999",
+      "kind": "wms",
+      "panel": true,
+      "section": "orthophotos",
+      "registryGroup": "sat-hist",
+      "registryZ": 410,
+      "title": {
+        "ro": "Ortofoto 1999",
+        "en": "Ortofoto 1999"
+      },
+      "layers": "Orthophoto:Ortofoto_1999",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 1,
+      "order": 110,
+      "minZoom": 7,
+      "maxNativeZoom": 18,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG 1999 orthophoto, rendered live from the ASIG geoportal (geoportal.asig.gov.al). Requests are limited to the ASIG coverage of Albania.",
+      "notes": "prototype exact name; same layer/id as the previous Albania module."
+    },
+    {
+      "id": "ortho1957",
+      "kind": "wms",
+      "panel": true,
+      "section": "orthophotos",
+      "registryGroup": "sat-hist",
+      "registryZ": 411,
+      "title": {
+        "ro": "Ortofoto 1957",
+        "en": "Ortofoto 1957"
+      },
+      "layers": "Orthophoto:Ortofoto_1957",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 1,
+      "order": 120,
+      "minZoom": 7,
+      "maxNativeZoom": 18,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG 1957 orthophoto, rendered live from the ASIG geoportal (geoportal.asig.gov.al). Requests are limited to the ASIG coverage of Albania.",
+      "notes": "prototype exact name."
+    },
+    {
+      "id": "ortho19761980",
+      "kind": "wms",
+      "panel": true,
+      "section": "orthophotos",
+      "registryGroup": "sat-hist",
+      "registryZ": 412,
+      "title": {
+        "ro": "Orthofoto 1976 1980",
+        "en": "Orthofoto 1976 1980"
+      },
+      "layers": "Orthophoto:Orthofoto_1976_1980",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 1,
+      "order": 130,
+      "minZoom": 7,
+      "maxNativeZoom": 18,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG 1976–1980 orthophoto, rendered live from the ASIG geoportal (geoportal.asig.gov.al). Requests are limited to the ASIG coverage of Albania.",
+      "notes": "prototype exact name (display title spells \"Orthofoto\", as in the prototype table)."
+    },
+    {
+      "id": "fragmentDurres1986",
+      "kind": "wms",
+      "panel": true,
+      "section": "orthophotos",
+      "registryGroup": "sat-hist",
+      "registryZ": 413,
+      "title": {
+        "ro": "Fragment Durres 1986",
+        "en": "Fragment Durres 1986"
+      },
+      "layers": "Orthophoto:Fragment_Durres_1986",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 1,
+      "order": 140,
+      "minZoom": 7,
+      "maxNativeZoom": 18,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG orthophoto fragment of Durrës, 1986, rendered live from the ASIG geoportal (geoportal.asig.gov.al). Requests are limited to the ASIG coverage of Albania.",
+      "notes": "prototype exact name."
+    },
+    {
+      "id": "lidar",
+      "kind": "wmts",
+      "panel": true,
+      "queryable": false,
+      "section": "terrain",
+      "registryGroup": "lidar",
+      "registryZ": 611,
+      "title": {
+        "ro": "Hillshade 2015 group",
+        "en": "Hillshade 2015 group"
+      },
+      "layers": "Dtm_2015:Hillshade_2015_group",
+      "url": "https://geoportal.asig.gov.al/service/wmts",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 0.5,
+      "order": 150,
+      "minZoom": 7,
+      "maxNativeZoom": 18,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "Hillshade of the 2015 digital terrain model. Tile-only product: ASIG serves it as pre-rendered WMTS tiles (EPSG:4326 grid), reprojected to Web Mercator in your browser; where the tile cache ends, shallower tiles are enlarged.",
+      "notes": "prototype WMTS_ONLY (WMS GetMap answers LayerNotDefined). Same id/layer as the previous module, which wrongly drew it through WMS. Not mirrored in the registry: it has no WMS GetMap for the proxy to serve — the 3D mirror drapes the live 2D canvas tiles."
+    },
+    {
+      "id": "dsm",
+      "kind": "wmts",
+      "panel": true,
+      "queryable": false,
+      "section": "terrain",
+      "registryGroup": "lidar",
+      "registryZ": 610,
+      "title": {
+        "ro": "Dsm Hill Group",
+        "en": "Dsm Hill Group"
+      },
+      "layers": "DSM:Dsm_Hill_Group",
+      "url": "https://geoportal.asig.gov.al/service/wmts",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 0.6,
+      "order": 160,
+      "minZoom": 7,
+      "maxNativeZoom": 18,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "Hillshade of the digital surface model (DSM). Tile-only product: ASIG serves it as pre-rendered WMTS tiles (EPSG:4326 grid), reprojected to Web Mercator in your browser; where the tile cache ends, shallower tiles are enlarged.",
+      "notes": "prototype WMTS_ONLY (WMS GetMap answers LayerNotDefined). Not registry-mirrored — see lidar note."
+    },
+    {
+      "id": "cadastralZone",
+      "kind": "wms",
+      "panel": true,
+      "section": "cadastre",
+      "registryGroup": "patrimoniu",
+      "registryZ": 624,
+      "title": {
+        "ro": "Cadastral Zone",
+        "en": "Cadastral Zone"
+      },
+      "layers": null,
+      "resolveTitle": "Cadastral Zone",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 0.85,
+      "order": 170,
+      "minZoom": 7,
+      "maxNativeZoom": 19,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG layer “Cadastral Zone”. Its exact WMS name is resolved from the geoportal layer list in your browser (by exact title) — until that lookup succeeds the row stays disabled and nothing is requested under a guessed name.",
+      "notes": "resolve-by-title: exact name is in the owner’s asig-layers.json (not yet supplied). Bake into `layers` when supplied."
+    },
+    {
+      "id": "cadastralParcels",
+      "kind": "wms",
+      "panel": true,
+      "section": "cadastre",
+      "registryGroup": "patrimoniu",
+      "registryZ": 625,
+      "title": {
+        "ro": "Cadastral Parcels",
+        "en": "Cadastral Parcels"
+      },
+      "layers": null,
+      "resolveTitle": "Cadastral Parcels",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 0.85,
+      "order": 180,
+      "minZoom": 7,
+      "maxNativeZoom": 19,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG layer “Cadastral Parcels”. Its exact WMS name is resolved from the geoportal layer list in your browser (by exact title) — until that lookup succeeds the row stays disabled and nothing is requested under a guessed name.",
+      "notes": "resolve-by-title: see cadastralZone."
+    },
+    {
+      "id": "cadastralParcelsAshk",
+      "kind": "wms",
+      "panel": true,
+      "section": "cadastre",
+      "registryGroup": "patrimoniu",
+      "registryZ": 626,
+      "title": {
+        "ro": "Cadastral Parcels (ASHK)",
+        "en": "Cadastral Parcels (ASHK)"
+      },
+      "layers": null,
+      "resolveTitle": "Cadastral Parcels (ASHK)",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 0.85,
+      "order": 190,
+      "minZoom": 7,
+      "maxNativeZoom": 19,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG layer “Cadastral Parcels (ASHK)”. Its exact WMS name is resolved from the geoportal layer list in your browser (by exact title) — until that lookup succeeds the row stays disabled and nothing is requested under a guessed name.",
+      "notes": "resolve-by-title: see cadastralZone."
+    },
+    {
+      "id": "italiane100k",
+      "kind": "wmts",
+      "panel": true,
+      "queryable": false,
+      "section": "maps",
+      "registryGroup": "hist-free",
+      "registryZ": 640,
+      "title": {
+        "ro": "italiane 100k",
+        "en": "italiane 100k"
+      },
+      "layers": "hartat_historike:italiane_100k",
+      "url": "https://geoportal.asig.gov.al/service/wmts",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 1,
+      "order": 200,
+      "minZoom": 7,
+      "maxNativeZoom": 18,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "Historical Italian 1:100,000 map. Tile-only product: ASIG serves it as pre-rendered WMTS tiles (EPSG:4326 grid), reprojected to Web Mercator in your browser; at deep zoom enlarged tiles are shown instead of blank ones.",
+      "notes": "prototype WMTS_ONLY (the owner’s LayerNotDefined example). Not registry-mirrored — see lidar note."
+    },
+    {
+      "id": "topo25k",
+      "kind": "wms",
+      "panel": true,
+      "section": "maps",
+      "registryGroup": "hist-free",
+      "registryZ": 641,
+      "title": {
+        "ro": "25k_krgjsh_1",
+        "en": "25k_krgjsh_1"
+      },
+      "layers": null,
+      "resolveTitle": "25k_krgjsh_1",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 1,
+      "order": 210,
+      "minZoom": 7,
+      "maxNativeZoom": 18,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG layer “25k_krgjsh_1”. Its exact WMS name is resolved from the geoportal layer list in your browser (by exact title) — until that lookup succeeds the row stays disabled and nothing is requested under a guessed name.",
+      "notes": "resolve-by-title (the wanted string looks like a local layer Name; the resolver tries Title first, then Name, like the prototype)."
+    },
+    {
+      "id": "waterCourseLink",
+      "kind": "wms",
+      "panel": true,
+      "section": "environment",
+      "registryGroup": "patrimoniu",
+      "registryZ": 627,
+      "title": {
+        "ro": "Water course link",
+        "en": "Water course link"
+      },
+      "layers": null,
+      "resolveTitle": "Water course link",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 0.9,
+      "order": 220,
+      "minZoom": 7,
+      "maxNativeZoom": 19,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG layer “Water course link”. Its exact WMS name is resolved from the geoportal layer list in your browser (by exact title) — until that lookup succeeds the row stays disabled and nothing is requested under a guessed name.",
+      "notes": "resolve-by-title: see cadastralZone."
+    },
+    {
+      "id": "areasPlanned347",
+      "kind": "wms",
+      "panel": true,
+      "section": "planning",
+      "registryGroup": "patrimoniu",
+      "registryZ": 628,
+      "title": {
+        "ro": "Areas Planned by (DCM 347)",
+        "en": "Areas Planned by (DCM 347)"
+      },
+      "layers": null,
+      "resolveTitle": "Areas Planned by (DCM 347)",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 0.85,
+      "order": 230,
+      "minZoom": 7,
+      "maxNativeZoom": 19,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG layer “Areas Planned by (DCM 347)”. Its exact WMS name is resolved from the geoportal layer list in your browser (by exact title) — until that lookup succeeds the row stays disabled and nothing is requested under a guessed name.",
+      "notes": "resolve-by-title: see cadastralZone."
+    },
+    {
+      "id": "miningHazardous726",
+      "kind": "wms",
+      "panel": true,
+      "section": "planning",
+      "registryGroup": "patrimoniu",
+      "registryZ": 629,
+      "title": {
+        "ro": "Mining Hazardous Areas (DCM 726)",
+        "en": "Mining Hazardous Areas (DCM 726)"
+      },
+      "layers": null,
+      "resolveTitle": "Mining Hazardous Areas (DCM 726)",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 0.85,
+      "order": 240,
+      "minZoom": 7,
+      "maxNativeZoom": 19,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG layer “Mining Hazardous Areas (DCM 726)”. Its exact WMS name is resolved from the geoportal layer list in your browser (by exact title) — until that lookup succeeds the row stays disabled and nothing is requested under a guessed name.",
+      "notes": "resolve-by-title: see cadastralZone."
+    },
+    {
+      "id": "miningHazardous347",
+      "kind": "wms",
+      "panel": true,
+      "section": "planning",
+      "registryGroup": "patrimoniu",
+      "registryZ": 630,
+      "title": {
+        "ro": "Mining Hazardous Areas (DCM 347)",
+        "en": "Mining Hazardous Areas (DCM 347)"
+      },
+      "layers": null,
+      "resolveTitle": "Mining Hazardous Areas (DCM 347)",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 0.85,
+      "order": 250,
+      "minZoom": 7,
+      "maxNativeZoom": 19,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG layer “Mining Hazardous Areas (DCM 347)”. Its exact WMS name is resolved from the geoportal layer list in your browser (by exact title) — until that lookup succeeds the row stays disabled and nothing is requested under a guessed name.",
+      "notes": "resolve-by-title: see cadastralZone."
+    },
+    {
+      "id": "oldMiningAreas",
+      "kind": "wms",
+      "panel": true,
+      "section": "planning",
+      "registryGroup": "patrimoniu",
+      "registryZ": 631,
+      "title": {
+        "ro": "Old Mining Areas",
+        "en": "Old Mining Areas"
+      },
+      "layers": null,
+      "resolveTitle": "Old Mining Areas",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 0.85,
+      "order": 260,
+      "minZoom": 7,
+      "maxNativeZoom": 19,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG layer “Old Mining Areas”. Its exact WMS name is resolved from the geoportal layer list in your browser (by exact title) — until that lookup succeeds the row stays disabled and nothing is requested under a guessed name.",
+      "notes": "resolve-by-title: see cadastralZone."
+    },
+    {
+      "id": "mineralResouces",
+      "kind": "wms",
+      "panel": true,
+      "section": "planning",
+      "registryGroup": "patrimoniu",
+      "registryZ": 632,
+      "title": {
+        "ro": "Mineral Resouces",
+        "en": "Mineral Resouces"
+      },
+      "layers": null,
+      "resolveTitle": "Mineral Resouces",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 0.85,
+      "order": 270,
+      "minZoom": 7,
+      "maxNativeZoom": 19,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG layer “Mineral Resouces”. Its exact WMS name is resolved from the geoportal layer list in your browser (by exact title) — until that lookup succeeds the row stays disabled and nothing is requested under a guessed name.",
+      "notes": "resolve-by-title: \"Resouces\" is the portal’s own spelling of the Title — keep it for matching."
+    },
+    {
+      "id": "miningPermits",
+      "kind": "wms",
+      "panel": true,
+      "section": "planning",
+      "registryGroup": "patrimoniu",
+      "registryZ": 633,
+      "title": {
+        "ro": "Mining exploitation permits",
+        "en": "Mining exploitation permits"
+      },
+      "layers": null,
+      "resolveTitle": "Mining exploitation permits",
+      "format": "image/png",
+      "transparent": true,
+      "opacity": 0.85,
+      "order": 280,
+      "minZoom": 7,
+      "maxNativeZoom": 19,
+      "defaultOn": false,
+      "attributionRow": "Data: ASIG, Albanian State Authority for Geospatial Information (geoportal.asig.gov.al)",
+      "description": "ASIG layer “Mining exploitation permits”. Its exact WMS name is resolved from the geoportal layer list in your browser (by exact title) — until that lookup succeeds the row stays disabled and nothing is requested under a guessed name.",
+      "notes": "resolve-by-title: see cadastralZone."
+    }
+  ]
+}

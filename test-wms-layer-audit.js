@@ -83,34 +83,43 @@ expect('vegfp.ppi', 'watch', 'VITO');
 });
 console.log('  ✓ every family names its provider (CENAGIS, eHarta, IGN, Copernicus, CAST, VITO, …)');
 
-// ASIG's nine exact registry names stay attributed to Albania in the registry
-// (the panel groups them in one Albania-only panel row). This
-// is an offline URL audit only; production status is established by the probe.
+// ASIG's 18 statically-named WMS layers (14 orthophotos + the four Heritage
+// parts) stay attributed to Albania in the registry. The three WMTS-only
+// layers and the resolve-by-title entries have no static WMS GetMap, so the
+// registry/proxy audit deliberately excludes them (the 2D panel loads those
+// directly from ASIG). This is an offline URL audit only; production status
+// is established by the probe.
 const ASIG_NAMES = [
-    'Topografike:50K_Topografike', 'Orthophoto:Ortofoto_1999',
-    'orthophoto_2015:OrthoImagery_20cm', 'DSM:Dsm_Hill_Group',
-    'Dtm_2015:Hillshade_2015_group',
     'iktk:zonatembrojturatetrashegimisekulturore22_07_2026',
-    'akzm:zonat_mbrojtura_081124',
     'iktk:zonatembrojturatetrashegimisekulturore_pike13_05_2026',
-    'akzm:monumentet_natyrore_07032023'
+    'akzm:zonat_mbrojtura_081124',
+    'akzm:monumentet_natyrore_07032023',
+    'Orthophoto:Ortofoto_76_86_25k', 'Orthophoto:ortofoto_94',
+    'orthophoto_2007:OrthoImagery', 'orthophoto_2015:OrthoImagery',
+    'orthophoto_2015:OrthoImagery_20cm', 'orthophoto_2015:OrthoImagery_8cm',
+    'Orthophoto_cir:Orthophoto_CIR', 'Orthophoto_cir:Orthophoto_CIR_8cm',
+    'ortofoto_2018:Ortofoto_2018', 'Orthophoto:Ortofoto_2001',
+    'Orthophoto:Ortofoto_1999', 'Orthophoto:Ortofoto_1957',
+    'Orthophoto:Orthofoto_1976_1980', 'Orthophoto:Fragment_Durres_1986'
 ];
 const asig = report.layers.filter((l) => l.id.startsWith('albania.'));
 const layerRegistry = require('./js/layer-registry.js');
-assert.strictEqual(asig.length, 9, 'the audit contains all nine ASIG registry rows');
+assert.strictEqual(asig.length, 18, 'the audit contains all 18 static ASIG registry rows');
 assert.deepStrictEqual(asig.map((l) => l.layer).sort(), ASIG_NAMES.slice().sort(), 'ASIG WMS Names remain exact');
+assert(!asig.some((l) => ['DSM:Dsm_Hill_Group', 'Dtm_2015:Hillshade_2015_group', 'hartat_historike:italiane_100k'].includes(l.layer)),
+    'WMTS-only layers are not audited as WMS (ASIG answers LayerNotDefined)');
 assert(asig.every((l) => { const def = layerRegistry.get(l.id); return def && JSON.stringify(def.countries) === JSON.stringify(['AL']) && def.selfGuarded === true && def.guard === false && def.selfGuardedReason; }),
     'all ASIG registry rows are attributed to Albania alone and stay self-guarded');
 assert(asig.every((l) => l.sampleTile === '12/2273/1530 (Tirana)'), 'ASIG offline samples use Tirana tile 12/2273/1530');
-assert(asig.every((l) => l.sample2d.includes('STYLES=&') && /crs=EPSG%3A3857/i.test(l.sample2d)),
-    'offline WMS URL construction preserves empty style and the existing 3857 path');
+assert(asig.every((l) => l.sample2d.includes('STYLES=&') && /[?&]VERSION=1\.1\.1(?:&|$)/.test(l.sample2d) && /[?&]SRS=EPSG%3A3857(?:&|$)/i.test(l.sample2d)),
+    'offline 2D URL construction uses the panel shape: WMS 1.1.1, SRS=EPSG:3857, empty style');
 assert(asig.every((l) => /^\/api\/map3d\/tile\?layer=albania\./.test(l.sample3d) && /z=12&x=2273&y=1530/.test(l.sample3d)),
     'the audit maps each ASIG registry ID to the same-origin tile proxy at Tirana');
 assert(!layerRegistry.GROUPS['albania-raster'] && !layerRegistry.GROUPS['albania-overlay'], 'no Albania-wide registry group remains');
 assert(report.warnings.length === 0 && report.errors.length === 0, 'offline audit remains clean: 0 errors, 0 warnings');
 assert(/offline URL construction does not verify production acceptance/.test(asig[0].findings.map((f) => f.message).join(' ')),
     'audit explicitly distinguishes URL construction from live verification');
-console.log('  ✓ nine exact ASIG Names, Tirana sample, thematic groups and proxy/self-guard invariants');
+console.log('  ✓ 18 exact ASIG Names, Tirana sample, thematic groups and proxy/self-guard invariants');
 
 // ══════════════════════════════════════════════════════════════
 // 3. The sample requests are real requests
@@ -123,7 +132,7 @@ report.layers.forEach(function (l) {
     assert(new RegExp('layers=' + encodeURIComponent(l.layer).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(url),
         l.id + ': the URL asks for its own LAYERS');
     assert(/[?&]bbox=[-\d.]+,[-\d.]+,[-\d.]+,[-\d.]+/i.test(url), l.id + ': a real bbox is requested');
-    const versionedCrs = /version=1\.1\.(0|1)/.test(url) ? /[?&]srs=EPSG%3A3857/i.test(url)
+    const versionedCrs = /version=1\.1\.(0|1)/i.test(url) ? /[?&]srs=EPSG%3A3857/i.test(url)
         : /[?&]crs=EPSG%3A3857/i.test(url);
     const wgs84 = /(srs|crs)=EPSG%3A4326/i.test(url);
     assert(versionedCrs || wgs84, l.id + ': the version/CRS pair matches the WMS spec');
@@ -221,7 +230,10 @@ Object.keys(report.modules).forEach(function (name) {
     if (!m.present) return;
     const src = read(m.file);
     if (!/done\(null\s*,\s*(tile|canvas)\)/.test(src)) return;
-    const hasOwnPath = /showAuthNotice|reportUnavailable|TOKEN_MISSING_MESSAGE|noteFailure/.test(src);
+    // `noteLayerFailure` is the ASIG module's own visible path: its layers opt
+    // out of the guard (_detectlabNoGuard) and persistent failures land as a
+    // status on the catalogue row instead of flipping the switch.
+    const hasOwnPath = /showAuthNotice|reportUnavailable|TOKEN_MISSING_MESSAGE|noteFailure|noteLayerFailure/.test(src);
     assert(hasOwnPath,
         m.file + ' hides a failed tile from Leaflet but neither reports it to the guard ' +
         '(DetectLabWmsHealth.noteFailure) nor shows its own notice');

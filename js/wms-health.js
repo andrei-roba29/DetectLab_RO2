@@ -98,8 +98,9 @@
          * it stops answering, per the rule that every third-party endpoint of
          * the registry appears in this map. The layers themselves opt out of
          * the guard with _detectlabNoGuard (js/asig-albania-layers.js owns
-         * its rows: per-tile EPSG:4326 fallback after repeated tile errors
-         * and a status line under the switch instead of a flipped switch). */
+         * its rows: per-workspace → global endpoint → EPSG:4326 fallback
+         * after repeated tile errors, and a status line under the switch
+         * instead of a flipped switch). */
         'geoportal.asig.gov.al': 'ASIG / geoportal.asig.gov.al',
         /* The Finnish layers (js/finland-layers.config.js) read these hosts
          * directly — the SYKE GeoServer and the Åland ArcGIS server answer

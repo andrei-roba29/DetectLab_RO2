@@ -8504,6 +8504,191 @@
     color: rgba(245, 240, 235, 0.98);
 }
 
+/* Catalogue sections: the caption is a real button that collapses its rows;
+   the chevron is decorative (the button carries aria-expanded). */
+.albania-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+button.albania-layer-section.albania-section-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 0.66rem;
+    letter-spacing: 0.06em;
+    text-align: left;
+    cursor: pointer;
+}
+
+button.albania-layer-section.albania-section-toggle::after {
+    content: "▾";
+    font-size: 0.7rem;
+    line-height: 1;
+    transition: transform 0.2s ease;
+}
+
+button.albania-layer-section.albania-section-toggle:hover {
+    opacity: 0.85;
+}
+
+.albania-section.is-collapsed > button.albania-layer-section.albania-section-toggle::after {
+    transform: rotate(-90deg);
+}
+
+.albania-section-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* The catalogue filter (#albaniaLayerSearch in index.html). It lives outside
+   the generated mount, so a panel rebuild never clears the query. */
+.albania-layer-search {
+    width: 100%;
+    box-sizing: border-box;
+    margin: 2px 0 8px;
+    padding: 5px 8px;
+    border: 1px solid rgba(228, 30, 32, 0.35);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.25);
+    color: rgba(245, 240, 235, 0.92);
+    font: inherit;
+    font-size: 0.74rem;
+}
+
+.albania-layer-search::placeholder {
+    color: rgba(245, 240, 235, 0.45);
+}
+
+/* Exact ASIG Name under each row title (or the resolve-by-title hint). */
+.albania-layer-name {
+    padding-left: 19px;
+    font-size: 0.62rem;
+    line-height: 1.3;
+    opacity: 0.48;
+    word-break: break-all;
+}
+
+.albania-layer-move {
+    width: 17px;
+    height: 17px;
+    padding: 0;
+    border: 1px solid rgba(245, 240, 235, 0.28);
+    border-radius: 3px;
+    background: none;
+    color: rgba(245, 240, 235, 0.72);
+    font-size: 0.62rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.albania-layer-move:hover:not(:disabled) {
+    border-color: #e04545;
+    color: #fff;
+}
+
+.albania-layer-move:disabled {
+    opacity: 0.32;
+    cursor: default;
+}
+
+.albania-layer-row.is-unresolved .albania-layer-title,
+.albania-layer-row.is-unresolved .albania-layer-name {
+    opacity: 0.55;
+}
+
+.albania-layer-row.is-unresolved .albania-layer-label,
+.albania-layer-row.is-unresolved .albania-layer-label input {
+    cursor: not-allowed;
+}
+
+.albania-layer-stack {
+    font-size: 0.66rem;
+    opacity: 0.85;
+}
+
+/* Discovery tools under the catalogue: reload the live ASIG layer list, load
+   a browser-saved capabilities file, the group status line and attribution. */
+.albania-group-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.albania-tool-btn {
+    border: 1px solid rgba(224, 69, 69, 0.45);
+    border-radius: 3px;
+    padding: 2px 6px;
+    background: none;
+    color: rgba(245, 240, 235, 0.78);
+    font: inherit;
+    font-size: 0.64rem;
+    cursor: pointer;
+}
+
+.albania-tool-btn:hover {
+    border-color: #e04545;
+    color: #fff;
+}
+
+.albania-group-status {
+    flex-basis: 100%;
+    font-size: 0.66rem;
+    line-height: 1.35;
+    opacity: 0.75;
+}
+
+.albania-group-status.is-error {
+    color: #ffb4a2;
+    opacity: 1;
+}
+
+.albania-group-status.is-warn {
+    color: #ffd166;
+    opacity: 1;
+}
+
+.albania-group-attribution {
+    flex-basis: 100%;
+    font-size: 0.62rem;
+    line-height: 1.35;
+    opacity: 0.5;
+}
+
+/* Map-click GetFeatureInfo popup: ASIG answers with its own HTML, shown in a
+   sandboxed iframe (no scripts, no same-origin access). */
+.asig-fi {
+    max-height: 340px;
+    overflow-y: auto;
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+
+.asig-fi h4 {
+    margin: 6px 0 4px;
+    font-size: 0.78rem;
+}
+
+.asig-fi iframe {
+    width: 100%;
+    min-height: 120px;
+    border: none;
+    background: #fff;
+}
+
+.asig-fi-empty {
+    opacity: 0.75;
+}
+
 /* The "Protected Sites" toggle group: a caption the visitor can collapse,
    with the four child checkboxes nested underneath (transparent overlays). */
 
@@ -8516,7 +8701,11 @@
 .albania-layer-label input:focus-visible,
 .albania-layer-info:focus-visible,
 .albania-layer-go:focus-visible,
-.albania-layer-slider:focus-visible {
+.albania-layer-slider:focus-visible,
+.albania-layer-move:focus-visible,
+.albania-tool-btn:focus-visible,
+.albania-layer-search:focus-visible,
+button.albania-layer-section.albania-section-toggle:focus-visible {
     outline: 2px solid #e04545;
     outline-offset: 1px;
 }
