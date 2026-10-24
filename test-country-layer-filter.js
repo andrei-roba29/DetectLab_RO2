@@ -301,9 +301,13 @@ function groupRowOf(document, iconId) {
     // The Romanian county catalogue is not Italian either.
     assert.equal(rowOfSlider(document, 'lidarHdOpacitySlider', 'lidarSubLayers').classList.contains(UNAVAILABLE),
         true, 'HD county row hidden for Italy');
-    // No national LiDAR service is attributed to Italy → the group goes too.
-    assert.equal(groupRowOf(document, 'lidarExpandIcon').classList.contains(UNAVAILABLE), true,
-        'LiDAR group hidden for Italy (no Italian national service in the catalogue)');
+    // Every European country carries the generic Hillshade LiDAR derivate
+    // (MapTiler Terrain RGB), so Italy gets its own row and the LiDAR group
+    // stays — but no foreign national LiDAR service leaks in.
+    assert.equal(unavailable(document, 'lidarDerivateITRow'), false,
+        'Italy has its own Hillshade LiDAR derivate row available');
+    assert.equal(groupRowOf(document, 'lidarExpandIcon').classList.contains(UNAVAILABLE), false,
+        'LiDAR group kept for Italy (generic Hillshade LiDAR derivate row)');
     // ...and the Romania-only free historical group disappears entirely.
     assert.equal(groupRowOf(document, 'histExpandIcon').classList.contains(UNAVAILABLE), true, 'historical group hidden for Italy');
     // Premium historical maps: the Central-European series (Mitteleuropa,
