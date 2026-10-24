@@ -767,7 +767,12 @@
 //   Historical Maps premium group; re-cache the registry, map app, panel
 //   translations, subscription guard, the offline-maps catalogue and the
 //   vertical opacity mirror's slider→switch map.
-const CACHE_NAME = 'detectlab-v265-uk-historical-maps';
+// v266: remove the duplicate .m3d-lidar status/action box from #map3d-bar on
+//   both desktop and PWA — the expandable “LiDAR in 3D” window (#map3d-focus /
+//   .m3d-focus-mini) already provides the same functionality without
+//   overlapping the 2D and refresh buttons. Re-tags css/map3d-terrain.css and
+//   js/map3d-terrain.js.
+const CACHE_NAME = 'detectlab-v266-no-bar-lidar-row';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -879,6 +884,7 @@ const PRECACHE_URLS = [
   'js/map3d-mirror.js?v=20261013-3d-mobile',
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
+  'js/map3d-terrain.js?v=20261024-no-bar-lidar-row',
   'js/map3d-terrain.js?v=20261024-gesture-only-camera',
   'js/map3d-terrain.js?v=20261023-pwa-only-3d-column',
   'js/map3d-terrain.js?v=20261020-outline-camera-handoff',
@@ -905,6 +911,7 @@ const PRECACHE_URLS = [
   /* v248: the 2D/3D switch and the country “Exit view” pill stopped sharing
    * the same bottom-centre slot in the installed PWA (see the CACHE_NAME note
    * below). Re-tags the 3D skin, the country dock and its module. */
+  'css/map3d-terrain.css?v=20261024-no-bar-lidar-row',
   'css/map3d-terrain.css?v=20261024-gesture-only-camera',
   'css/map3d-terrain.css?v=20261023-pwa-only-3d-column',
   'css/map3d-terrain.css?v=20261021-country-exit-3d-stack',

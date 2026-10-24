@@ -50,8 +50,8 @@ const focusSource = read('js/lidar-3d-focus.js');
 /* Every build that changes the LiDAR 3D focus path bumps its own tag. */
 const TAG = '20261020-lidar-disc-route';
 const TAG_MIRROR = '20261021-lidar-canvas-tiles';
-const TAG_VIEWER = '20261024-gesture-only-camera';
-const TAG_CSS = '20261024-gesture-only-camera';
+const TAG_VIEWER = '20261024-no-bar-lidar-row';
+const TAG_CSS = '20261024-no-bar-lidar-row';
 
 /* One real event-loop turn: the viewer runs its entry gate through a promise,
  * so the dialog is not in the DOM in the same tick as open(). */
@@ -334,11 +334,13 @@ const fakeCanvas = function () {
     ['#map3d-focus .m3d-focus-card', '#map3d-focus .m3d-focus-layers', '#map3d-focus .m3d-focus-radius',
      '#map3d-focus .m3d-focus-chips', '#map3d-focus .m3d-focus-fixed',
      '#map3d-focus .m3d-focus-point-block', '#map3d-focus .m3d-focus-actions',
-     '#map3d-focus .m3d-focus-progress', '#map3d-focus .m3d-focus-x', '#map3d-bar .m3d-lidar',
+     '#map3d-focus .m3d-focus-progress', '#map3d-focus .m3d-focus-x',
      '#map3d-focus .m3d-focus-mini', '#map3d-focus .m3d-focus-mini-arrow',
      '#detectlab-map.m3d-picking'].forEach(function (selector) {
         assert(skin.indexOf(selector) !== -1, 'the skin styles ' + selector);
     });
+    assert(!/\.m3d-lidar\b/.test(skin) && !/\.m3d-lidar\b/.test(viewerSource),
+        'the duplicate LiDAR row in #map3d-bar is removed on both desktop and PWA (the expandable #map3d-focus window owns LiDAR in 3D)');
     const cardRule = (skin.match(/#map3d-focus \.m3d-focus-card \{[^}]*\}/) || [''])[0];
     assert(/width: min\(400px, calc\(100% - 16px\)\)/.test(cardRule) &&
            /max-height: min\(76vh, 620px\)/.test(cardRule) && /overflow-y: auto/.test(cardRule),

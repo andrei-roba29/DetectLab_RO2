@@ -358,15 +358,7 @@
             terrainOff: 'Modelul de elevație nu s-a putut încărca',
             mirrored: 'oglindite din harta 2D',
             base: 'hartă de bază',
-            attribution: 'Surse',
-            lidarFocus: 'LiDAR în 3D',
-            lidarUnprepared: 'LiDAR: pregătește zona pentru 3D',
-            lidarOff: 'LiDAR scos din vederea 3D (un singur strat LiDAR o dată)',
-            lidarSingle: 'Un singur strat LiDAR în 3D',
-            lidarChoose: 'Alege zona LiDAR',
-            lidarChange: 'Schimbă zona',
-            lidarClear: 'Scoate',
-            lidarTiles: 'tile pregătite'
+            attribution: 'Surse'
         },
         en: {
             button: '3D',
@@ -416,15 +408,7 @@
             terrainOff: 'The elevation model could not be loaded',
             mirrored: 'mirrored from the 2D map',
             base: 'base map',
-            attribution: 'Sources',
-            lidarFocus: 'LiDAR in 3D',
-            lidarUnprepared: 'LiDAR: prepare the area for 3D',
-            lidarOff: 'LiDAR removed from the 3D view (one LiDAR layer at a time)',
-            lidarSingle: 'One LiDAR layer in 3D',
-            lidarChoose: 'Choose the LiDAR area',
-            lidarChange: 'Change the area',
-            lidarClear: 'Remove',
-            lidarTiles: 'tiles prepared'
+            attribution: 'Sources'
         }
     };
     function t(key) { var l = lang(); return (COPY[l] && COPY[l][key]) || COPY.en[key] || key; }
@@ -1608,13 +1592,10 @@
             /* No exaggeration / pitch / bearing sliders: the camera is moved by
              * gestures only (drag to pan, right-drag or Ctrl+drag to pitch and
              * rotate, two fingers on touch, Shift+arrows on a keyboard), and the
-             * DEM exaggeration is fixed at CONFIG.terrain.exaggeration. */
-            '<div class="m3d-lidar" hidden>',
-            '<span class="m3d-lidar-text"></span>',
-            '<span class="m3d-lidar-actions">',
-            '<button type="button" class="m3d-lidar-change"></button>',
-            '<button type="button" class="m3d-lidar-clear"></button>',
-            '</span></div>',
+             * DEM exaggeration is fixed at CONFIG.terrain.exaggeration.
+             * No duplicate LiDAR row in the bar either (desktop or PWA): the
+             * expandable “LiDAR in 3D” window (#map3d-focus / .m3d-focus-mini)
+             * already provides the status summary and the same actions. */
             '<div class="m3d-actions">',
             '<button type="button" class="m3d-reset">' + t('reset') + '</button>',
             '<button type="button" class="m3d-north">↑ N</button>',
@@ -1668,16 +1649,6 @@
         bar.syncBasemap = function () { syncBasemapSelect(); };
         syncBasemapSelect();
 
-        /* The LiDAR focus row is the viewer's own report of what it drew; the
-         * two buttons only announce the intent — js/lidar-3d-focus.js owns the
-         * dialog, the prefetch and the 2D circle behind them. */
-        bar.querySelector('.m3d-lidar-change').addEventListener('click', function () {
-            announce('detectlab:map3d-lidar-change');
-        });
-        bar.querySelector('.m3d-lidar-clear').addEventListener('click', function () {
-            announce('detectlab:map3d-lidar-clear');
-        });
-
         /* Camera movement is gesture-only on the desktop website: there are no
          * pitch / bearing / exaggeration inputs to wire here. The three
          * remaining action buttons are one-tap shortcuts, not sliders. */
@@ -1712,57 +1683,16 @@
             bar.querySelector('.m3d-collapse').textContent = collapsed ? '▸' : '▾';
             bar.querySelector('.m3d-collapse').setAttribute('aria-expanded', collapsed ? 'false' : 'true');
         });
-        refreshFocusRow();
         return bar;
     }
 
-    /** One DOM event, the app's own `detectlab:` convention. */
-    function announce(name, detail) {
-        try {
-            document.dispatchEvent(new CustomEvent(name, { detail: detail || {} }));
-        } catch (e) { /* no CustomEvent (headless): the event is informational */ }
-    }
-
     /**
-     * What the LiDAR row says, and why it is not decoration.
-     *
-     * Three states have to be distinguishable at a glance, because they look
-     * identical on the terrain:
-     *   • a disc is drawn            → which layer, how big, how many tiles ready
-     *   • other LiDAR layers are on  → they are NOT drawn (one at a time), named
-     *   • LiDAR was removed from 3D  → the button back into the dialog
+     * The 3D bar no longer renders a duplicate LiDAR status/actions box on
+     * either desktop or PWA: the expandable “LiDAR in 3D” window
+     * (#map3d-focus / .m3d-focus-mini) already owns that state and its actions.
+     * Keep the 3D disc outline synced whenever the focus changes.
      */
     function refreshFocusRow() {
-        if (!bar) return;
-        var row = bar.querySelector('.m3d-lidar');
-        if (!row) return;
-        var text = row.querySelector('.m3d-lidar-text');
-        var change = row.querySelector('.m3d-lidar-change');
-        var clear = row.querySelector('.m3d-lidar-clear');
-        var focus = state.focus;
-        var notes = state.lidarNotes || [];
-        var lines = [];
-        if (focus) {
-            var disc = focus.mask || focus;
-            lines.push(t('lidarFocus') + ': ' + (focus.label || focus.key) + ' · ' +
-                (Math.round(Number(disc.radiusKm) * 10) / 10) + ' km');
-            /* More than one LiDAR layer on the 2D map and only one draped: say
-             * it, because “my second LiDAR layer is missing in 3D” is answered
-             * nowhere else. */
-            if (notes.length && notes[0].reason === 'focused' && notes[0].count > 1) {
-                lines.push(t('lidarSingle'));
-            }
-        } else if (state.lidarOff) {
-            lines.push(t('lidarOff'));
-        } else if (notes.length) {
-            lines.push(t('lidarUnprepared'));
-        }
-        var prepared = state.primedOrder.length;
-        if (prepared) lines.push(prepared + ' ' + t('lidarTiles'));
-        change.textContent = focus ? t('lidarChange') : t('lidarChoose');
-        clear.textContent = t('lidarClear');
-        row.hidden = !lines.length;
-        text.textContent = lines.join(' · ');
         refreshFocusOutline();
     }
 

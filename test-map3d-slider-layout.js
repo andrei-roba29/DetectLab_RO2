@@ -90,7 +90,9 @@ assert(/body\.is-pwa\.is-3d #map3d-surface \.maplibregl-ctrl-bottom-left\s*\{[^}
 for (const action of ['reset', 'north', 'flat']) {
     assert(ensureBar.includes('m3d-' + action), 'retained action: ' + action);
 }
-const SLIDER_TAGS = { 'js/map3d-terrain.js': '20261024-gesture-only-camera', 'css/map3d-terrain.css': '20261024-gesture-only-camera' };
+assert(!/\.m3d-lidar\b/.test(ensureBar) && !/\.m3d-lidar\b/.test(skin),
+    'the duplicate .m3d-lidar box in #map3d-bar is removed from both desktop and PWA');
+const SLIDER_TAGS = { 'js/map3d-terrain.js': '20261024-no-bar-lidar-row', 'css/map3d-terrain.css': '20261024-no-bar-lidar-row' };
 for (const file of ['js/map3d-terrain.js', 'css/map3d-terrain.css']) {
     const url = file + '?v=' + SLIDER_TAGS[file];
     assert(html.includes(url) && sw.includes("'" + url + "'"), 'updated asset cache wiring: ' + file);
