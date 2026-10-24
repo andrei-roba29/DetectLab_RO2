@@ -747,7 +747,17 @@
 //   to a finer level keeps the old tiles as a blurred stand-in until the new
 //   one loads, so the sheet never vanishes mid-zoom. Re-tags
 //   js/other-maps-overlay.js + css/other-maps.css. See OTHER_MAPS.md.
-const CACHE_NAME = 'detectlab-v261-other-maps-fit';
+// v262: “Alte hărți” dots and sheets stay locked to the tiles through zoom
+//   animations and pinch. While Leaflet animates a zoom it leaves the map
+//   pane stationary for 250 ms and CSS-scales only the tile containers, so a
+//   child canvas/root with no transform of its own sits still — the dots slid
+//   away from their places and snapped back at zoomend. Both now apply the
+//   same transform the Patrimoniu canvases use: zoomanim (button /
+//   double-tap / wheel) and zoom with e.pinch (touch) compute
+//   translate(scale·anchor − newPixelOrigin) scale(scale) — exact in Web
+//   Mercator project space — and a settled redraw resets it. Re-tags
+//   js/other-maps.js + js/other-maps-overlay.js. See OTHER_MAPS.md.
+const CACHE_NAME = 'detectlab-v262-other-maps-zoomlock';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -823,8 +833,8 @@ const PRECACHE_URLS = [
   'js/hist-shift.js?v=20261014-hist-shift',
   'css/hist-shift.css?v=20261014-hist-shift',
   'js/other-maps-tiles.js?v=20261023-other-maps',
-  'js/other-maps-overlay.js?v=20261024-other-maps-fit',
-  'js/other-maps.js?v=20261023-other-maps',
+  'js/other-maps-overlay.js?v=20261024-other-maps-zoomlock',
+  'js/other-maps.js?v=20261024-other-maps-zoomlock',
   'css/other-maps.css?v=20261024-other-maps-fit',
   'data/other-maps-catalog.json',
   'js/translations.js?v=20261023-other-maps',

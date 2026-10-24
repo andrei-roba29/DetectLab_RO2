@@ -203,10 +203,19 @@
             activeId: null
         };
 
+        /* The settled zoom the overlays were last painted at (render runs
+         * only on settled views — see renderAll), so the zoom-animation
+         * transform can express every scale relative to it. */
+        var lastZoom = null;
+
         /* ── overlay construction ─────────────────────────────────────── */
         function build(record) {
             var root_ = document.createElement('div');
-            root_.className = 'om-overlay';
+            /* leaflet-zoom-animated: the 250 ms transform transition (and 0 0
+             * origin) from css/leaflet.css, so applyZoomTransform's scale
+             * glides with the tiles during a zoom animation, like the dots
+             * canvas in js/other-maps.js. */
+            root_.className = 'om-overlay leaflet-zoom-animated';
             root_.style.position = 'absolute';
             root_.style.left = '0';
             root_.style.top = '0';
@@ -280,6 +289,8 @@
                 stale: null,           // previous-level stand-in while a finer level loads
                 meta: null,
                 geom: null,
+                anchor: null,          // anchor LatLng in layer pixels (last paint)
+                projectAnchor: null,   // anchor in project space (last paint)
                 token: 0,
                 state: {
                     lat: Number(record.lat),
@@ -450,6 +461,14 @@
             var oldLevel = ov.geom ? ov.geom.level : null;
             ov.geom = g;
             ov.anchor = a;
+            /* Project-space position of the anchor as just painted (render
+             * only runs on settled views).  applyZoomTransform scales around
+             * it, the same contract the dots canvas uses — it also absorbs
+             * the half-pixel rounding latLngToLayerPoint bakes into `a`. */
+            if (typeof map.project === 'function') {
+                ov.projectAnchor = map.project(L.latLng(ov.state.lat, ov.state.lng), map.getZoom());
+            }
+            lastZoom = map.getZoom();
 
             ov.root.style.transform = 'translate3d(' + a.x + 'px,' + a.y + 'px,0)';
             ov.root.style.opacity = String(ov.state.opacity);
@@ -479,8 +498,37 @@
             syncTiles(ov, view);
         }
 
+        /* Keep the sheets locked to the tiles during a zoom animation, the
+         * same way the dots canvas does (js/other-maps.js): the map pane is
+         * stationary while the tile containers CSS-scale for 250 ms, so each
+         * sheet root gets the matching transform
+         *     translate(scale·(projectAnchor − anchor) − newPixelOrigin) ·
+         *     scale · translate(anchor)
+         * — Web Mercator project space is linear in zoom, so every point of
+         * the sheet lands at its exact target-zoom position.  The 250 ms
+         * glide comes from `.leaflet-zoom-anim .leaflet-zoom-animated`
+         * (css/leaflet.css).  A settled render() resets the root transform,
+         * so it never lingers. */
+        function applyZoomTransform(center, zoom) {
+            if (lastZoom == null || typeof map._getNewPixelOrigin !== 'function') return;
+            var scale = map.getZoomScale(zoom, lastZoom);
+            var newOrigin = map._getNewPixelOrigin(center, zoom);
+            order.forEach(function (id) {
+                var ov = overlays[id];
+                if (!ov || !ov.anchor || !ov.projectAnchor) return;
+                var local = ov.projectAnchor.subtract(ov.anchor);
+                var offset = local.multiplyBy(scale).subtract(newOrigin)._round();
+                ov.root.style.transform = 'translate3d(' + offset.x + 'px,' + offset.y + 'px,0) ' +
+                    'scale(' + scale + ') translate3d(' + ov.anchor.x + 'px,' + ov.anchor.y + 'px,0)';
+            });
+        }
+
         function renderAll() {
             if (map._animatingZoom) return;
+            /* A pinch is rescaled from the last settled frame by
+             * applyZoomTransform on every 'zoom' event; redrawing mid-pinch
+             * would fight that transform (same guard as the dots canvas). */
+            if (map.touchZoom && map.touchZoom._zooming) return;
             order.forEach(function (id) { render(overlays[id]); });
         }
 
@@ -878,7 +926,20 @@
         /* ── map wiring ───────────────────────────────────────────────── */
         function onMove() { renderAll(); }
 
-        function onZoomStart() { /* the pane is CSS-scaled while animating */ }
+        /* Zoom animations keep the sheets locked to the tiles — the same
+         * contract as the dots canvas in js/other-maps.js: button /
+         * double-tap / wheel arrive as zoomanim, touch pinch as 'zoom' with
+         * e.pinch (Leaflet fires no move/zoom events during the 250 ms
+         * animation, so without these handlers the sheets sit still and
+         * snap back at zoomend).  onMove redraws and resets the transforms
+         * once the view settles. */
+        function onZoomAnim(e) {
+            if (e && e.center != null && e.zoom != null) applyZoomTransform(e.center, e.zoom);
+        }
+
+        function onZoom(e) {
+            if (e && e.pinch) applyZoomTransform(map.getCenter(), map.getZoom());
+        }
 
         function onResize() { renderAll(); }
 
@@ -887,7 +948,8 @@
         map.on('zoomend', onMove);
         map.on('viewreset', onMove);
         map.on('resize', onResize);
-        map.on('zoomstart', onZoomStart);
+        map.on('zoomanim', onZoomAnim);
+        map.on('zoom', onZoom);
 
         container.addEventListener('pointerdown', onPointerDown, true);
         root.addEventListener('pointermove', onPointerMove, { passive: true });
@@ -902,7 +964,8 @@
             map.off('zoomend', onMove);
             map.off('viewreset', onMove);
             map.off('resize', onResize);
-            map.off('zoomstart', onZoomStart);
+            map.off('zoomanim', onZoomAnim);
+            map.off('zoom', onZoom);
             container.removeEventListener('pointerdown', onPointerDown, true);
             root.removeEventListener('pointermove', onPointerMove);
             root.removeEventListener('pointerup', onPointerUp);
