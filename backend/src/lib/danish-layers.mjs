@@ -31,22 +31,23 @@
  * the only params that travel are the ones a WMS/WFS needs, and credentials are
  * stripped from anything a caller sends.
  */
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
-import path from 'node:path';
-
-const require = createRequire(import.meta.url);
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+import danishLayerConfig from './danish-layers.config.cjs';
 
 /* The layer config, shared with the browser: the canonical file is
  * js/danish-layers.config.js and this directory keeps a generated copy of it
  * (backend/src/lib/danish-layers.config.cjs — .cjs on purpose: this package is
- * "type": "module", so a .js copy would never export anything to require())
- * because the backend is deployed with backend/ as its own app root and may not
- * import anything outside it.
+ * "type": "module", so a .js copy would be interpreted as ESM). The backend is
+ * deployed with backend/ as its own app root and may not import anything outside
+ * it.
+ *
+ * Keep this as a static import. Netlify's function bundler cannot trace a
+ * createRequire(path.resolve(...)) lookup: it used to leave the config out of
+ * dk-dtk25/dk-orto/dk-heritage and every request failed before reaching the
+ * proxy. A static import is bundled by Netlify and also works unchanged on
+ * Railway.
  * `node tools/sync-danish-config.mjs` regenerates the copy and
  * `--check` — run by the test suite — fails on any drift. */
-export const config = require(path.resolve(HERE, 'danish-layers.config.cjs'));
+export const config = danishLayerConfig;
 
 /* ── KVP handling ─────────────────────────────────────────────────────────── */
 

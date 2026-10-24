@@ -731,7 +731,12 @@
 //   (the transform), js/other-maps.js (catalogue + dots + panel),
 //   css/other-maps.css, data/other-maps-catalog.json and the harvester
 //   tools/build-hungaricana-catalog.mjs. See OTHER_MAPS.md.
-const CACHE_NAME = 'detectlab-v259-asig-lidar';
+// v260: Denmark's shared WMS proxy statically imports its config so Netlify
+//   includes it in each function bundle (the dynamic require was crashing every
+//   LiDAR/historical/orthophoto request). Protected nature types and scheduled
+//   ancient monument areas now render inside Heritage; re-tag the config so an
+//   installed PWA cannot retain their old ungrouped placement.
+const CACHE_NAME = 'detectlab-v260-danish-heritage-proxy';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -765,7 +770,7 @@ const PRECACHE_URLS = [
   // js/maplibre-gl.js is precached as well: opening 3D on a cold PWA offline
   // must not depend on the network.
   'js/layer-registry.js?v=20261015-danish-layers',
-  'js/danish-layers.config.js?v=20261019-danish-token-maps',
+  'js/danish-layers.config.js?v=20261024-danish-heritage-proxy',
   'js/asig-albania-layers.config.js',
   'js/asig-albania-layers.config.js?v=20261017-albania-asig',
   'js/asig-albania-layers.js',

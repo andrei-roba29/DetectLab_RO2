@@ -293,7 +293,7 @@ const TAGS = {
     'js/layer-registry.js': '20261024-asig-catalogue',
     'js/map3d-terrain.js': '20261023-pwa-only-3d-column',
     'css/map3d-terrain.css': '20261023-pwa-only-3d-column',
-    'js/danish-layers.config.js': '20261019-danish-token-maps',
+    'js/danish-layers.config.js': '20261024-danish-heritage-proxy',
     'js/danish-layers.js': '20261019-danish-free-groups'
 };
 ['js/map3d-terrain.js', 'js/layer-registry.js', 'css/map3d-terrain.css',

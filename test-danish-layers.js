@@ -65,12 +65,13 @@ const TOKEN = 'test-token-not-a-credential';
     assert.strictEqual(CONFIG.byId('witx_fundogfortidsminder_areal').layers, 'witx:FundOgFortidsminderAreal');
     assert.strictEqual(CONFIG.byId('witx_fundogfortidsminder').layers, 'witx:FundOgFortidsminder');
     assert.deepStrictEqual(CONFIG.panelGroups.map((group) => [group.id, group.title.en, group.layers]), [
-        ['heritage', 'Heritage', ['fortidsminder_punkt_ikkefredet', 'fortidsminder_punkt_fredet']],
+        ['heritage', 'Heritage', ['naturtyper', 'fortidsminder', 'fortidsminder_punkt_ikkefredet', 'fortidsminder_punkt_fredet']],
         ['historical', 'Historical maps', ['topo4cm_1980_2001', 'topo4cm_1953_1976', 'hist_lave', 'hist_hoeje', 'hist_preussen']],
         ['orthophoto', 'Ortophoto', ['orto_sommer_2008', 'orto_sommer_2005', 'orto_sommer_2002', 'orto_sommer_1999']]
     ], 'the requested free Denmark groups and sublayer order are explicit in the catalogue');
     CONFIG.panelGroups.forEach((group) => group.layers.forEach((id) => {
         assert.strictEqual(CONFIG.byId(id).enabled, true, id + ' is available in the free Denmark catalogue');
+        assert.strictEqual(CONFIG.byId(id).panelGroup, group.id, id + ' is rendered only inside ' + group.id);
     }));
     ok('existing Danish layers retained; requested free Heritage, Historical maps and Ortophoto groups are enabled');
 
@@ -754,8 +755,11 @@ function testWiring() {
         'so a .js mirror would export nothing to require())');
     assert.ok(read('backend/src/routes/geoProxy.js').includes("from '../lib/danish-layers.mjs'"),
         'and the Express mirror imports it from there');
-    assert.ok(read('backend/src/lib/danish-layers.mjs').includes("require(path.resolve(HERE, 'danish-layers.config.cjs'))"),
-        'the library reads its own copy of the config, never the repository root');
+    const danishProxySource = read('backend/src/lib/danish-layers.mjs');
+    assert.ok(danishProxySource.includes("import danishLayerConfig from './danish-layers.config.cjs';"),
+        'the library statically imports its own config so the Netlify bundle includes it');
+    assert.ok(!danishProxySource.includes("require(path.resolve(HERE, 'danish-layers.config.cjs'))"),
+        'no runtime-only config lookup may reintroduce the production MODULE_NOT_FOUND failure');
     const sync = spawnSync(process.execPath, ['tools/sync-danish-config.mjs', '--check'], { encoding: 'utf8' });
     assert.strictEqual(sync.status, 0,
         'the mirrored config is in step with js/danish-layers.config.js (run: node tools/sync-danish-config.mjs)' +
