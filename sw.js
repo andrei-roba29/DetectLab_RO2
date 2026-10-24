@@ -736,7 +736,18 @@
 //   LiDAR/historical/orthophoto request). Protected nature types and scheduled
 //   ancient monument areas now render inside Heritage; re-tag the config so an
 //   installed PWA cannot retain their old ungrouped placement.
-const CACHE_NAME = 'detectlab-v260-danish-heritage-proxy';
+// v261: “Alte hărți” sheets load stable and sharp on the basemap. A freshly
+//   added sheet is framed into the viewport (longest side ≈ 70% of the smaller
+//   edge — the same rule as “Încadrează”) instead of at an arbitrary ~4 km
+//   ground size that rendered as a blur at county zooms; the painter clips the
+//   tile grid to the sheet's natural box (the server's 512 px tiles carry
+//   padding outside the sheet, which made the apparent shape change with the
+//   pyramid level); the pyramid level is upgraded one step — downscaling =
+//   crisp — while the visible tile window stays within 16 tiles; and a zoom
+//   to a finer level keeps the old tiles as a blurred stand-in until the new
+//   one loads, so the sheet never vanishes mid-zoom. Re-tags
+//   js/other-maps-overlay.js + css/other-maps.css. See OTHER_MAPS.md.
+const CACHE_NAME = 'detectlab-v261-other-maps-fit';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -812,9 +823,9 @@ const PRECACHE_URLS = [
   'js/hist-shift.js?v=20261014-hist-shift',
   'css/hist-shift.css?v=20261014-hist-shift',
   'js/other-maps-tiles.js?v=20261023-other-maps',
-  'js/other-maps-overlay.js?v=20261023-other-maps',
+  'js/other-maps-overlay.js?v=20261024-other-maps-fit',
   'js/other-maps.js?v=20261023-other-maps',
-  'css/other-maps.css?v=20261023-other-maps',
+  'css/other-maps.css?v=20261024-other-maps-fit',
   'data/other-maps-catalog.json',
   'js/translations.js?v=20261023-other-maps',
   'js/map3d-mirror.js?v=20261017-archeo-3d-projection',

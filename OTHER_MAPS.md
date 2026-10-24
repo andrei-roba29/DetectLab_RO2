@@ -92,7 +92,22 @@ Fereastra listează hărțile locului (miniatură, titlu, subiect, colecție, an
 două acțiuni: **„Adaugă pe hartă”** și **„Deschide pe Hungaricana”**.
 
 După adăugare, harta devine o suprapunere liberă (`js/other-maps-overlay.js`) și se
-deschide panoul de aliniere:
+deschide panoul de aliniere. Din prima încărcare foia apare **stabili și lizibilă, cu
+proporțiile ei naturale** — nu ca un punct difuz care „schimbă formatul” la zoom:
+
+* **Încadrare la adăugare** — o foie nouă e pusă la scara la care latura ei lungă
+  ocupă ~70 % din marginea mai mică a ferestrei (aceeași regulă ca „Încadrează”), nu la
+  o scară pe teren arbitrar de ~4 km care, la zoom de comitat, o desena ca un punct de
+  cîțiva pixeli.
+* **Nivelul din piramidă e ales ca să micșoreze, nu să mărimească** — cel mai apropiat
+  nivel la care 1 pixel de nivel ≈ 1 pixel de ecran, urcat cu un nivel (k ≤ 1 = lizibil)
+  cînd fereastra de tile-uri vizibile rămîne sub plafonul de 16 tile-uri.
+* **Grila e tăiată la conturul foii** — tile-urile de 512 px ale serverului au margini
+  în afara foiei la nivelurile groase; fără clip, acele margini se desenează peste baza
+  și făceau forma vizibilă să se schimbe odată cu nivelul (ex. 4:3 → 9:16).
+* **Fără goluri la schimbarea nivelului** — la zoom spre un nivel mai fin, tile-urile
+  vechi rămân ca fundal estompat (replasate cu 2^Δ) pînă termină să se încarce cele noi;
+  la zoom spre un nivel mai gros se refac direct cele 1–2 tile-uri groase.
 
 | Gest | Efect |
 | --- | --- |
@@ -138,7 +153,7 @@ Alinierea supraviețuiește reîncărcării paginii și repornirii stratului. C�
 | `tools/build-hungaricana-catalog.mjs` | re-generează/extinde catalogul de pe portal |
 | `test-other-maps.js` | regresia (rulează fără rețea) |
 | `index.html` | rîndul din panoul „Hărți istorice” + tagurile de asset |
-| `sw.js` | cache `detectlab-v257-other-maps` |
+| `sw.js` | cache `detectlab-v261-other-maps-fit` |
 
 ## 7. Cum extinzi catalogul
 
@@ -180,15 +195,20 @@ coordonatele de comitat sînt aproximative).
 node test-other-maps.js
 ```
 
-213 de verificări, fără rețea:
+253 de verificări, fără rețea:
 
 * hash-ul tile-ului reproduce vectorul publicat de dezoomify (ambele ordini);
-* matematica transformării: alegerea nivelului din piramidă, păstrarea proporțiilor,
-  limitele de scală, inversa transformării (fereastra de tile-uri acoperă viewportul la
-  0°, 90°, 37° și −128°);
+* matematica transformării: alegerea nivelului din piramidă, **scara de încadrare
+  (fitScale) și preferința pentru nivelul mai fin lizibil (cu plafon de tile-uri)**,
+  păstrarea proporțiilor, limitele de scală, inversa transformării (fereastra de
+  tile-uri acoperă viewportul la 0°, 90°, 37° și −128°);
 * fiecare înregistrare din catalog are id, cale ECW și coordonate plauzibile;
 * gruparea: hărțile unui loc rămîn un singur punct, două locuri la 1,4 km sînt un punct
-  la z6 și două puncte la z11 — cu aceeași configurție ca Patrimoniu.
+  la z6 și două puncte la z11 — cu aceeași configurție ca Patrimoniu;
+* **managerul de suprapunere** (mapă falsă + mini-DOM): o foie nouă e încadrată la
+  `fitScale(viewport, zoom)`, la zoom spre un nivel mai fin tile-urile vechi rămân ca
+  fundal estompat (replasate cu 2^Δ, cu timer de rezervă) pînă se încarcă cele noi, la
+  zoom spre un nivel mai gros se refac direct, iar reset/ștergere curăță totul.
 
-Asset-urile sînt versionate `20261023-other-maps`; cache-ul service-worker-ului e
-`detectlab-v257-other-maps`.
+Asset-urile modificate sînt versionate `20261024-other-maps-fit`; cache-ul
+service-worker-ului e `detectlab-v261-other-maps-fit`.

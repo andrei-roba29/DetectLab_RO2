@@ -15,7 +15,11 @@
  *   4. the clustering contract: the dots must group EXACTLY like the
  *      Patrimoniu sites (same helper, same config, same distances);
  *   5. js/other-maps.js — a group of sheets on one place opens the list, a
- *      group spread over the map zooms in instead.
+ *      group spread over the map zooms in instead;
+ *   6. the overlay manager against a fake map + mini DOM — a fresh sheet is
+ *      framed into the viewport, zooming in keeps the old tiles as a stand-in
+ *      until the finer level loads (and the fallback retires it), zooming out
+ *      refetches the coarser level, reset/ remove clean up.
  */
 
 const assert = require('assert');
@@ -60,6 +64,88 @@ function webCryptoStub() {
     };
 }
 
+/* ── mini DOM + manual timers (for the manager simulation, §6) ───────── */
+/* Timers never fire on their own: the test flushes them explicitly, so the
+ * stand-in's 6 s fallback is exercised on demand and node never waits. */
+const pendingTimers = new Map();
+let nextTimerId = 1;
+function flushTimers() {
+    const list = Array.from(pendingTimers.values());
+    pendingTimers.clear();
+    list.forEach((timer) => timer.fn());
+}
+
+function fakeEl(tag) {
+    const el = {
+        nodeType: 1,
+        tagName: String(tag).toUpperCase(),
+        className: '',
+        style: {},
+        attributes: Object.create(null),
+        children: [],
+        parentNode: null,
+        listeners: Object.create(null),
+        appendChild(child) { child.parentNode = el; el.children.push(child); return child; },
+        removeChild(child) {
+            const i = el.children.indexOf(child);
+            if (i >= 0) el.children.splice(i, 1);
+            child.parentNode = null;
+            return child;
+        },
+        addEventListener(type, fn) { (el.listeners[type] = el.listeners[type] || []).push(fn); },
+        removeEventListener(type, fn) {
+            el.listeners[type] = (el.listeners[type] || []).filter((f) => f !== fn);
+        },
+        dispatch(type) { (el.listeners[type] || []).slice().forEach((fn) => fn({ type })); },
+        getAttribute(name) { return el.attributes[name] == null ? null : el.attributes[name]; },
+        setAttribute(name, value) { el.attributes[name] = String(value); },
+        matches: () => false,
+        setPointerCapture: () => {}
+    };
+    el.classList = {
+        _set: new Set(),
+        add(c) { el.classList._set.add(c); },
+        remove(c) { el.classList._set.delete(c); },
+        toggle(c, on) {
+            const should = (on == null) ? !el.classList._set.has(c) : !!on;
+            if (should) el.classList._set.add(c);
+            else el.classList._set.delete(c);
+        },
+        contains(c) { return el.classList._set.has(c); }
+    };
+    return el;
+}
+
+/* A Leaflet stand-in: the anchor is pinned to the centre of a 400×800
+ * viewport, layer points are identity, and the test drives zooms by
+ * rewriting `_state.zoom` and firing 'zoomend'. */
+function fakeMap(initial) {
+    const state = Object.assign({}, initial);
+    const panes = Object.create(null);
+    const events = Object.create(null);
+    const container = fakeEl('div');
+    return {
+        _animatingZoom: false,
+        _state: state,
+        getZoom: () => state.zoom,
+        getSize: () => ({ x: state.size.x, y: state.size.y }),
+        getCenter: () => state.center,
+        getContainer: () => container,
+        getPane: (name) => panes[name] || null,
+        createPane: (name) => {
+            const pane = fakeEl('div');
+            panes[name] = pane;
+            container.appendChild(pane);
+            return pane;
+        },
+        latLngToLayerPoint: () => ({ x: 200, y: 400 }),
+        containerPointToLayerPoint: (pt) => ({ x: pt.x, y: pt.y }),
+        on: (type, fn) => { (events[type] = events[type] || []).push(fn); },
+        off: (type, fn) => { events[type] = (events[type] || []).filter((f) => f !== fn); },
+        fire: (type) => { (events[type] || []).slice().forEach((fn) => fn({ type })); }
+    };
+}
+
 const sandbox = {
     console,
     Math,
@@ -72,12 +158,24 @@ const sandbox = {
     isFinite,
     TextEncoder,
     Uint8Array,
-    setTimeout: (fn) => setTimeout(fn, 0),
+    setTimeout: (fn, ms) => { pendingTimers.set(nextTimerId, { fn, ms }); return nextTimerId++; },
+    clearTimeout: (id) => { pendingTimers.delete(id); },
     clearInterval: () => {},
     setInterval: () => 0,
+    addEventListener: () => {},
+    removeEventListener: () => {},
     localStorage: storageStub(),
     crypto: webCryptoStub(),
-    document: { readyState: 'loading', addEventListener: () => {}, documentElement: { lang: 'ro' } }
+    document: {
+        readyState: 'loading',
+        addEventListener: () => {},
+        documentElement: { lang: 'ro' },
+        createElement: (tag) => fakeEl(tag)
+    },
+    L: {
+        point: (x, y) => ({ x, y }),
+        latLng: (lat, lng) => ({ lat, lng })
+    }
 };
 sandbox.window = sandbox;
 vm.createContext(sandbox);
@@ -159,6 +257,59 @@ const OtherMaps = sandbox.DetectLabOtherMaps;
     eq(tiny.level, 0, 'the smallest scale clamps to the pyramid root');
     const huge = Overlay.planGeometry({ lat: 47, zoom: 14, w: 10000, h: 7000, mpp: 400, maxZoom: 5 });
     eq(huge.level, 5, 'the largest scale clamps to the deepest level');
+
+    /* The “frame it” scale: longest side ≈ FIT_FRACTION of the smaller
+     * viewport edge, in metres per natural pixel. */
+    const res12 = Overlay.resolutionAt(47, 12);
+    const fitMppPhone = Overlay.fitScale(8000, 6000, res12, 400, 800);
+    eq(fitMppPhone, 0.7 * 400 * res12 / 8000,
+        'fitScale sizes the sheet to 70% of the smaller viewport edge');
+    eq(Overlay.fitScale(8000, 6000, res12, 800, 400), fitMppPhone,
+        'fitScale uses the smaller edge regardless of orientation');
+    eq(Overlay.fitScale(6000, 8000, res12, 400, 800), 0.7 * 400 * res12 / 8000,
+        'fitScale follows the longest side for portrait sheets');
+    eq(Overlay.fitScale(0, 0, res12, 400, 800), null, 'fitScale gives up without a size');
+    eq(Overlay.fitScale(8000, 6000, res12, 0, 0), null, 'fitScale gives up without a viewport');
+
+    /* A freshly added sheet is framed, so its on-screen size IS the fit:
+     * longest side on screen = FIT_FRACTION of the smaller edge, natural
+     * aspect, a level inside the pyramid and a bounded tile window. */
+    const fitted = Overlay.planGeometry(
+        { lat: 47, zoom: 12, w: 8000, h: 6000, mpp: fitMppPhone, maxZoom: 4 },
+        { anchor: { x: 200, y: 400 }, rotation: 0, topLeft: { x: 0, y: 0 }, bottomRight: { x: 400, y: 800 } }
+    );
+    ok(Math.abs(fitted.dW - 0.7 * 400) < 1e-9, 'the fitted sheet spans 70% of the smaller edge');
+    ok(Math.abs(fitted.dW / fitted.dH - 8000 / 6000) < 1e-6, 'the fitted sheet keeps its natural 4:3 format');
+    ok(fitted.level >= 0 && fitted.level <= 4, 'the fitted sheet stays inside the pyramid');
+    ok(fitted.k <= 1 + 1e-9, 'the fitted sheet is never upscaled past its own pixels');
+    const fittedRange = Overlay.visibleTileRange(fitted, { x: 200, y: 400 }, 0,
+        { x: 0, y: 0 }, { x: 400, y: 800 });
+    ok((fittedRange.x1 - fittedRange.x0 + 1) * (fittedRange.y1 - fittedRange.y0 + 1) <= Overlay.maxSharpTiles,
+        'the fitted tile window respects the budget');
+
+    /* The sharp-level preference: one level finer downscaling (k ≤ 1, crisp)
+     * instead of upscaling (k > 1, soft) — with a view that says the extra
+     * tiles are affordable (a small window). */
+    const sharpMpp = Math.pow(2, 0.3 - 3) * res12;   // base = 0.3 → round 0, ceil 1
+    const sharp = Overlay.planGeometry(
+        { lat: 47, zoom: 12, w: 4000, h: 3000, mpp: sharpMpp, maxZoom: 3 },
+        { anchor: { x: 200, y: 400 }, rotation: 0, topLeft: { x: 0, y: 0 }, bottomRight: { x: 400, y: 800 } }
+    );
+    const sharpNoView = Overlay.planGeometry({ lat: 47, zoom: 12, w: 4000, h: 3000, mpp: sharpMpp, maxZoom: 3 });
+    eq(sharpNoView.level, 0, 'without a viewport the planner keeps the 1:1 level');
+    ok(sharpNoView.k > 1, '…which means a mild upscale there');
+    eq(sharp.level, 1, 'with an affordable window the planner steps up one level');
+    ok(sharp.k <= 1 + 1e-9, 'the stepped-up level downscales (crisp, no blur)');
+
+    /* …but a viewport whose fine window would exceed the tile budget keeps
+     * the 1:1 level — no tile storm for a wall-sized sheet. */
+    const wideMpp = 0.2625 * res12;                  // base ≈ 2.07 → round 2, ceil 3
+    const wide = Overlay.planGeometry(
+        { lat: 47, zoom: 12, w: 8000, h: 6000, mpp: wideMpp, maxZoom: 4 },
+        { anchor: { x: 1500, y: 1000 }, rotation: 0, topLeft: { x: 0, y: 0 }, bottomRight: { x: 3000, y: 2000 } }
+    );
+    eq(wide.level, 2, 'an over-budget fine window keeps the 1:1 level');
+    ok(wide.k > 1 && wide.k < 1.1, '…accepting the mild 1:1 upscale rather than hundreds of tiles');
 
     // …and the visible tile window must always contain every tile the
     // viewport actually looks at — that is the whole point of the inverse
@@ -283,6 +434,85 @@ const OtherMaps = sandbox.DetectLabOtherMaps;
     const limits = Overlay.limits;
     eq(OtherMaps.sliderFromMppLimits(limits.mppMin, limits), 0, 'the scale slider starts at the minimum');
     eq(OtherMaps.sliderFromMppLimits(limits.mppMax, limits), 1000, 'the scale slider ends at the maximum');
+
+    /* ══ 6. the manager: framing on add + level crossfade ═════════════ */
+    /* The overlay manager against a fake map + mini DOM. The sheet's
+     * natural size comes from the catalogue hint (no network), tile <img>s
+     * load only when the test dispatches 'load', and the stand-in's
+     * fallback timer is flushed on demand. */
+    const simMap = fakeMap({ zoom: 12, size: { x: 400, y: 800 }, center: { lat: 47.933, lng: 23.892 } });
+    const mgr = Overlay.createManager(simMap, { pane: 'om_test_pane', opacity: 0.8 });
+    const rec = {
+        id: 'TST/1',
+        path: 'maps/mol/s011/s11_0647/s11_0647.ecw',
+        lat: 47.933,
+        lng: 23.892,
+        w: 8000,
+        h: 6000
+    };
+    const ov = await mgr.add(rec);
+    await new Promise((r) => setImmediate(r));   // let the tile-URL promises set src
+
+    // A fresh sheet is framed into the viewport, not dropped at an
+    // arbitrary ground size.
+    const fitMpp12 = Overlay.fitScale(8000, 6000, Overlay.resolutionAt(47.933, 12), 400, 800);
+    ok(Math.abs(ov.state.mpp - fitMpp12) / fitMpp12 < 1e-9,
+        'a fresh sheet is framed: mpp = fitScale(viewport, zoom)');
+    eq(ov.geom.level, 0, 'the fitted sheet sits at the pyramid root at county zoom');
+    const gridTiles = () => ov.gridEl.children.filter((el) => el.tagName === 'IMG');
+    eq(gridTiles().length, 1, 'the whole fitted sheet is one root-level tile');
+
+    // Zoom in → finer level: the old tiles stay as a blurred stand-in,
+    // repositioned by 2^Δ, until the new level loads.
+    simMap._state.zoom = 13;
+    simMap.fire('zoomend');
+    await new Promise((r) => setImmediate(r));
+    eq(ov.geom.level, 1, 'zooming in moves the sheet to a finer pyramid level');
+    ok(ov.stale && Object.keys(ov.stale.imgs).length === 1,
+        'the old level is kept as a stand-in while the finer one loads');
+    eq(gridTiles().length, 5, 'stand-in tiles and new tiles coexist on the grid');
+    const standin = ov.stale.imgs['0:0:0'];
+    eq(standin.style.left, '0px', 'the stand-in tile keeps its ground position');
+    eq(standin.style.width, '1024.6px', '…scaled 2^Δ to cover the same ground at the finer level');
+    ok(standin.className.indexOf('om-tile-stale') >= 0, 'stand-in tiles are tagged as such');
+    eq(pendingTimers.size, 1, 'the stand-in carries a fallback timer');
+
+    // Nothing loads → the fallback drops the stand-in (no forever blur).
+    flushTimers();
+    ok(!ov.stale, 'the fallback timer retires the stand-in');
+    eq(gridTiles().length, 4, '…leaving exactly the new-level window');
+    eq(pendingTimers.size, 0, '…and the fallback timer is gone');
+
+    // Zoom out → coarser level: the finer tiles are dropped, no stand-in.
+    simMap._state.zoom = 11;
+    simMap.fire('zoomend');
+    await new Promise((r) => setImmediate(r));
+    eq(ov.geom.level, 0, 'zooming out returns to the coarser level');
+    ok(!ov.stale, 'going coarser drops the finer tiles (nothing can stand in)');
+    eq(gridTiles().length, 1, 'the coarser window is refetched');
+
+    // Zoom in again, and this time the tiles load: the stand-in retires
+    // the moment every wanted tile has settled.
+    simMap._state.zoom = 13;
+    simMap.fire('zoomend');
+    await new Promise((r) => setImmediate(r));
+    ok(ov.stale, 'the stand-in is back for the second zoom-in');
+    gridTiles().filter((el) => el.className.indexOf('stale') < 0)
+        .forEach((img) => img.dispatch('load'));
+    ok(!ov.stale, 'every new tile settled → the stand-in retires');
+    eq(gridTiles().length, 4, '…and the grid holds exactly the new-level window');
+
+    // Reset returns to the framed state of the current view (zoom 13 here).
+    mgr.reset('TST/1');
+    const fitMpp13 = Overlay.fitScale(8000, 6000, Overlay.resolutionAt(47.933, 13), 400, 800);
+    ok(Math.abs(ov.state.mpp - fitMpp13) / fitMpp13 < 1e-9, 'reset returns the framed scale');
+    eq(ov.state.rotation, 0, 'reset clears the rotation');
+    ok(ov.state.lat === rec.lat && ov.state.lng === rec.lng, 'reset restores the sheet position');
+
+    // Removal cleans up tiles and leaves no timer behind.
+    mgr.remove('TST/1');
+    eq(gridTiles().length, 0, 'remove empties the grid');
+    eq(pendingTimers.size, 0, '…and no stand-in timer is left behind');
 
     console.log('✓ other-maps: ' + checks + ' checks passed ' +
         '(' + catalog.maps.length + ' catalogue records, ' + locations.length + ' places)');
