@@ -84,7 +84,8 @@ function boot(mode) {
     // Run the actual 3D close/camera hand-off in its own closure: its `map`
     // refers to MapLibre, while selectResult's `map` refers to Leaflet.
     vm.runInContext(`DetectLabMap3D = (function () {
-        var map = threeDMap, popup = null;
+        var map = threeDMap, popup = null, cesiumViewer = null;
+        function deactivateCesium() {}
         ${settleMotion}\n${camera}\n${close}
         return { isOpen: function () { return state.open; }, close: function () { events.push('close'); return close(); } };
     })();\n${select}\n${display}\n${keyboard}`, context);
@@ -156,7 +157,7 @@ for (const coordinateItem of [null, { valid: false }]) {
     assert(pending.context.state.open && !pending.events.includes('fly'),
         'pending place lookup and invalid coordinates do not exit 3D');
 }
-const viewerUrl = 'js/map3d-terrain.js?v=20261024-gesture-only-camera';
+const viewerUrl = 'js/map3d-terrain.js?v=20261024-no-bar-lidar-row';
 assert(read('index.html').includes(viewerUrl) && read('sw.js').includes("'" + viewerUrl + "'"),
     'the 3D camera hand-off fix is cache-busted and precached');
 assert(Number(read('sw.js').match(/CACHE_NAME = 'detectlab-v(\d+)-/)[1]) >= 245);

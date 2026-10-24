@@ -80,8 +80,8 @@ const skin = read('css/map3d-terrain.css');
 
 const TAG = '20261019-tile-order';              /* MapLibre itself (coveringTiles patch) */
 const TAG_3D = '20261021-lidar-canvas-tiles';    /* mirror (canvas tiles)          */
-const TAG_VIEWER = '20261024-gesture-only-camera'; /* viewer (js)                         */
-const TAG_CSS = '20261024-gesture-only-camera';    /* viewer skin (css)              */
+const TAG_VIEWER = '20261024-no-bar-lidar-row'; /* viewer (js)                         */
+const TAG_CSS = '20261024-no-bar-lidar-row';    /* viewer skin (css)              */
 const TAG_FOCUS = '20261020-lidar-disc-route';  /* LiDAR focus (3D, one disc)     */
 const TAG_REGISTRY = '20261024-uk-historical-maps'; /* shared registry (UK historical maps) */
 
@@ -920,6 +920,8 @@ const TAG_REGISTRY = '20261024-uk-historical-maps'; /* shared registry (UK histo
      * bearing sliders are removed outright — not just hidden in the PWA. */
     assert(!/m3d-(exag|pitch|bearing)-row/.test(viewer) && !/m3d-(exag|pitch|bearing)-row/.test(skin),
         'no terrain-exaggeration or camera slider row is rendered or styled');
+    assert(!/\.m3d-lidar\b/.test(viewer) && !/\.m3d-lidar\b/.test(skin),
+        'no duplicate .m3d-lidar row is rendered or styled in #map3d-bar (the expandable #map3d-focus window owns LiDAR in 3D)');
     assert(/exaggeration: CONFIG\.terrain\.exaggeration/.test(viewer),
         'the DEM exaggeration stays a fixed config constant');
     assert(viewer.includes("toggleGroup.className = 'm3d-toggle-group'") &&

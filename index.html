@@ -31,7 +31,7 @@
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
     <link rel="stylesheet" href="css/maplibre-gl.css?v=20261013-3d-terrain">
-    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261024-gesture-only-camera">
+    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261024-no-bar-lidar-row">
     <link rel="stylesheet" href="css/hist-shift.css?v=20261014-hist-shift">
     <!-- „Alte hărți / Other maps” — punctele verzi + suprapunerea liberă a
          hărților ne-georeferențiate (Hungaricana). -->
@@ -6132,7 +6132,7 @@
          — so nothing can be visible in 2D and missing in 3D. MapLibre GL
          itself is downloaded only when 3D is opened (js/map3d-terrain.js). -->
     <script src="js/map3d-mirror.js?v=20261021-lidar-canvas-tiles"></script>
-    <script src="js/map3d-terrain.js?v=20261024-gesture-only-camera"></script>
+    <script src="js/map3d-terrain.js?v=20261024-no-bar-lidar-row"></script>
     <!-- LiDAR in the 3D view (js/lidar-3d-focus.js): a national LiDAR pyramid
          cannot be draped the way a historical sheet is, so pressing 3D with a
          LiDAR layer switched on asks for ONE layer, a point and a fetching
