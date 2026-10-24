@@ -30,17 +30,18 @@ check(CATALOGUE.licence.state === 'unverified', 'the licence is recorded as unve
 check(/ASIG/.test(CATALOGUE.attribution), 'the catalogue carries the ASIG attribution');
 check(JSON.stringify(CATALOGUE.bounds) === JSON.stringify([[39.538, 18.773], [42.758, 21.179]]), 'coverage bounds');
 
-/* Section order and the requested row counts. `topo50k` is kept from the
- * pre-catalogue group (retained) and is not one of the 28 requested layers. */
+/* Section order and the requested row counts. The catalogue is the ONLY
+ * Albanian content: no pre-catalogue row is kept alongside it. */
 assert.deepStrictEqual(CATALOGUE.sections.map((s) => s.title),
     ['Orthophotos', 'Terrain', 'Cadastre', 'Maps', 'Environment', 'Planning & mining']);
 const counts = {};
 CATALOGUE.sections.forEach((section) => { counts[section.title] = section.layers.length; });
-assert.deepStrictEqual(counts, { Orthophotos: 14, Terrain: 2, Cadastre: 3, Maps: 3, Environment: 1, 'Planning & mining': 6 });
-const requested = CATALOGUE.sections.reduce((sum, section) => sum + section.layers.filter((l) => !l.retained).length, 0);
-check(requested === 28, 'the catalogue holds the 28 requested layers (plus the retained 1:50k sheet)');
-check(CONFIG.layers.filter((l) => l.retained).length === 1 && CONFIG.byId('topo50k').retained,
-    'exactly one row is marked retained so no pre-catalogue feature disappears');
+assert.deepStrictEqual(counts, { Orthophotos: 14, Terrain: 2, Cadastre: 3, Maps: 2, Environment: 1, 'Planning & mining': 6 });
+const requested = CATALOGUE.sections.reduce((sum, section) => sum + section.layers.length, 0);
+check(requested === 28, 'the catalogue holds exactly the 28 requested layers');
+check(!CONFIG.byId('topo50k') && !/Topografike:50K_Topografike/.test(JSON.stringify(CATALOGUE)),
+    'the pre-catalogue 1:50k sheet is gone from the catalogue and the config');
+check(CONFIG.layers.every((layer) => !layer.retained), 'no catalogue row is kept for a pre-catalogue feature');
 
 const all = CATALOGUE.sections.flatMap((section) => section.layers);
 const byTitle = {};
@@ -88,7 +89,7 @@ check(CONFIG.endpoints.nativeCrs === 'EPSG:6870' && CONFIG.wmts.tileMatrixSet ==
     'native CRS is recorded; the browser reads the EPSG:4326 matrix set');
 check(CONFIG.wmts.maxSourceZoom === 21 && CONFIG.wmts.tileMatrixPrefix === 'EPSG:4326:', 'WMTS grid settings');
 check(CONFIG.licenceState === 'unverified' && /confirm|verify/i.test(CONFIG.licence), 'the config keeps the licence caveat');
-check(CONFIG.layers.length === 30, '29 catalogue rows + the Heritage toggle');
+check(CONFIG.layers.length === 29, '28 catalogue rows + the Heritage toggle');
 check(CONFIG.sections[0].id === 'heritage', 'Heritage is the first panel section');
 const wmtsUrl = CONFIG.wmtsTileUrl('DSM:Dsm_Hill_Group', 12, 100, 200);
 check(/TileMatrix=EPSG%3A4326%3A12/.test(wmtsUrl) && /TileCol=100/.test(wmtsUrl) && /TileRow=200/.test(wmtsUrl),
@@ -202,14 +203,6 @@ presetElement('albaniaExpandBtn', 'button');
 presetElement('albaniaExpandIcon', 'svg');
 const mount = presetElement('albaniaSubLayers', 'div');
 
-/* A stale app shell: the pre-group mounts plus one stray Albanian row. */
-const romanianSatellite = presetElement('romanianSatelliteSection', 'div');
-const staleMount = presetElement('asigSatelliteLayers', 'div');
-const strayRow = new Element('div');
-strayRow.setAttribute('data-albania-row', 'ortho_1999');
-romanianSatellite.appendChild(staleMount);
-romanianSatellite.appendChild(strayRow);
-
 const document = {
     readyState: 'complete',
     documentElement: { getAttribute: () => 'en' },
@@ -217,18 +210,7 @@ const document = {
     createElement: (tag) => new Element(tag),
     createTextNode: (text) => new TextNode(text),
     getElementById: (id) => elements[id] || registryById[id] || null,
-    addEventListener(type, handler) { (this.listeners[type] || (this.listeners[type] = [])).push(handler); },
-    querySelectorAll(selector) {
-        if (selector !== '[data-albania-row]') return [];
-        const found = [];
-        const walk = (node) => (node.children || []).forEach((child) => {
-            if (child.attributes && child.attributes['data-albania-row'] !== undefined) found.push(child);
-            walk(child);
-        });
-        Object.keys(elements).forEach((key) => walk(elements[key]));
-        walk(mount);
-        return found;
-    }
+    addEventListener(type, handler) { (this.listeners[type] || (this.listeners[type] = [])).push(handler); }
 };
 
 function proto() {}
@@ -358,7 +340,7 @@ assert.ok(API, 'the module exposes window.AsigAlbaniaLayers');
 API.init();
 
 /* ── panel structure ─────────────────────────────────────────────────────── */
-check(API.layerIds().length === 30, 'the group renders all 29 catalogue rows plus the Heritage toggle');
+check(API.layerIds().length === 29, 'the group renders all 28 catalogue rows plus the Heritage toggle');
 function allRows(node, found) {
     found = found || [];
     (node.children || []).forEach((child) => {
@@ -390,10 +372,10 @@ sections.forEach((section) => {
     check(body.children.length === Number(head.children[2].textContent.replace(/[()]/g, '')),
         section.attributes['data-albania-section'] + ' body holds exactly its rows');
 });
-check(rows.length === 30 && rows.filter((row) => row.id !== 'albaniaRow_heritage').length === 29,
-    'all 29 catalogue rows plus the Heritage toggle are mounted in the one Albania group');
-check(API.state.swept >= 2 && !romanianSatellite.children.includes(staleMount) && !romanianSatellite.children.includes(strayRow),
-    'the placement sweep removes a pre-group mount and a stray row');
+check(rows.length === 29 && rows.filter((row) => row.id !== 'albaniaRow_heritage').length === 28,
+    'all 28 catalogue rows plus the Heritage toggle are mounted in the one Albania group');
+check(rows.filter((row) => row.id === 'albaniaRow_topo50k').length === 0,
+    'the pre-catalogue 1:50k row is not rendered');
 LAYERS_CHECK();
 function LAYERS_CHECK() {
     CONFIG.layers.forEach((layer) => {
@@ -426,7 +408,7 @@ API.setSearch('zzz-nothing');
 check(mount.children.some((child) => child.id === 'albaniaSearchEmpty'), 'an unmatched search says so');
 API.setSearch('');
 const restored = allRows(mount);
-check(restored.length === 30 && restored.every((row) => row.style.display === ''), 'clearing the search restores every row');
+check(restored.length === 29 && restored.every((row) => row.style.display === ''), 'clearing the search restores every row');
 
 /* ── country gate ────────────────────────────────────────────────────────── */
 check(API.isInCountry() === false && elements.albaniaRow.classList.contains('albania-out-of-country'),
@@ -480,12 +462,12 @@ API.toggleAll(false);
 check(layersOnMap.size === 0, 'and off again');
 
 /* The choice survives the country gate without requesting anything. */
-API.toggle('topo50k', true);
+API.toggle('ortho_1999', true);
 API.filterForCountry('RO');
-check(API.isActive('topo50k') && layersOnMap.size === 0, 'switching country parks the layer and keeps the choice');
+check(API.isActive('ortho_1999') && layersOnMap.size === 0, 'switching country parks the layer and keeps the choice');
 API.filterForCountry('AL');
-check(API.isActive('topo50k') && layersOnMap.size === 1, 'returning to Albania restores it');
-API.toggle('topo50k', false);
+check(API.isActive('ortho_1999') && layersOnMap.size === 1, 'returning to Albania restores it');
+API.toggle('ortho_1999', false);
 
 /* ── requests ────────────────────────────────────────────────────────────── */
 const url3857 = API.tileUrl('ortho_1999', [1000000, 4000000, 3000000, 6000000], 256, 'EPSG:3857');

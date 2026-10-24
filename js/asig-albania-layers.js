@@ -43,8 +43,9 @@
  * Country gate
  *   The group and every row are visible only while Albania (ISO2 AL) is the
  *   selected country; the on/off choice is remembered meanwhile and nothing is
- *   requested for another country or the global view. Placement is enforced:
- *   buildPanel() sweeps any pre-group mount or stray Albanian row first.
+ *   requested for another country or the global view. buildPanel() always
+ *   rebuilds the panel inside #albaniaSubLayers, so the catalogue owns exactly
+ *   one place in the page.
  *
  * Attribution
  *   ASIG is credited on every layer (Leaflet attribution control) and in every
@@ -72,7 +73,6 @@
     var HERITAGE_ID = HERITAGE ? HERITAGE.id : 'heritage';
 
     var STORE_KEY = 'detectlab_albania_layers_v2';
-    var LEGACY_STORE_KEY = 'detectlab_albania_layers_v1';
     var GROUP_ROW_ID = 'albaniaRow';
     var MOUNT_ID = 'albaniaSubLayers';
     var GROUP_TOGGLE_ID = 'albaniaToggle';
@@ -87,25 +87,9 @@
     var PANE_Z = 404;
     var Z_BASE = 100;
 
-    /* Mounts used before the single Albania group existed (kept from the
-     * pre-catalogue shell so a stale PWA cannot resurrect them). */
-    var LEGACY_MOUNT_IDS = ['asigHistoricalLayers', 'asigSatelliteLayers', 'asigLidarLayers', 'asigHeritageLayers'];
     var COUNTRY = String(CONFIG.country || 'AL').toUpperCase();
     var OUT_OF_COUNTRY_CLASS = 'albania-out-of-country';
     var BLANK_TILE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
-
-    /* The pre-catalogue rows (state stored by v251 of this module). */
-    var LEGACY_STATE = {
-        topo50k: 'topo50k',
-        ortho1999: 'ortho_1999',
-        ortho1994: 'ortho_2015_20cm',
-        dsm: 'dsm_hill',
-        lidar: 'hillshade_2015',
-        heritage: HERITAGE_ID,
-        natural: HERITAGE_ID,
-        cultural: HERITAGE_ID,
-        monument: HERITAGE_ID
-    };
 
     var STRINGS = {
         en: {
@@ -175,7 +159,6 @@
         warned: {},
         inCountry: false,
         suppressed: false,
-        swept: 0,
         resolver: { state: 'idle', names: {}, parts: [], error: '' },
         heritageParts: []
     };
@@ -692,7 +675,6 @@
         runtime.sectionNodes = {};
         var mount = document.getElementById(MOUNT_ID);
         if (mount) {
-            sweepLegacyRows(mount);
             clear(mount);
             mount.appendChild(toolsNode());
             /* Heritage is ONE toggle at the top of the panel — never a group of
@@ -1482,31 +1464,6 @@
         return code === COUNTRY;
     }
 
-    function sweepLegacyRows(mount) {
-        var removed = 0;
-        LEGACY_MOUNT_IDS.forEach(function (id) {
-            var node = document.getElementById(id);
-            if (!node || node === mount) return;
-            if (node.parentNode && node.parentNode.removeChild) node.parentNode.removeChild(node);
-            else if (node.innerHTML !== undefined) node.innerHTML = '';
-            removed += 1;
-        });
-        if (mount && typeof document.querySelectorAll === 'function') {
-            var strays = document.querySelectorAll('[data-albania-row]');
-            Array.prototype.forEach.call(strays, function (row) {
-                if (row === mount) return;
-                if (typeof mount.contains === 'function' && mount.contains(row)) return;
-                if (row.parentNode && row.parentNode.removeChild) row.parentNode.removeChild(row);
-                removed += 1;
-            });
-        }
-        runtime.swept = removed;
-        if (removed && window.console && window.console.info) {
-            window.console.info('[ASIG] removed ' + removed + ' Albanian row(s) mounted outside the Albania group');
-        }
-        return removed;
-    }
-
     /* ═══════════════════════════════════════════════════════════════════════
      * 9. STATE
      * ═══════════════════════════════════════════════════════════════════════ */
@@ -1533,26 +1490,7 @@
         var data = null;
         try { data = JSON.parse(window.localStorage.getItem(STORE_KEY) || 'null'); }
         catch (e) { data = null; }
-        if (!data) {
-            /* First run after the catalogue replaced the nine-row group: carry
-             * the visitor's old choices over instead of resetting them. */
-            var legacy = null;
-            try { legacy = JSON.parse(window.localStorage.getItem(LEGACY_STORE_KEY) || 'null'); }
-            catch (e) { legacy = null; }
-            if (legacy) {
-                Object.keys(legacy.active || {}).forEach(function (oldId) {
-                    var next = LEGACY_STATE[oldId];
-                    if (next && legacy.active[oldId]) runtime.active[next] = true;
-                });
-                Object.keys(legacy.opacity || {}).forEach(function (oldId) {
-                    var next = LEGACY_STATE[oldId];
-                    if (next && typeof legacy.opacity[oldId] === 'number') {
-                        runtime.opacity[next] = Math.max(0, Math.min(100, legacy.opacity[oldId]));
-                    }
-                });
-            }
-            return;
-        }
+        if (!data) return;
         LAYERS.forEach(function (def) {
             if (data.active && data.active[def.id]) runtime.active[def.id] = true;
             if (data.opacity && typeof data.opacity[def.id] === 'number') {
@@ -1649,8 +1587,6 @@
         COUNTRY: COUNTRY,
         HERITAGE_ID: HERITAGE_ID,
         PANE_ID: PANE_ID,
-        LEGACY_MOUNT_IDS: LEGACY_MOUNT_IDS,
-        sweepLegacyRows: sweepLegacyRows,
         tileUrl: tileUrl,
         wmsRequestUrl: wmsRequestUrl,
         planWmtsTile: planWmtsTile,

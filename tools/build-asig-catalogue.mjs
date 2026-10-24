@@ -139,11 +139,7 @@ const CATALOGUE_SPEC = [
         registry: { group: 'hist-free', z: 640 },
         layers: [
             { id: 'italiane_100k', title: 'italiane 100k', kind: 'wmts', name: 'hartat_historike:italiane_100k', opacity: 1 },
-            { id: 'krgjsh_25k', title: '25k_krgjsh_1', resolve: true, opacity: 0.85 },
-            /* Not one of the geoportal's 28: it shipped with the first Albanian
-             * block of this site. Kept so removing the catalogue cannot remove a
-             * layer somebody already uses; delete this row to drop it. */
-            { id: 'topo50k', title: 'Topographic map 1:50k', name: 'Topografike:50K_Topografike', opacity: 1, retained: true }
+            { id: 'krgjsh_25k', title: '25k_krgjsh_1', resolve: true, opacity: 0.85 }
         ]
     },
     {
@@ -327,7 +323,6 @@ function buildCatalogue(exportData, options) {
                     : (sectionSpec.id === 'orthophotos' ? ZOOM.orthoMaxNative : ZOOM.wmsMaxNative)
             };
             if (!resolved) layer.resolveByTitle = spec.title;
-            if (spec.retained) layer.retained = true;
             layers.push(layer);
         });
         sections.push({

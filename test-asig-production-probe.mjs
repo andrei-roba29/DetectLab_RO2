@@ -19,6 +19,8 @@ const ids = registry.list()
   .map((id) => id.slice('albania.'.length))
   .sort();
 const total = ids.length;
+/* The scenario that must fail: one real registry row answers a bad body. */
+const badId = 'albania.' + ids[0];
 const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000b49444154789c636000020000050001a5f645400000000049454e44ae426082', 'hex');
 
 function runProbe(origin) {
@@ -38,7 +40,7 @@ const server = http.createServer((req, res) => {
   requests.push(url);
   if (url.pathname !== '/api/map3d/tile') { res.writeHead(404).end(); return; }
   const id = url.searchParams.get('layer') || '';
-  const invalid = id === 'albania.topo50k';
+  const invalid = id === badId;
   const mode = url.searchParams.get('mock') || process.env.ASIG_PROBE_MOCK || 'pass';
   // Scenarios come from the server path so the probe still tests the production URL shape.
   if (invalid && mode === 'xml') { res.writeHead(200, { 'Content-Type': 'text/xml' }).end('<ServiceExceptionReport/>'); return; }
@@ -73,7 +75,7 @@ try {
     } else {
       assert.equal(result.code, 1, `${scenario}: invalid response must fail the gate`);
       assert.match(result.stdout, new RegExp(`Probe summary: ${total - 1}/${total} passed`));
-      const failed = result.stdout.split('\n').find((line) => line.startsWith('FAIL albania.topo50k'));
+      const failed = result.stdout.split('\n').find((line) => line.startsWith('FAIL ' + badId));
       assert.ok(failed, `${scenario}: the bad layer is identified in output`);
       if (scenario === 'xml' || scenario === 'html') assert.match(failed, /XML\/HTML exception body/);
       if (scenario === 'short') assert.match(failed, /3 bytes/);

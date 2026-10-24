@@ -485,21 +485,6 @@
             "minZoom": 7,
             "maxNativeZoom": 19,
             "resolveByTitle": "25k_krgjsh_1"
-          },
-          {
-            "id": "topo50k",
-            "title": "Topographic map 1:50k",
-            "kind": "wms",
-            "name": "Topografike:50K_Topografike",
-            "nameSource": "repo",
-            "url": "https://geoportal.asig.gov.al/service/Topografike/wms",
-            "fallbackUrl": "https://geoportal.asig.gov.al/service/wms",
-            "format": "image/png",
-            "transparent": true,
-            "opacity": 1,
-            "minZoom": 7,
-            "maxNativeZoom": 19,
-            "retained": true
           }
         ]
       },

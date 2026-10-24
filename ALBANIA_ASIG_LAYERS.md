@@ -20,12 +20,9 @@ Gratis / Free tab.
 ## The catalogue
 
 Section order in the panel: **Heritage (one toggle)** first, then Orthophotos
-(14), Terrain (2), Cadastre (3), Maps (3), Environment (1), Planning & mining (6)
-— 28 catalogue rows. **Maps has a third, retained row** (`Topographic map 1:50k`,
-published by the same service before this catalogue existed) so switching to the
-catalogue does not remove a layer somebody already uses; delete it from
-`CATALOGUE_SPEC` to drop it.
-Three of them are tile-only (WMTS) and cannot be drawn through the WMS:
+(14), Terrain (2), Cadastre (3), Maps (2), Environment (1), Planning & mining (6)
+— 28 catalogue rows, and the only Albanian content the site has. Three of them
+are tile-only (WMTS) and cannot be drawn through the WMS:
 
 | Title | Name | Kind |
 |---|---|---|
@@ -37,10 +34,11 @@ Display titles are the portal's own, kept verbatim — including the misspelled
 **“Mineral Resouces”**, which is also the title the export uses, so resolution
 must match it exactly.
 
-`Topographic map 1:50k` (`Topografike:50K_Topografike`) is **not** one of the 28:
-it shipped before this catalogue and is kept (`"retained": true`) so no existing
-feature disappears. Remove it from `CATALOGUE_SPEC` in the generator if it is
-not wanted.
+Nothing from the pre-catalogue group survives: the old 1:50k sheet
+(`Topografike:50K_Topografike`), its captions and the modules' legacy
+state/mount handling are gone, so an older Albanian layer cannot be switched on
+beside the catalogue — a country view shows the catalogue or no ASIG layers at
+all.
 
 ### Heritage — one toggle, several parts
 
@@ -139,10 +137,10 @@ still shown. Tile-only layers have no feature info and are skipped.
 `asig-layers.json` (the prototype export) was **not available** when this
 catalogue was generated, so only the names that were already verified in this
 repository are baked: `Orthophoto:Ortofoto_1999`,
-`orthophoto_2015:OrthoImagery_20cm`, `Topografike:50K_Topografike`, the three
-tile-only products and the four Heritage parts. **23 of the 26 WMS
-rows are still unnamed** — the 12 remaining orthophoto flights, Cadastre ×3,
-`25k_krgjsh_1`, Water course link and Planning & mining ×6. They are written as
+`orthophoto_2015:OrthoImagery_20cm`, the three tile-only products and the four
+Heritage parts. **23 of the 25 WMS rows are still unnamed** — the other 13
+orthophoto flights, Cadastre ×3, `25k_krgjsh_1`, Water course link and
+Planning & mining ×6. They are written as
 `"name": null` plus `resolveByTitle`, and `js/asig-albania-layers.js` fills them
 in **in the visitor's browser**:
 
@@ -219,13 +217,11 @@ After regenerating: bump the `?v=` tags for the data + config + module in
   is the selected country — including the global view, where no country is
   selected. The on/off choice is remembered and the tile layers are parked while
   another country is on screen, so nothing is requested.
-- `buildPanel()` first runs `sweepLegacyRows()`: it removes any surviving
-  pre-group mount (`#asigHistoricalLayers`, `#asigSatelliteLayers`,
-  `#asigLidarLayers`, `#asigHeritageLayers`) and any `data-albania-row` outside
-  `#albaniaSubLayers`, so an installed PWA running an old shell cannot leave
-  Albanian rows under another country's section.
-- State is stored under `detectlab_albania_layers_v2`; the pre-catalogue key
-  (`…_v1`) is migrated on first load (including its old ids).
+- `buildPanel()` always rebuilds the panel inside `#albaniaSubLayers`, so the
+  catalogue has exactly one place in the page and nothing older can be rendered
+  beside it.
+- State is stored under `detectlab_albania_layers_v2`; there is no migration
+  from the pre-catalogue keys, because none of those rows exist any more.
 - The three WMTS rows are **not** in the registry: they are canvas-reprojected
   layers with no WMS layer to audit, and the 2D ⇄ 3D mirror does not carry ASIG
   layers. WMS rows are mirrored as `albania.<id>`, `countries: ['AL']`,

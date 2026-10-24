@@ -13794,7 +13794,7 @@
                     var finland = window.FinlandLayers;
                     var finlandCount = updateGeneratedLayers(finland, finland && finland.CONFIG && finland.CONFIG.countryBounds, mapBounds);
 
-                    // Albania's nine generated rows share the national coverage.
+                    // The generated ASIG catalogue rows share the national coverage.
                     var albania = window.AsigAlbaniaLayers;
                     var albaniaBounds = albania && albania.CONFIG && albania.CONFIG.countryBounds;
                     var albaniaCount = 0;
@@ -13956,7 +13956,7 @@
                         try { row = def.getRow(); } catch (e) {}
                         if (!row) return;
                         var available = true;
-                        // ASIG's nine rows live in their own Albania-only
+                        // The ASIG catalogue rows live in their own Albania-only
                         // group and are gated by js/asig-albania-layers.js;
                         // they are attributed ['AL'] in the registry and are
                         // never treated as country-independent rows here.

@@ -43,7 +43,7 @@ const check = (condition, message) => { assert.ok(condition, message); checks +=
 
 /* ── 1. every layer the spec declares, flattened ──────────────────────────── */
 const SPEC_ROWS = CATALOGUE_SPEC.reduce((rows, section) => rows.concat(section.layers), []);
-check(SPEC_ROWS.length === 29, '29 rows are curated (28 catalogue + the retained 1:50k sheet)');
+check(SPEC_ROWS.length === 28, '28 rows are curated — the catalogue is the whole Albanian set');
 check(SPEC_ROWS.filter((row) => row.kind === 'wmts').length === 3, 'three rows are tile-only');
 check(new Set(SPEC_ROWS.map((row) => row.id)).size === SPEC_ROWS.length, 'every row id is unique');
 check(CATALOGUE_SPEC.map((section) => section.title).join(',') ===
@@ -101,8 +101,8 @@ const full = buildCatalogue(synthExport({
 }), {});
 
 check(full.sections.length === 6, 'six sections');
-check(full.sections.map((section) => section.layers.length).join(',') === '14,2,3,3,1,6',
-    'per-section counts: 14 / 2 / 3 / 3 / 1 / 6');
+check(full.sections.map((section) => section.layers.length).join(',') === '14,2,3,2,1,6',
+    'per-section counts: 14 / 2 / 3 / 2 / 1 / 6');
 check(full.unresolved.length === 0, 'a complete export leaves nothing unresolved');
 check(full.sections.every((section) => section.layers.every((row) => row.name)),
     'every row of a complete export gets its exact name');
@@ -197,8 +197,10 @@ check(true, 'the committed catalogue matches what the generator produces today')
 const committed = JSON.parse(read('data/asig-layers.json'));
 check(committed.sections.map((section) => section.id).join(',') ===
     CATALOGUE_SPEC.map((section) => section.id).join(','), 'the committed sections follow the curated order');
-check(committed.sections.reduce((sum, section) => sum + section.layers.length, 0) === SPEC_ROWS.length,
-    'the committed catalogue has every curated row');
+check(committed.sections.reduce((sum, section) => sum + section.layers.length, 0) === 28,
+    'the committed catalogue holds exactly the 28 catalogued rows');
+check(!JSON.stringify(committed).includes('Topografike'),
+    'the committed catalogue no longer mentions any pre-catalogue layer');
 const unresolvedRows = committed.sections.reduce((rows, section) =>
     rows.concat(section.layers.filter((row) => !row.name)), []);
 check(unresolvedRows.every((row) => row.resolveByTitle && row.nameSource === 'unresolved'),

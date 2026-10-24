@@ -242,7 +242,6 @@
             maxNativeZoom: layer.maxNativeZoom || (kind === 'wmts' ? 20 : 19),
             resolveByTitle: layer.resolveByTitle || '',
             nameSource: layer.nameSource || '',
-            retained: !!layer.retained,
             notes: '',
             description: ''
         };

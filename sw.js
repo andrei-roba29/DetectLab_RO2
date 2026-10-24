@@ -706,7 +706,10 @@
 //   the alternate-endpoint retry, the three tile-only WMTS layers reprojected on
 //   canvas, and map-click feature info in sandboxed iframes. Rows whose name is
 //   not in the export yet are resolved once from GetCapabilities in the
-//   visitor's browser. Re-tags data/asig-layers.data.js,
+//   visitor's browser. The catalogue is now the ONLY Albanian content: the
+//   pre-catalogue 1:50k sheet, the old Historical/Satellite/LiDAR/Heritage
+//   captions, the stale-row sweep and the v1 state migration are removed, so
+//   nothing older can be switched on beside it. Re-tags data/asig-layers.data.js,
 //   js/asig-albania-layers.config.js, js/asig-albania-layers.js,
 //   js/layer-registry.js, css/styles.css and index.html.
 //   See ALBANIA_ASIG_LAYERS.md.
