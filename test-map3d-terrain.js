@@ -83,7 +83,7 @@ const TAG_3D = '20261021-lidar-canvas-tiles';    /* mirror (canvas tiles)       
 const TAG_VIEWER = '20261024-gesture-only-camera'; /* viewer (js)                         */
 const TAG_CSS = '20261024-gesture-only-camera';    /* viewer skin (css)              */
 const TAG_FOCUS = '20261020-lidar-disc-route';  /* LiDAR focus (3D, one disc)     */
-const TAG_REGISTRY = '20261024-asig-catalogue'; /* shared registry (ASIG catalogue) */
+const TAG_REGISTRY = '20261024-uk-historical-maps'; /* shared registry (UK historical maps) */
 
 // ══════════════════════════════════════════════════════════════
 // 1. Static wiring — the viewer must be reachable in the app

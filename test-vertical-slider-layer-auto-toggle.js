@@ -34,7 +34,7 @@ const opacityIds = rangeTags.filter(function (tag) {
 }).map(function (tag) {
     return (tag.match(/id="([^"]+)"/) || [])[1];
 });
-assert.strictEqual(opacityIds.length, 45, 'all 45 shipped layer opacity ranges should be discoverable');
+assert.strictEqual(opacityIds.length, 54, 'all 54 shipped layer opacity ranges should be discoverable (46 prior + 8 UK historical maps)');
 opacityIds.forEach(function (id) {
     if (id === 'satOpacitySlider') {
         assert(!(id in LAYER_TOGGLE_MAP) && !(id in LIDAR_SUB_TOGGLE_KEYS),

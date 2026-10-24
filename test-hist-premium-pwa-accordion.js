@@ -1,6 +1,7 @@
 // Regression test — mobile PWA: the last card of the PREMIUM historical-maps
-// accordion ("Hartă administrativă a Galiției și Lodomeriei – 1855") must
-// never be clipped by the panel's animated max-height.
+// accordion (today "Alte hărți / Other maps"; the Galiția & Lodomeria 1855
+// card and the eight UK historical maps precede it) must never be clipped by
+// the panel's animated max-height.
 //
 // Background:
 //   · v1 of the bug: hardcoded max-height 1000px + overflow:hidden cut the
@@ -67,16 +68,28 @@ assert.match(mapApp, /sub\.style\.maxHeight === '0px' \|\| sub\.style\.maxHeight
     'Josephine auto-expand guard unchanged (collapsed = maxHeight 0)');
 
 // The clipped card is the LAST child of the premium accordion, so a
-// released panel is what keeps it fully visible.
+// released panel is what keeps it fully visible. Galicia used to be the
+// last card; eight premium UK historical maps now follow it, and the
+// "Other maps" card closes the accordion.
 const subStart = html.indexOf('id="histPremiumSubLayers"');
 const subEnd = html.indexOf('/histPremiumSubLayers');
 assert.ok(subStart > -1 && subEnd > subStart, 'histPremiumSubLayers panel exists');
 const subPanel = html.slice(subStart, subEnd);
 const galiciaIdx = subPanel.indexOf('id="galicia1855Row"');
 assert.ok(galiciaIdx > -1, 'galicia1855Row lives inside the premium accordion');
-const afterGalicia = subPanel.slice(galiciaIdx);
-assert.ok(!/id="(\w+)Row"/.test(afterGalicia.replace('id="galicia1855Row"', '')),
-    'galicia1855Row (Hartă administrativă a Galiției și Lodomeriei – 1855) is the last card of the accordion');
+const UK_ROWS = ['ukOsLondon1893Row', 'ukOs1919Row', 'ukOs10k1888Row', 'ukOs25k1937Row',
+    'ukOsHills1885Row', 'ukOs63k1955Row', 'ukOs1900sRow', 'ukBaire1940Row'];
+let cursor = galiciaIdx;
+for (const rowId of UK_ROWS) {
+    const idx = subPanel.indexOf('id="' + rowId + '"', cursor);
+    assert.ok(idx > cursor, rowId + ' is appended after the previous premium card (Galicia → UK maps order)');
+    cursor = idx;
+}
+const otherMapsIdx = subPanel.indexOf('id="otherMapsRow"', cursor);
+assert.ok(otherMapsIdx > cursor, 'otherMapsRow still comes after the UK historical maps');
+const afterLastCard = subPanel.slice(otherMapsIdx).replace('id="otherMapsRow"', '');
+assert.ok(!/id="(\w+)Row"/.test(afterLastCard),
+    'otherMapsRow (Alte hărți / Other maps) is the last card of the accordion');
 
 // ── 2. Runtime simulation of the real helper (mock panel + fake clock) ─
 

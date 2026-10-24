@@ -293,6 +293,70 @@
             minZoom: 6, maxNativeZoom: 14, tms: false,
             bounds: boundsArray(46.8116, 18.3937, 50.8713, 26.6844),
             description: { ro: 'Hartă administrativă istorică regională · Digitalizare și publicare: Universitatea „Ștefan cel Mare” din Suceava · Sursă: bukowina1856.eu', en: 'Regional historical administrative map · Digitized and published by “Ștefan cel Mare” University of Suceava · Source: bukowina1856.eu' }, onlineKey: '_galicia1855MapLayer'
+        },
+        /* United Kingdom · Ordnance Survey / Bartholomew historical pyramids
+           (MapTiler, National Library of Scotland collection). The shared
+           MapTiler key is the same public key used by the online layers; the
+           service worker's offline tile cache also matches the extensionless
+           hybrid URL because offline-maps tags its downloads with
+           __dl_offline_map=. */
+        {
+            id: 'ukOsLondon1893', label: { ro: 'Ordnance Survey 1893-1896', en: 'Ordnance Survey 1893-1896' }, category: 'premium', requiresPremium: true,
+            url: 'https://api.maptiler.com/tiles/uk-oslondon1k1893/{z}/{x}/{y}.jpg?key=lJtTFcjiimg8ZwMPUfpf',
+            minZoom: 9, maxNativeZoom: 20, tms: false,
+            bounds: boundsArray(51.347988, -0.370763, 51.6159, 0.1047),
+            description: { ro: 'Londra, OS five-foot 1:1.056 (729 de foi, revizie 1891–1895) · National Library of Scotland (maps.nls.uk) · MapTiler', en: 'London, OS five-foot 1:1,056 (729 sheets, survey 1891–1895) · National Library of Scotland (maps.nls.uk) · MapTiler' }, onlineKey: '_ukOsLondon1893MapLayer'
+        },
+        {
+            id: 'ukOs1919', label: { ro: 'Ordnance Survey Historical Maps 1919-1947', en: 'Ordnance Survey Historical Maps 1919-1947' }, category: 'premium', requiresPremium: true,
+            url: 'https://api.maptiler.com/tiles/uk-osgb1919/{z}/{x}/{y}.jpg?key=lJtTFcjiimg8ZwMPUfpf',
+            minZoom: 1, maxNativeZoom: 14, tms: false,
+            bounds: boundsArray(49.84945588, -9.25728709, 60.89106986, 2.12770424),
+            description: { ro: 'Hărți istorice Ordnance Survey 1919–1947 · National Library of Scotland (maps.nls.uk) · MapTiler', en: 'UK Ordnance Survey Historical Maps 1919–1947 · National Library of Scotland (maps.nls.uk) · MapTiler' }, onlineKey: '_ukOs1919MapLayer'
+        },
+        {
+            id: 'ukOs10k1888', label: { ro: 'Ordnance Survey 1888-1913', en: 'Ordnance Survey 1888-1913' }, category: 'premium', requiresPremium: true,
+            url: 'https://api.maptiler.com/tiles/uk-osgb10k1888/{z}/{x}/{y}.jpg?key=lJtTFcjiimg8ZwMPUfpf',
+            minZoom: 1, maxNativeZoom: 17, tms: false,
+            bounds: boundsArray(49.852539, -7.793077, 60.894042, 1.790425),
+            description: { ro: 'OS County Series, six-inch 1:10.560, ediția a II-a · National Library of Scotland (maps.nls.uk) · MapTiler', en: 'OS County Series six-inch 1:10,560, 2nd edition · National Library of Scotland (maps.nls.uk) · MapTiler' }, onlineKey: '_ukOs10k1888MapLayer'
+        },
+        {
+            id: 'ukOs25k1937', label: { ro: 'Ordnance Survey 1937-1961', en: 'Ordnance Survey 1937-1961' }, category: 'premium', requiresPremium: true,
+            url: 'https://api.maptiler.com/tiles/uk-osgb25k1937/{z}/{x}/{y}.jpg?key=lJtTFcjiimg8ZwMPUfpf',
+            minZoom: 1, maxNativeZoom: 16, tms: false,
+            bounds: boundsArray(49.79634, -6.48436, 58.718087, 1.856328),
+            description: { ro: 'OS „Provisional edition” 1:25.000, precursorul seriilor Explorer · National Library of Scotland (maps.nls.uk) · MapTiler', en: 'OS Provisional edition 1:25,000, forerunner of Explorer maps · National Library of Scotland (maps.nls.uk) · MapTiler' }, onlineKey: '_ukOs25k1937MapLayer'
+        },
+        {
+            id: 'ukOsHills1885', label: { ro: "Ordnance Survey, 'Hills' edition, 1885-1903", en: "Ordnance Survey, 'Hills' edition, 1885-1903" }, category: 'premium', requiresPremium: true,
+            url: 'https://api.maptiler.com/tiles/uk-osgb63k1885/{z}/{x}/{y}.png?key=lJtTFcjiimg8ZwMPUfpf',
+            minZoom: 1, maxNativeZoom: 16, tms: false,
+            bounds: boundsArray(49.767508, -8.208189, 61.003313, 1.885168),
+            description: { ro: 'OS one-inch 1:63.360, seria „Hills” (Anglia/Gales revizuită, Scoția ediția a II-a) · National Library of Scotland (maps.nls.uk) · MapTiler', en: 'OS one-inch 1:63,360 Hills edition (revised England/Wales, Scotland 2nd ed.) · National Library of Scotland (maps.nls.uk) · MapTiler' }, onlineKey: '_ukOsHills1885MapLayer'
+        },
+        {
+            id: 'ukOs63k1955', label: { ro: 'Ordnance Survey 1955-1961', en: 'Ordnance Survey 1955-1961' }, category: 'premium', requiresPremium: true,
+            url: 'https://api.maptiler.com/tiles/uk-osgb63k1955/{z}/{x}/{y}.jpg?key=lJtTFcjiimg8ZwMPUfpf',
+            minZoom: 1, maxNativeZoom: 15, tms: false,
+            bounds: boundsArray(49.853151, -8.684076, 60.87018, 1.845546),
+            description: { ro: 'OS One-Inch Seventh Series 1:63.360, precursorul seriei Landranger · National Library of Scotland (maps.nls.uk) · MapTiler', en: 'OS One-Inch Seventh Series 1:63,360, forerunner of Landranger · National Library of Scotland (maps.nls.uk) · MapTiler' }, onlineKey: '_ukOs63k1955MapLayer'
+        },
+        {
+            id: 'ukOs1900s', label: { ro: 'Ordnance Survey 1900s', en: 'Ordnance Survey 1900s' }, category: 'premium', requiresPremium: true,
+            /* Hybrid product: the TileJSON ships an extensionless template and
+               MapTiler content-negotiates the image format per tile. */
+            url: 'https://api.maptiler.com/tiles/uk-osgb1888/{z}/{x}/{y}?key=lJtTFcjiimg8ZwMPUfpf',
+            minZoom: 1, maxNativeZoom: 17, tms: false,
+            bounds: boundsArray(49.205882, -14.169172, 61.483786, 4.393046),
+            description: { ro: 'Mozaic fără suduri pe cinci scări OS (1:1 milion–1:10.560), în jur de 1900 · National Library of Scotland (maps.nls.uk) · MapTiler', en: 'Seamless five-scale OS pyramid (1:1m–1:10,560), around 1900 · National Library of Scotland (maps.nls.uk) · MapTiler' }, onlineKey: '_ukOs1900sMapLayer'
+        },
+        {
+            id: 'ukBaire1940', label: { ro: 'UK Bartholomew Ireland 1940s', en: 'UK Bartholomew Ireland 1940s' }, category: 'premium', requiresPremium: true,
+            url: 'https://api.maptiler.com/tiles/uk-baire250k1940/{z}/{x}/{y}.png?key=lJtTFcjiimg8ZwMPUfpf',
+            minZoom: 5, maxNativeZoom: 12, tms: false,
+            bounds: boundsArray(51.312374, -10.670794, 55.451952, -5.358557),
+            description: { ro: 'Bartholomew Quarter-Inch Irlanda, hărți publicate în 1940 · National Library of Scotland (maps.nls.uk) · MapTiler', en: 'Bartholomew Quarter-Inch Ireland, maps published 1940 · National Library of Scotland (maps.nls.uk) · MapTiler' }, onlineKey: '_ukBaire1940MapLayer'
         }
     ];
 

@@ -95,6 +95,17 @@
         kdrGbMapOpacitySlider: 'kdrGbMapToggle',
         wig100kMapOpacitySlider: 'wig100kMapToggle',
         galicia1855MapOpacitySlider: 'galicia1855MapToggle',
+        /* UK historical premium sublayers (NLS / MapTiler): same mirror →
+           switch wiring as the rest of the Historical maps accordion. */
+        ukOsLondon1893MapOpacitySlider: 'ukOsLondon1893MapToggle',
+        ukOs1919MapOpacitySlider: 'ukOs1919MapToggle',
+        ukOs10k1888MapOpacitySlider: 'ukOs10k1888MapToggle',
+        ukOs25k1937MapOpacitySlider: 'ukOs25k1937MapToggle',
+        ukOsHills1885MapOpacitySlider: 'ukOsHills1885MapToggle',
+        ukOs63k1955MapOpacitySlider: 'ukOs63k1955MapToggle',
+        ukOs1900sMapOpacitySlider: 'ukOs1900sMapToggle',
+        ukBaire1940MapOpacitySlider: 'ukBaire1940MapToggle',
+        otherMapsOpacitySlider: 'otherMapsToggle',
         satellite60sMapOpacitySlider: 'satellite60sToggle',
         vegfpPpiOpacitySlider: 'vegfpPpiToggle',
         vegfpSmxOpacitySlider: 'vegfpSmxToggle',

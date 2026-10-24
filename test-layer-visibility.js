@@ -190,7 +190,8 @@ function premiumRows(h) {
 test('desktop: Banat keeps covered leaves and hides Bucovina and unrelated areas', () => {
     const h = setup({ local: new MapMock(BANAT) });
     // WWII, Mitteleuropa and Reymann also cover Banat. Excluding them would break intersects semantics.
-    assert.deepEqual(premiumRows(h), ['banatRow', 'mitteleuropaRow', 'reymannRow', 'ww2Row']);
+    // "Other maps" (Hungaricana composites) ships without coverage bounds, so it stays visible everywhere.
+    assert.deepEqual(premiumRows(h), ['banatRow', 'mitteleuropaRow', 'otherMapsRow', 'reymannRow', 'ww2Row']);
     assert.equal(highlighted(h, 'bucovinaRow'), false);
     assert.equal(highlighted(h, 'satellite60sRow'), true);
     assert.equal(h.row('histPremiumExpandIcon').classList.contains(ARROW_CLASS), false);
@@ -203,7 +204,8 @@ test('PWA: _dlMap takes precedence over a stale local map and window.map', () =>
     const legacy = new MapMock(ALL);
     const h = setup({ exposed: active, local, legacy, pwa: true });
     // Galicia 1855, Chrzanowski, KDR Großblatt, Mitteleuropa, Reymann, WIG 100k also span the Bucovina viewport.
-    assert.deepEqual(premiumRows(h), ['bucovinaRow', 'chrzanowskiRow', 'galicia1855Row', 'kdrGbRow', 'mitteleuropaRow', 'reymannRow', 'wig100kRow', 'ww2Row']);
+    // The boundless "Other maps" row is always visible; the UK-only maps are hidden (no GB/IE intersection).
+    assert.deepEqual(premiumRows(h), ['bucovinaRow', 'chrzanowskiRow', 'galicia1855Row', 'kdrGbRow', 'mitteleuropaRow', 'otherMapsRow', 'reymannRow', 'wig100kRow', 'ww2Row']);
     assert.equal(active.reads, 1);
     assert.equal(local.reads + legacy.reads, 0);
     assert.equal(h.row('histPremiumExpandIcon').classList.contains(ARROW_CLASS), false);
@@ -343,7 +345,7 @@ test('all real historical, LIDAR and Roman rows resolve in the shared PWA panel'
             }
             return false;
         }));
-    assert.equal(leafRows.length, 65, '4 historical + 11 LIDAR + 32 Roman + 18 premium rows');
+    assert.equal(leafRows.length, 74, '4 historical + 11 LIDAR + 32 Roman + 27 premium rows (19 prior + 8 UK historical maps)');
     // The Pleiades, AWMC names and eastern Mediterranean political layers are
     // now real rows in the shared Roman/Premium panel.
     ['roman_places', 'roman_regional_names', 'roman_shade_herod', 'roman_shade_hasmonean'].forEach(id => {
@@ -351,8 +353,15 @@ test('all real historical, LIDAR and Roman rows resolve in the shared PWA panel'
     });
     const pwaStack = h.row('pwa-br-stack');
     assert(pwaStack, 'PWA account stack keeps its id');
-    leafRows.forEach(row => {
-        assert.equal(row.classList.contains(ROW_CLASS), false, row.id || 'anonymous LIDAR/Roman row');
+    // The "ALL" fixture is a central/Southeast-European viewport (lng 15–35):
+    // the eight UK/GB-IE historical maps legitimately filter out there, and
+    // nothing else may be hidden.
+    const viewportHidden = leafRows.filter(row => row.classList.contains(ROW_CLASS)).map(row => row.id).sort();
+    assert.deepEqual(viewportHidden, [
+        'ukBaire1940Row', 'ukOs10k1888Row', 'ukOs1900sRow', 'ukOs1919Row',
+        'ukOs25k1937Row', 'ukOs63k1955Row', 'ukOsHills1885Row', 'ukOsLondon1893Row'
+    ], 'only the eight UK/GB-IE historical maps are hidden outside their coverage');
+    leafRows.filter(row => !row.classList.contains(ROW_CLASS)).forEach(row => {
         assert.equal(row.closest('.transp-panel'), h.row('transpPanel'));
         for (let el = row; el; el = el.parentElement) {
             assert.notEqual(el, pwaStack, (row.id || 'anonymous row') + ' stays out of the PWA account stack');

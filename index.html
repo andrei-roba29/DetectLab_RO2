@@ -4367,6 +4367,224 @@
                                        oninput="setGalicia1855MapOpacity(this.value)">
                             </div>
 
+                            <!-- United Kingdom · Ordnance Survey / Bartholomew historical maps
+                                 (MapTiler tiles, National Library of Scotland collection). -->
+                            <!-- Ordnance Survey 1893-1896 — London five-foot 1:1,056 -->
+                            <div id="ukOsLondon1893Row">
+                                <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
+                                    <span style="display:flex;align-items:center;gap:5px;">
+                                        <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
+                                        <span class="t" data-key="layer_uk_os_london1893">Ordnance Survey 1893-1896</span>
+                                    </span>
+                                    <label class="apm-toggle-switch" title="Toggle Ordnance Survey 1893-1896" style="transform:scale(0.85);transform-origin:right center;">
+                                        <input type="checkbox" id="ukOsLondon1893MapToggle" onchange="toggleUkOsLondon1893Map(this.checked)">
+                                        <span class="apm-toggle-track"></span>
+                                    </label>
+                                </div>
+                                <div class="transp-layer-label" style="margin-bottom:5px;margin-top:2px">
+                                    <span style="display:flex;align-items:center;gap:6px;min-width:0">
+                                        <span style="font-size:0.72rem;opacity:0.6">Opacity</span>
+                                        <span style="font-size:0.55rem;background:rgba(255,200,50,0.15);color:#ffc832;border:1px solid rgba(255,200,50,0.4);border-radius:3px;padding:1px 4px;flex-shrink:0">PREMIUM</span>
+                                    </span>
+                                    <span class="pct-wrap" style="display:flex;align-items:center;gap:5px">
+                                        <button type="button" class="layer-info-btn" onclick="event.stopPropagation();showLayerInfo('Ordnance Survey 1893-1896','© Ordnance Survey five-foot London 1:1,056 (1893–1896) · National Library of Scotland (maps.nls.uk) · MapTiler')" title="Layer info"><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="7.5" r="1.3" fill="currentColor" /><rect x="10.8" y="10.5" width="2.4" height="7" rx="1.2" fill="currentColor" /></svg></button>
+                                        <span class="pct" id="ukOsLondon1893MapPct">80%</span>
+                                    </span>
+                                </div>
+                                <input type="range" class="transp-slider" id="ukOsLondon1893MapOpacitySlider"
+                                       min="0" max="100" value="80"
+                                       oninput="setUkOsLondon1893MapOpacity(this.value)">
+                            </div>
+
+                            <!-- Ordnance Survey Historical Maps 1919-1947 -->
+                            <div id="ukOs1919Row">
+                                <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
+                                    <span style="display:flex;align-items:center;gap:5px;">
+                                        <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
+                                        <span class="t" data-key="layer_uk_os_1919">Ordnance Survey Historical Maps 1919-1947</span>
+                                    </span>
+                                    <label class="apm-toggle-switch" title="Toggle Ordnance Survey Historical Maps 1919-1947" style="transform:scale(0.85);transform-origin:right center;">
+                                        <input type="checkbox" id="ukOs1919MapToggle" onchange="toggleUkOs1919Map(this.checked)">
+                                        <span class="apm-toggle-track"></span>
+                                    </label>
+                                </div>
+                                <div class="transp-layer-label" style="margin-bottom:5px;margin-top:2px">
+                                    <span style="display:flex;align-items:center;gap:6px;min-width:0">
+                                        <span style="font-size:0.72rem;opacity:0.6">Opacity</span>
+                                        <span style="font-size:0.55rem;background:rgba(255,200,50,0.15);color:#ffc832;border:1px solid rgba(255,200,50,0.4);border-radius:3px;padding:1px 4px;flex-shrink:0">PREMIUM</span>
+                                    </span>
+                                    <span class="pct-wrap" style="display:flex;align-items:center;gap:5px">
+                                        <button type="button" class="layer-info-btn" onclick="event.stopPropagation();showLayerInfo('Ordnance Survey Historical Maps 1919-1947','© UK Ordnance Survey Historical Maps (1919–1947) · National Library of Scotland (maps.nls.uk) · MapTiler')" title="Layer info"><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="7.5" r="1.3" fill="currentColor" /><rect x="10.8" y="10.5" width="2.4" height="7" rx="1.2" fill="currentColor" /></svg></button>
+                                        <span class="pct" id="ukOs1919MapPct">80%</span>
+                                    </span>
+                                </div>
+                                <input type="range" class="transp-slider" id="ukOs1919MapOpacitySlider"
+                                       min="0" max="100" value="80"
+                                       oninput="setUkOs1919MapOpacity(this.value)">
+                            </div>
+
+                            <!-- Ordnance Survey 1888-1913 — County Series six-inch 1:10,560 -->
+                            <div id="ukOs10k1888Row">
+                                <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
+                                    <span style="display:flex;align-items:center;gap:5px;">
+                                        <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
+                                        <span class="t" data-key="layer_uk_os_10k1888">Ordnance Survey 1888-1913</span>
+                                    </span>
+                                    <label class="apm-toggle-switch" title="Toggle Ordnance Survey 1888-1913" style="transform:scale(0.85);transform-origin:right center;">
+                                        <input type="checkbox" id="ukOs10k1888MapToggle" onchange="toggleUkOs10k1888Map(this.checked)">
+                                        <span class="apm-toggle-track"></span>
+                                    </label>
+                                </div>
+                                <div class="transp-layer-label" style="margin-bottom:5px;margin-top:2px">
+                                    <span style="display:flex;align-items:center;gap:6px;min-width:0">
+                                        <span style="font-size:0.72rem;opacity:0.6">Opacity</span>
+                                        <span style="font-size:0.55rem;background:rgba(255,200,50,0.15);color:#ffc832;border:1px solid rgba(255,200,50,0.4);border-radius:3px;padding:1px 4px;flex-shrink:0">PREMIUM</span>
+                                    </span>
+                                    <span class="pct-wrap" style="display:flex;align-items:center;gap:5px">
+                                        <button type="button" class="layer-info-btn" onclick="event.stopPropagation();showLayerInfo('Ordnance Survey 1888-1913','© Ordnance Survey County Series six-inch to the mile 1:10,560 (1888–1913) · National Library of Scotland (maps.nls.uk) · MapTiler')" title="Layer info"><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="7.5" r="1.3" fill="currentColor" /><rect x="10.8" y="10.5" width="2.4" height="7" rx="1.2" fill="currentColor" /></svg></button>
+                                        <span class="pct" id="ukOs10k1888MapPct">80%</span>
+                                    </span>
+                                </div>
+                                <input type="range" class="transp-slider" id="ukOs10k1888MapOpacitySlider"
+                                       min="0" max="100" value="80"
+                                       oninput="setUkOs10k1888MapOpacity(this.value)">
+                            </div>
+
+                            <!-- Ordnance Survey 1937-1961 — Provisional edition 1:25,000 -->
+                            <div id="ukOs25k1937Row">
+                                <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
+                                    <span style="display:flex;align-items:center;gap:5px;">
+                                        <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
+                                        <span class="t" data-key="layer_uk_os_25k1937">Ordnance Survey 1937-1961</span>
+                                    </span>
+                                    <label class="apm-toggle-switch" title="Toggle Ordnance Survey 1937-1961" style="transform:scale(0.85);transform-origin:right center;">
+                                        <input type="checkbox" id="ukOs25k1937MapToggle" onchange="toggleUkOs25k1937Map(this.checked)">
+                                        <span class="apm-toggle-track"></span>
+                                    </label>
+                                </div>
+                                <div class="transp-layer-label" style="margin-bottom:5px;margin-top:2px">
+                                    <span style="display:flex;align-items:center;gap:6px;min-width:0">
+                                        <span style="font-size:0.72rem;opacity:0.6">Opacity</span>
+                                        <span style="font-size:0.55rem;background:rgba(255,200,50,0.15);color:#ffc832;border:1px solid rgba(255,200,50,0.4);border-radius:3px;padding:1px 4px;flex-shrink:0">PREMIUM</span>
+                                    </span>
+                                    <span class="pct-wrap" style="display:flex;align-items:center;gap:5px">
+                                        <button type="button" class="layer-info-btn" onclick="event.stopPropagation();showLayerInfo('Ordnance Survey 1937-1961','© Ordnance Survey Provisional edition 1:25,000 (1937–1961) · National Library of Scotland (maps.nls.uk) · MapTiler')" title="Layer info"><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="7.5" r="1.3" fill="currentColor" /><rect x="10.8" y="10.5" width="2.4" height="7" rx="1.2" fill="currentColor" /></svg></button>
+                                        <span class="pct" id="ukOs25k1937MapPct">80%</span>
+                                    </span>
+                                </div>
+                                <input type="range" class="transp-slider" id="ukOs25k1937MapOpacitySlider"
+                                       min="0" max="100" value="80"
+                                       oninput="setUkOs25k1937MapOpacity(this.value)">
+                            </div>
+
+                            <!-- Ordnance Survey 'Hills' edition, 1885-1903 — one-inch 1:63,360 (PNG overlay) -->
+                            <div id="ukOsHills1885Row">
+                                <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
+                                    <span style="display:flex;align-items:center;gap:5px;">
+                                        <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
+                                        <span class="t" data-key="layer_uk_os_hills1885">Ordnance Survey, 'Hills' edition, 1885-1903</span>
+                                    </span>
+                                    <label class="apm-toggle-switch" title="Toggle Ordnance Survey Hills edition 1885-1903" style="transform:scale(0.85);transform-origin:right center;">
+                                        <input type="checkbox" id="ukOsHills1885MapToggle" onchange="toggleUkOsHills1885Map(this.checked)">
+                                        <span class="apm-toggle-track"></span>
+                                    </label>
+                                </div>
+                                <div class="transp-layer-label" style="margin-bottom:5px;margin-top:2px">
+                                    <span style="display:flex;align-items:center;gap:6px;min-width:0">
+                                        <span style="font-size:0.72rem;opacity:0.6">Opacity</span>
+                                        <span style="font-size:0.55rem;background:rgba(255,200,50,0.15);color:#ffc832;border:1px solid rgba(255,200,50,0.4);border-radius:3px;padding:1px 4px;flex-shrink:0">PREMIUM</span>
+                                    </span>
+                                    <span class="pct-wrap" style="display:flex;align-items:center;gap:5px">
+                                        <button type="button" class="layer-info-btn" onclick="event.stopPropagation();showLayerInfo('Ordnance Survey, \'Hills\' edition, 1885-1903','© Ordnance Survey one-inch to the mile 1:63,360, Hills edition (1885–1903) · National Library of Scotland (maps.nls.uk) · MapTiler')" title="Layer info"><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="7.5" r="1.3" fill="currentColor" /><rect x="10.8" y="10.5" width="2.4" height="7" rx="1.2" fill="currentColor" /></svg></button>
+                                        <span class="pct" id="ukOsHills1885MapPct">80%</span>
+                                    </span>
+                                </div>
+                                <input type="range" class="transp-slider" id="ukOsHills1885MapOpacitySlider"
+                                       min="0" max="100" value="80"
+                                       oninput="setUkOsHills1885MapOpacity(this.value)">
+                            </div>
+
+                            <!-- Ordnance Survey 1955-1961 — One-Inch Seventh Series 1:63,360 -->
+                            <div id="ukOs63k1955Row">
+                                <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
+                                    <span style="display:flex;align-items:center;gap:5px;">
+                                        <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
+                                        <span class="t" data-key="layer_uk_os_63k1955">Ordnance Survey 1955-1961</span>
+                                    </span>
+                                    <label class="apm-toggle-switch" title="Toggle Ordnance Survey 1955-1961" style="transform:scale(0.85);transform-origin:right center;">
+                                        <input type="checkbox" id="ukOs63k1955MapToggle" onchange="toggleUkOs63k1955Map(this.checked)">
+                                        <span class="apm-toggle-track"></span>
+                                    </label>
+                                </div>
+                                <div class="transp-layer-label" style="margin-bottom:5px;margin-top:2px">
+                                    <span style="display:flex;align-items:center;gap:6px;min-width:0">
+                                        <span style="font-size:0.72rem;opacity:0.6">Opacity</span>
+                                        <span style="font-size:0.55rem;background:rgba(255,200,50,0.15);color:#ffc832;border:1px solid rgba(255,200,50,0.4);border-radius:3px;padding:1px 4px;flex-shrink:0">PREMIUM</span>
+                                    </span>
+                                    <span class="pct-wrap" style="display:flex;align-items:center;gap:5px">
+                                        <button type="button" class="layer-info-btn" onclick="event.stopPropagation();showLayerInfo('Ordnance Survey 1955-1961','© Ordnance Survey One-Inch Seventh Series 1:63,360 (1955–1961) · National Library of Scotland (maps.nls.uk) · MapTiler')" title="Layer info"><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="7.5" r="1.3" fill="currentColor" /><rect x="10.8" y="10.5" width="2.4" height="7" rx="1.2" fill="currentColor" /></svg></button>
+                                        <span class="pct" id="ukOs63k1955MapPct">80%</span>
+                                    </span>
+                                </div>
+                                <input type="range" class="transp-slider" id="ukOs63k1955MapOpacitySlider"
+                                       min="0" max="100" value="80"
+                                       oninput="setUkOs63k1955MapOpacity(this.value)">
+                            </div>
+
+                            <!-- Ordnance Survey 1900s — seamless five-scale pyramid (hybrid format) -->
+                            <div id="ukOs1900sRow">
+                                <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
+                                    <span style="display:flex;align-items:center;gap:5px;">
+                                        <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
+                                        <span class="t" data-key="layer_uk_os_1900s">Ordnance Survey 1900s</span>
+                                    </span>
+                                    <label class="apm-toggle-switch" title="Toggle Ordnance Survey 1900s" style="transform:scale(0.85);transform-origin:right center;">
+                                        <input type="checkbox" id="ukOs1900sMapToggle" onchange="toggleUkOs1900sMap(this.checked)">
+                                        <span class="apm-toggle-track"></span>
+                                    </label>
+                                </div>
+                                <div class="transp-layer-label" style="margin-bottom:5px;margin-top:2px">
+                                    <span style="display:flex;align-items:center;gap:6px;min-width:0">
+                                        <span style="font-size:0.72rem;opacity:0.6">Opacity</span>
+                                        <span style="font-size:0.55rem;background:rgba(255,200,50,0.15);color:#ffc832;border:1px solid rgba(255,200,50,0.4);border-radius:3px;padding:1px 4px;flex-shrink:0">PREMIUM</span>
+                                    </span>
+                                    <span class="pct-wrap" style="display:flex;align-items:center;gap:5px">
+                                        <button type="button" class="layer-info-btn" onclick="event.stopPropagation();showLayerInfo('Ordnance Survey 1900s','© Ordnance Survey seamless multi-scale series, around 1900 (1:1 million–1:10,560) · National Library of Scotland (maps.nls.uk) · MapTiler')" title="Layer info"><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="7.5" r="1.3" fill="currentColor" /><rect x="10.8" y="10.5" width="2.4" height="7" rx="1.2" fill="currentColor" /></svg></button>
+                                        <span class="pct" id="ukOs1900sMapPct">80%</span>
+                                    </span>
+                                </div>
+                                <input type="range" class="transp-slider" id="ukOs1900sMapOpacitySlider"
+                                       min="0" max="100" value="80"
+                                       oninput="setUkOs1900sMapOpacity(this.value)">
+                            </div>
+
+                            <!-- UK Bartholomew Ireland 1940s — Quarter-Inch (PNG overlay) -->
+                            <div id="ukBaire1940Row">
+                                <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
+                                    <span style="display:flex;align-items:center;gap:5px;">
+                                        <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
+                                        <span class="t" data-key="layer_uk_baire_1940">UK Bartholomew Ireland 1940s</span>
+                                    </span>
+                                    <label class="apm-toggle-switch" title="Toggle UK Bartholomew Ireland 1940s" style="transform:scale(0.85);transform-origin:right center;">
+                                        <input type="checkbox" id="ukBaire1940MapToggle" onchange="toggleUkBaire1940Map(this.checked)">
+                                        <span class="apm-toggle-track"></span>
+                                    </label>
+                                </div>
+                                <div class="transp-layer-label" style="margin-bottom:5px;margin-top:2px">
+                                    <span style="display:flex;align-items:center;gap:6px;min-width:0">
+                                        <span style="font-size:0.72rem;opacity:0.6">Opacity</span>
+                                        <span style="font-size:0.55rem;background:rgba(255,200,50,0.15);color:#ffc832;border:1px solid rgba(255,200,50,0.4);border-radius:3px;padding:1px 4px;flex-shrink:0">PREMIUM</span>
+                                    </span>
+                                    <span class="pct-wrap" style="display:flex;align-items:center;gap:5px">
+                                        <button type="button" class="layer-info-btn" onclick="event.stopPropagation();showLayerInfo('UK Bartholomew Ireland 1940s','© Bartholomew Ireland Quarter-Inch, maps published 1940 · National Library of Scotland (maps.nls.uk) · MapTiler')" title="Layer info"><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="7.5" r="1.3" fill="currentColor" /><rect x="10.8" y="10.5" width="2.4" height="7" rx="1.2" fill="currentColor" /></svg></button>
+                                        <span class="pct" id="ukBaire1940MapPct">80%</span>
+                                    </span>
+                                </div>
+                                <input type="range" class="transp-slider" id="ukBaire1940MapOpacitySlider"
+                                       min="0" max="100" value="80"
+                                       oninput="setUkBaire1940MapOpacity(this.value)">
+                            </div>
+
                             <!-- Alte hărți / Other maps — hărți NE-georeferențiate (Hungaricana).
                                  Când stratul e pornit, locurile care au hărți apar ca puncte verzi
                                  semitransparente, grupate la fel ca siturile din „Patrimoniu”;
@@ -5768,7 +5986,7 @@
         </div>
     </footer>
 
-    <script src="js/translations.js?v=20261023-other-maps"></script>
+    <script src="js/translations.js?v=20261024-uk-historical-maps"></script>
 
     <!-- Leaflet JS (from qgis2web folder) -->
     <script src="js/leaflet.js"></script>
@@ -5881,7 +6099,7 @@
          depend on. -->
     <script src="js/finland-tm35.js?v=20261019-finland-filter"></script>
     <script src="js/finland-layers.config.js?v=20261019-finland-filter"></script>
-    <script src="js/layer-registry.js?v=20261024-asig-catalogue"></script>
+    <script src="js/layer-registry.js?v=20261024-uk-historical-maps"></script>
     <!-- Roman roads („Drumuri romane”): the parser owns the record/geometry
          format, the layer paints the road network on canvas tiles, and the
          worker streams + parses the NDJSON off the main thread. map-app.js
@@ -5889,7 +6107,7 @@
          See ROMAN_ROADS_PERFORMANCE.md. -->
     <script src="js/roman-roads-parser.js?v=20261015-roman-roads"></script>
     <script src="js/roman-roads.js?v=20261015-roman-roads"></script>
-    <script src="js/map-app.js?v=20261021-viewport-layer-filter"></script>
+    <script src="js/map-app.js?v=20261024-uk-historical-maps"></script>
     <!-- Danish layers: panel rows, basemap-control buttons and the lazy
          Leaflet layers, all built from js/danish-layers.config.js. -->
     <script src="js/danish-layers.js?v=20261019-danish-free-groups"></script>
@@ -5935,9 +6153,9 @@
     <script src="js/other-maps-tiles.js?v=20261023-other-maps"></script>
     <script src="js/other-maps-overlay.js?v=20261024-other-maps-zoomlock"></script>
     <script src="js/other-maps.js?v=20261024-other-maps-zoomlock"></script>
-    <script src="js/offline-maps.js?v=20261009-3d-globe"></script>
+    <script src="js/offline-maps.js?v=20261024-uk-historical-maps"></script>
     <script src="js/battles-layer.js?v=20261020-3d-analysis-points"></script>
-    <script src="js/vertical-opacity-control.js?v=20261002-persistent-layer-actions-v2"></script>
+    <script src="js/vertical-opacity-control.js?v=20261024-uk-historical-maps"></script>
     <!-- leaflet-heat rămâne în shell (pre-cache), dar nu mai e folosit de
          „Archeological Potential Sites": heatmap-ul de acolo e propriul raster de
          scoruri ancorat geografic, ca să nu alunece la zoom. -->
@@ -6398,7 +6616,7 @@
         // for the digitized Transylvania 1859 / Galicia & Lodomeria 1855 maps)
         // are rendered as clickable links. The text is still built node by node
         // — never with innerHTML — so the attribution cannot inject markup.
-        var LAYER_INFO_SOURCE_DOMAINS = ['bukowina1856.eu'];
+        var LAYER_INFO_SOURCE_DOMAINS = ['bukowina1856.eu', 'maps.nls.uk'];
         function renderLayerInfoAttribution(box, text) {
             box.textContent = '';
             var linkRe = new RegExp('(https?:\\/\\/[^\\s\'"<>)]+|(?:www\\.)?(?:' +
@@ -6481,6 +6699,14 @@
             'Polish Tactical Map – WIG 1:100k (1919–1939)': 'layer_wig100k',
             'Hartă administrativă a Galiției și Lodomeriei – 1855': 'layer_galicia1855',
             'Administrative Map of Galicia and Lodomeria – 1855': 'layer_galicia1855',
+            'Ordnance Survey 1893-1896': 'layer_uk_os_london1893',
+            'Ordnance Survey Historical Maps 1919-1947': 'layer_uk_os_1919',
+            'Ordnance Survey 1888-1913': 'layer_uk_os_10k1888',
+            'Ordnance Survey 1937-1961': 'layer_uk_os_25k1937',
+            "Ordnance Survey, 'Hills' edition, 1885-1903": 'layer_uk_os_hills1885',
+            'Ordnance Survey 1955-1961': 'layer_uk_os_63k1955',
+            'Ordnance Survey 1900s': 'layer_uk_os_1900s',
+            'UK Bartholomew Ireland 1940s': 'layer_uk_baire_1940',
             "Satellite imagery 60's": 'layer_sat60',
             'Imagini satelitare anii 60': 'layer_sat60',
             'Zone cu potențial arheologic': 'layer_archeo_potential',
@@ -7028,7 +7254,7 @@
     </div>
 
 <script src="js/account-legacy.js?v=20260814-promo"></script>
-<script src="js/subscriptions.js?v=20261008-premium-roman-guard"></script>
+<script src="js/subscriptions.js?v=20261024-uk-historical-maps"></script>
 
 
 

@@ -32,16 +32,16 @@ assert(!source.includes('cenagis-catalog-title'), 'the catalog renderer builds n
     assert(!indexHtml.includes('id="' + id + '"'), 'obsolete separate group #' + id + ' is removed');
 });
 assert(indexHtml.includes('js/historical-eu-maps.js?v=20261013-flat-hist-maps'), 'versioned catalog is loaded');
-assert(indexHtml.includes('js/map-app.js?v=20261021-albania-country-group'), 'versioned fallback map app is loaded');
-assert(indexHtml.includes('js/subscriptions.js?v=20261008-premium-roman-guard'), 'premium guard is versioned');
+assert(indexHtml.includes('js/map-app.js?v=20261024-uk-historical-maps'), 'versioned fallback map app is loaded');
+assert(indexHtml.includes('js/subscriptions.js?v=20261024-uk-historical-maps'), 'premium guard is versioned');
 assert(subscriptions.includes('toggleCenagisLayer'), 'dynamic CENAGIS toggle is Premium-guarded');
 assert(subscriptions.includes("'toggleRomanDareCategories'"), 'DARE All/None is Premium-guarded');
 assert(subscriptions.includes("'toggleRomanSub'"), 'Roman sublayers are Premium-guarded');
 console.log('  ✓ one premium parent group, versioned scripts and entitlement guards verified');
 
 assert(swJs.includes('js/historical-eu-maps.js?v=20261013-flat-hist-maps'), 'service worker precaches the versioned catalog');
-assert(swJs.includes('js/map-app.js?v=20261021-albania-country-group'), 'service worker precaches the current versioned map app');
-assert(swJs.includes('js/subscriptions.js?v=20261008-premium-roman-guard'), 'service worker precaches the versioned subscription guard');
+assert(swJs.includes('js/map-app.js?v=20261024-uk-historical-maps'), 'service worker precaches the current versioned map app');
+assert(swJs.includes('js/subscriptions.js?v=20261024-uk-historical-maps'), 'service worker precaches the versioned subscription guard');
 const shellVersion = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
 assert(shellVersion >= 171, 'service-worker cache bumped for the merged catalog (got v' + shellVersion + ')');
 console.log('  ✓ service-worker precache and cache version v' + shellVersion + ' verified');
