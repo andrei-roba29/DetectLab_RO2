@@ -1,162 +1,284 @@
-# Albania ASIG layers — one Albania-only group in the layer panel
+# Albania ASIG geoportal catalogue — one Albania-only panel
 
-The nine public WMS products below are described once in
-`js/asig-albania-layers.config.js` and rendered as separate rows **inside a
-single Albania group**: `#albaniaRow` → `#albaniaSubLayers` in the Gratis / Free
-tab. The group is attributed to Albania (`country: 'AL'`) and is visible **only
-while Albania is the selected country**. Every row keeps its own checkbox,
-opacity control, information popup, Tirana button, and failure status; the group
-adds a master switch, an expander, a Tirana button and an info popup. ASIG
-attribution is attached to every layer.
+The Albanian layers are the **ASIG geoportal catalogue** (Autoriteti Shtetëror
+për Informacionin Gjeohapësinor, <https://geoportal.asig.gov.al>): 28 curated
+layers in six sections plus **Heritage as one toggle**. Everything is mounted in
+a single Albania-only group, `#albaniaRow` → `#albaniaSubLayers`, in the
+Gratis / Free tab.
 
-| Theme caption in the group | Row label | Registry ID | Exact ASIG WMS `Name` | Format | Snapshot/date notes |
-|---|---|---|---|---|---|
-| Historical Maps | Topographic map 1:50k | `albania.topo50k` | `Topografike:50K_Topografike` | PNG | — |
-| Satellite | Orthophoto 1999 | `albania.ortho1999` | `Orthophoto:Ortofoto_1999` | PNG | — |
-| Satellite | Orthophoto 20 cm (2015) | `albania.ortho1994` | `orthophoto_2015:OrthoImagery_20cm` | JPEG | Catalogued 2015 20 cm product; the row no longer calls it 1994 |
-| LiDAR | DSM hillshade | `albania.dsm` | `DSM:Dsm_Hill_Group` | PNG | 60% initial opacity |
-| LiDAR | LiDAR hillshade | `albania.lidar` | `Dtm_2015:Hillshade_2015_group` | PNG | Hillshade derived from 2015 DTM; 50% initial opacity |
-| Heritage Sites | Heritage Sites | `albania.heritage` | `iktk:zonatembrojturatetrashegimisekulturore22_07_2026` | PNG | Snapshot: 22 July 2026 (`_22_07_2026`) |
-| Heritage Sites | Natural Protected Sites | `albania.natural` | `akzm:zonat_mbrojtura_081124` | PNG | Snapshot: 8 November 2024 (`_081124`) |
-| Heritage Sites | Cultural Protected Sites | `albania.cultural` | `iktk:zonatembrojturatetrashegimisekulturore_pike13_05_2026` | PNG | Snapshot: 13 May 2026 (`_13_05_2026`) |
-| Heritage Sites | Natural monuments | `albania.monument` | `akzm:monumentet_natyrore_07032023` | PNG | Snapshot: 7 March 2023 (`_07032023`) |
+| File | Job |
+|---|---|
+| `data/asig-layers.json` | **The catalogue** — sections, display titles, exact `workspace:name` values, endpoints, Heritage parts, licence note. Generated; never hand-edit. |
+| `data/asig-layers.data.js` | The same object as a plain `<script>` (and a Node `require`). Generated in the same pass, so it cannot drift. |
+| `tools/build-asig-catalogue.mjs` | The generator: curated spec + the prototype's `asig-layers.json` export → both files above. |
+| `js/asig-albania-layers.config.js` | Request rules only: WMS/WMTS parameters, CRS, zoom limits, pane/registry metadata, labels, run-time resolver settings. |
+| `js/asig-albania-layers.js` | The panel and the Leaflet layers: sections, search, active list, Heritage, WMS, WMTS reprojection, feature info, country gate. |
+| `js/layer-registry.js` | Mirrors every answerable WMS row as `albania.<id>` for the diagnostics, the 3D status report and the offline audit. |
+| `index.html` | Loads `data/asig-layers.data.js` before the config; the group row and `#albaniaSubLayers` mount. |
+| `css/styles.css` | `.albania-*` panel styles (search, active list, sections, Heritage block, feature-info iframes). |
 
-The four date-bearing names are provider snapshots, not timeless identifiers.
-If one stops drawing, re-check the provider capabilities and update the config;
-do not silently rename a layer. The exact strings above are regression-tested.
+## The catalogue
 
-## Capabilities evidence and request CRS
+Section order in the panel: **Heritage (one toggle)** first, then Orthophotos
+(14), **LiDAR** (2), Cadastre (3), Maps (2), Environment (1), Planning & mining
+(6) — 28 catalogue rows, and the only Albanian content the site has.
 
-The capabilities facts below were supplied by the owner. They are documented in
-`test/fixtures/asig-wms-capabilities.xml`; this fixture is explicitly an
-owner-supplied excerpt, **not an agent-fetched live response**:
+The section used to be labelled *Terrain*; it is now **LiDAR** (id `lidar`), which
+is what its two products actually are — DTM/DSM-derived hillshades — and what the
+rest of the site calls that kind of layer. The label and the section id are
+separate things: the id keys the DOM (`#albaniaSection_lidar`), the registry's
+`ui.section` and the saved collapsed state, so it was renamed together with the
+label rather than left behind.
 
-- WMS version 1.3.0; GetMap formats `image/png` and `image/jpeg`.
-- Root CRS values `EPSG:6870`, `EPSG:4326`, `EPSG:900913`, and `CRS:84`.
-- Each of the nine layers has an empty default style name, so requests use
-  `STYLES=`.
-- EPSG:6870 is the native CRS / WMTS matrix set. No hand-built EPSG:6870 XYZ
-  grid is inferred.
-- EPSG:900913 is the advertised Web-Mercator alias. EPSG:3857 is not literally
-  listed in this excerpt, so the excerpt alone does **not** establish that the
-  service accepts EPSG:3857.
+Three rows are tile-only (WMTS) and cannot be drawn through the WMS:
 
-The 2D layer keeps its existing EPSG:3857 first-request path and switches to
-EPSG:4326 after six tile errors. WMS 1.3.0 uses latitude/longitude BBOX axis
-order for EPSG:4326; the renderer handles that fallback ordering. Acceptance of
-the retained EPSG:3857 path is established only by the production proxy probe,
-not by offline URL construction or by the supplied capabilities excerpt.
+| Title | Name | Kind |
+|---|---|---|
+| Hillshade 2015 group (LiDAR) | `Dtm_2015:Hillshade_2015_group` | WMTS only |
+| Dsm Hill Group (LiDAR) | `DSM:Dsm_Hill_Group` | WMTS only |
+| italiane 100k (Maps) | `hartat_historike:italiane_100k` | WMTS only |
 
-## Coverage, visibility, and panel placement
+Display titles are the portal's own, kept verbatim — including the misspelled
+**“Mineral Resouces”**, which is also the title the export uses, so resolution
+must match it exactly.
 
-The WMS BBOX is clipped to the ASIG footprint: longitude 18.773–21.179 and
-latitude 39.538–42.758. Tirana is `[41.3275, 19.8187]`, zoom 9. Each Tirana
-button (per row and on the group) uses that view.
+Nothing from the pre-catalogue group survives: the old 1:50k sheet
+(`Topografike:50K_Topografike`), its captions and the modules' legacy
+state/mount handling are gone, so an older Albanian layer cannot be switched on
+beside the catalogue — a country view shows the catalogue or no ASIG layers at
+all.
 
-**Placement.** The rows used to be mounted in four different places of the
-Romanian/Denmark panel — the orthophotos between Romania's satellite periods,
-the heritage rows inside Romania's Heritage Sites section, and the DSM/LiDAR
-hillshades inside the LiDAR group that hosts Denmark's DHM. There are no
-`asigHistoricalLayers` / `asigSatelliteLayers` / `asigLidarLayers` /
-`asigHeritageLayers` mounts any more: `js/asig-albania-layers.js` renders all
-nine rows into `#albaniaSubLayers`, in draw order, with a small
-Historical / Satellite / LiDAR / Heritage caption whenever the theme changes
-(`CONFIG.sectionLabels`). The group row sits on its own between the LiDAR group
-and the Denmark group.
+### Heritage — one toggle, several parts
 
-**Placement is enforced, not just authored.** `buildPanel()` first runs
-`sweepLegacyRows()`: it removes any surviving pre-group mount (the four ids
-above) and any element carrying `data-albania-row` that is not inside
-`#albaniaSubLayers`, then re-renders the nine rows from the config. The sweep
-is what repairs an installed PWA that is still running an older app shell
-whose rows were mounted under Romania's satellite/heritage sections or under
-the LiDAR group that hosts Denmark's DHM — those rows sit outside the country
-gate, so without the sweep they would stay visible for every country. The
-function is exposed as `AsigAlbaniaLayers.sweepLegacyRows()` (with
-`AsigAlbaniaLayers.LEGACY_MOUNT_IDS` and `state.swept`) for diagnostics and
-tests. The shell cache is `detectlab-v251-albania-only`, and the config/module
-asset tags are `?v=20261021-albania-only`, so a browser cannot keep the old
-placement alive from a previous cache.
+Turning Heritage on switches on every part at once; turning it off removes them
+all. It has **one** checkbox, **one** opacity slider, **one** entry in the
+active-layer list, one reorder control and one remove button. The parts are
+never rows of their own:
 
-**Country gate.** `filterForCountry(iso)` (called by
-`js/map-app.js` → `filterLayersForCountry` on every selection, by
-`unfilterLayersForCountry` on “Exit view”, and from the
-`detectlab:country-selected` / `detectlab:country-cleared` events) shows the
-group only for ISO2 `AL`. For every other country — and for the global view
-with no country selected — the group row and every child row get
-`albania-out-of-country` / `country-layer-unavailable` and `aria-hidden="true"`,
-and the active tile layers are taken off the map (the user's on/off choice is
-remembered and restored on the next Albania view, so nothing is requested while
-another country is on screen). The class ships in the HTML and the hide rule
-(`#albaniaRow.albania-out-of-country { display:none !important; }`) is not
-scoped to `.country-filter-active`, because the gate must hold in the global
-view too, where that panel class is absent. The gate only controls the panel and
-map membership — it never changes the stored on/off state.
+- `akzm:zonat_mbrojtura_081124` — Natural Protected Areas
+- `akzm:monumentet_natyrore_07032023` — Natural monument
+- Cultural protected sites (point) — `iktk:…_pike13_05_2026` (recorded in this
+  repo from the owner-supplied capabilities; the export wins when it has the
+  same title)
+- Cultural protected sites (polygon) — `iktk:…22_07_2026`
+- **every** WMS layer whose title or name matches
+  `/archaeolog|archeolog|arkeolog/i` — added by the generator from the export,
+  and by the run-time resolver when the export is not available yet.
 
-Config metadata still supplies the shared catalogue group/z-order:
-Historical Maps → `hist-free`, Satellite → `sat-hist`, LiDAR → `lidar`, and
-Heritage Sites → `patrimoniu`; that is draw order (panes), not panel placement.
-Registry definitions carry `countries: ['AL']` (they are no longer
-`countryIndependent`), `guard:false`, `selfGuarded:true`, and an explicit
-explanation because this module owns the per-row fallback and status rather than
-allowing the global guard to flip a control.
+Because ASIG keeps publishing new Council of Ministers zoning decisions, the
+archaeological list is meant to be regenerated, not hand-edited (see
+“Regenerating the catalogue”).
 
-## Failure behavior
+## The panel
 
-- Failed image loads, including HTTP-200 XML/HTML or bodies the browser cannot
-  decode as images, become Leaflet tile errors.
-- After six EPSG:3857 tile errors, that layer redraws with EPSG:4326.
-- If the fallback also has a persistent error burst, that row reports
-  **“the source is not answering”** (or its Romanian equivalent).
-- Console output is limited to one concise warning per layer.
+- **Collapsible sections.** One header per section with its row count; the
+  collapsed state is remembered in `localStorage`.
+- **One checkbox and one opacity slider per layer**, plus a per-row ⓘ popup
+  (title, exact service name, ASIG attribution, licence caveat) and a per-row
+  **Tirana** button (centre the map on the capital) — both kept from the earlier
+  group.
+- **Search box** (`#albaniaSearch`) filtering by display title, exact layer name
+  and — for Heritage — every part's title/name, so `zonat_mbrojtura` or
+  `arkeologjike` finds the Heritage toggle even though its parts are not rows.
+  Matching folds diacritics and case: `durres` finds *Durrës*, `shkoder` finds
+  *Shkodër*, `25k` finds the sheet.
+- **Active-layer list** (`#albaniaActive`) with ↑ / ↓ reordering and a remove
+  button per entry; the top of the list is the top of the map. Reordering is a
+  real z-order: every catalogue layer draws in ONE Leaflet pane
+  (`pane_asig`, z-index 404), so list order is draw order. (The sections no
+  longer own individual panes — that would have made cross-section reordering
+  meaningless.)
+- **Group master switch / expander / Tirana / ⓘ** behave as before.
 
-The same-origin map tile proxy also rejects successful upstream responses that
-are not `image/*` or contain fewer than 32 bytes, and marks upstream failures in
-`X-Map3D-Upstream`. The production probe treats those markers as failures.
+## Requests
 
-## Offline checks versus live production results
+### WMS (25 of the 28 rows)
 
-The offline audit rebuilds request URLs and verifies repository invariants only;
-it makes no HTTP request and does not claim that ASIG or the production proxy
-returned a tile. Its Tirana sample for all nine Albania entries is
-`12/2273/1530`. The former sample `12/2345/1480` is Bucharest, not Albania.
+`GetMap` per tile, WMS 1.3.0, `STYLES=`, `image/png`, `TRANSPARENT=TRUE`, the
+tile's own EPSG:3857 extent clipped to the ASIG footprint
+(`lon 18.773–21.179`, `lat 39.538–42.758`). Two fallbacks, in order:
 
-Run the same-origin production gate with:
+1. **Endpoint.** The per-workspace route
+   `https://geoportal.asig.gov.al/service/<workspace>/wms` is asked first; after
+   two tile errors with no successful tile the layer retries once through the
+   global `https://geoportal.asig.gov.al/service/wms` (the prototype's rule).
+   *Not verified:* which endpoint a given layer prefers; the export records both
+   (`url`, `fallbackUrl`) and the catalogue uses what it says.
+2. **CRS.** After `CONFIG.wms.fallbackAfterErrors` (6) consecutive errors the
+   layer redraws with `EPSG:4326` (WMS 1.3.0 lat/lon axis order, handled). A
+   second burst marks the row “the source is not answering”.
+
+A HTTP 200 answer that is XML/HTML, or any body the browser cannot decode as an
+image, is a tile error — that is how the GeoServer `LayerNotDefined` body for the
+three tile-only names is caught.
+
+### WMTS (the 3 tile-only rows)
+
+The WMTS (`service/wmts`, GeoWebCache) links its layers **only** to the
+`EPSG:6870` (13 levels, Albania TM) and `EPSG:4326` (22 levels) tile-matrix sets.
+There is no Web-Mercator grid, so each Web-Mercator tile is drawn on a canvas:
+`api.planWmtsTile()` maps the destination tile into the plate-carrée grid
+(`2^(z+1) × 2^z` tiles of 256 px, top-left at −180°/90°), fetches the source
+tiles that cover it and mosaics them row by row (latitude is not linear in
+Mercator). The images are **not** requested with `crossOrigin` — the WMTS sends
+no CORS header and the canvas is only a drawing surface here, so a tainted
+canvas keeps working while a CORS request would refuse every tile.
+
+The deepest cached level is unknown. Each destination tile starts at
+`min(maxSourceZoom, z)`, steps down a level when a source level evidently has no
+cached tiles (three misses), and the row says “no cached tiles at this zoom;
+showing a shallower level enlarged”. `italiane 100k` is the layer this was added
+for; the step-down has **not** been re-confirmed against the live tile server
+from this environment.
+
+## Feature info on map click
+
+A click queries **every active WMS part** (Heritage included), grouped by
+endpoint, with `GetFeatureInfo` (WMS 1.1.1, `SRS=EPSG:3857`, the clicked pixel
+and the map's view size). The answer is rendered in a map popup, one
+**sandboxed** `<iframe>` (`sandbox=""`) per endpoint. If the cross-origin read is
+blocked the iframe loads the request URL directly, so the service's own HTML is
+still shown. Tile-only layers have no feature info and are skipped.
+
+## Run-time name resolution (rows the export has not named yet)
+
+`asig-layers.json` (the prototype export) was **not available** when this
+catalogue was generated, so only the names that were already verified in this
+repository are baked: `Orthophoto:Ortofoto_1999`,
+`orthophoto_2015:OrthoImagery_20cm`, the three tile-only products and the four
+Heritage parts. **23 of the 25 WMS rows are still unnamed** — the other 13
+orthophoto flights, Cadastre ×3, `25k_krgjsh_1`, Water course link and
+Planning & mining ×6. They are written as
+`"name": null` plus `resolveByTitle`, and `js/asig-albania-layers.js` fills them
+in **in the visitor's browser**:
+
+1. a name baked in the catalogue always wins;
+2. otherwise the service's `GetCapabilities` is read once (title match, then the
+   bare name segment) and the answer is cached in `localStorage` for 7 days;
+3. every layer whose title/name matches the archaeology keyword joins Heritage
+   as a new part, and Heritage redraws if it is already on.
+
+This runs in the browser on purpose: ASIG answers *“IP … is blacklisted”* to
+automated requests from some cloud addresses, while visitors' browsers are
+served normally. If the read fails, the affected rows stay off and say so — they
+never draw a guessed layer name.
+
+**Bake the names as soon as the export exists** (below): the panel keeps the
+rows but marks them *not in the catalogue yet*, the registry skips them
+(`AsigAlbaniaLayers` → `asigCatalogueSkips()` lists them, with the reason), so
+they are invisible to the diagnostics, the 3D status report and the production
+probe until the catalogue is regenerated. Nothing is guessed in the meantime.
+
+## Regenerating the catalogue
+
+```sh
+# 1. Prototype: wait for the status line, click “Export layer list (JSON)”,
+#    save the file as asig-layers.json in the repo root.
+node tools/build-asig-catalogue.mjs --export=asig-layers.json
+node tools/build-asig-catalogue.mjs --check        # what the regression test runs
+
+# Bootstrap only, when no export exists yet (run-time resolution, see above) —
+# this is how the committed catalogue was produced:
+node tools/build-asig-catalogue.mjs --allow-unresolved
+```
+
+The export also carries the archaeology list: every layer whose title or name
+matches `/archaeolog|archeolog|arkeolog/i` is appended to Heritage as soon as it
+appears in it — no code change per Council of Ministers decision.
+
+The generator is **strict**: a WMS row whose title cannot be matched stops the
+build and lists the titles, because a catalogue must not ship a layer name nobody
+verified. `--allow-unresolved` is the only way to write `null` names. The
+curated spec (sections, order, display titles, which rows are tile-only, the
+Heritage rule) lives in `CATALOGUE_SPEC` / `HERITAGE_SPEC` inside the generator;
+names, endpoints and the archaeological parts come from the export. Both output
+files are written in one pass, and `test-albania-asig-layers.js` fails if they
+drift from the generator.
+
+After regenerating: bump the `?v=` tags for the data + config + module in
+`index.html` and `sw.js` (and `CACHE_NAME`), then run the tests below.
+
+## Attribution, licence, and what is verified
+
+- **Attribution.** `Data: ASIG, Albanian State Authority for Geospatial
+  Information (geoportal.asig.gov.al)` is attached to every Leaflet layer (so it
+  appears in the map's attribution control whenever a layer is on) and repeated
+  in every row's ⓘ popup and the group popup.
+- **Licence — unresolved, deliberately.** ASIG does not state reuse terms in the
+  supplied capabilities. The catalogue records
+  `"licence": { "state": "unverified", … }` and the ⓘ popups tell the visitor
+  the terms are not published. **Confirm them with ASIG before commercial use or
+  redistribution of the tiles.** Do not replace this with a guessed licence.
+- **Observed** (from the portal's WMTS capabilities and the owner's network
+  logs): the WMTS endpoint and its two matrix sets; no Web-Mercator grid; the
+  WMS `LayerNotDefined` XML body with HTTP 200 for `hartat_historike:italiane_100k`;
+  the portal's own map asking WMS with `SRS=EPSG:6870` and WMTS with
+  `tilematrixset=EPSG:6870`; the cloud-IP blacklist.
+- **Assumed / unverified:** which endpoint each WMS layer prefers; the deepest
+  WMTS level with cached tiles; that EPSG:3857 is accepted (the supplied
+  capabilities advertise EPSG:900913, not 3857 literally — the retained request
+  path is established only by the production probe, not by URL construction).
+
+## Coverage, country gate, and the 3D view
+
+- The panel group and every row are visible **only** while Albania (ISO2 `AL`)
+  is the selected country — including the global view, where no country is
+  selected. The on/off choice is remembered and the tile layers are parked while
+  another country is on screen, so nothing is requested.
+- `buildPanel()` always rebuilds the panel inside `#albaniaSubLayers`, so the
+  catalogue has exactly one place in the page and nothing older can be rendered
+  beside it.
+- State is stored under `detectlab_albania_layers_v2`; there is no migration
+  from the pre-catalogue keys, because none of those rows exist any more.
+- The three WMTS rows are **not** in the registry: they are canvas-reprojected
+  layers with no WMS layer to audit, and the 2D ⇄ 3D mirror does not carry ASIG
+  layers. WMS rows are mirrored as `albania.<id>`, `countries: ['AL']`,
+  `guard: false`, `selfGuarded: true`; rows without a baked name are skipped
+  until the catalogue is regenerated (`AsigAlbaniaLayers` shows the list via
+  `registry.asigCatalogueSkips()`).
+
+## Tests and live checks
+
+```sh
+node test-albania-asig-layers.js            # catalogue + panel + WMS/WMTS + registry (offline)
+node test-asig-catalogue-generator.mjs      # generator: title folding, names, strict mode, artefacts
+node test-wms-layer-audit.js                # offline audit of every WMS/WMTS layer
+node test-asig-production-probe.mjs         # mock-only probe regression
+node test-wms-health.js                     # the availability guard, incl. the ASIG rows
+node tools/audit-wms-layers.mjs             # the audit itself (0 errors expected)
+node tools/audit-wms-layers.mjs --write=WMS_WMTS_LAYER_AUDIT.md   # refresh the report
+```
+
+Live production check (same-origin tile proxy, never ASIG directly):
 
 ```sh
 node tools/probe-asig-production.mjs --origin=https://detectlab.eu --tile=12/2273/1530
 ```
 
-It requests all nine registry IDs through
+It requests every `albania.*` WMS registry row through
 `/api/map3d/tile?layer=albania.<id>&z=12&x=2273&y=1530` and prints HTTP status,
-Content-Type, body size, and `X-Map3D-Upstream` for every layer. A pass requires
-HTTP 200, an `image/*` response of at least 32 bytes, no XML/HTML exception body,
-and no upstream failure marker. The test `test-asig-production-probe.mjs` is
-mock-only and does not contact production. Do not represent its results—or the
-offline audit—as live verification.
+Content-Type, body size and `X-Map3D-Upstream`. A pass requires HTTP 200, an
+`image/*` body of at least 32 bytes, no XML/HTML exception body and no upstream
+failure marker. Offline tests build URLs only — they do not prove that ASIG (or
+the proxy) returned a tile.
 
 ## Manual QA
 
-- Open the layer panel in the default view: there is **no** Albania group (the
-  Albanian rows are not in the Romanian Historical Maps / Satellite / Heritage
-  Sites rows, nor in the LiDAR group that hosts Denmark's DHM).
-- Select Albania from the globe/dock: the “Albania · ASIG geoportal” group
-  appears between the LiDAR group and the Denmark group, expanded, with the four
-  theme captions and the nine rows. Its master switch toggles the whole stack;
-  the arrow collapses it; “Tirana” frames the country.
-- Switch to Romania, Denmark or Finland (or “Exit view”): the group disappears
-  and any Albanian layer that was on is parked without losing its switch state.
-  Back to Albania: the same rows return with the same on/off and opacity values.
-- `node test-albania-asig-layers.js` covers the placement invariants (one group,
-  no old mounts, position before the Denmark group), the stale-shell sweep
-  (legacy mounts and stray rows are removed at startup and on rebuild), the
-  gate for RO/DK/FI/IT, the global view, the remembered per-layer state, the
-  master switch, the expander, the WMS URL/BBOX clipping and the EPSG:4326
-  fallback.
-  `node test-country-layer-filter.js`, `node test-wms-layer-audit.js` and
-  `node test-wms-health.js` cover the surrounding filter/registry/health
-  contracts.
-
-Attribution: Data: ASIG, Albanian State Authority for Geospatial Information
-(geoportal.asig.gov.al). Terms for commercial redistribution are not stated in
-the supplied capabilities excerpt; verify them before commercial promotion.
+- Default view (no country): there is **no** Albania group.
+- Select Albania: the group appears between Romania's LiDAR group and the
+  Denmark group, expanded, with the search box, the active list, the Heritage
+  toggle and six collapsible sections — Orthophotos · **LiDAR** · Cadastre ·
+  Maps · Environment · Planning & mining. Counts per section: 14 / 2 / 3 / 2 / 1 / 6.
+- Search `arkeolog`: only the Heritage toggle remains visible; search `durres`:
+  one orthophoto row. Clear: everything returns.
+- Switch on two orthophotos and reorder them with ↑/↓: the upper list entry
+  draws above the other (compare with and without the basemap).
+- Switch Heritage on: one active-list entry, 4+ layers on the map, one slider
+  moving all of them. Click the map inside Albania: the popup queries the
+  Heritage parts (one iframe per workspace endpoint).
+- Switch `italiane 100k` on and zoom in deeply: instead of going blank it shows
+  enlarged tiles and the row says the level is not cached (only if the WMTS
+  really has no deep tiles there).
+- Switch to Romania / Denmark / Finland, or “Exit view”: the group disappears,
+  the switches are remembered, and back in Albania the same rows return with the
+  same opacity and order.

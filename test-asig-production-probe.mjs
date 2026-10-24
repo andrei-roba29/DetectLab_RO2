@@ -5,10 +5,22 @@ import { spawn } from 'node:child_process';
 import http from 'node:http';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const probe = path.join(root, 'tools/probe-asig-production.mjs');
-const ids = ['topo50k', 'ortho1999', 'ortho1994', 'dsm', 'lidar', 'heritage', 'natural', 'cultural', 'monument'];
+const require = createRequire(import.meta.url);
+/* The probe follows the catalogue: every ASIG WMS row the registry mirrors.
+ * Tile-only (WMTS) rows and rows whose name is not baked yet are skipped. */
+const registry = require('./js/layer-registry.js');
+const ids = registry.list()
+  .map((def) => def.id)
+  .filter((id) => id.startsWith('albania.'))
+  .map((id) => id.slice('albania.'.length))
+  .sort();
+const total = ids.length;
+/* The scenario that must fail: one real registry row answers a bad body. */
+const badId = 'albania.' + ids[0];
 const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000b49444154789c636000020000050001a5f645400000000049454e44ae426082', 'hex');
 
 function runProbe(origin) {
@@ -28,7 +40,7 @@ const server = http.createServer((req, res) => {
   requests.push(url);
   if (url.pathname !== '/api/map3d/tile') { res.writeHead(404).end(); return; }
   const id = url.searchParams.get('layer') || '';
-  const invalid = id === 'albania.topo50k';
+  const invalid = id === badId;
   const mode = url.searchParams.get('mock') || process.env.ASIG_PROBE_MOCK || 'pass';
   // Scenarios come from the server path so the probe still tests the production URL shape.
   if (invalid && mode === 'xml') { res.writeHead(200, { 'Content-Type': 'text/xml' }).end('<ServiceExceptionReport/>'); return; }
@@ -48,7 +60,7 @@ try {
     process.env.ASIG_PROBE_MOCK = scenario;
     const result = await runProbe(origin);
     if (previous === undefined) delete process.env.ASIG_PROBE_MOCK; else process.env.ASIG_PROBE_MOCK = previous;
-    assert.equal(requests.length, 9, `${scenario}: probes all nine registry IDs; child=${result.code} ${result.stderr} ${result.stdout}`);
+    assert.equal(requests.length, total, `${scenario}: probes all ${total} registry IDs; child=${result.code} ${result.stderr} ${result.stdout}`);
     requests.forEach((url) => {
       assert.equal(url.pathname, '/api/map3d/tile');
       assert.equal(url.searchParams.get('z'), '12');
@@ -58,19 +70,19 @@ try {
     ids.forEach((id) => assert.ok(requests.some((url) => url.searchParams.get('layer') === 'albania.' + id), `${scenario}: includes albania.${id}`));
     if (scenario === 'pass') {
       assert.equal(result.code, 0, result.stderr + result.stdout);
-      assert.match(result.stdout, /Probe summary: 9\/9 passed/);
+      assert.match(result.stdout, new RegExp(`Probe summary: ${total}/${total} passed`));
       assert.match(result.stdout, /HTTP 200\timage\/png\t\d+ bytes\tX-Map3D-Upstream: <absent>/);
     } else {
       assert.equal(result.code, 1, `${scenario}: invalid response must fail the gate`);
-      assert.match(result.stdout, /Probe summary: 8\/9 passed/);
-      const failed = result.stdout.split('\n').find((line) => line.startsWith('FAIL albania.topo50k'));
+      assert.match(result.stdout, new RegExp(`Probe summary: ${total - 1}/${total} passed`));
+      const failed = result.stdout.split('\n').find((line) => line.startsWith('FAIL ' + badId));
       assert.ok(failed, `${scenario}: the bad layer is identified in output`);
       if (scenario === 'xml' || scenario === 'html') assert.match(failed, /XML\/HTML exception body/);
       if (scenario === 'short') assert.match(failed, /3 bytes/);
       if (scenario === 'upstream') assert.match(failed, /X-Map3D-Upstream: not-an-image/);
     }
   }
-  console.log('[ASIG probe mock] 5 response scenarios passed; all requests were same-origin and used Tirana tile 12/2273/1530.');
+  console.log(`[ASIG probe mock] 5 response scenarios passed over ${total} ASIG rows; all requests were same-origin and used Tirana tile 12/2273/1530.`);
 } finally {
   await new Promise((resolve) => server.close(resolve));
 }

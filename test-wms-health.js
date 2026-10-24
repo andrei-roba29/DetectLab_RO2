@@ -29,16 +29,28 @@ const mapApp = read('js/map-app.js');
 const histEu = read('js/historical-eu-maps.js');
 const registry = read('js/layer-registry.js');
 
-const guardTag = indexHtml.indexOf('js/wms-health.js?v=20261021-albania-country-group');
-assert(guardTag !== -1, 'index.html loads the versioned WMS guard');
+/* Version tags are read from index.html instead of being hard-coded: every
+ * release re-versions these scripts, and a literal would make this suite fail
+ * for a reason that has nothing to do with the guard. What has to hold is that
+ * index.html loads the guard, that it loads before the two files that create
+ * third-party layers, and that sw.js precaches the exact same URLs. */
+function scriptTag(html, file) {
+    const match = html.match(new RegExp('src="' + file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\?v=[^"\']*)?"'));
+    return match ? match[0].slice(5, -1) : null;
+}
+const guardTag = indexHtml.indexOf(scriptTag(indexHtml, 'js/wms-health.js') || '\u0000');
+assert(guardTag !== -1 && scriptTag(indexHtml, 'js/wms-health.js'), 'index.html loads the versioned WMS guard');
+assert(indexHtml.includes(scriptTag(indexHtml, 'js/wms-health.js') + '"'), 'the guard is requested with its version tag');
 assert(guardTag > indexHtml.indexOf('js/leaflet.js'), 'the guard loads after Leaflet');
-assert(guardTag < indexHtml.indexOf('js/map-app.js?v=20261021-albania-country-group'),
+assert(guardTag < indexHtml.indexOf(scriptTag(indexHtml, 'js/map-app.js') || '\u0000'),
     'the guard loads before map-app.js creates the CENAGIS layers');
-assert(guardTag < indexHtml.indexOf('js/historical-eu-maps.js?v=20261013-flat-hist-maps'),
+assert(guardTag < indexHtml.indexOf(scriptTag(indexHtml, 'js/historical-eu-maps.js') || '\u0000'),
     'the guard loads before the country-map catalog wraps it');
-assert(swJs.includes('js/wms-health.js?v=20261021-albania-country-group'), 'sw.js precaches the guard');
-assert(swJs.includes('js/map-app.js?v=20261021-albania-country-group'), 'sw.js precaches the re-versioned map app');
-assert(swJs.includes('js/historical-eu-maps.js?v=20261013-flat-hist-maps'), 'sw.js precaches the re-versioned catalog');
+['js/wms-health.js', 'js/map-app.js', 'js/historical-eu-maps.js'].forEach(function (file) {
+    const tag = scriptTag(indexHtml, file);
+    assert(tag, 'index.html loads ' + file);
+    assert(swJs.includes(tag), 'sw.js precaches the exact URL index.html requests (' + tag + ')');
+});
 const shellVersion = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
 assert(shellVersion >= 201, 'sw.js cache is v201 or newer so installed PWAs pick the provider-aware guard up');
 console.log('  ✓ index.html / sw.js load and precache the guard in order');

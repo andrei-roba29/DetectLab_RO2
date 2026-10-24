@@ -629,6 +629,10 @@ const warnings = rows.flatMap((r) => r.findings.filter((f) => f.level === 'warn'
  * `what` is the first thing to look for when a layer of that provider goes
  * blank, `owner` says whether the fault can be fixed in this repo at all.
  */
+/* The ASIG catalogue's Names are read from the registry, not typed here: the
+ * catalogue is generated, and a hand-written list is what went stale before. */
+const asigNames = rows.filter((r) => r.id.startsWith('albania.') && r.layer).map((r) => r.layer);
+
 const SIGNATURES = [
   {
     host: 'pastmaps.cenagis.edu.pl',
@@ -694,19 +698,15 @@ const SIGNATURES = [
   {
     host: 'geoportal.asig.gov.al',
     provider: 'ASIG / geoportal.asig.gov.al',
-    request: 'WMS 1.3.0 GetMap (CRS=EPSG:3857, STYLES=) for the nine exact Names: ' +
-      'Topografike:50K_Topografike, Orthophoto:Ortofoto_1999, orthophoto_2015:OrthoImagery_20cm, ' +
-      'DSM:Dsm_Hill_Group, Dtm_2015:Hillshade_2015_group, iktk:zonatembrojturatetrashegimisekulturore22_07_2026, ' +
-      'akzm:zonat_mbrojtura_081124, iktk:zonatembrojturatetrashegimisekulturore_pike13_05_2026, ' +
-      'akzm:monumentet_natyrore_07032023',
+    request: 'WMS 1.3.0 GetMap (CRS=EPSG:3857, STYLES=) for the exact catalogue Names the registry mirrors' +
+      (asigNames.length ? ': ' + asigNames.join(', ') : ' (none yet — see “What is not audited”)'),
     what: 'HTTP 200 with XML/HTML or a body that is not a decodable image is a tile error; the same-origin ' +
       'production probe separately requires HTTP 200, image/*, at least 32 bytes, no exception body and no ' +
       'X-Map3D-Upstream failure marker. EPSG:3857 is retained as the request path but is not listed literally ' +
       'in the owner-supplied capabilities excerpt (which advertises EPSG:900913).',
     owner: 'external (the agency GeoServer; government host, no SLA)',
-    app: 'rows are rendered in one Albania-only group (#albaniaRow, with Historical/Satellite/LiDAR/Heritage ' +
-      'captions) and are shown only while Albania is selected; a runtime sweep removes any surviving pre-group ' +
-      'mount or stray Albanian row; renderer owns error handling, retries EPSG:4326 after the configured ' +
+    app: 'the rows are the ASIG catalogue in one Albania-only group (#albaniaRow) and are shown only while ' +
+      'Albania is selected; the renderer owns error handling, retries EPSG:4326 after the configured ' +
       'EPSG:3857 error burst, then reports a persistent fallback failure on that layer row'
   },
   {

@@ -111,9 +111,9 @@ until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one
 | `danish.orto_foraar_2024` | wms | same-origin | geodanmark_2024_12_5cm | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `danish.orto_foraar_2025` | wms | same-origin | geodanmark_2025_12_5cm | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `sat.vhr-2012` | wms | copernicus.discomap.eea.europa.eu | Image | 1.1.1 | image/jpeg | no | always | probe · Copernicus Land / EEA discomap |
-| `albania.ortho1999` | wms | geoportal.asig.gov.al | Orthophoto:Ortofoto_1999 | 1.3.0 | image/png | unknown | always | probe · ASIG / geoportal.asig.gov.al |
+| `albania.ortho_2015_20cm` | wms | geoportal.asig.gov.al | orthophoto_2015:OrthoImagery_20cm | 1.3.0 | image/png | unknown | always | probe · ASIG / geoportal.asig.gov.al |
+| `albania.ortho_1999` | wms | geoportal.asig.gov.al | Orthophoto:Ortofoto_1999 | 1.3.0 | image/png | unknown | always | probe · ASIG / geoportal.asig.gov.al |
 | `sat.vhr-2018` | wms | image.discomap.eea.europa.eu | VHR_2018_WM | 1.1.1 | image/jpeg | no | always | probe · Copernicus Land / EEA discomap |
-| `albania.ortho1994` | wms | geoportal.asig.gov.al | orthophoto_2015:OrthoImagery_20cm | 1.3.0 | image/jpeg | unknown | always | probe · ASIG / geoportal.asig.gov.al |
 | `sat.vhr-2021` | wms | image.discomap.eea.europa.eu | VHR_2021_LAEA | 1.1.1 | image/jpeg | no | always | probe · Copernicus Land / EEA discomap |
 | `danish.naturtyper` | wms | arealeditering-dist-geo.miljoeportal.dk | dai:bes_naturtyper | 1.3.0 | image/png | unknown | auto | probe · Danmarks Miljøportal |
 | `danish.fortidsminder_punkt_fredet` | wms | www.kulturarv.dk | fundogfortidsminder_punkt_fredet | 1.3.0 | image/png | unknown | auto | probe · Slots- og Kulturstyrelsen (Fund og Fortidsminder) |
@@ -152,16 +152,11 @@ until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one
 | `lidar.dk-dhm` | dynamic | same-origin | dhm |  | image/png | yes | never | — same-origin |
 | `lidar.se-lantmateriet` | dynamic | same-origin |  |  | image/png | yes | never | — same-origin |
 | `lidar.fr-mnh` | wms | data.geopf.fr | IGNF_LIDAR-HD_MNT_ELEVATION.ELEVATIONGRID… | 1.3.0 | image/png | unknown | auto | probe · IGN France / Géoplateforme |
-| `albania.dsm` | wms | geoportal.asig.gov.al | DSM:Dsm_Hill_Group | 1.3.0 | image/png | unknown | always | probe · ASIG / geoportal.asig.gov.al |
-| `albania.lidar` | wms | geoportal.asig.gov.al | Dtm_2015:Hillshade_2015_group | 1.3.0 | image/png | unknown | always | probe · ASIG / geoportal.asig.gov.al |
 | `vegfp.ppi` | wmts | phenology.hrvpp2.vgt.vito.be | CLMS_HRVPP_ST_PPI_10M | 1.0.0 | image/png | unknown | auto | watch · VITO / Copernicus HR-VPP |
 | `vegfp.smx` | wmts | phenology.hrvpp2.vgt.vito.be | CLMS_HRVPP_VPP_MAXV_SEASON1_10M | 1.0.0 | image/png | unknown | auto | watch · VITO / Copernicus HR-VPP |
 | `vegfp.sgu` | wmts | phenology.hrvpp2.vgt.vito.be | CLMS_HRVPP_VPP_LSLOPE_SEASON1_10M | 1.0.0 | image/png | unknown | auto | watch · VITO / Copernicus HR-VPP |
 | `vegfp.sgd` | wmts | phenology.hrvpp2.vgt.vito.be | CLMS_HRVPP_VPP_RSLOPE_SEASON1_10M | 1.0.0 | image/png | unknown | auto | watch · VITO / Copernicus HR-VPP |
-| `albania.heritage` | wms | geoportal.asig.gov.al | iktk:zonatembrojturatetrashegimisekulturo… | 1.3.0 | image/png | unknown | always | probe · ASIG / geoportal.asig.gov.al |
-| `albania.natural` | wms | geoportal.asig.gov.al | akzm:zonat_mbrojtura_081124 | 1.3.0 | image/png | unknown | always | probe · ASIG / geoportal.asig.gov.al |
-| `albania.cultural` | wms | geoportal.asig.gov.al | iktk:zonatembrojturatetrashegimisekulturo… | 1.3.0 | image/png | unknown | always | probe · ASIG / geoportal.asig.gov.al |
-| `albania.monument` | wms | geoportal.asig.gov.al | akzm:monumentet_natyrore_07032023 | 1.3.0 | image/png | unknown | always | probe · ASIG / geoportal.asig.gov.al |
+| `albania.heritage` | wms | geoportal.asig.gov.al | akzm:zonat_mbrojtura_081124,akzm:monument… | 1.3.0 | image/png | unknown | always | probe · ASIG / geoportal.asig.gov.al |
 | `overlay.image-overlays` | dynamic | same-origin |  |  |  | yes | never | — runtime |
 | `cenagis.wig25k` | wms | pastmaps.cenagis.edu.pl | ihpan:wig25k_3857 | 1.3.0 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `cenagis.wig100k` | wms | pastmaps.cenagis.edu.pl | ihpan:wig100k_3857 | 1.3.0 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
@@ -209,7 +204,6 @@ until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one
 | `cenagis.city_warszawa_1822` | wms | pastmaps.cenagis.edu.pl | ihpan:warszawaOKI_2180 | 1.3.0 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `cenagis.city_praga_1796` | wms | pastmaps.cenagis.edu.pl | ihpan:rauch_2180 | 1.3.0 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `hist.austrian` | wms | services.geo-spatial.org | eharta:mozaic_austrian_200k | 1.1.0 | image/png | unknown | auto | probe · geo-spatial.org (eHarta) |
-| `albania.topo50k` | wms | geoportal.asig.gov.al | Topografike:50K_Topografike | 1.3.0 | image/png | unknown | always | probe · ASIG / geoportal.asig.gov.al |
 | `hist.firing-plans` | wms | services.geo-spatial.org | eharta:mozaic_planuri_tragere_20k | 1.1.0 | image/png | unknown | auto | probe · geo-spatial.org (eHarta) |
 | `hist.soviet-1970` | wms | services.geo-spatial.org | eharta:mozaic_soviet100k | 1.1.0 | image/png | unknown | auto | probe · geo-spatial.org (eHarta) |
 | `sat.corona-60s` | dynamic | geoserve.cast.uark.edu | corona:<product> | 1.1.1 | image/png | no | always | watch · CAST / University of Arkansas (CORONA) |
@@ -220,7 +214,7 @@ until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one
 | `premium.kdr-gb` | wms | pastmaps.cenagis.edu.pl | ihpan:kdr_gb_3857 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `premium.wig-100k` | wms | pastmaps.cenagis.edu.pl | ihpan:wig100k_3857 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 
-**102/102 third-party layers guarded** (84 probed, 18 watched); 0 self-handled + 27 same-origin, 1 runtime. 0 error(s), 0 warning(s).
+**96/96 third-party layers guarded** (78 probed, 18 watched); 0 self-handled + 27 same-origin, 1 runtime. 0 error(s), 0 warning(s).
 
 ### Small print
 
@@ -257,7 +251,7 @@ None — every checked invariant holds.
 | **Copernicus Land / EEA discomap** (`image.discomap.eea.europa.eu`) | ArcGIS ImageServer/WMSServer GetMap, WMS 1.1.1, JPEG | 200 + an ArcGIS JSON error, or a blank JPEG where the LAEA-native mosaic has no data | external | probe; 3D through the proxy for the same reason |
 | **Danmarks Miljøportal** (`arealeditering-dist-geo.miljoeportal.dk`) | WMS 1.3.0 GetMap (CRS=EPSG:3857, uppercase KVP), dai:bes_naturtyper, PNG + transparent | 200 + ServiceExceptionReport XML (GeoServer answers exceptions with 200), or an all-alpha tile where the layer has no polygons. The capabilities advertise only EPSG:25832/CRS:84 while GetMap serves 3857 normally — judge by the tile, not by the capabilities | external (the agency GeoServer) | no guard row: js/danish-layers.js owns the switch and prints its own status line (the layer opts out with _detectlabNoGuard); the host is still named in js/wms-health.js HOSTS so a tile-error burst can be attributed |
 | **Slots- og Kulturstyrelsen (Fund og Fortidsminder)** (`www.kulturarv.dk`) | WMS 1.3.0 GetMap (CRS=EPSG:3857, uppercase KVP), fundogfortidsminder_punkt_fredet / _punkt_ikkefredet, PNG + transparent | 200 + ServiceExceptionReport XML (GeoServer answers exceptions with 200) or an all-alpha tile. The capabilities advertise EPSG:25832 and CRS:84 while GetMap serves EPSG:3857 normally (verified 2026-10-19) — judge by the tile, not by the capabilities. A renamed layer answers "Could not find layer …" the same way | external (the agency GeoServer) | no guard row: js/danish-layers.js owns the switch and prints its own status line (the layers opt out with _detectlabNoGuard); the host is still named in js/wms-health.js HOSTS so a tile-error burst can be attributed |
-| **ASIG / geoportal.asig.gov.al** (`geoportal.asig.gov.al`) | WMS 1.3.0 GetMap (CRS=EPSG:3857, STYLES=) for the nine exact Names: Topografike:50K_Topografike, Orthophoto:Ortofoto_1999, orthophoto_2015:OrthoImagery_20cm, DSM:Dsm_Hill_Group, Dtm_2015:Hillshade_2015_group, iktk:zonatembrojturatetrashegimisekulturore22_07_2026, akzm:zonat_mbrojtura_081124, iktk:zonatembrojturatetrashegimisekulturore_pike13_05_2026, akzm:monumentet_natyrore_07032023 | HTTP 200 with XML/HTML or a body that is not a decodable image is a tile error; the same-origin production probe separately requires HTTP 200, image/*, at least 32 bytes, no exception body and no X-Map3D-Upstream failure marker. EPSG:3857 is retained as the request path but is not listed literally in the owner-supplied capabilities excerpt (which advertises EPSG:900913). | external (the agency GeoServer; government host, no SLA) | rows are rendered in one Albania-only group (#albaniaRow, with Historical/Satellite/LiDAR/Heritage captions) and are shown only while Albania is selected; a runtime sweep removes any surviving pre-group mount or stray Albanian row; renderer owns error handling, retries EPSG:4326 after the configured EPSG:3857 error burst, then reports a persistent fallback failure on that layer row |
+| **ASIG / geoportal.asig.gov.al** (`geoportal.asig.gov.al`) | WMS 1.3.0 GetMap (CRS=EPSG:3857, STYLES=) for the exact catalogue Names the registry mirrors: orthophoto_2015:OrthoImagery_20cm, Orthophoto:Ortofoto_1999, akzm:zonat_mbrojtura_081124,akzm:monumentet_natyrore_07032023,iktk:zonatembrojturatetrashegimisekulturore_pike13_05_2026,iktk:zonatembrojturatetrashegimisekulturore22_07_2026 | HTTP 200 with XML/HTML or a body that is not a decodable image is a tile error; the same-origin production probe separately requires HTTP 200, image/*, at least 32 bytes, no exception body and no X-Map3D-Upstream failure marker. EPSG:3857 is retained as the request path but is not listed literally in the owner-supplied capabilities excerpt (which advertises EPSG:900913). | external (the agency GeoServer; government host, no SLA) | the rows are the ASIG catalogue in one Albania-only group (#albaniaRow) and are shown only while Albania is selected; the renderer owns error handling, retries EPSG:4326 after the configured EPSG:3857 error burst, then reports a persistent fallback failure on that layer row |
 | **SYKE / Finnish Environment Institute** (`paikkatiedot.ymparisto.fi`) | GeoServer WMS/WFS for Finnish protected-site layers | HTTP 200 ServiceException XML/HTML, a WFS JSON exception, or an empty image outside coverage | external (SYKE) | self-guarded Finland row reports failed tiles and retries through the Finland proxy |
 | **Ålands landskapsregering** (`kartor.regeringen.ax`) | ArcGIS REST export / query for Åland heritage layers | HTTP 200 JSON error or an image response without usable map pixels | external (Åland) | self-guarded Finland row reports failed tiles and retries through the Finland proxy |
 | **Maanmittauslaitos** (`karttamoottori.maanmittauslaitos.fi`) | ETRS-TM35FIN WMTS REST tile | HTTP 403/5xx or an XML/HTML access/error page instead of a tile | external (MML) | self-guarded Finland row reports failed tiles and uses the configured same-origin fallback |
@@ -425,22 +419,22 @@ sample tile undefined
 3D /api/map3d/tile?layer=sat.vhr-2012&z={z}&x={x}&y={y}
 ```
 ```
-# albania.ortho1999 — Orthophoto 1999
+# albania.ortho_2015_20cm — Ortofoto 2015 (20 cm)
 sample tile 12/2273/1530 (Tirana)
-2D https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=Orthophoto%3AOrtofoto_1999&STYLES=&CRS=EPSG%3A3857&BBOX=2201386.4146,5058296.7838,2211170.3542,5068080.7234&WIDTH=256&HEIGHT=256&FORMAT=image%2Fpng&TRANSPARENT=FALSE
-3D /api/map3d/tile?layer=albania.ortho1999&z=12&x=2273&y=1530
+2D https://geoportal.asig.gov.al/service/orthophoto_2015/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=orthophoto_2015%3AOrthoImagery_20cm&STYLES=&CRS=EPSG%3A3857&BBOX=2201386.4146,5058296.7838,2211170.3542,5068080.7234&WIDTH=256&HEIGHT=256&FORMAT=image%2Fpng&TRANSPARENT=TRUE
+3D /api/map3d/tile?layer=albania.ortho_2015_20cm&z=12&x=2273&y=1530
+```
+```
+# albania.ortho_1999 — Ortofoto 1999
+sample tile 12/2273/1530 (Tirana)
+2D https://geoportal.asig.gov.al/service/Orthophoto/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=Orthophoto%3AOrtofoto_1999&STYLES=&CRS=EPSG%3A3857&BBOX=2201386.4146,5058296.7838,2211170.3542,5068080.7234&WIDTH=256&HEIGHT=256&FORMAT=image%2Fpng&TRANSPARENT=TRUE
+3D /api/map3d/tile?layer=albania.ortho_1999&z=12&x=2273&y=1530
 ```
 ```
 # sat.vhr-2018 — Satellite 2018 (Copernicus VHR)
 sample tile undefined
 2D https://image.discomap.eea.europa.eu/arcgis/services/GioLand/VHR_2018_WM/ImageServer/WMSServer?service=WMS&request=GetMap&version=1.1.1&layers=VHR_2018_WM&styles=&format=image%2Fjpeg&transparent=false&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/map3d/tile?layer=sat.vhr-2018&z={z}&x={x}&y={y}
-```
-```
-# albania.ortho1994 — Orthophoto 20 cm (2015)
-sample tile 12/2273/1530 (Tirana)
-2D https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=orthophoto_2015%3AOrthoImagery_20cm&STYLES=&CRS=EPSG%3A3857&BBOX=2201386.4146,5058296.7838,2211170.3542,5068080.7234&WIDTH=256&HEIGHT=256&FORMAT=image%2Fjpeg&TRANSPARENT=FALSE
-3D /api/map3d/tile?layer=albania.ortho1994&z=12&x=2273&y=1530
 ```
 ```
 # sat.vhr-2021 — Satellite 2021 (Copernicus VHR)
@@ -671,18 +665,6 @@ sample tile undefined
 3D https://data.geopf.fr/wms-r/wms?service=WMS&request=GetMap&version=1.3.0&layers=IGNF_LIDAR-HD_MNT_ELEVATION.ELEVATIONGRIDCOVERAGE.SHADOW&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
-# albania.dsm — DSM (hillshade)
-sample tile 12/2273/1530 (Tirana)
-2D https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=DSM%3ADsm_Hill_Group&STYLES=&CRS=EPSG%3A3857&BBOX=2201386.4146,5058296.7838,2211170.3542,5068080.7234&WIDTH=256&HEIGHT=256&FORMAT=image%2Fpng&TRANSPARENT=TRUE
-3D /api/map3d/tile?layer=albania.dsm&z=12&x=2273&y=1530
-```
-```
-# albania.lidar — LiDAR
-sample tile 12/2273/1530 (Tirana)
-2D https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=Dtm_2015%3AHillshade_2015_group&STYLES=&CRS=EPSG%3A3857&BBOX=2201386.4146,5058296.7838,2211170.3542,5068080.7234&WIDTH=256&HEIGHT=256&FORMAT=image%2Fpng&TRANSPARENT=TRUE
-3D /api/map3d/tile?layer=albania.lidar&z=12&x=2273&y=1530
-```
-```
 # vegfp.ppi — Vegetation PPI (dekadal)
 sample tile undefined
 2D https://phenology.hrvpp2.vgt.vito.be/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=CLMS_HRVPP_ST_PPI_10M&STYLE=&FORMAT=image%2Fpng&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A12&TILEROW=1480&TILECOL=2345&TIME=2024-07-01
@@ -707,28 +689,10 @@ sample tile undefined
 3D https://phenology.hrvpp2.vgt.vito.be/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=CLMS_HRVPP_VPP_RSLOPE_SEASON1_10M&STYLE=&FORMAT=image%2Fpng&TILEMATRIXSET=EPSG%3A3857&TILEMATRIX=EPSG%3A3857%3A{z}&TILEROW={y}&TILECOL={x}&TIME=2024-01-01
 ```
 ```
-# albania.heritage — Heritage Sites
+# albania.heritage — Heritage
 sample tile 12/2273/1530 (Tirana)
-2D https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=iktk%3Azonatembrojturatetrashegimisekulturore22_07_2026&STYLES=&CRS=EPSG%3A3857&BBOX=2201386.4146,5058296.7838,2211170.3542,5068080.7234&WIDTH=256&HEIGHT=256&FORMAT=image%2Fpng&TRANSPARENT=TRUE
+2D https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=akzm%3Azonat_mbrojtura_081124%2Cakzm%3Amonumentet_natyrore_07032023%2Ciktk%3Azonatembrojturatetrashegimisekulturore_pike13_05_2026%2Ciktk%3Azonatembrojturatetrashegimisekulturore22_07_2026&STYLES=&CRS=EPSG%3A3857&BBOX=2201386.4146,5058296.7838,2211170.3542,5068080.7234&WIDTH=256&HEIGHT=256&FORMAT=image%2Fpng&TRANSPARENT=TRUE
 3D /api/map3d/tile?layer=albania.heritage&z=12&x=2273&y=1530
-```
-```
-# albania.natural — Natural Protected Sites
-sample tile 12/2273/1530 (Tirana)
-2D https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=akzm%3Azonat_mbrojtura_081124&STYLES=&CRS=EPSG%3A3857&BBOX=2201386.4146,5058296.7838,2211170.3542,5068080.7234&WIDTH=256&HEIGHT=256&FORMAT=image%2Fpng&TRANSPARENT=TRUE
-3D /api/map3d/tile?layer=albania.natural&z=12&x=2273&y=1530
-```
-```
-# albania.cultural — Cultural Protected Sites
-sample tile 12/2273/1530 (Tirana)
-2D https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=iktk%3Azonatembrojturatetrashegimisekulturore_pike13_05_2026&STYLES=&CRS=EPSG%3A3857&BBOX=2201386.4146,5058296.7838,2211170.3542,5068080.7234&WIDTH=256&HEIGHT=256&FORMAT=image%2Fpng&TRANSPARENT=TRUE
-3D /api/map3d/tile?layer=albania.cultural&z=12&x=2273&y=1530
-```
-```
-# albania.monument — Environment: Natural monument
-sample tile 12/2273/1530 (Tirana)
-2D https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=akzm%3Amonumentet_natyrore_07032023&STYLES=&CRS=EPSG%3A3857&BBOX=2201386.4146,5058296.7838,2211170.3542,5068080.7234&WIDTH=256&HEIGHT=256&FORMAT=image%2Fpng&TRANSPARENT=TRUE
-3D /api/map3d/tile?layer=albania.monument&z=12&x=2273&y=1530
 ```
 ```
 # overlay.image-overlays — Dynamic image overlays
@@ -1010,12 +974,6 @@ sample tile undefined
 sample tile undefined
 2D https://services.geo-spatial.org/geoserver/eharta/wms?service=WMS&request=GetMap&version=1.1.0&layers=eharta%3Amozaic_austrian_200k&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://services.geo-spatial.org/geoserver/eharta/wms?service=WMS&request=GetMap&version=1.1.0&layers=eharta%3Amozaic_austrian_200k&styles=&format=image%2Fpng&transparent=true&srs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
-```
-```
-# albania.topo50k — Topographic map 1:50k
-sample tile 12/2273/1530 (Tirana)
-2D https://geoportal.asig.gov.al/service/wms?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=Topografike%3A50K_Topografike&STYLES=&CRS=EPSG%3A3857&BBOX=2201386.4146,5058296.7838,2211170.3542,5068080.7234&WIDTH=256&HEIGHT=256&FORMAT=image%2Fpng&TRANSPARENT=FALSE
-3D /api/map3d/tile?layer=albania.topo50k&z=12&x=2273&y=1530
 ```
 ```
 # hist.firing-plans — Firing Plans

@@ -290,7 +290,7 @@ assert(shellVersion >= 196,
  * WMS/WMTS audit, and the viewer + its skin by the 2D/3D switch moving into
  * the bottom-left control column, above the base-layer button. */
 const TAGS = {
-    'js/layer-registry.js': '20261021-albania-country-group',
+    'js/layer-registry.js': '20261024-asig-catalogue',
     'js/map3d-terrain.js': '20261023-pwa-only-3d-column',
     'css/map3d-terrain.css': '20261023-pwa-only-3d-column',
     'js/danish-layers.config.js': '20261019-danish-token-maps',

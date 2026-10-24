@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 /*
- * Live production check for the nine Albania ASIG registry layers.
+ * Live production check for every Albania ASIG WMS registry layer.
+ *
  * This calls DetectLab's same-origin tile proxy only; it never calls ASIG
  * directly. HTTP 200 is insufficient unless the proxy returns a real image.
+ *
+ * The list comes from the shared registry, so it follows the catalogue:
+ * tile-only rows (WMTS) and rows whose name is not in the catalogue yet are
+ * not registered and therefore not probed — run
+ * `node tools/build-asig-catalogue.mjs --export=asig-layers.json` to bake the
+ * remaining names first.
  */
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const registry = require('../js/layer-registry.js');
-const expectedIds = [
-  'albania.topo50k', 'albania.ortho1999', 'albania.ortho1994', 'albania.dsm',
-  'albania.lidar', 'albania.heritage', 'albania.natural', 'albania.cultural', 'albania.monument'
-];
 
 function option(name, fallback) {
   const prefix = `--${name}=`;
@@ -42,11 +45,14 @@ if (!/^\d+\/\d+\/\d+$/.test(tile)) {
   console.error(`Invalid tile ${tile}; expected z/x/y.`);
   process.exit(2);
 }
-const ids = registry.list().map((def) => def.id).filter((id) => id.startsWith('albania.')).sort();
-if (ids.length !== expectedIds.length || expectedIds.some((id) => !ids.includes(id))) {
-  console.error(`Registry mismatch: expected ${expectedIds.join(', ')}; found ${ids.join(', ')}`);
+const expectedIds = registry.list().map((def) => def.id).filter((id) => id.startsWith('albania.')).sort();
+if (!expectedIds.length) {
+  console.error('No albania.* layers in the registry — is data/asig-layers.data.js present?');
   process.exit(2);
 }
+const skipped = typeof registry.asigCatalogueSkips === 'function' ? registry.asigCatalogueSkips() : [];
+console.log(`Probing ${expectedIds.length} ASIG WMS layer(s) through the same-origin proxy` +
+  (skipped.length ? `; ${skipped.length} catalogue row(s) not probed: ${skipped.join(', ')}` : '') + '.');
 
 let failures = 0;
 for (const id of expectedIds) {

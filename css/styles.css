@@ -8504,6 +8504,236 @@
     color: rgba(245, 240, 235, 0.98);
 }
 
+/* ── ASIG catalogue panel (js/asig-albania-layers.js) ──────────────────────
+   Same dark glass as the rest of the panel: a search box, the active-layer
+   list (reorder + remove), the single Heritage toggle at the top, then one
+   collapsible section per catalogue section. */
+
+.albania-catalogue-tools {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.albania-search {
+    width: 100%;
+    padding: 5px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(245, 240, 235, 0.18);
+    background: rgba(13, 26, 43, 0.85);
+    color: rgba(245, 240, 235, 0.9);
+    font: inherit;
+    font-size: 0.74rem;
+}
+
+.albania-search::placeholder {
+    color: rgba(245, 240, 235, 0.4);
+}
+
+.albania-search:focus-visible {
+    outline: 2px solid #e04545;
+    outline-offset: 1px;
+}
+
+.albania-active {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.albania-active-empty {
+    font-size: 0.68rem;
+    opacity: 0.5;
+}
+
+.albania-active-head {
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    opacity: 0.55;
+    margin-top: 2px;
+}
+
+.albania-active-item {
+    border: 1px solid rgba(245, 240, 235, 0.14);
+    border-radius: 5px;
+    padding: 5px 7px;
+    background: rgba(13, 26, 43, 0.55);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.albania-active-top {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+
+.albania-active-top b {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: rgba(245, 240, 235, 0.92);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.albania-active-parts {
+    font-size: 0.6rem;
+    opacity: 0.5;
+    flex-shrink: 0;
+}
+
+.albania-active-move,
+.albania-active-remove {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border-radius: 3px;
+    border: 1px solid rgba(245, 240, 235, 0.2);
+    background: none;
+    color: rgba(245, 240, 235, 0.75);
+    font-size: 0.66rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.albania-active-move:hover,
+.albania-active-move:focus-visible,
+.albania-active-remove:hover,
+.albania-active-remove:focus-visible {
+    border-color: #e04545;
+    color: #fff;
+}
+
+.albania-active-slider {
+    width: 100%;
+    margin: 0;
+}
+
+.albania-active-hint {
+    font-size: 0.62rem;
+    line-height: 1.3;
+    opacity: 0.65;
+}
+
+.albania-active-hint.is-warn {
+    color: #ffd166;
+    opacity: 1;
+}
+
+.albania-heritage-block {
+    border-top: 1px solid rgba(245, 240, 235, 0.12);
+    border-bottom: 1px solid rgba(245, 240, 235, 0.12);
+    padding: 6px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.albania-heritage-caption {
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(224, 69, 69, 0.85);
+}
+
+.albania-heritage-note {
+    font-size: 0.62rem;
+    line-height: 1.3;
+    padding-left: 19px;
+    opacity: 0.55;
+}
+
+.albania-layer-parts {
+    flex-shrink: 0;
+    font-size: 0.62rem;
+    opacity: 0.5;
+}
+
+.albania-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.albania-section-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 4px 2px;
+    border: 0;
+    background: none;
+    color: rgba(245, 240, 235, 0.72);
+    font: inherit;
+    font-size: 0.68rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    cursor: pointer;
+    text-align: left;
+}
+
+.albania-section-head:hover,
+.albania-section-head:focus-visible {
+    color: #fff;
+    outline: none;
+}
+
+.albania-section-caret {
+    color: rgba(224, 69, 69, 0.9);
+    font-size: 0.62rem;
+    width: 9px;
+    flex-shrink: 0;
+}
+
+.albania-section-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.albania-section-count {
+    opacity: 0.45;
+    font-size: 0.62rem;
+    flex-shrink: 0;
+}
+
+.albania-section-body {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding-left: 9px;
+    border-left: 1px solid rgba(245, 240, 235, 0.12);
+}
+
+/* Map-click feature info: one sandboxed iframe per endpoint. */
+.albania-feature-info {
+    max-height: 46vh;
+    overflow: auto;
+}
+
+.albania-feature-info h4 {
+    margin: 4px 0 2px;
+    font-size: 0.72rem;
+}
+
+.albania-feature-frame {
+    width: 100%;
+    height: 130px;
+    border: 1px solid rgba(245, 240, 235, 0.2);
+    border-radius: 4px;
+    margin-bottom: 6px;
+    background: #fff;
+}
+
 /* The "Protected Sites" toggle group: a caption the visitor can collapse,
    with the four child checkboxes nested underneath (transparent overlays). */
 

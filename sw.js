@@ -696,6 +696,29 @@
 //   bar (--layer-dock-clearance / --country-exit-lift still apply there).
 //   Re-tags css/map3d-terrain.css and js/map3d-terrain.js.
 //   See MAP3D_SWITCH_BASE_LAYER_COLUMN.md.
+// v259: the catalogue's second section is named “LiDAR”, not “Terrain”, and
+//   its id follows (section id `lidar`, so the DOM/registry metadata and the
+//   saved collapsed state read the same word). Both the label and the section
+//   note come from data/asig-layers.json + js/asig-albania-layers.config.js, so
+//   only those two files are re-tagged; v258's cache name still holds the old
+//   catalogue for shells that have not updated.
+// v258: the Albania ASIG group is now the full geoportal catalogue.
+//   data/asig-layers.json (generated from the prototype export by
+//   tools/build-asig-catalogue.mjs) is the single description of the 28
+//   curated layers in six sections plus the Heritage toggle; the browser reads
+//   the same object through data/asig-layers.data.js. js/asig-albania-layers.js
+//   renders collapsible sections, a search box, an active-layer list with ↑/↓
+//   reordering, one Heritage toggle (its parts are never rows), WMS tiles with
+//   the alternate-endpoint retry, the three tile-only WMTS layers reprojected on
+//   canvas, and map-click feature info in sandboxed iframes. Rows whose name is
+//   not in the export yet are resolved once from GetCapabilities in the
+//   visitor's browser. The catalogue is now the ONLY Albanian content: the
+//   pre-catalogue 1:50k sheet, the old Historical/Satellite/LiDAR/Heritage
+//   captions, the stale-row sweep and the v1 state migration are removed, so
+//   nothing older can be switched on beside it. Re-tags data/asig-layers.data.js,
+//   js/asig-albania-layers.config.js, js/asig-albania-layers.js,
+//   js/layer-registry.js, css/styles.css and index.html.
+//   See ALBANIA_ASIG_LAYERS.md.
 // v257: “Alte hărți / Other maps” — a new sub-layer of the premium historical
 //   maps group for the sheets that carry a place name but NO georeference
 //   (maps.hungaricana.hu). Switching it on paints every place that owns a
@@ -708,7 +731,7 @@
 //   (the transform), js/other-maps.js (catalogue + dots + panel),
 //   css/other-maps.css, data/other-maps-catalog.json and the harvester
 //   tools/build-hungaricana-catalog.mjs. See OTHER_MAPS.md.
-const CACHE_NAME = 'detectlab-v257-other-maps';
+const CACHE_NAME = 'detectlab-v259-asig-lidar';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -751,6 +774,14 @@ const PRECACHE_URLS = [
   'js/asig-albania-layers.js?v=20261021-albania-country-group',
   'js/asig-albania-layers.config.js?v=20261021-albania-only',
   'js/asig-albania-layers.js?v=20261021-albania-only',
+  'data/asig-layers.data.js',
+  'data/asig-layers.data.js?v=20261024-asig-catalogue',
+  'js/asig-albania-layers.config.js?v=20261024-asig-catalogue',
+  'data/asig-layers.data.js?v=20261024-asig-lidar',
+  'js/asig-albania-layers.config.js?v=20261024-asig-lidar',
+  'js/asig-albania-layers.js?v=20261024-asig-catalogue',
+  'js/layer-registry.js?v=20261024-asig-catalogue',
+  'css/styles.css?v=20261024-asig-catalogue',
   'js/layer-registry.js?v=20261017-albania-asig',
   'js/translations.js?v=20261017-albania-asig',
   'js/translations.js?v=20261017-albania-asig',

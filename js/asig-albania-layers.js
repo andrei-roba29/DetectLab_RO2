@@ -1,63 +1,166 @@
 /*
- * Albania ASIG WMS layers. Every row and Leaflet layer is rendered from
- * js/asig-albania-layers.config.js into ONE Albania-only panel group
- * (#albaniaRow → #albaniaSubLayers). The rows are not mounted inside the
- * Romanian/Denmark/Finland sections any more: the group — and every row in
- * it — is hidden unless Albania (ISO2 AL) is the selected country, and the
- * tile layers are taken off the map while another country (or the global
- * view) is active.
+ * js/asig-albania-layers.js
+ * ───────────────────────────────────────────────────────────────────────────
+ * DetectLab · the ASIG geoportal catalogue for Albania
  *
- * Placement is enforced at runtime: buildPanel() removes the four pre-group
- * mounts and any Albanian row that is still outside the group before it
- * renders the nine rows again (sweepLegacyRows), so a stale installed shell
- * cannot leave Albanian layers scattered under another country's section.
+ * Every row and every Leaflet layer is rendered from data/asig-layers.json
+ * (wrapped for the browser by data/asig-layers.data.js) via
+ * js/asig-albania-layers.config.js. The module holds no layer names of its own:
+ * a new orthophoto, a new mining layer or a new archaeological zoning decision
+ * is a re-run of tools/build-asig-catalogue.mjs, not a code change.
+ *
+ * Panel (all inside the single Albania group, #albaniaRow → #albaniaSubLayers)
+ *   • collapsible sections, one checkbox and one opacity slider per layer;
+ *   • Heritage is ONE toggle at the top: one checkbox, one opacity slider, one
+ *     entry in the active-layer list, one reorder control, one remove button.
+ *     Its parts are never rendered as rows;
+ *   • a search box filtering by display title or exact layer name;
+ *   • an active-layer list with ↑ / ↓ reordering (top of the list = top of the
+ *     map) and a per-entry remove button. Reordering is a real z-order: every
+ *     catalogue layer draws in ONE Leaflet pane (pane_asig), so the list order
+ *     is the draw order.
+ *
+ * Layer kinds
+ *   • wms  — one GeoServer GetMap per tile, the tile's own extent, clipped to
+ *            the ASIG footprint. Web Mercator first, EPSG:4326 after a
+ *            tile-error burst; the per-workspace endpoint is retried once via
+ *            the global service when it returns no tiles (the prototype's
+ *            behaviour; which endpoint a layer prefers is unverified).
+ *   • wmts — the three tile-only products (Hillshade 2015 group, Dsm Hill
+ *            Group, italiane 100k) do not exist in the WMS: it answers HTTP 200
+ *            with an XML “LayerNotDefined” exception instead of a tile. The
+ *            WMTS exposes no Web Mercator grid. They are mosaicked from the
+ *            EPSG:4326 plate-carrée grid and reprojected tile by tile on a
+ *            canvas. When a deep level has no cached tiles the layer steps down
+ *            to a shallower one and says so in its row.
+ *
+ * Failure handling
+ *   A failed image — including the HTTP 200 XML/HTML bodies this server sends
+ *   for a bad layer name — is a Leaflet tile error. Rows report what happened
+ *   (“no tiles”, “retrying the alternate endpoint”, “fewer cached levels here”)
+ *   instead of silently going blank; console output is one warning per row.
+ *
+ * Country gate
+ *   The group and every row are visible only while Albania (ISO2 AL) is the
+ *   selected country; the on/off choice is remembered meanwhile and nothing is
+ *   requested for another country or the global view. buildPanel() always
+ *   rebuilds the panel inside #albaniaSubLayers, so the catalogue owns exactly
+ *   one place in the page.
+ *
+ * Attribution
+ *   ASIG is credited on every layer (Leaflet attribution control) and in every
+ *   row's ⓘ popup. ASIG's reuse terms are NOT published in the supplied
+ *   capabilities — see the licence note in the group popup and
+ *   ALBANIA_ASIG_LAYERS.md before commercial use.
  */
 (function (window, document) {
     'use strict';
 
     var CONFIG = window.ASIG_ALBANIA_CONFIG || window.ASIG_ALBANIA_LAYERS;
     var L = window.L;
-    if (!CONFIG || !Array.isArray(CONFIG.layers) || !L || !document) return;
+    if (!CONFIG || !L || !document) return;
+    /* The catalogue missing means the generated data file was not loaded; say
+     * so once rather than rendering an empty group. */
+    if (!Array.isArray(CONFIG.layers) || !CONFIG.layers.length) {
+        if (window.console && window.console.warn) {
+            window.console.warn('[ASIG] data/asig-layers.data.js is missing — the Albanian catalogue is not available.');
+        }
+        return;
+    }
 
     var LAYERS = CONFIG.enabledLayers();
-    var STORE_KEY = 'detectlab_albania_layers_v1';
+    var HERITAGE = CONFIG.heritageDef || CONFIG.byId('heritage');
+    var HERITAGE_ID = HERITAGE ? HERITAGE.id : 'heritage';
+
+    var STORE_KEY = 'detectlab_albania_layers_v2';
     var GROUP_ROW_ID = 'albaniaRow';
     var MOUNT_ID = 'albaniaSubLayers';
     var GROUP_TOGGLE_ID = 'albaniaToggle';
     var EXPAND_BTN_ID = 'albaniaExpandBtn';
     var EXPAND_ICON_ID = 'albaniaExpandIcon';
-    /* Mounts used before the single Albania group existed: the 1:50k map in
-     * the free Historical Maps section (#asigHistoricalLayers), the two
-     * orthophotos between Romania's satellite periods (#asigSatelliteLayers),
-     * the two hillshades in the LiDAR group that hosts Denmark's DHM
-     * (#asigLidarLayers) and the four protected-site rows under Romania's
-     * Heritage Sites (#asigHeritageLayers). A stale app shell (an installed
-     * PWA still running an older index.html) can carry them; they are removed
-     * so no Albanian row can ever sit inside another country's section. */
-    var LEGACY_MOUNT_IDS = ['asigHistoricalLayers', 'asigSatelliteLayers', 'asigLidarLayers', 'asigHeritageLayers'];
+    var SEARCH_ID = 'albaniaSearch';
+    var ACTIVE_ID = 'albaniaActive';
+    var PANE_ID = 'pane_asig';
+    /* Above the satellite basemap stack (398) and just below the historical-map
+     * pane (405); every catalogue layer shares it so the active-layer order is
+     * the real draw order. */
+    var PANE_Z = 404;
+    var Z_BASE = 100;
+
     var COUNTRY = String(CONFIG.country || 'AL').toUpperCase();
-    /* The row is hidden for every other country — including "no country" —
-     * with a plain class that does not depend on the panel's filter state
-     * (the HTML ships the class, so nothing flashes before this module runs). */
     var OUT_OF_COUNTRY_CLASS = 'albania-out-of-country';
-    var PANE_BY_SECTION = {
-        historical: ['pane_asig_historical', 405],
-        satellite: ['pane_satellite', 398],
-        lidar: ['pane_lidar', 610],
-        heritage: ['pane_patrimoniu', 620]
-    };
     var BLANK_TILE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
-    var runtime = {
-        ready: false, map: null, panes: false, built: {}, active: {}, opacity: {}, rows: {}, notices: {},
-        /* Country gating: `inCountry` mirrors the last filter call, `suppressed`
-         * says the tile layers are currently off the map because of it,
-         * `expanded` is the accordion state of the group and `swept` is the
-         * number of stray Albanian rows the placement sweep removed. */
-        inCountry: false, suppressed: false, expanded: true, swept: 0
-    };
+
     var STRINGS = {
-        en: { opacity: 'Opacity', go: 'Tirana', unavailable: 'the source is not answering' },
-        ro: { opacity: 'Opacitate', go: 'Tirana', unavailable: 'sursa nu răspunde' }
+        en: {
+            opacity: 'Opacity',
+            go: 'Tirana',
+            unavailable: 'the source is not answering',
+            resolving: 'resolving the layer name from the service …',
+            unresolved: 'not in the catalogue yet — the layer name could not be read from the service',
+            retrying: 'first endpoint returned no tiles; retrying through the alternate one',
+            overzoom: 'no cached tiles at this zoom; showing a shallower level enlarged',
+            partsFailed: 'parts of this layer return no tiles',
+            allFailed: 'no tiles are loading for this layer',
+            active: 'Active layers',
+            activeEmpty: 'Nothing from the catalogue is on yet.',
+            search: 'Search ASIG layers…',
+            noMatch: 'No layer matches.',
+            moveUp: 'Move up (draw above)',
+            moveDown: 'Move down (draw below)',
+            remove: 'Remove from the map',
+            parts: 'parts',
+            infoParts: 'Heritage switches on every part at once',
+            licence: 'ASIG has not published reuse terms for this service',
+            querying: 'Querying the ASIG service…',
+            noFeatures: 'No features at this location.',
+            wmtsNoInfo: 'Tile-only layer: the service provides no feature info for it.'
+        },
+        ro: {
+            opacity: 'Opacitate',
+            go: 'Tirana',
+            unavailable: 'sursa nu răspunde',
+            resolving: 'se rezolvă numele stratului din serviciu …',
+            unresolved: 'încă nu e în catalog — numele stratului nu a putut fi citit din serviciu',
+            retrying: 'primul endpoint nu a returnat plăci; se reîncearcă prin cel alternativ',
+            overzoom: 'nu există plăci la acest zoom; se afișează un nivel mai mic, mărit',
+            partsFailed: 'o parte din straturile acestei intrări nu returnează plăci',
+            allFailed: 'nu se încarcă nicio placă pentru acest strat',
+            active: 'Straturi active',
+            activeEmpty: 'Niciun strat din catalog nu este pornit.',
+            search: 'Caută în straturile ASIG…',
+            noMatch: 'Niciun strat nu corespunde.',
+            moveUp: 'Mută mai sus (desenează deasupra)',
+            moveDown: 'Mută mai jos (desenează dedesubt)',
+            remove: 'Scoate de pe hartă',
+            parts: 'părți',
+            infoParts: 'Patrimoniu pornește toate părțile deodată',
+            licence: 'ASIG nu a publicat termenii de reutilizare pentru acest serviciu',
+            querying: 'Se interoghează serviciul ASIG…',
+            noFeatures: 'Nicio informație la acest punct.',
+            wmtsNoInfo: 'Strat doar cu plăci: serviciul nu oferă informații pentru el.'
+        }
+    };
+
+    var runtime = {
+        ready: false,
+        map: null,
+        panes: false,
+        expanded: true,
+        collapsed: {},
+        search: '',
+        /* Herite is not in `order` unless it is on; the list is bottom → top. */
+        order: [],
+        active: {},
+        opacity: {},
+        rows: {},
+        entries: {},
+        notices: {},
+        warned: {},
+        inCountry: false,
+        suppressed: false,
+        resolver: { state: 'idle', names: {}, parts: [], error: '' },
+        heritageParts: []
     };
 
     function lang() {
@@ -70,14 +173,17 @@
         return /^ro/i.test(lang()) ? (pair.ro || pair.en || '') : (pair.en || pair.ro || '');
     }
     function words() { return /^ro/i.test(lang()) ? STRINGS.ro : STRINGS.en; }
-    function wmsBase() { return String(window.DETECTLAB_ASIG_WMS || CONFIG.wms.url).replace(/\/+$/, ''); }
     function round(value, places) {
         var factor = Math.pow(10, places);
         return Math.round(value * factor) / factor;
     }
+    function mapInstance() { return runtime.map || window._dlMap || window.map || null; }
 
-    /* The config bounds are Leaflet [[south,west],[north,east]]. Clamp the
-     * actual WMS bbox, not just the tile grid, to the published footprint. */
+    /* ═══════════════════════════════════════════════════════════════════════
+     * 1. WMS REQUEST — one GetMap per tile, clipped to the ASIG footprint
+     * ═══════════════════════════════════════════════════════════════════════ */
+    /* The config bounds are Leaflet [[south,west],[north,east]]. Clamp the actual
+     * WMS bbox, not just the tile grid, to the published footprint. */
     function projectedBounds(crs) {
         var sw = CONFIG.countryBounds[0], ne = CONFIG.countryBounds[1];
         if (crs === 'EPSG:4326') return [sw[1], sw[0], ne[1], ne[0]];
@@ -94,9 +200,8 @@
         return [Math.max(bbox[0], bounds[0]), Math.max(bbox[1], bounds[1]),
             Math.min(bbox[2], bounds[2]), Math.min(bbox[3], bounds[3])];
     }
-    function tileUrl(id, bbox, size, crs) {
-        var def = CONFIG.byId(id);
-        if (!def) throw new Error('Unknown ASIG layer: ' + id);
+    /** GetMap URL for one tile extent. `leaf` needs name/url/format/transparent. */
+    function wmsRequestUrl(leaf, bbox, size, crs) {
         var useCrs = crs || CONFIG.wms.crs;
         var clipped = clippedBbox(bbox, useCrs);
         if (!(clipped[2] > clipped[0] && clipped[3] > clipped[1])) return BLANK_TILE;
@@ -107,23 +212,32 @@
             'SERVICE=WMS',
             'VERSION=' + encodeURIComponent(CONFIG.wms.version),
             'REQUEST=GetMap',
-            'LAYERS=' + encodeURIComponent(def.layers),
-            'STYLES=',
+            'LAYERS=' + encodeURIComponent(leaf.name || ''),
+            'STYLES=' + encodeURIComponent(CONFIG.wms.styles || ''),
             'CRS=' + encodeURIComponent(useCrs),
             'BBOX=' + requestBbox.map(function (v) { return round(v, useCrs === 'EPSG:4326' ? 7 : 4); }).join(','),
             'WIDTH=' + (size || CONFIG.wms.tileSize),
             'HEIGHT=' + (size || CONFIG.wms.tileSize),
-            'FORMAT=' + encodeURIComponent(def.format),
-            'TRANSPARENT=' + (def.transparent ? 'TRUE' : 'FALSE')
+            'FORMAT=' + encodeURIComponent(leaf.format || 'image/png'),
+            'TRANSPARENT=' + (leaf.transparent === false ? 'FALSE' : 'TRUE')
         ];
-        return wmsBase() + '?' + params.join('&');
+        return String(leaf.url || CONFIG.wms.url) + '?' + params.join('&');
     }
 
-    function warnOnce(layer, detail) {
-        if (runtime.warned && runtime.warned[layer.id]) return;
-        runtime.warned = runtime.warned || {};
-        runtime.warned[layer.id] = true;
-        if (window.console && window.console.warn) window.console.warn('[ASIG] ' + layer.id + ': ' + detail);
+    /* The offline audit (tools/audit-wms-layers.mjs) builds one regression URL
+     * per registry row through this function — keep the signature. */
+    function tileUrl(id, bbox, size, crs) {
+        var def = CONFIG.byId(id);
+        if (!def) throw new Error('Unknown ASIG layer: ' + id);
+        /* Tile-only rows have no WMS layer; the Heritage entry's LAYERS value
+         * is the comma list of its baked parts (WMS accepts that). */
+        if (def.kind === 'wmts' || !def.layers) return '';
+        return wmsRequestUrl({
+            name: def.name || def.layers,
+            url: def.url,
+            format: def.format,
+            transparent: def.transparent
+        }, bbox, size, crs);
     }
 
     var AsigWmsLayer = L.TileLayer.extend({
@@ -133,13 +247,20 @@
             errorTileUrl: BLANK_TILE, updateWhenZooming: false, updateWhenIdle: true,
             noWrap: true, crossOrigin: false
         },
-        initialize: function (def, options) {
-            this._layerDef = def;
+        initialize: function (leaf, options) {
+            this._leaf = {
+                name: leaf.name,
+                url: leaf.url,
+                fallbackUrl: leaf.fallbackUrl || leaf.url,
+                format: leaf.format || 'image/png',
+                transparent: leaf.transparent !== false
+            };
+            this._layerId = leaf.id;
             this._errorCount = 0;
             this._warned = false;
             L.setOptions(this, options || {});
-            this.options.minZoom = def.minZoom;
-            this.options.maxNativeZoom = def.maxNativeZoom;
+            this.options.minZoom = leaf.minZoom || 7;
+            this.options.maxNativeZoom = leaf.maxNativeZoom || 19;
             this.options.bounds = L.latLngBounds(CONFIG.countryBounds);
             L.TileLayer.prototype.initialize.call(this, '', this.options);
         },
@@ -162,7 +283,7 @@
                 done(error || null, tile);
             }
             tile.alt = '';
-            tile.setAttribute('role', 'presentation');
+            if (tile.setAttribute) tile.setAttribute('role', 'presentation');
             tile.onload = function () {
                 /* Invalid 200 XML/HTML and other non-image bodies fail image
                  * decoding (zero natural dimensions) just like network errors. */
@@ -178,13 +299,23 @@
             tile.src = url;
             return tile;
         },
+        /** Switch the endpoint once (per-workspace → global service). */
+        setEndpoint: function (url) {
+            if (!url || url === this._leaf.url) return false;
+            this._leaf.url = url;
+            this._errorCount = 0;
+            this.redraw();
+            return true;
+        },
+        endpoint: function () { return this._leaf.url; },
         _onTileLoad: function () { this._errorCount = 0; },
         _onTileError: function () {
-            var def = this._layerDef;
+            var literal = this._leaf;
             this._errorCount += 1;
+            reportFailure(this);
             if (!this._warned) {
                 this._warned = true;
-                warnOnce(def, 'tile image failed; retrying with EPSG:4326 after the error burst');
+                warnOnce(literal.name, 'tile image failed; retrying with EPSG:4326 after the error burst');
             }
             if (this.options.crs === CONFIG.wms.crs && this._errorCount >= CONFIG.wms.fallbackAfterErrors) {
                 this.options.crs = CONFIG.wms.fallbackCrs;
@@ -194,7 +325,7 @@
             }
             if (this.options.crs === CONFIG.wms.fallbackCrs && this._errorCount >= CONFIG.wms.fallbackAfterErrors) {
                 this._errorCount = 0;
-                setStatus(def.id, words().unavailable, 'error');
+                setStatus(this._layerId, words().unavailable, 'error');
             }
         },
         getTileUrl: function (coords) {
@@ -204,142 +335,1185 @@
             var bbox;
             if (crs === 'EPSG:4326') bbox = [sw.lng, sw.lat, ne.lng, ne.lat];
             else {
-                var project = (this._map && this._map.options.crs && this._map.options.crs.project) || L.CRS.EPSG3857.project;
-                var a = project(sw), b = project(ne);
+                /* Call project() ON the CRS object: Leaflet's CRS.project reads
+                 * this.projection, so a detached reference throws. */
+                var mapCrs = (this._map && this._map.options && this._map.options.crs) || L.CRS.EPSG3857;
+                var a = mapCrs.project(sw), b = mapCrs.project(ne);
                 bbox = [a.x, a.y, b.x, b.y];
             }
-            return tileUrl(this._layerDef.id, bbox, size.x, crs);
+            return wmsRequestUrl(this._leaf, bbox, size.x, crs);
         }
     });
 
-    function el(tag, attrs) {
+    /* ═══════════════════════════════════════════════════════════════════════
+     * 2. WMTS → WEB MERCATOR — the three tile-only layers
+     * ═══════════════════════════════════════════════════════════════════════
+     * The WMTS publishes no Web-Mercator matrix set, so each destination tile is
+     * filled with a canvas mosaic of the EPSG:4326 plate-carrée tiles that
+     * cover it. In that grid level z is 256-px tiles over 2^(z+1) columns and
+     * 2^z rows, top-left at -180/90. Longitude is linear in both systems;
+     * latitude is not, so every destination pixel row picks its own source row
+     * (planWmtsTile). Proven in the owner's prototype; kept verbatim in shape.
+     */
+    function planWmtsTile(Z, tx, ty, size, maxZ) {
+        var z = Math.min(maxZ, Z);
+        var n = Math.pow(2, Z);
+        var W = 256 * Math.pow(2, z + 1), H = 256 * Math.pow(2, z);
+        var pxL = (tx / n) * W, pxR = ((tx + 1) / n) * W;
+        function latAt(f) { return Math.atan(Math.sinh(Math.PI * (1 - 2 * (ty + f) / n))) * 180 / Math.PI; }
+        var rows = [];
+        for (var j = 0; j < size; j++) {
+            var a = (90 - latAt(j / size)) / 180 * H;
+            var b = (90 - latAt((j + 1) / size)) / 180 * H;
+            var mid = (a + b) / 2;
+            var sh = Math.min(Math.max(b - a, 0.01), 256);
+            var r = Math.max(0, Math.min(Math.floor(mid / 256), Math.pow(2, z) - 1));
+            rows.push({ r: r, sy: Math.max(0, Math.min(mid - sh / 2 - r * 256, 256 - sh)), sh: sh });
+        }
+        var cols = [];
+        for (var c = Math.floor(pxL / 256); c <= Math.ceil(pxR / 256) - 1; c++) {
+            var s0 = Math.max(pxL, c * 256), s1 = Math.min(pxR, (c + 1) * 256);
+            cols.push({
+                c: c, sx: s0 - c * 256, sw: s1 - s0,
+                dx: (s0 - pxL) / (pxR - pxL) * size,
+                dw: (s1 - s0) / (pxR - pxL) * size
+            });
+        }
+        return { z: z, rows: rows, cols: cols };
+    }
+
+    var AsigWmtsLayer = L.GridLayer.extend({
+        options: {
+            tileSize: CONFIG.wmts.tileSize, opacity: 1, attribution: CONFIG.attribution,
+            updateWhenZooming: false, updateWhenIdle: true, keepBuffer: CONFIG.wmts.keepBuffer,
+            noWrap: true, minZoom: 7, maxZoom: 22
+        },
+        initialize: function (part, options) {
+            this._part = { id: part.id, name: part.name, url: part.url || CONFIG.wmts.url, title: part.title };
+            this._maxSourceZoom = CONFIG.wmts.maxSourceZoom;
+            this._stats = { ok: 0, err: 0, deep: {}, okLevel: {}, overzoomLevel: null };
+            L.setOptions(this, options || {});
+            this.options.minZoom = part.minZoom || 7;
+            this.options.maxNativeZoom = part.maxNativeZoom || 20;
+            this.options.bounds = L.latLngBounds(CONFIG.countryBounds);
+            L.GridLayer.prototype.initialize.call(this, this.options);
+        },
+        /** The WMTS GetTile URL for one plate-carrée tile. */
+        tileUrl: function (level, col, row) {
+            return CONFIG.wmtsTileUrl(this._part.name, level, col, row);
+        },
+        createTile: function (coords, done) {
+            var size = this.getTileSize().x;
+            var canvas = document.createElement('canvas');
+            canvas.width = canvas.height = size;
+            if (canvas.setAttribute) canvas.setAttribute('role', 'presentation');
+            var self = this;
+            var st = this._stats;
+            function lost(level) { return (st.deep[level] || 0) >= 3 && !st.okLevel[level]; }
+            var lowest = Math.max(0, coords.z - 10);
+            var start = Math.min(this._maxSourceZoom, coords.z);
+            while (start > lowest && lost(start)) start--;
+            var failed = [];
+            function attempt(level) {
+                var plan = planWmtsTile(coords.z, coords.x, coords.y, size, level);
+                var images = new Map();
+                plan.rows.forEach(function (row) {
+                    plan.cols.forEach(function (col) { images.set(col.c + '/' + row.r, null); });
+                });
+                var pending = images.size, loaded = 0;
+                function finish() {
+                    if (!loaded) {
+                        if (level > lowest) {
+                            failed.push(level);
+                            attempt(level - 1);
+                        } else {
+                            st.err += 1;
+                            reportFailure(self);
+                            done(new Error('ASIG WMTS: no source tiles at any level'), canvas);
+                        }
+                        return;
+                    }
+                    failed.forEach(function (level_) { st.deep[level_] = (st.deep[level_] || 0) + 1; });
+                    if (level < coords.z - 1 && (st.overzoomLevel == null || level > st.overzoomLevel)) {
+                        st.overzoomLevel = level;
+                    }
+                    st.ok += 1;
+                    st.okLevel[level] = (st.okLevel[level] || 0) + 1;
+                    var context = null;
+                    try { context = canvas.getContext && canvas.getContext('2d'); }
+                    catch (e) { context = null; }
+                    if (context) {
+                        plan.rows.forEach(function (row, j) {
+                            plan.cols.forEach(function (col) {
+                                var img = images.get(col.c + '/' + row.r);
+                                if (img) context.drawImage(img, col.sx, row.sy, col.sw, row.sh, col.dx, j, col.dw, 1);
+                            });
+                        });
+                    }
+                    done(null, canvas);
+                }
+                if (!pending) { finish(); return; }
+                images.forEach(function (_, key) {
+                    var split = key.split('/');
+                    var img = document.createElement('img');
+                    /* No crossOrigin: the WMTS sends no CORS header, and the
+                     * canvas is only a drawing surface here (no getImageData),
+                     * so a tainted canvas is harmless — asking for CORS would
+                     * refuse every tile instead. */
+                    img.onload = function () { images.set(key, img); loaded += 1; if (!--pending) finish(); };
+                    img.onerror = function () { if (!--pending) finish(); };
+                    img.src = self.tileUrl(plan.z, Number(split[0]), Number(split[1]));
+                });
+            }
+            attempt(start);
+            return canvas;
+        }
+    });
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     * 3. SMALL DOM HELPERS + status
+     * ═══════════════════════════════════════════════════════════════════════ */
+    function el(tag, attrs, children) {
         var node = document.createElement(tag);
         Object.keys(attrs || {}).forEach(function (key) {
-            if (key === 'text') node.textContent = attrs[key];
-            else if (key === 'className') node.className = attrs[key];
-            else node.setAttribute(key === 'htmlFor' ? 'for' : key, attrs[key]);
+            var value = attrs[key];
+            if (value == null || value === false) return;
+            if (key === 'text') node.textContent = value;
+            else if (key === 'className') node.className = value;
+            else if (key === 'htmlFor') node.setAttribute('for', value);
+            else if (key.slice(0, 2) === 'on' && typeof value === 'function') {
+                node.addEventListener(key.slice(2).toLowerCase(), value);
+            } else node.setAttribute(key, value === true ? '' : String(value));
+        });
+        (children || []).forEach(function (child) {
+            if (child == null || child === false) return;
+            node.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
         });
         return node;
+    }
+    function clear(node) { if (node && node.replaceChildren) node.replaceChildren(); else if (node) node.innerHTML = ''; }
+    function warnOnce(key, detail) {
+        if (!key || runtime.warned[key]) return;
+        runtime.warned[key] = true;
+        if (window.console && window.console.warn) window.console.warn('[ASIG] ' + key + ': ' + detail);
+    }
+    /* The shared availability guard counts failures per host. These rows are
+     * self-guarded (their own status line and active-list hint do the talking),
+     * but a tile error is still reported so the guard's host verdict stays
+     * honest; noteFailure() is a no-op for a layer the guard does not watch. */
+    function reportFailure(layer) {
+        try {
+            if (window.DetectLabWmsHealth && typeof window.DetectLabWmsHealth.noteFailure === 'function') {
+                window.DetectLabWmsHealth.noteFailure(layer);
+            }
+        } catch (e) { /* the guard must never break the row */ }
     }
     function setStatus(id, message, kind) {
         var row = runtime.rows[id];
         if (!row || !row.status) return;
         row.status.textContent = message || '';
-        row.status.style.display = message ? 'block' : 'none';
+        if (row.status.style) row.status.style.display = message ? 'block' : 'none';
         row.status.className = 'albania-layer-status' + (kind ? ' is-' + kind : '');
-        row.status.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+        if (row.status.setAttribute) row.status.setAttribute('role', kind === 'error' ? 'alert' : 'status');
         if (message) runtime.notices[id] = { text: message, kind: kind };
         else delete runtime.notices[id];
     }
     function info(def) {
+        var title = text(def.title);
+        var description = def.description || '';
+        if (def.kind === 'group') {
+            var parts = currentHeritageParts();
+            description = (def.description || '') + ' ' + words().infoParts + ' (' + parts.length + ' ' + words().parts + '): ' +
+                parts.map(function (part) { return text(part.title) + (part.name ? ' — ' + part.name : ''); }).join(' · ');
+        }
+        description += ' ' + CONFIG.attribution + '. ' + words().licence + '.';
         if (typeof window.showLayerInfo === 'function') {
-            window.showLayerInfo(text(def.title), def.attributionRow || CONFIG.attribution, def.description || '');
-        } else if (window.alert) window.alert(text(def.title) + '\n' + (def.attributionRow || CONFIG.attribution) + '\n' + (def.description || ''));
+            window.showLayerInfo(title, CONFIG.attribution, description);
+        } else if (window.alert) window.alert(title + '\n' + CONFIG.attribution + '\n' + description);
     }
     function gotoTirana() {
-        var map = runtime.map || window._dlMap || window.map;
+        var map = mapInstance();
         if (map && map.setView) map.setView(CONFIG.view.center, CONFIG.view.zoom, { animate: true });
     }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     * 4. THE PANEL — heritage toggle, search, active list, sections
+     * ═══════════════════════════════════════════════════════════════════════ */
+    /* Parts that can actually draw: a baked part with a name, plus whatever the
+     * browser resolved. The catalogue's dynamic placeholder is a rule, not a
+     * layer, and an unnamed part cannot be requested — neither is counted, so
+     * the row does not promise layers it cannot switch on. */
+    function currentHeritageParts() {
+        var baked = (HERITAGE ? HERITAGE.parts : []).filter(function (part) {
+            return !part.dynamic && part.name;
+        });
+        return baked.concat(runtime.resolver.parts || []);
+    }
+
+    function sectionById(id) {
+        var list = CONFIG.sections || [];
+        for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+        return null;
+    }
+
     function createRow(def) {
-        var row = el('div', { className: 'albania-layer-row', id: 'albaniaRow_' + def.id, 'data-category': 'free', 'data-albania-row': def.id });
+        var row = el('div', {
+            className: 'albania-layer-row' + (def.kind === 'group' ? ' albania-layer-group' : ''),
+            id: 'albaniaRow_' + def.id,
+            'data-category': 'free',
+            'data-albania-row': def.id
+        });
         var head = el('div', { className: 'albania-layer-head' });
-        var input = el('input', { type: 'checkbox', id: 'albaniaToggle_' + def.id, 'aria-label': text(def.title) });
+        var input = el('input', {
+            type: 'checkbox',
+            id: 'albaniaToggle_' + def.id,
+            'aria-label': text(def.title)
+        });
         input.checked = !!runtime.active[def.id];
         input.addEventListener('change', function () { toggle(def.id, input.checked); });
-        var label = el('label', { className: 'albania-layer-label', htmlFor: input.id });
-        label.appendChild(input);
-        label.appendChild(el('span', { className: 'albania-layer-title', text: text(def.title) }));
+        var titleNode = el('span', { className: 'albania-layer-title', text: text(def.title) });
+        var partsNode = def.kind === 'group'
+            ? el('span', { className: 'albania-layer-parts', text: currentHeritageParts().length + ' ' + words().parts })
+            : null;
+        var label = el('label', { className: 'albania-layer-label', htmlFor: input.id }, [
+            input, titleNode, partsNode
+        ]);
         head.appendChild(label);
         var actions = el('span', { className: 'albania-layer-actions' });
-        var infoBtn = el('button', { type: 'button', className: 'albania-layer-info', title: 'Layer information', 'aria-label': 'Layer information', text: 'i' });
-        infoBtn.addEventListener('click', function (event) { event.preventDefault(); event.stopPropagation(); info(def); });
-        actions.appendChild(infoBtn);
-        var go = el('button', { type: 'button', className: 'albania-layer-go', text: words().go, title: 'Centre map on Tirana' });
-        go.addEventListener('click', function (event) { event.preventDefault(); event.stopPropagation(); gotoTirana(); });
+        var go = el('button', {
+            type: 'button', className: 'albania-layer-go', text: words().go, title: 'Centre map on Tirana'
+        });
+        go.addEventListener('click', function (event) {
+            if (event && event.preventDefault) event.preventDefault();
+            if (event && event.stopPropagation) event.stopPropagation();
+            gotoTirana();
+        });
         actions.appendChild(go);
+        var infoBtn = el('button', {
+            type: 'button', className: 'albania-layer-info', title: 'Layer information',
+            'aria-label': 'Layer information', text: 'i'
+        });
+        infoBtn.addEventListener('click', function (event) {
+            if (event && event.preventDefault) event.preventDefault();
+            if (event && event.stopPropagation) event.stopPropagation();
+            info(def);
+        });
+        actions.appendChild(infoBtn);
         head.appendChild(actions);
         row.appendChild(head);
 
-        var opacityLine = el('div', { className: 'albania-layer-opacity' });
-        opacityLine.appendChild(el('span', { text: words().opacity }));
         var pct = el('span', { className: 'pct', id: 'albaniaPct_' + def.id, text: runtime.opacity[def.id] + '%' });
-        opacityLine.appendChild(pct);
+        var opacityLine = el('div', { className: 'albania-layer-opacity' }, [
+            el('span', { text: words().opacity }),
+            pct
+        ]);
         row.appendChild(opacityLine);
-        var slider = el('input', { type: 'range', className: 'albania-layer-slider lidar-country-opacity', id: 'albaniaOpacity_' + def.id, min: '0', max: '100', value: String(runtime.opacity[def.id]), 'aria-label': text(def.title) + ' ' + words().opacity });
+        var slider = el('input', {
+            type: 'range', className: 'albania-layer-slider lidar-country-opacity',
+            id: 'albaniaOpacity_' + def.id, min: '0', max: '100',
+            value: String(runtime.opacity[def.id]),
+            'aria-label': text(def.title) + ' ' + words().opacity
+        });
         slider.addEventListener('input', function () { setOpacity(def.id, slider.value); });
         row.appendChild(slider);
         var status = el('div', { className: 'albania-layer-status', id: 'albaniaStatus_' + def.id, role: 'status' });
-        status.style.display = 'none';
+        if (status.style) status.style.display = 'none';
         row.appendChild(status);
-        runtime.rows[def.id] = { row: row, input: input, slider: slider, pct: pct, status: status, go: go };
+
+        runtime.rows[def.id] = {
+            row: row, input: input, slider: slider, status: status, go: go,
+            pct: pct, title: titleNode, parts: partsNode
+        };
         return row;
     }
-    /* ── placement sweep ────────────────────────────────────────────────────
-     * Every Albanian row must live inside #albaniaSubLayers: that is the one
-     * container the country gate hides, so a row mounted anywhere else would
-     * stay visible for Romania, Denmark and every other country — exactly the
-     * scattered layout this module replaced. The current markup ships the
-     * rows in the group, but an installed PWA can keep running an older shell
-     * whose mounts above are still present. They are removed (the nine rows
-     * are re-created from CONFIG right after), together with any Albanian row
-     * that somehow ended up outside the group. Returns the number of stale
-     * nodes removed. */
-    function sweepLegacyRows(mount) {
-        var removed = 0;
-        LEGACY_MOUNT_IDS.forEach(function (id) {
-            var node = document.getElementById(id);
-            if (!node || node === mount) return;
-            if (node.parentNode && node.parentNode.removeChild) node.parentNode.removeChild(node);
-            else if (node.innerHTML !== undefined) node.innerHTML = '';
-            removed += 1;
-        });
-        if (mount && typeof document.querySelectorAll === 'function') {
-            var strays = document.querySelectorAll('[data-albania-row]');
-            Array.prototype.forEach.call(strays, function (row) {
-                if (row === mount) return;
-                if (typeof mount.contains === 'function' && mount.contains(row)) return;
-                if (row.parentNode && row.parentNode.removeChild) row.parentNode.removeChild(row);
-                removed += 1;
-            });
-        }
-        runtime.swept = removed;
-        /* Informational, not a layer failure: it must not inflate the
-         * one-warning-per-layer console contract. */
-        if (removed && window.console && window.console.info) {
-            window.console.info('[ASIG] removed ' + removed + ' Albanian row(s) mounted outside the Albania group');
-        }
-        return removed;
+
+    function sectionNode(sectionId) {
+        var section = sectionById(sectionId) || { id: sectionId, title: sectionId };
+        var defs = LAYERS.filter(function (def) { return def.section === sectionId; });
+        var collapsed = !!runtime.collapsed[sectionId];
+        var head = el('button', {
+            type: 'button',
+            className: 'albania-section-head',
+            id: 'albaniaSectionHead_' + sectionId,
+            'aria-expanded': collapsed ? 'false' : 'true',
+            title: text(section.label || section.title)
+        }, [
+            el('span', { className: 'albania-section-caret', text: collapsed ? '▸' : '▾' }),
+            el('span', { className: 'albania-section-title', text: text(section.label || section.title) }),
+            el('span', { className: 'albania-section-count', text: '(' + defs.length + ')' })
+        ]);
+        head.addEventListener('click', function () { toggleSection(sectionId); });
+        var body = el('div', { className: 'albania-section-body', id: 'albaniaSectionBody_' + sectionId });
+        if (collapsed) if (body.style) body.style.display = 'none';
+        defs.forEach(function (def) { body.appendChild(createRow(def)); });
+        var wrapper = el('div', {
+            className: 'albania-section', id: 'albaniaSection_' + sectionId, 'data-albania-section': sectionId
+        }, [head, body]);
+        runtime.sectionNodes = runtime.sectionNodes || {};
+        runtime.sectionNodes[sectionId] = { wrapper: wrapper, head: head, body: body };
+        return wrapper;
     }
-    /* The nine rows live in ONE container inside the Albania group row, in
-     * draw order, with a small caption whenever the theme changes. */
+
+    function toolsNode() {
+        var search = el('input', {
+            type: 'search',
+            id: SEARCH_ID,
+            className: 'albania-search',
+            placeholder: words().search,
+            'aria-label': words().search,
+            autocomplete: 'off',
+            spellcheck: 'false'
+        });
+        search.value = runtime.search;
+        search.addEventListener('input', function () { setSearch(search.value); });
+        var active = el('div', { className: 'albania-active', id: ACTIVE_ID });
+        return el('div', { className: 'albania-catalogue-tools' }, [search, active]);
+    }
+
     function buildPanel() {
         runtime.rows = {};
+        runtime.sectionNodes = {};
         var mount = document.getElementById(MOUNT_ID);
         if (mount) {
-            sweepLegacyRows(mount);
-            mount.innerHTML = '';
-            var lastSection = null;
-            CONFIG.drawOrder().forEach(function (def) {
-                if (def.section !== lastSection) {
-                    lastSection = def.section;
-                    var label = CONFIG.sectionLabels && CONFIG.sectionLabels[def.section];
-                    if (label) mount.appendChild(el('div', { className: 'albania-layer-section', text: text(label) }));
-                }
-                mount.appendChild(createRow(def));
+            clear(mount);
+            mount.appendChild(toolsNode());
+            /* Heritage is ONE toggle at the top of the panel — never a group of
+             * rows and never inside a section, so its parts cannot be mistaken
+             * for layers the visitor has to switch on one by one. */
+            if (HERITAGE) {
+                mount.appendChild(el('div', { className: 'albania-heritage-block' }, [
+                    el('div', { className: 'albania-heritage-caption', text: text(HERITAGE.title) }),
+                    createRow(HERITAGE),
+                    el('div', {
+                        className: 'albania-heritage-note',
+                        text: words().infoParts + ' (' + currentHeritageParts().length + ' ' + words().parts + ')'
+                    })
+                ]));
+            }
+            (CONFIG.sections || []).forEach(function (section) {
+                if (section.id === HERITAGE_ID) return;
+                mount.appendChild(sectionNode(section.id));
             });
         }
         Object.keys(runtime.rows).forEach(function (id) {
             if (runtime.notices[id]) setStatus(id, runtime.notices[id].text, runtime.notices[id].kind);
         });
+        renderActive();
+        applySearch();
         setExpanded(runtime.expanded);
         /* Rebuilding the DOM must not undo the country gate. */
         applyCountryVisibility(runtime.inCountry);
+        refreshResolverNotices();
     }
+
+    function toggleSection(sectionId) {
+        runtime.collapsed[sectionId] = !runtime.collapsed[sectionId];
+        var node = runtime.sectionNodes && runtime.sectionNodes[sectionId];
+        if (node) {
+            var collapsed = !!runtime.collapsed[sectionId];
+            if (node.body.style) node.body.style.display = collapsed ? 'none' : '';
+            node.head.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            if (node.head.children && node.head.children[0]) node.head.children[0].textContent = collapsed ? '▸' : '▾';
+        }
+        save();
+    }
+
+    /* Diacritics-insensitive comparison: visitors type "Durres", "Shkoder" or
+     * "Kruje", while the catalogue keeps the portal's "Durrës", "Shkodër",
+     * "Krujë". NFD splits the accent off the base letter, so stripping the
+     * combining marks makes both spellings the same search term. */
+    function fold(value) {
+        var out = String(value == null ? '' : value).toLowerCase();
+        if (out.normalize) out = out.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return out.replace(/[đĐ]/g, 'd').replace(/[_\s]+/g, ' ').trim();
+    }
+
+    function applySearch() {
+        var query = fold(runtime.search);
+        var matched = {};
+        var visible = 0;
+        LAYERS.forEach(function (def) {
+            var row = runtime.rows[def.id];
+            if (!row) return;
+            /* The Heritage toggle is searchable by EVERY part, so
+             * “zonat_mbrojtura” or “arkeologjike” finds it even though the
+             * parts are never rows of their own. */
+            var heritageText = def.kind === 'group'
+                ? ' heritage archaeolog archeolog arkeolog ' + currentHeritageParts().map(function (part) {
+                    return text(part.title) + ' ' + (part.name || '');
+                }).join(' ')
+                : '';
+            var haystack = fold(text(def.title) + ' ' + def.title.en + ' ' + (def.name || '') + ' ' +
+                heritageText);
+            matched[def.id] = !query || haystack.indexOf(query) !== -1;
+            if (row.row.style) row.row.style.display = matched[def.id] ? '' : 'none';
+            if (matched[def.id]) visible += 1;
+        });
+        (CONFIG.sections || []).forEach(function (section) {
+            var node = runtime.sectionNodes && runtime.sectionNodes[section.id];
+            if (!node) return;
+            if (section.id === HERITAGE_ID) {
+                /* Heritage has no section node; it is the bare toggle above. */
+                return;
+            }
+            var shown = LAYERS.filter(function (def) {
+                return def.section === section.id && matched[def.id];
+            }).length;
+            if (node.wrapper.style) node.wrapper.style.display = shown ? '' : 'none';
+            /* A search overrides the collapsed state so matches are visible. */
+            if (node.body.style) node.body.style.display = (!query && runtime.collapsed[section.id]) ? 'none' : '';
+        });
+        if (HERITAGE && runtime.rows[HERITAGE_ID] && !query && runtime.rows[HERITAGE_ID].row.style) {
+            runtime.rows[HERITAGE_ID].row.style.display = '';
+        }
+        var empty = document.getElementById('albaniaSearchEmpty');
+        if (query && !visible) {
+            if (!empty) {
+                var mount = document.getElementById(MOUNT_ID);
+                if (mount) {
+                    mount.appendChild(el('div', { className: 'empty', id: 'albaniaSearchEmpty', text: words().noMatch }));
+                }
+            }
+        } else if (empty && empty.parentNode) {
+            empty.parentNode.removeChild(empty);
+        }
+        return visible;
+    }
+
+    function setSearch(value) {
+        runtime.search = String(value == null ? '' : value);
+        applySearch();
+    }
+
+    /* ── active layers: the real draw order, top of the list = top of the map ── */
+    function orderList() {
+        return runtime.order.slice();
+    }
+    function hasActive() {
+        return runtime.order.length > 0;
+    }
+    function syncOrder() {
+        runtime.order = runtime.order.filter(function (id) { return !!runtime.active[id]; });
+        LAYERS.forEach(function (def) {
+            if (runtime.active[def.id] && runtime.order.indexOf(def.id) === -1) runtime.order.push(def.id);
+        });
+    }
+    function applyZOrder() {
+        syncOrder();
+        runtime.order.forEach(function (id, index) {
+            var entry = runtime.entries[id];
+            if (!entry) return;
+            entry.parts.forEach(function (part) {
+                if (part.layer && part.layer.setZIndex) part.layer.setZIndex(Z_BASE + index);
+            });
+        });
+    }
+
+    function renderActive() {
+        var box = document.getElementById(ACTIVE_ID);
+        if (!box) return;
+        clear(box);
+        var list = orderList().slice().reverse();   /* top of list = top of map */
+        if (!list.length) {
+            box.appendChild(el('div', { className: 'empty albania-active-empty', text: words().activeEmpty }));
+            return;
+        }
+        box.appendChild(el('div', { className: 'albania-active-head', text: words().active + ' (' + list.length + ')' }));
+        list.forEach(function (id) {
+            var def = CONFIG.byId(id);
+            if (!def) return;
+            var entry = runtime.entries[id];
+            var slider = el('input', {
+                type: 'range', className: 'albania-active-slider', min: '0', max: '100',
+                value: String(runtime.opacity[id]),
+                'aria-label': text(def.title) + ' ' + words().opacity
+            });
+            slider.addEventListener('input', function () { setOpacity(id, slider.value); });
+            var item = el('div', { className: 'albania-active-item', 'data-active-id': id }, [
+                el('div', { className: 'albania-active-top' }, [
+                    el('b', { text: text(def.title) }),
+                    def.kind === 'group' ? el('span', { className: 'albania-active-parts', text: currentHeritageParts().length + ' ' + words().parts }) : null,
+                    el('button', {
+                        type: 'button', className: 'albania-active-move', 'data-dir': 'up',
+                        title: words().moveUp, 'aria-label': words().moveUp, text: '↑',
+                        onclick: function () { moveActive(id, 1); }
+                    }),
+                    el('button', {
+                        type: 'button', className: 'albania-active-move', 'data-dir': 'down',
+                        title: words().moveDown, 'aria-label': words().moveDown, text: '↓',
+                        onclick: function () { moveActive(id, -1); }
+                    }),
+                    el('button', {
+                        type: 'button', className: 'albania-active-remove',
+                        title: words().remove, 'aria-label': words().remove, text: '✕',
+                        onclick: function () { toggle(id, false); }
+                    })
+                ]),
+                slider
+            ]);
+            if (entry) {
+                var overzoom = entry.parts.some(function (part) { return part.stats && part.stats.overzoomLevel != null; });
+                var bad = entry.parts.filter(function (part) { return part.warn && !part.ok; });
+                var retrying = entry.parts.some(function (part) { return part.switched && !part.warn && !part.ok; });
+                if (overzoom) item.appendChild(el('div', { className: 'albania-active-hint', text: words().overzoom }));
+                if (retrying && !bad.length) item.appendChild(el('div', { className: 'albania-active-hint', text: words().retrying }));
+                if (bad.length) {
+                    item.appendChild(el('div', {
+                        className: 'albania-active-hint is-warn',
+                        text: (entry.parts.length > 1 ? bad.length + '/' + entry.parts.length + ' ' + words().partsFailed : words().allFailed)
+                    }));
+                }
+            }
+            box.appendChild(item);
+        });
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     * 5. LAYER LIFECYCLE
+     * ═══════════════════════════════════════════════════════════════════════ */
+    function ensurePanes(map) {
+        if (runtime.panes || !map || !map.createPane) return;
+        var pane = map.getPane && map.getPane(PANE_ID);
+        if (!pane) pane = map.createPane(PANE_ID);
+        if (pane && pane.style) {
+            pane.style.zIndex = String(PANE_Z);
+            /* Tiles are decoration: never steal a click from the map. */
+            pane.style.pointerEvents = 'none';
+        }
+        runtime.panes = true;
+    }
+
+    function attachPart(entry, leaf) {
+        var part = {
+            leaf: leaf,
+            layer: null,
+            ok: 0,
+            err: 0,
+            switched: false,
+            warn: false
+        };
+        if (!leaf.name) {
+            part.missingName = true;
+            entry.parts.push(part);
+            return part;
+        }
+        var layer = leaf.kind === 'wmts'
+            ? new AsigWmtsLayer(leaf, {
+                pane: PANE_ID,
+                opacity: entry.opacity,
+                attribution: CONFIG.attribution,
+                minZoom: leaf.minZoom,
+                maxNativeZoom: leaf.maxNativeZoom
+            })
+            : new AsigWmsLayer(leaf, {
+                pane: PANE_ID,
+                opacity: entry.opacity,
+                attribution: CONFIG.attribution,
+                keepBuffer: CONFIG.wms.keepBuffer
+            });
+        part.layer = layer;
+        layer._dlDefId = 'albania.' + entry.def.id;
+        layer._detectlabProvider = CONFIG.provider;
+        layer._detectlabUiTitle = text(entry.def.title) + (entry.def.kind === 'group' ? ' · ' + text(leaf.title) : '');
+        layer._detectlabUiKeys = ['albaniaToggle_' + entry.def.id];
+        layer._detectlabNoGuard = true;
+
+        if (leaf.kind === 'wmts') {
+            layer._stats = layer._stats || {};
+            part.stats = layer._stats;
+            layer.on('tileload', function () {
+                if (part.stats.overzoomLevel != null && !part.overzoomNoted) {
+                    part.overzoomNoted = true;
+                    renderActive();
+                }
+            });
+            layer.on('tileerror', function () {
+                part.err += 1;
+                if (part.err >= 3 && !part.warn) { part.warn = true; renderActive(); }
+            });
+        } else {
+            layer.on('tileload', function () {
+                part.ok += 1;
+                if (part.ok === 1) renderActive();
+            });
+            layer.on('tileerror', function () {
+                part.err += 1;
+                if (!part.ok && !part.switched && part.err >= 2 && leaf.fallbackUrl && leaf.fallbackUrl !== layer.endpoint()) {
+                    /* The prototype's one automatic retry: this layer's
+                     * per-workspace endpoint answered nothing, so ask the
+                     * global service. */
+                    part.switched = true;
+                    layer.setEndpoint(leaf.fallbackUrl);
+                    part.err = 0;
+                    renderActive();
+                } else if (!part.ok && part.err >= 3 && !part.warn) {
+                    part.warn = true;
+                    renderActive();
+                }
+            });
+        }
+        entry.parts.push(part);
+        return part;
+    }
+
+    function buildEntry(def) {
+        var entry = runtime.entries[def.id];
+        if (entry && entry.parts.length) return entry;
+        entry = runtime.entries[def.id] = {
+            def: def,
+            parts: [],
+            opacity: runtime.opacity[def.id] / 100,
+            overzoom: false
+        };
+        var leaves = def.kind === 'group'
+            ? currentHeritageParts().filter(function (part) {
+                /* Only WMS parts carry a map layer; the keyword rule has no
+                 * tile-only products. */
+                return part.kind !== 'wmts';
+            }).map(function (part) {
+                return {
+                    id: part.id,
+                    kind: 'wms',
+                    title: part.title,
+                    name: part.name,
+                    url: part.url,
+                    fallbackUrl: part.fallbackUrl,
+                    format: part.format,
+                    transparent: part.transparent,
+                    minZoom: def.minZoom,
+                    maxNativeZoom: def.maxNativeZoom
+                };
+            })
+            : [{
+                id: def.id,
+                kind: def.kind,
+                title: def.title,
+                name: def.name,
+                url: def.url,
+                fallbackUrl: def.fallbackUrl,
+                format: def.format,
+                transparent: def.transparent,
+                minZoom: def.minZoom,
+                maxNativeZoom: def.maxNativeZoom
+            }];
+        leaves.forEach(function (leaf) { attachPart(entry, leaf); });
+        return entry;
+    }
+
+    function addEntryToMap(entry) {
+        var map = mapInstance();
+        if (!map || runtime.suppressed) return;
+        entry.parts.forEach(function (part) {
+            if (part.layer && !map.hasLayer(part.layer)) map.addLayer(part.layer);
+        });
+    }
+    function removeEntryFromMap(entry) {
+        var map = mapInstance();
+        if (!map) return;
+        entry.parts.forEach(function (part) {
+            if (part.layer && map.hasLayer(part.layer)) map.removeLayer(part.layer);
+        });
+    }
+
+    function activate(def) {
+        runtime.active[def.id] = true;
+        if (runtime.order.indexOf(def.id) === -1) runtime.order.push(def.id);
+        var entry = buildEntry(def);
+        entry.opacity = runtime.opacity[def.id] / 100;
+        entry.parts.forEach(function (part) { if (part.layer && part.layer.setOpacity) part.layer.setOpacity(entry.opacity); });
+        addEntryToMap(entry);
+        applyZOrder();
+        setStatus(def.id, '', 'info');
+        refreshRowNotice(def.id);
+        renderActive();
+    }
+    function deactivate(def) {
+        runtime.active[def.id] = false;
+        var index = runtime.order.indexOf(def.id);
+        if (index !== -1) runtime.order.splice(index, 1);
+        var entry = runtime.entries[def.id];
+        if (entry) removeEntryFromMap(entry);
+        setStatus(def.id, '', 'info');
+        var row = runtime.rows[def.id];
+        if (row && row.input) row.input.checked = false;
+        applyZOrder();
+        renderActive();
+        save();
+    }
+
+    function refreshRowNotice(id) {
+        var def = CONFIG.byId(id);
+        var entry = runtime.entries[id];
+        if (!def || !runtime.active[id]) return;
+        var parts = entry ? entry.parts : [];
+        if (!parts.length) return;
+        var missing = parts.filter(function (part) { return part.missingName; }).length;
+        var bad = parts.filter(function (part) { return part.warn && !part.ok; }).length;
+        var retrying = parts.some(function (part) { return part.switched && !part.warn && !part.ok; });
+        if (missing === parts.length) {
+            setStatus(id, runtime.resolver.state === 'failed' ? words().unresolved : words().resolving, 'warn');
+        } else if (missing) {
+            setStatus(id, missing + '/' + parts.length + ' ' + words().partsFailed, 'warn');
+        } else if (bad === parts.length) {
+            setStatus(id, words().allFailed, 'error');
+        } else if (bad) {
+            setStatus(id, bad + '/' + parts.length + ' ' + words().partsFailed, 'warn');
+        } else if (retrying) {
+            setStatus(id, words().retrying, 'warn');
+        } else {
+            setStatus(id, '', 'info');
+        }
+    }
+
+    function toggle(id, on) {
+        var def = CONFIG.byId(id);
+        if (!def) return;
+        if (on) activate(def); else deactivate(def);
+        syncUI();
+        save();
+    }
+
+    function setOpacity(id, value) {
+        var def = CONFIG.byId(id);
+        if (!def) return;
+        var opacity = Math.max(0, Math.min(100, Number(value) || 0));
+        runtime.opacity[id] = opacity;
+        var entry = runtime.entries[id];
+        if (entry) {
+            entry.opacity = opacity / 100;
+            entry.parts.forEach(function (part) { if (part.layer && part.layer.setOpacity) part.layer.setOpacity(entry.opacity); });
+        }
+        if (opacity > 0 && !runtime.active[id]) activate(def);
+        if (opacity === 0 && runtime.active[id]) deactivate(def);
+        syncUI();
+        save();
+    }
+
+    /** ↑/↓ in the active list. `direction` +1 moves the entry up (drawn later). */
+    function moveActive(id, direction) {
+        syncOrder();
+        var index = runtime.order.indexOf(id);
+        if (index === -1) return;
+        var target = index + direction;
+        if (target < 0 || target >= runtime.order.length) return;
+        var other = runtime.order[target];
+        runtime.order[target] = id;
+        runtime.order[index] = other;
+        applyZOrder();
+        renderActive();
+        save();
+        return runtime.order.slice();
+    }
+
+    function syncUI() {
+        var anyActive = false;
+        LAYERS.forEach(function (def) {
+            var row = runtime.rows[def.id];
+            if (runtime.active[def.id]) anyActive = true;
+            if (!row) return;
+            row.input.checked = !!runtime.active[def.id];
+            if (row.row.classList) row.row.classList.toggle('is-active', !!runtime.active[def.id]);
+            if (row.pct) row.pct.textContent = runtime.opacity[def.id] + '%';
+            if (row.slider && String(row.slider.value) !== String(runtime.opacity[def.id])) {
+                row.slider.value = String(runtime.opacity[def.id]);
+            }
+        });
+        var master = document.getElementById(GROUP_TOGGLE_ID);
+        if (master) master.checked = anyActive;
+    }
+
+    /* Group master switch: one click turns the whole Albanian stack on/off. */
+    function toggleAll(on) {
+        LAYERS.forEach(function (def) { if (on) activate(def); else deactivate(def); });
+        if (!on) runtime.order = [];
+        applyZOrder();
+        syncUI();
+        renderActive();
+        save();
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     * 6. RUN-TIME NAME RESOLUTION (rows the export has not named yet)
+     * ═══════════════════════════════════════════════════════════════════════
+     * The prototype resolved the rows the owner's notes do not name by title
+     * from the service's own GetCapabilities. ASIG refused the automated
+     * requests from a cloud IP (“IP … is blacklisted”), so this happens in the
+     * visitor's browser — where the service does answer — once, with the answer
+     * cached for a week. A baked name always wins: this only fills the blanks,
+     * and rows whose name never resolves say so instead of drawing nothing.
+     */
+    function resolverNeeded() {
+        var pending = false;
+        LAYERS.forEach(function (def) {
+            if (def.kind !== 'group' && !def.name) pending = true;
+        });
+        (HERITAGE ? HERITAGE.parts : []).forEach(function (part) { if (!part.name) pending = true; });
+        return pending;
+    }
+
+    function readResolverCache() {
+        try {
+            var raw = window.localStorage.getItem(CONFIG.resolver.cacheKey);
+            if (!raw) return null;
+            var cached = JSON.parse(raw);
+            if (!cached || !cached.at || (Date.now() - cached.at) > CONFIG.resolver.ttlMs) return null;
+            return cached;
+        } catch (e) { return null; }
+    }
+    function writeResolverCache(names, parts) {
+        try {
+            window.localStorage.setItem(CONFIG.resolver.cacheKey, JSON.stringify({
+                at: Date.now(), names: names || {}, parts: parts || []
+            }));
+        } catch (e) { /* private mode: resolve again next time */ }
+    }
+
+    function parseCapabilities(xmlText) {
+        var Parser = window.DOMParser;
+        if (!Parser) throw new Error('DOMParser unavailable');
+        var doc = new Parser().parseFromString(xmlText, 'text/xml');
+        if (doc.querySelector && doc.querySelector('parsererror')) throw new Error('the response is not valid XML');
+        var nodes = doc.getElementsByTagName ? doc.getElementsByTagName('*') : [];
+        var found = [];
+        for (var i = 0; i < nodes.length; i++) {
+            var node = nodes[i];
+            if (!node.localName || node.localName !== 'Layer') continue;
+            var name = '', title = '';
+            for (var j = 0; j < node.children.length; j++) {
+                var child = node.children[j];
+                if (child.localName === 'Name' && !name) name = String(child.textContent || '').trim();
+                if (child.localName === 'Title' && !title) title = String(child.textContent || '').trim();
+            }
+            if (name) found.push({ name: name, title: title || name });
+        }
+        if (!found.length) throw new Error('the capabilities document lists no layers');
+        return found;
+    }
+
+    /* Same folding as the search box, so a capabilities title spelled with an
+     * accent still matches the catalogue's plain-spelled resolveByTitle. */
+    function norm(value) {
+        return fold(value);
+    }
+
+    function applyResolved(names, parts) {
+        runtime.resolver.names = names || {};
+        runtime.resolver.parts = (parts || []).map(function (part) {
+            return {
+                id: part.id, title: part.title, kind: 'wms', name: part.name,
+                url: part.url || CONFIG.workspaceUrl(part.name),
+                fallbackUrl: part.fallbackUrl || CONFIG.wms.url,
+                format: 'image/png', transparent: true
+            };
+        });
+        var resolvedAny = false;
+        LAYERS.forEach(function (def) {
+            if (def.kind === 'group' || def.name) return;
+            var key = norm(def.resolveByTitle || def.title.en);
+            var name = runtime.resolver.names[key];
+            if (!name) return;
+            def.name = name;
+            def.layers = name;
+            def.url = CONFIG.workspaceUrl(name);
+            def.fallbackUrl = CONFIG.wms.url;
+            resolvedAny = true;
+            /* An entry built while the name was unknown must be rebuilt. */
+            if (runtime.entries[def.id]) {
+                removeEntryFromMap(runtime.entries[def.id]);
+                delete runtime.entries[def.id];
+                if (runtime.active[def.id]) activate(def);
+            }
+        });
+        if (resolvedAny) {
+            buildPanel();
+            syncUI();
+        }
+        /* Heritage discovered by keyword joins the group, and the group redraws
+         * if it is already on. */
+        if (runtime.resolver.parts.length) {
+            var heritageEntry = runtime.entries[HERITAGE_ID];
+            if (heritageEntry) {
+                removeEntryFromMap(heritageEntry);
+                delete runtime.entries[HERITAGE_ID];
+                if (runtime.active[HERITAGE_ID]) activate(HERITAGE);
+            }
+            var row = runtime.rows[HERITAGE_ID];
+            if (row && row.title) row.title.textContent = text(HERITAGE.title);
+            buildPanel();
+            syncUI();
+        }
+        LAYERS.forEach(function (def) { refreshRowNotice(def.id); });
+        renderActive();
+    }
+
+    function refreshResolverNotices() {
+        if (!resolverNeeded()) return;
+        LAYERS.forEach(function (def) {
+            if (def.kind === 'group' || def.name) return;
+            if (runtime.active[def.id]) refreshRowNotice(def.id);
+        });
+    }
+
+    function resolveNames() {
+        if (!CONFIG.resolver.enabled || runtime.resolver.state === 'running' || runtime.resolver.state === 'done') {
+            return Promise.resolve(runtime.resolver);
+        }
+        if (!resolverNeeded()) {
+            runtime.resolver.state = 'done';
+            return Promise.resolve(runtime.resolver);
+        }
+        runtime.resolver.state = 'running';
+        refreshResolverNotices();
+        var cached = readResolverCache();
+        if (cached) {
+            runtime.resolver.state = 'done';
+            runtime.resolver.cached = true;
+            applyResolved(cached.names, cached.parts);
+            return Promise.resolve(runtime.resolver);
+        }
+        if (typeof window.fetch !== 'function') {
+            runtime.resolver.state = 'failed';
+            runtime.resolver.error = 'no fetch';
+            refreshResolverNotices();
+            return Promise.resolve(runtime.resolver);
+        }
+        return window.fetch(CONFIG.resolver.capabilitiesUrl, { cache: 'force-cache' })
+            .then(function (response) {
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                return response.text();
+            })
+            .then(function (xml) {
+                var found = parseCapabilities(xml);
+                var names = {};
+                var pending = LAYERS.filter(function (def) { return def.kind !== 'group' && !def.name; });
+                pending.forEach(function (def) {
+                    var key = norm(def.resolveByTitle || def.title.en);
+                    var hit = found.filter(function (node) { return norm(node.title) === key; })[0] ||
+                        found.filter(function (node) {
+                            return norm(String(node.name).split(':').pop()) === key;
+                        })[0];
+                    if (hit) names[key] = hit.name;
+                });
+                /* Every archaeological layer the service publishes joins
+                 * Heritage, exactly like the prototype's keyword rule. */
+                var keyword = new RegExp(CONFIG.resolver.keyword || 'archaeolog|archeolog|arkeolog', 'i');
+                var known = {};
+                (HERITAGE ? HERITAGE.parts : []).forEach(function (part) { if (part.name) known[part.name] = true; });
+                var parts = found.filter(function (node) {
+                    return keyword.test(node.title + ' ' + node.name) && !known[node.name];
+                }).sort(function (a, b) { return a.title.localeCompare(b.title); }).map(function (node) {
+                    return {
+                        id: 'heritage_archaeology_' + node.name.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '').toLowerCase(),
+                        title: node.title,
+                        name: node.name
+                    };
+                });
+                runtime.resolver.state = 'done';
+                writeResolverCache(names, parts);
+                applyResolved(names, parts);
+                return runtime.resolver;
+            })
+            .catch(function (error) {
+                runtime.resolver.state = 'failed';
+                runtime.resolver.error = (error && error.message) || 'request failed';
+                warnOnce('resolver', 'GetCapabilities could not be read in this browser: ' + runtime.resolver.error);
+                refreshResolverNotices();
+                return runtime.resolver;
+            });
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     * 7. FEATURE INFO — one query per endpoint, sandboxed iframe for the HTML
+     * ═══════════════════════════════════════════════════════════════════════ */
+    function activeWmsLeaves() {
+        var leaves = [];
+        runtime.order.forEach(function (id) {
+            var entry = runtime.entries[id];
+            if (!entry) return;
+            entry.parts.forEach(function (part) {
+                if (!part.layer || part.missingName) return;
+                if (part.leaf.kind === 'wmts') return;
+                leaves.push({
+                    name: part.leaf.name,
+                    title: part.leaf.title || entry.def.title,
+                    url: part.layer.endpoint ? part.layer.endpoint() : part.leaf.url
+                });
+            });
+        });
+        return leaves;
+    }
+
+    function featureInfoUrl(url, leaves, latlng, size, point, bounds) {
+        var crs = L.CRS.EPSG3857;
+        var sw = crs.project(bounds.getSouthWest());
+        var ne = crs.project(bounds.getNorthEast());
+        var names = leaves.map(function (leaf) { return leaf.name; }).join(',');
+        var query = new window.URLSearchParams({
+            service: 'WMS', version: '1.1.1', request: 'GetFeatureInfo',
+            layers: names, query_layers: names, styles: '',
+            bbox: [sw.x, sw.y, ne.x, ne.y].join(','),
+            width: size.x, height: size.y, srs: 'EPSG:3857',
+            x: Math.round(point.x), y: Math.round(point.y),
+            info_format: CONFIG.featureInfo.format || 'text/html',
+            feature_count: CONFIG.featureInfo.featureCount || 10
+        });
+        return url + (url.indexOf('?') === -1 ? '?' : '&') + query.toString();
+    }
+
+    function featureInfo(latlng) {
+        var map = mapInstance();
+        if (!map || !latlng) return Promise.resolve([]);
+        var leaves = activeWmsLeaves();
+        if (!leaves.length) return Promise.resolve([]);
+        var groups = {};
+        leaves.forEach(function (leaf) {
+            if (!groups[leaf.url]) groups[leaf.url] = [];
+            groups[leaf.url].push(leaf);
+        });
+        var bounds = map.getBounds();
+        var size = map.getSize();
+        var point = map.latLngToContainerPoint(latlng);
+        var results = [];
+        var requests = Object.keys(groups).map(function (url) {
+            var list = groups[url];
+            var full = featureInfoUrl(url, list, latlng, size, point, bounds);
+            var title = list.map(function (leaf) { return text(leaf.title); }).join(', ');
+            if (typeof window.fetch !== 'function') {
+                results.push({ title: title, url: full, html: '' });
+                return Promise.resolve();
+            }
+            return window.fetch(full)
+                .then(function (response) {
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    return response.text();
+                })
+                .then(function (html) {
+                    if (String(html).replace(/<[^>]*>/g, '').trim()) results.push({ title: title, url: full, html: html });
+                })
+                .catch(function () {
+                    /* Cross-origin read blocked: let the browser show the
+                     * server's own HTML in the sandboxed iframe. */
+                    results.push({ title: title, url: full, html: '' });
+                });
+        });
+        return Promise.all(requests).then(function () { return results; });
+    }
+
+    function openFeatureInfo(latlng) {
+        var map = mapInstance();
+        if (!map || !L.popup) return;
+        var box = el('div', { className: 'albania-feature-info' }, [el('div', { className: 'empty', text: words().querying })]);
+        var popup = L.popup({
+            maxWidth: CONFIG.featureInfo.maxWidth,
+            minWidth: CONFIG.featureInfo.minWidth
+        }).setLatLng(latlng).setContent(box);
+        popup.openOn(map);
+        featureInfo(latlng).then(function (results) {
+            clear(box);
+            if (!results.length) { box.appendChild(el('div', { className: 'empty', text: words().noFeatures })); return; }
+            results.forEach(function (result) {
+                box.appendChild(el('h4', { text: result.title }));
+                var frame = document.createElement('iframe');
+                /* Sandboxed, script-free rendering: the service's HTML cannot
+                 * run a script or reach this page. */
+                frame.setAttribute('sandbox', '');
+                frame.setAttribute('loading', 'lazy');
+                frame.className = 'albania-feature-frame';
+                if (result.html) frame.setAttribute('srcdoc', result.html);
+                else frame.setAttribute('src', result.url);
+                box.appendChild(frame);
+            });
+        });
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     * 8. COUNTRY GATE + PLACEMENT SWEEP
+     * ═══════════════════════════════════════════════════════════════════════ */
+    function setMapSuppressed(suppressed) {
+        runtime.suppressed = !!suppressed;
+        var map = mapInstance();
+        if (!map) return;
+        Object.keys(runtime.entries).forEach(function (id) {
+            var entry = runtime.entries[id];
+            if (runtime.suppressed) removeEntryFromMap(entry);
+            else if (runtime.active[id]) addEntryToMap(entry);
+        });
+    }
+    function applyCountryVisibility(visible) {
+        runtime.inCountry = !!visible;
+        var groupRow = document.getElementById(GROUP_ROW_ID);
+        if (groupRow) {
+            if (groupRow.classList) {
+                groupRow.classList.toggle(OUT_OF_COUNTRY_CLASS, !visible);
+                groupRow.classList.toggle('country-layer-unavailable', !visible);
+            }
+            groupRow.setAttribute('aria-hidden', visible ? 'false' : 'true');
+        }
+        LAYERS.forEach(function (def) {
+            var row = runtime.rows[def.id] && runtime.rows[def.id].row;
+            if (!row) return;
+            if (row.classList) row.classList.toggle('country-layer-unavailable', !visible);
+            row.setAttribute('aria-hidden', visible ? 'false' : 'true');
+        });
+        setMapSuppressed(!visible);
+    }
+    /* The same signature the other country groups expose. */
+    function filterForCountry(iso) {
+        var code = String(iso == null ? (window._detectlabSelectedCountry || '') : iso).toUpperCase();
+        applyCountryVisibility(code === COUNTRY);
+        return code === COUNTRY;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     * 9. STATE
+     * ═══════════════════════════════════════════════════════════════════════ */
+    function save() {
+        var state = {
+            active: runtime.active,
+            opacity: runtime.opacity,
+            order: runtime.order,
+            collapsed: runtime.collapsed
+        };
+        try { window.localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+        catch (e) { /* Storage may be disabled in private browsing. */ }
+    }
+
+    function defaultOpacity(def) {
+        return Math.round((typeof def.opacity === 'number' ? def.opacity : 1) * 100);
+    }
+
+    function load() {
+        LAYERS.forEach(function (def) {
+            runtime.active[def.id] = false;
+            runtime.opacity[def.id] = defaultOpacity(def);
+        });
+        var data = null;
+        try { data = JSON.parse(window.localStorage.getItem(STORE_KEY) || 'null'); }
+        catch (e) { data = null; }
+        if (!data) return;
+        LAYERS.forEach(function (def) {
+            if (data.active && data.active[def.id]) runtime.active[def.id] = true;
+            if (data.opacity && typeof data.opacity[def.id] === 'number') {
+                runtime.opacity[def.id] = Math.max(0, Math.min(100, data.opacity[def.id]));
+            }
+        });
+        runtime.collapsed = (data.collapsed && typeof data.collapsed === 'object') ? data.collapsed : {};
+        if (Array.isArray(data.order)) {
+            runtime.order = data.order.filter(function (id) {
+                return !!runtime.active[id] && !!CONFIG.byId(id);
+            });
+        }
+        syncOrder();
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     * 10. EXPANSION + GROUP INFO + START
+     * ═══════════════════════════════════════════════════════════════════════ */
     function setExpanded(expanded) {
         runtime.expanded = !!expanded;
         var mount = document.getElementById(MOUNT_ID);
         if (mount && mount.style) {
-            mount.style.maxHeight = expanded ? '4000px' : '0px';
+            mount.style.maxHeight = expanded ? '6000px' : '0px';
             mount.style.opacity = expanded ? '1' : '0';
             mount.style.marginTop = expanded ? '6px' : '0px';
         }
@@ -350,189 +1524,51 @@
     }
     function toggleExpanded() { setExpanded(!runtime.expanded); }
 
-    /* ── country gate ────────────────────────────────────────────────────────
-     * Albania owns these rows. `applyCountryVisibility(false)` hides the group
-     * row and every child row and parks the tile layers (the user's on/off
-     * choice is remembered in runtime.active), so nothing is requested while
-     * another country — or no country at all — is selected. */
-    function setMapSuppressed(suppressed) {
-        runtime.suppressed = !!suppressed;
-        var map = runtime.map || window._dlMap || window.map;
-        if (!map) return;
-        LAYERS.forEach(function (def) {
-            var layer = runtime.built[def.id];
-            if (!layer) return;
-            if (runtime.suppressed) {
-                if (map.hasLayer(layer)) map.removeLayer(layer);
-            } else if (runtime.active[def.id] && !map.hasLayer(layer)) {
-                map.addLayer(layer);
-            }
-        });
-    }
-    function applyCountryVisibility(visible) {
-        runtime.inCountry = !!visible;
-        var groupRow = document.getElementById(GROUP_ROW_ID);
-        if (groupRow) {
-            groupRow.classList.toggle(OUT_OF_COUNTRY_CLASS, !visible);
-            groupRow.classList.toggle('country-layer-unavailable', !visible);
-            groupRow.setAttribute('aria-hidden', visible ? 'false' : 'true');
-        }
-        LAYERS.forEach(function (def) {
-            var row = runtime.rows[def.id] && runtime.rows[def.id].row;
-            if (!row) return;
-            row.classList.toggle('country-layer-unavailable', !visible);
-            row.setAttribute('aria-hidden', visible ? 'false' : 'true');
-        });
-        setMapSuppressed(!visible);
-    }
-    /* The same signature the other country groups expose. Albania is strictly
-     * its own country: no ISO (the global view) hides the rows too. */
-    function filterForCountry(iso) {
-        var code = String(iso == null ? (window._detectlabSelectedCountry || '') : iso).toUpperCase();
-        applyCountryVisibility(code === COUNTRY);
-        return code === COUNTRY;
-    }
-    function save() {
-        try { window.localStorage.setItem(STORE_KEY, JSON.stringify({ active: runtime.active, opacity: runtime.opacity })); }
-        catch (e) { /* Storage may be disabled in private browsing. */ }
-    }
-    function load() {
-        try {
-            var data = JSON.parse(window.localStorage.getItem(STORE_KEY) || '{}');
-            LAYERS.forEach(function (def) {
-                runtime.active[def.id] = !!(data.active && data.active[def.id]);
-                runtime.opacity[def.id] = data.opacity && typeof data.opacity[def.id] === 'number'
-                    ? Math.max(0, Math.min(100, data.opacity[def.id])) : Math.round(def.opacity * 100);
-            });
-        } catch (e) {
-            LAYERS.forEach(function (def) { runtime.active[def.id] = false; runtime.opacity[def.id] = Math.round(def.opacity * 100); });
-        }
-    }
-    function ensurePanes(map) {
-        if (runtime.panes || !map || !map.createPane) return;
-        var created = {};
-        LAYERS.forEach(function (def) {
-            var paneDef = PANE_BY_SECTION[def.section];
-            if (!paneDef || created[paneDef[0]]) return;
-            var pane = map.getPane && map.getPane(paneDef[0]);
-            if (!pane) pane = map.createPane(paneDef[0]);
-            if (pane && pane.style) pane.style.zIndex = String(paneDef[1]);
-            if (pane && pane.style && paneDef[0] !== 'pane_asig_historical') pane.style.pointerEvents = 'none';
-            created[paneDef[0]] = true;
-        });
-        runtime.panes = true;
-    }
-    function buildLayer(def) {
-        var pane = PANE_BY_SECTION[def.section][0];
-        var layer = new AsigWmsLayer(def, {
-            pane: pane,
-            opacity: runtime.opacity[def.id] / 100,
-            attribution: CONFIG.attribution,
-            keepBuffer: CONFIG.wms.keepBuffer
-        });
-        layer._dlDefId = 'albania.' + def.id;
-        layer._detectlabProvider = CONFIG.provider;
-        layer._detectlabUiTitle = text(def.title);
-        layer._detectlabUiKeys = ['albaniaToggle_' + def.id];
-        layer._detectlabNoGuard = true;
-        return layer;
-    }
-    function activate(def) {
-        var map = runtime.map || window._dlMap || window.map;
-        runtime.active[def.id] = true;
-        if (!map) return;
-        ensurePanes(map);
-        if (!runtime.built[def.id]) runtime.built[def.id] = buildLayer(def);
-        var layer = runtime.built[def.id];
-        if (layer.setOpacity) layer.setOpacity(runtime.opacity[def.id] / 100);
-        /* The country gate owns the map membership while another country (or
-         * the global view) is selected: remember the choice, draw nothing. */
-        if (!runtime.suppressed && !map.hasLayer(layer)) map.addLayer(layer);
-        setStatus(def.id, '', 'info');
-    }
-    function deactivate(def) {
-        runtime.active[def.id] = false;
-        var map = runtime.map || window._dlMap || window.map;
-        var layer = runtime.built[def.id];
-        if (map && layer && map.hasLayer(layer)) map.removeLayer(layer);
-        setStatus(def.id, '', 'info');
-    }
-    function toggle(id, on) {
-        var def = CONFIG.byId(id);
-        if (!def) return;
-        if (on) activate(def); else deactivate(def);
-        syncUI();
-        save();
-    }
-    function setOpacity(id, value) {
-        var def = CONFIG.byId(id);
-        if (!def) return;
-        var opacity = Math.max(0, Math.min(100, Number(value) || 0));
-        runtime.opacity[id] = opacity;
-        if (runtime.built[id] && runtime.built[id].setOpacity) runtime.built[id].setOpacity(opacity / 100);
-        if (opacity > 0 && !runtime.active[id]) activate(def);
-        if (opacity === 0 && runtime.active[id]) deactivate(def);
-        syncUI();
-        save();
-    }
-    function syncUI() {
-        var anyActive = false;
-        LAYERS.forEach(function (def) {
-            var row = runtime.rows[def.id];
-            if (runtime.active[def.id]) anyActive = true;
-            if (!row) return;
-            row.input.checked = !!runtime.active[def.id];
-            row.row.classList.toggle('is-active', !!runtime.active[def.id]);
-            row.pct.textContent = runtime.opacity[def.id] + '%';
-            if (String(row.slider.value) !== String(runtime.opacity[def.id])) row.slider.value = String(runtime.opacity[def.id]);
-        });
-        var master = document.getElementById(GROUP_TOGGLE_ID);
-        if (master) master.checked = anyActive;
-    }
-    /* Group master switch: one click turns the whole Albanian stack on/off. */
-    function toggleAll(on) {
-        LAYERS.forEach(function (def) { if (on) activate(def); else deactivate(def); });
-        syncUI();
-        save();
-    }
     function showGroupInfo() {
         var title = text(CONFIG.groupLabel);
-        var description = text(CONFIG.groupInfo) || '';
+        var description = text(CONFIG.groupInfo) + ' ' + words().licence + '. ' + CONFIG.attribution + '.';
         if (typeof window.showLayerInfo === 'function') {
             window.showLayerInfo(title, CONFIG.attribution, description);
             return;
         }
         if (window.alert) window.alert(title + '\n' + CONFIG.attribution + '\n' + description);
     }
-    function start() {
-        if (runtime.started) return;
-        runtime.started = true;
-        load();
-        buildPanel();
-        /* Nothing Albanian is shown before Albania is the selected country. */
-        filterForCountry(window._detectlabSelectedCountry || '');
-        var map = window._dlMap || window.map;
-        if (map) ready(map);
-        else {
-            var attempts = 0;
-            var timer = window.setInterval(function () {
-                var found = window._dlMap || window.map;
-                if (found) { window.clearInterval(timer); ready(found); }
-                else if (++attempts > 240) window.clearInterval(timer);
-            }, 250);
-        }
-    }
+
     function ready(map) {
         runtime.map = map;
         runtime.ready = true;
         ensurePanes(map);
         LAYERS.forEach(function (def) { if (runtime.active[def.id]) activate(def); });
+        applyZOrder();
         syncUI();
+        renderActive();
+        map.on('click', function (event) {
+            if (!hasActive()) return;
+            if (!activeWmsLeaves().length) return;
+            openFeatureInfo(event.latlng);
+        });
+        resolveNames();
     }
+
+    function start() {
+        if (runtime.started) return;
+        runtime.started = true;
+        load();
+        buildPanel();
+        filterForCountry(window._detectlabSelectedCountry || '');
+        var map = mapInstance();
+        if (map) ready(map);
+        else {
+            var attempts = 0;
+            var timer = window.setInterval(function () {
+                var found = mapInstance();
+                if (found) { window.clearInterval(timer); ready(found); }
+                else if (++attempts > 240) window.clearInterval(timer);
+            }, 250);
+        }
+    }
+
     function refreshTexts() {
-        /* The group title is a static .t[data-key] node (js/translations.js has
-         * albania_group_title in every language) — only the generated rows are
-         * rebuilt, and the country gate is re-applied by buildPanel(). */
         buildPanel();
         syncUI();
     }
@@ -540,15 +1576,41 @@
     function showInfo(id) { var def = CONFIG.byId(id); if (def) info(def); }
 
     var API = {
-        CONFIG: CONFIG, layers: LAYERS, state: runtime, Layer: AsigWmsLayer, TEXT: STRINGS,
-        GROUP_ROW_ID: GROUP_ROW_ID, MOUNT_ID: MOUNT_ID, COUNTRY: COUNTRY,
-        LEGACY_MOUNT_IDS: LEGACY_MOUNT_IDS, sweepLegacyRows: sweepLegacyRows,
-        tileUrl: tileUrl, init: start, toggle: toggle, setOpacity: setOpacity,
+        CONFIG: CONFIG,
+        layers: LAYERS,
+        state: runtime,
+        Layer: AsigWmsLayer,
+        WmtsLayer: AsigWmtsLayer,
+        TEXT: STRINGS,
+        GROUP_ROW_ID: GROUP_ROW_ID,
+        MOUNT_ID: MOUNT_ID,
+        COUNTRY: COUNTRY,
+        HERITAGE_ID: HERITAGE_ID,
+        PANE_ID: PANE_ID,
+        tileUrl: tileUrl,
+        wmsRequestUrl: wmsRequestUrl,
+        planWmtsTile: planWmtsTile,
+        init: start,
+        toggle: toggle,
+        setOpacity: setOpacity,
+        setSearch: setSearch,
+        toggleSection: toggleSection,
+        moveActive: moveActive,
+        activeOrder: orderList,
+        activeLeaves: activeWmsLeaves,
+        featureInfo: featureInfo,
+        openFeatureInfo: openFeatureInfo,
+        resolveNames: resolveNames,
         isActive: function (id) { return !!runtime.active[id]; },
-        filterForCountry: filterForCountry, refreshTexts: refreshTexts,
-        goToView: goToView, showInfo: showInfo, setStatus: setStatus,
-        showGroupInfo: showGroupInfo, toggleAll: toggleAll,
-        toggleExpanded: toggleExpanded, setExpanded: setExpanded,
+        filterForCountry: filterForCountry,
+        refreshTexts: refreshTexts,
+        goToView: goToView,
+        showInfo: showInfo,
+        setStatus: setStatus,
+        showGroupInfo: showGroupInfo,
+        toggleAll: toggleAll,
+        toggleExpanded: toggleExpanded,
+        setExpanded: setExpanded,
         isInCountry: function () { return !!runtime.inCountry; },
         layerIds: function () { return LAYERS.map(function (def) { return def.id; }); }
     };
@@ -559,8 +1621,8 @@
     window.showAlbaniaInfo = showGroupInfo;
     window.toggleAlbaniaLayers = toggleAll;
     window.toggleAlbaniaSubLayers = toggleExpanded;
+    window.filterAlbaniaCatalogue = setSearch;
     document.addEventListener('detectlab:langchange', refreshTexts);
-    /* The country gate follows every selection / exit, including restores. */
     document.addEventListener('detectlab:country-selected', function (event) {
         var iso = (event && event.detail && event.detail.iso) || window._detectlabSelectedCountry || '';
         filterForCountry(iso);
