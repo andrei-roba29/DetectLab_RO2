@@ -18,9 +18,21 @@ assert(!viewer.includes('map3d-status') && !skin.includes('map3d-status'), 'laye
 assert(/status: status/.test(viewer) && /report: report/.test(viewer), 'developer diagnostics are preserved');
 assert(/#map3d-bar\s*\{[^}]*background: transparent;/.test(skin), 'shared panel has no background');
 assert(/#map3d-bar \.m3d-row\s*\{[^}]*background: rgba\(6, 14, 30, 0\.48\)/.test(skin), 'each slider is its own translucent strip');
+/* Gesture-only camera: the exaggeration / pitch / bearing sliders are gone from
+ * the desktop bar, and every rotation/pitch gesture handler is switched on. */
 for (const field of ['exag', 'pitch', 'bearing']) {
-    assert(ensureBar.includes(`label for="map3d-${field}"`) && ensureBar.includes(`id="map3d-${field}"`), 'slider has an associated label: ' + field);
+    assert(!ensureBar.includes(`map3d-${field}`), 'no camera/exaggeration slider left in the bar: ' + field);
 }
+assert(!/\.m3d-(exag|pitch|bearing)\b/.test(ensureBar), 'no slider rows or value labels in the bar markup');
+assert(!/paintLabels/.test(viewer), 'no slider label painting left behind');
+assert(!viewer.includes('sliderToExag') && !viewer.includes('exagToSlider'), 'no slider mapping helpers left behind');
+assert(/dragRotate: true/.test(viewer) && /pitchWithRotate: true/.test(viewer) && /touchPitch: true/.test(viewer),
+    'the map is created with the rotation/pitch gestures enabled');
+assert(/map\.touchZoomRotate\.enableRotation\(\)/.test(viewer) &&
+       /map\.touchPitch\.enable\(\)/.test(viewer) &&
+       /map\.dragRotate\.enable\(\)/.test(viewer),
+    'rotation, pitch and drag handlers are enabled explicitly after creation');
+assert(/map\.keyboard\.enable\(\)/.test(viewer), 'keyboard rotation stays available');
 assert(!viewer.includes('new maplibre.NavigationControl'), 'no duplicate MapLibre +/-, compass buttons in either layout');
 for (const pwa of [false, true]) {
     const controls = [];
@@ -66,12 +78,11 @@ for (const pwa of [false, true]) {
     assert.strictEqual(vm.runInNewContext(attributionOption, context), false,
         'no duplicate default bottom-right attribution control in either layout');
 }
-assert(ensureBar.includes('m3d-pitch-row') && ensureBar.includes('m3d-bearing-row'), 'camera rows can be hidden independently');
-assert(/body\.is-pwa\.is-3d #map3d-bar \.m3d-head,[\s\S]*?\.m3d-exag-row,[\s\S]*?\.m3d-pitch-row,[\s\S]*?\.m3d-bearing-row \{ display: none; \}/.test(skin),
-    'PWA hides exaggeration and camera sliders');
-assert(/\.m3d-row:not\(\.m3d-exag-row\):not\(\.m3d-pitch-row\):not\(\.m3d-bearing-row\)/.test(skin),
-    'the PWA collapsed-bar override cannot reveal the hidden exaggeration row');
-assert(/body\.is-pwa\.is-3d #map3d-bar \.m3d-head/.test(skin), 'PWA hides the extra collapse button');
+assert(!/\.m3d-(exag-row|pitch-row|bearing-row)/.test(skin),
+    'the skin no longer reserves or hides rows that do not exist');
+assert(/body\.is-pwa\.is-3d #map3d-bar \.m3d-head \{ display: none; \}/.test(skin), 'PWA hides the extra collapse button');
+assert(/body\.is-pwa\.is-3d #map3d-bar\.collapsed \.m3d-row,\nbody\.is-pwa\.is-3d #map3d-bar\.collapsed \.m3d-actions \{ display: flex; \}/.test(skin),
+    'the PWA collapsed-bar override keeps the basemap picker and the actions visible');
 assert(!/#map3d-surface \.maplibregl-ctrl-bottom-left \{ display: none; \}/.test(skin),
     'mobile source credits are not hidden with the scale');
 assert(/body\.is-pwa\.is-3d #map3d-surface \.maplibregl-ctrl-bottom-left\s*\{[^}]*max-width: 42%;/.test(skin),
@@ -79,13 +90,13 @@ assert(/body\.is-pwa\.is-3d #map3d-surface \.maplibregl-ctrl-bottom-left\s*\{[^}
 for (const action of ['reset', 'north', 'flat']) {
     assert(ensureBar.includes('m3d-' + action), 'retained action: ' + action);
 }
-const SLIDER_TAGS = { 'js/map3d-terrain.js': '20261023-pwa-only-3d-column', 'css/map3d-terrain.css': '20261023-pwa-only-3d-column' };
+const SLIDER_TAGS = { 'js/map3d-terrain.js': '20261024-gesture-only-camera', 'css/map3d-terrain.css': '20261024-gesture-only-camera' };
 for (const file of ['js/map3d-terrain.js', 'css/map3d-terrain.css']) {
     const url = file + '?v=' + SLIDER_TAGS[file];
     assert(html.includes(url) && sw.includes("'" + url + "'"), 'updated asset cache wiring: ' + file);
 }
 assert(Number(sw.match(/CACHE_NAME = 'detectlab-v(\d+)-/)[1]) >= 200);
-console.log('✓ PWA controls, collapsed source credits, and cache wiring');
+console.log('✓ gesture-only camera bar, PWA controls, collapsed source credits, and cache wiring');
 
 async function browserChecks() {
     if (!process.env.PUPPETEER_MODULE_DIR) {
@@ -184,7 +195,7 @@ async function browserChecks() {
             });
             assert.strictEqual(geometry.bg, 'rgba(0, 0, 0, 0)');
             assert.strictEqual(geometry.filter, 'none');
-            assert.strictEqual(geometry.rows.length, 4, 'basemap, exaggeration, pitch and bearing each have a row');
+            assert.strictEqual(geometry.rows.length, 1, 'the basemap picker is the only row left');
             assert(geometry.alpha.every(value => value.includes('0.48')), 'separate semi-transparent control strips');
             assert(geometry.rows.filter(row => row.width > 0).every(row => row.width > row.height * 2), 'visible control rows stay horizontal');
             assert.strictEqual(geometry.actions, 3, 'reset/north/flat actions remain available');
@@ -192,8 +203,10 @@ async function browserChecks() {
             assert.strictEqual(geometry.compass, false, 'no duplicate compass');
             assert(geometry.refresh.width >= 44 && geometry.refresh.left >= geometry.toggle.right,
                 'the raster refresh action has a touch-sized target beside the 2D/3D switch');
+            assert.strictEqual(await page.evaluate(() => document.querySelectorAll('#map3d-bar input[type="range"]').length), 0,
+                'no range slider is rendered, on web or in the PWA');
             if (pwa) {
-                assert.strictEqual(geometry.visibleRows, 1, 'only the basemap picker is visible; exaggeration and camera sliders are hidden');
+                assert.strictEqual(geometry.visibleRows, 1, 'only the basemap picker is visible');
                 assert.strictEqual(geometry.head, 'none', 'no extra PWA collapse control');
                 assert(Math.abs((geometry.bar.left + geometry.bar.right) / 2 - width / 2) < 1, 'PWA bar is centred');
                 assert(geometry.bar.top >= 56, 'PWA bar clears the top map controls');
@@ -213,7 +226,7 @@ async function browserChecks() {
                     await page.waitForFunction(() => document.getElementById('map3d-bar').scrollTop > 0, { timeout: 2000 });
                 }
             } else {
-                assert.strictEqual(geometry.visibleRows, 4, 'web keeps the basemap picker and all three sliders');
+                assert.strictEqual(geometry.visibleRows, 1, 'web keeps the basemap picker only — the camera is gesture-driven');
             }
             assert.strictEqual(geometry.info, true, 'the compact source-credit button remains available');
             assert.strictEqual(geometry.creditControl, true, 'the compact attribution control stays bottom-left');
@@ -223,14 +236,9 @@ async function browserChecks() {
                 'source credits remain accessible from the compact button');
             // Range callbacks and the retained actions must still drive the camera.
             const values = await page.evaluate(() => {
-                const update = (selector, value) => { const el = document.querySelector(selector); el.value = value; el.dispatchEvent(new Event('input')); };
-                if (!document.body.classList.contains('is-pwa')) update('.m3d-exag', 70);
-                if (document.body.classList.contains('is-pwa')) {
-                    // Pitch/bearing still respond to map gestures, not hidden sliders.
-                    map.setPitch(34); map.setBearing(120);
-                } else {
-                    update('.m3d-pitch', 34); update('.m3d-bearing', 120);
-                }
+                // Pitch/bearing come from map gestures (the camera transform), not
+                // from a slider: move the camera the way a gesture would.
+                map.setPitch(34); map.setBearing(120);
                 const values = { exag:state.exaggeration, pitch:map.pitch, bearing:map.bearing };
                 document.querySelector('.m3d-north').click(); values.north = map.bearing;
                 document.querySelector('.m3d-flat').click(); values.flat = map.pitch;
@@ -245,8 +253,7 @@ async function browserChecks() {
                 }
                 return values;
             });
-            if (pwa) assert.strictEqual(values.exag, 1.4, 'PWA does not expose or change terrain exaggeration');
-            else assert(Math.abs(values.exag - 2.95) < 0.001);
+            assert.strictEqual(values.exag, 1.4, 'terrain exaggeration is fixed — nothing in the bar changes it');
             assert.strictEqual(values.pitch, 34); assert.strictEqual(values.bearing, 120);
             assert.strictEqual(values.north, 0); assert.strictEqual(values.flat, 0);
             assert.strictEqual(values.resetPitch, 62); assert.strictEqual(values.resetBearing, 0);
@@ -254,7 +261,7 @@ async function browserChecks() {
                 assert.strictEqual(values.collapsed, 'none'); assert.strictEqual(values.expanded, 'false');
                 assert.strictEqual(values.restored, 'flex');
             }
-            console.log(`✓ ${width}×${height} ${pwa ? 'PWA' : 'web'}: control geometry and slider/actions work`);
+            console.log(`✓ ${width}×${height} ${pwa ? 'PWA' : 'web'}: control geometry, gesture camera and actions work`);
         }
     } finally { await browser.close(); }
 }

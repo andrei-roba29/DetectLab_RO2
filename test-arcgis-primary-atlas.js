@@ -39,7 +39,7 @@ assert.doesNotMatch(styles, /atlas-primary|atlas-view|legacy-map-tab|atlas-mode-
  * drapes the historical layers over a DEM; see MAP_3D_TERRAIN.md. */
 assert.doesNotMatch(index, /leaflet-maplibre-gl|globe-base-layer/,
     'the retired MapLibre globe basemap is not loaded by the shell');
-assert(index.includes('js/map3d-terrain.js?v=20261023-pwa-only-3d-column') &&
+assert(index.includes('js/map3d-terrain.js?v=20261024-gesture-only-camera') &&
        index.includes('js/layer-registry.js?v=20261021-albania-country-group') &&
        index.includes('js/map3d-mirror.js?v=20261021-lidar-canvas-tiles'),
     'the 3D terrain viewer, its shared layer registry and the 2D→3D mirror are loaded');

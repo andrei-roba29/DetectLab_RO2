@@ -1575,15 +1575,10 @@
             '<option value="topographic">' + t('basemapTopographic') + '</option>',
             '<option value="terrain">' + t('basemapTerrain') + '</option>',
             '</select></div>',
-            '<div class="m3d-row m3d-exag-row"><label for="map3d-exag"><span>' + t('exaggeration') + '</span>',
-            '<b class="m3d-exag-val"></b></label>',
-            '<input id="map3d-exag" type="range" class="m3d-exag" min="0" max="100" step="1"></div>',
-            '<div class="m3d-row m3d-pitch-row"><label for="map3d-pitch"><span>' + t('pitch') + '</span>',
-            '<b class="m3d-pitch-val"></b></label>',
-            '<input id="map3d-pitch" type="range" class="m3d-pitch" min="0" max="' + (CONFIG.camera.maxPitch || 80) + '" step="1"></div>',
-            '<div class="m3d-row m3d-bearing-row"><label for="map3d-bearing"><span>' + t('bearing') + '</span>',
-            '<b class="m3d-bearing-val"></b></label>',
-            '<input id="map3d-bearing" type="range" class="m3d-bearing" min="0" max="360" step="1"></div>',
+            /* No exaggeration / pitch / bearing sliders: the camera is moved by
+             * gestures only (drag to pan, right-drag or Ctrl+drag to pitch and
+             * rotate, two fingers on touch, Shift+arrows on a keyboard), and the
+             * DEM exaggeration is fixed at CONFIG.terrain.exaggeration. */
             '<div class="m3d-lidar" hidden>',
             '<span class="m3d-lidar-text"></span>',
             '<span class="m3d-lidar-actions">',
@@ -1638,43 +1633,15 @@
             announce('detectlab:map3d-lidar-clear');
         });
 
-        var exag = bar.querySelector('.m3d-exag');
-        var pitch = bar.querySelector('.m3d-pitch');
-        var bearing = bar.querySelector('.m3d-bearing');
-        var min = CONFIG.terrain.minExaggeration || 0.5;
-        var max = CONFIG.terrain.maxExaggeration || 4;
-        function exagToSlider(v) { return Math.round(((v - min) / (max - min)) * 100); }
-        function sliderToExag(v) { return min + (Number(v) / 100) * (max - min); }
-        exag.value = String(exagToSlider(state.exaggeration));
-
-        function paintLabels() {
-            bar.querySelector('.m3d-exag-val').textContent = state.exaggeration.toFixed(1) + '×';
-            bar.querySelector('.m3d-pitch-val').textContent = Math.round(cameraPitch()) + '°';
-            bar.querySelector('.m3d-bearing-val').textContent = Math.round(cameraBearing()) + '°';
-            pitch.value = String(Math.round(cameraPitch()));
-            bearing.value = String(Math.round((cameraBearing() + 360) % 360));
-        }
-
-        exag.addEventListener('input', function () {
-            setExaggeration(sliderToExag(exag.value));
-            paintLabels();
-        });
-        pitch.addEventListener('input', function () {
-            if (map) map.setPitch(Number(pitch.value));
-            paintLabels();
-        });
-        bearing.addEventListener('input', function () {
-            if (map) map.setBearing(Number(bearing.value));
-            paintLabels();
-        });
-        bar.querySelector('.m3d-reset').addEventListener('click', function () { resetView(true); paintLabels(); });
+        /* Camera movement is gesture-only on the desktop website: there are no
+         * pitch / bearing / exaggeration inputs to wire here. The three
+         * remaining action buttons are one-tap shortcuts, not sliders. */
+        bar.querySelector('.m3d-reset').addEventListener('click', function () { resetView(true); });
         bar.querySelector('.m3d-north').addEventListener('click', function () {
             if (map) map.setBearing(0);
-            paintLabels();
         });
         bar.querySelector('.m3d-flat').addEventListener('click', function () {
             if (map) map.easeTo({ pitch: 0, bearing: 0, duration: 400 });
-            paintLabels();
         });
         bar.querySelector('.m3d-collapse').addEventListener('click', function () {
             bar.classList.toggle('collapsed');
@@ -1682,8 +1649,6 @@
             bar.querySelector('.m3d-collapse').textContent = collapsed ? '▸' : '▾';
             bar.querySelector('.m3d-collapse').setAttribute('aria-expanded', collapsed ? 'false' : 'true');
         });
-        bar.paintLabels = paintLabels;
-        paintLabels();
         refreshFocusRow();
         return bar;
     }
@@ -1741,11 +1706,10 @@
     function refreshBarCopy() {
         if (!bar) return;
         bar.querySelector('.m3d-head span').textContent = t('title');
+        /* The basemap picker is the only row left: the camera rows are gone
+         * (gesture-only view), so the copy pass has exactly one label. */
         var rows = bar.querySelectorAll('.m3d-row > label > span');
         if (rows[0]) rows[0].textContent = t('basemap');
-        if (rows[1]) rows[1].textContent = t('exaggeration');
-        if (rows[2]) rows[2].textContent = t('pitch');
-        if (rows[3]) rows[3].textContent = t('bearing');
         var basemapOptions = bar.querySelectorAll('.m3d-basemap-select option');
         if (basemapOptions[0]) basemapOptions[0].textContent = t('basemapImagery');
         if (basemapOptions[1]) basemapOptions[1].textContent = t('basemapTopographic');
@@ -1905,7 +1869,6 @@
             pitch: CONFIG.camera.pitch,
             duration: animate ? 500 : 0
         });
-        if (bar && bar.paintLabels) bar.paintLabels();
     }
 
     /* ═══════════════════════════════════════════════════════════════════════
@@ -3750,6 +3713,19 @@
             minZoom: (CONFIG.camera && CONFIG.camera.minZoom) || 2,
             maxZoom: (CONFIG.camera && CONFIG.camera.maxZoom) || 20,
             maxPitch: (CONFIG.camera && CONFIG.camera.maxPitch) || 80,
+            /* Gesture-only camera: there are no pitch/bearing sliders in the
+             * desktop bar any more, so every one of these has to stay on. A
+             * right-drag (or Ctrl/⌘+drag) pitches and rotates, a two-finger
+             * twist rotates / a two-finger vertical drag pitches on touch,
+             * Shift+arrows rotate from the keyboard, and the wheel zooms with
+             * pitchWithRotate letting the drag rotate the view while pitched. */
+            dragRotate: true,
+            pitchWithRotate: true,
+            touchPitch: true,
+            touchZoomRotate: true,
+            dragPan: true,
+            scrollZoom: true,
+            keyboard: true,
             // Avoid MapLibre's default bottom-right attribution placement; the
             // compact source-credit control is added explicitly at bottom-left.
             attributionControl: false,
@@ -3868,7 +3844,15 @@
                 map = null;
                 return false;
             }
-            map.touchZoomRotate.enableRotation();
+            /* The camera is moved by gestures only (see MAP3D_GESTURE_CAMERA.md):
+             * make sure every rotation/pitch handler is on, whatever the style,
+             * the safe-mode retry or a device profile did to it. */
+            try { map.touchZoomRotate.enableRotation(); } catch (e) { /* no touch handler */ }
+            try { if (map.touchPitch) map.touchPitch.enable(); } catch (e) { /* no touch pitch */ }
+            try { if (map.dragRotate) map.dragRotate.enable(); } catch (e) { /* no drag rotate */ }
+            try { if (map.dragPan) map.dragPan.enable(); } catch (e) { /* no drag pan */ }
+            try { if (map.scrollZoom) map.scrollZoom.enable(); } catch (e) { /* no wheel zoom */ }
+            try { if (map.keyboard) map.keyboard.enable(); } catch (e) { /* no keyboard */ }
             // The app's controls and map gestures make MapLibre's +/- and
             // compass redundant. Keep source credits available from a compact
             // info control rather than as a permanent text panel. MapLibre
@@ -3909,9 +3893,9 @@
              * hid it), and its single button — the one titled “Disable
              * terrain” — switched off the very thing the 3D view exists for.
              * The deck is draped over the DEM by the style itself
-             * (`style.terrain` in buildStyle), the exaggeration slider keeps
-             * calling setTerrain(), and a DEM that cannot load already falls
-             * back to the flat view with a console warning. Nothing to toggle. */
+             * (`style.terrain` in buildStyle, with the fixed exaggeration), and
+             * a DEM that cannot load already falls back to the flat view with a
+             * console warning. Nothing to toggle. */
             if (maplibre.ScaleControl) {
                 map.addControl(new maplibre.ScaleControl({ maxWidth: 80, unit: 'metric' }), 'bottom-left');
             }
@@ -3950,7 +3934,6 @@
             map.on('load', firstSync);
             map.on('idle', function () { if (generation === openGeneration) hideVeil(); });
             map.on('moveend', function () {
-                if (bar && bar.paintLabels) bar.paintLabels();
                 scheduleSync();
             });
             map.on('sourcedata', function (event) {
@@ -4222,9 +4205,6 @@
         var v = Math.max(min, Math.min(max, Number(value) || min));
         var same = state.exaggeration === v;
         state.exaggeration = v;
-        if (bar && bar.querySelector('.m3d-exag-val')) {
-            bar.querySelector('.m3d-exag-val').textContent = v.toFixed(1) + '×';
-        }
         if (same) return v;                       /* nothing changed: no setTerrain */
         scheduleExaggeration();
         return v;

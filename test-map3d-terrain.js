@@ -80,8 +80,8 @@ const skin = read('css/map3d-terrain.css');
 
 const TAG = '20261019-tile-order';              /* MapLibre itself (coveringTiles patch) */
 const TAG_3D = '20261021-lidar-canvas-tiles';    /* mirror (canvas tiles)          */
-const TAG_VIEWER = '20261023-pwa-only-3d-column'; /* viewer (js)                         */
-const TAG_CSS = '20261023-pwa-only-3d-column';    /* viewer skin (css)              */
+const TAG_VIEWER = '20261024-gesture-only-camera'; /* viewer (js)                         */
+const TAG_CSS = '20261024-gesture-only-camera';    /* viewer skin (css)              */
 const TAG_FOCUS = '20261020-lidar-disc-route';  /* LiDAR focus (3D, one disc)     */
 const TAG_REGISTRY = '20261024-asig-catalogue'; /* shared registry (ASIG catalogue) */
 
@@ -916,9 +916,12 @@ const TAG_REGISTRY = '20261024-asig-catalogue'; /* shared registry (ASIG catalog
         'the picker calls the shared 2D basemap API and refreshes its selected value on each 3D open');
     assert(/#map3d-bar \.m3d-basemap-select\s*\{[^}]*min-height: 36px/.test(skin),
         'the basemap picker has a full-width, touch-sized select control');
-    assert(viewer.includes('class="m3d-row m3d-exag-row"') &&
-           /body\.is-pwa\.is-3d #map3d-bar \.m3d-exag-row/.test(skin),
-        'terrain exaggeration remains available on web but is hidden only in the installed PWA');
+    /* Gesture-only camera (MAP3D_GESTURE_CAMERA.md): the exaggeration, pitch and
+     * bearing sliders are removed outright — not just hidden in the PWA. */
+    assert(!/m3d-(exag|pitch|bearing)-row/.test(viewer) && !/m3d-(exag|pitch|bearing)-row/.test(skin),
+        'no terrain-exaggeration or camera slider row is rendered or styled');
+    assert(/exaggeration: CONFIG\.terrain\.exaggeration/.test(viewer),
+        'the DEM exaggeration stays a fixed config constant');
     assert(viewer.includes("toggleGroup.className = 'm3d-toggle-group'") &&
            viewer.includes("refreshBtn.id = 'map3d-refresh'") &&
            viewer.includes("refreshBtn.addEventListener('click', function () { refreshTiles(); })") &&

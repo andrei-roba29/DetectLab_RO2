@@ -33,8 +33,9 @@ body.is-3d #detectlab-map .leaflet-pane { visibility: hidden; }
  * Leaflet pins them at z-index 1000 — above this canvas. Hidden while 3D is
  * on, so nobody clicks a button that moves a map they cannot see; MapLibre
  * contributes a compact source-credit control and the scale, both bottom-left
- * (no navigation or terrain toggle — the 3D bar drives the camera, non-PWA
- * terrain exaggeration and shared basemap selection). The live location
+ * (no navigation or terrain toggle). The 3D bar keeps the shared basemap
+ * picker, the reset/north/flat shortcuts and the LiDAR row: pitch, bearing and
+ * terrain exaggeration are gesture-only / fixed on the web layout. The live location
  * control that the PWA appends to its own stack is hidden for the same reason
  * (it moves the 2D camera). */
 body.is-3d #detectlab-map .leaflet-control-container,
@@ -308,14 +309,9 @@ body.is-3d #map3d-bar { display: flex; }
     backdrop-filter: blur(4px);
 }
 #map3d-bar .m3d-row > label { display: flex; justify-content: space-between; gap: 6px; }
-#map3d-bar .m3d-row input[type="range"] {
-    display: block;
-    width: 100%;
-    height: 20px;
-    margin: 0;
-    accent-color: #c8a96e;
-    cursor: pointer;
-}
+/* The bar's only row is the basemap picker: the exaggeration / pitch /
+ * bearing sliders (and their `input[type="range"]` skin) are gone — the 3D
+ * camera is moved by gestures, and the DEM exaggeration is a fixed constant. */
 #map3d-bar .m3d-basemap-select {
     display: block;
     width: 100%;
@@ -465,15 +461,14 @@ body.is-pwa.is-3d #map3d-surface .maplibregl-ctrl-attrib {
 }
 
 /* Installed PWA: keep the basemap picker and reset/north/flat actions.
- * Hide exaggeration and camera controls in this environment: changing the DEM
- * exaggeration triggers a MapLibre terrain update that can crash the PWA. */
-body.is-pwa.is-3d #map3d-bar .m3d-head,
-body.is-pwa.is-3d #map3d-bar .m3d-exag-row,
-body.is-pwa.is-3d #map3d-bar .m3d-pitch-row,
-body.is-pwa.is-3d #map3d-bar .m3d-bearing-row { display: none; }
+ * The exaggeration / pitch / bearing rows this block used to hide no longer
+ * exist in the bar at all (they were already hidden here because changing the
+ * DEM exaggeration could crash the installed PWA); only the extra collapse
+ * button is still PWA-suppressed. */
+body.is-pwa.is-3d #map3d-bar .m3d-head { display: none; }
 
 /* Keep safe controls visible even if the bar was collapsed before entering PWA. */
-body.is-pwa.is-3d #map3d-bar.collapsed .m3d-row:not(.m3d-exag-row):not(.m3d-pitch-row):not(.m3d-bearing-row),
+body.is-pwa.is-3d #map3d-bar.collapsed .m3d-row,
 body.is-pwa.is-3d #map3d-bar.collapsed .m3d-actions { display: flex; }
 
 /* ══════════════════════════════════════════════════════════════════════════
