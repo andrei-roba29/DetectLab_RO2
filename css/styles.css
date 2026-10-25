@@ -7434,15 +7434,21 @@
                 pointer-events: none;
             }
 
+        /* Premium gate on the Detect switch: a hairline padlock in the map
+           palette, not the 🔒 emoji it used to render. */
         .detect-lock-icon {
             display: none;
-            font-size: 0.75rem;
-            color: rgba(184,216,240,0.55);
-            margin-left: 2px;
+            align-items: center;
+            color: var(--ctl-icon, #BBA9F2);
+            margin-left: 3px;
+        }
+
+        .detect-lock-icon svg {
+            display: block;
         }
 
         .detect-toggle-wrap.locked .detect-lock-icon {
-            display: inline;
+            display: inline-flex;
         }
 
         /* Desktop fullscreen uses Leaflet's normal 10px left control inset,
