@@ -384,7 +384,7 @@ console.log('[Test] the 2D/3D switch sits right above the base-layer button…')
      * 2D/3D switch moving into the bottom-left control column, the viewer by
      * the basemap-picker sync fix. */
     const TAG_CSS = '20261024-no-bar-lidar-row';
-    const TAG_VIEWER = '20261025-basemap-picker-sync';
+    const TAG_VIEWER = '20261025-lidar-3d-tile-heal';
     for (const asset of ['css/map3d-terrain.css', 'js/map3d-terrain.js']) {
         const tag = asset === 'css/map3d-terrain.css' ? TAG_CSS : TAG_VIEWER;
         const url = asset + '?v=' + tag;

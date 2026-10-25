@@ -778,7 +778,23 @@
 //   2D setter can no longer throw mid-swap, and a failed 3D sync pass is
 //   reported and retried instead of freezing the deck on the old plan.
 //   Re-tags js/map-app.js and js/map3d-terrain.js.
-const CACHE_NAME = 'detectlab-v267-basemap-picker-sync';
+// v268: “Romania 1m/pixel agregare” (and the 2–5 m aggregate) load in 3D
+//   again. A tile request MapLibre cancelled — routine on every camera
+//   move — was read by the viewer's tile fetcher as “this host has no
+//   CORS”, which moved tiles.arcgis.com onto the tile proxy for the whole
+//   browser session (sessionStorage included). Through a cold proxy the
+//   disc prefetch then collected blank placeholder tiles, counted them as
+//   prepared, cached them, and 3D opened on the base map alone: the layer
+//   flashed for a frame and only the basemap stayed. Aborts are no longer
+//   a host verdict, hosts the registry declares CORS-serving are never
+//   proxied at all (whatever a stale session verdict says), proxy blanks
+//   can no longer pose as prepared/cached tiles, the focus-disc outline
+//   is stacked above the background where it can be seen, and enabling
+//   LiDAR no longer throws the ReferenceError (_lidarCanvasZoomOpen was
+//   never defined) that cut Leaflet's zoomend→moveend chain and skipped
+//   the visibility event the 3D disc listens for. Re-tags js/map-app.js
+//   and js/map3d-terrain.js.
+const CACHE_NAME = 'detectlab-v268-lidar-3d-tile-heal';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -831,7 +847,7 @@ const PRECACHE_URLS = [
   // v265: premium UK historical maps (Ordnance Survey / Bartholomew, MapTiler).
   'js/layer-registry.js?v=20261024-uk-historical-maps',
   'js/map-app.js?v=20261024-uk-historical-maps',
-  'js/map-app.js?v=20261025-basemap-picker-sync',
+  'js/map-app.js?v=20261025-lidar-3d-tile-heal',
   'js/translations.js?v=20261024-uk-historical-maps',
   'js/subscriptions.js?v=20261024-uk-historical-maps',
   'js/offline-maps.js?v=20261024-uk-historical-maps',
@@ -892,7 +908,7 @@ const PRECACHE_URLS = [
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
   'js/map3d-terrain.js?v=20261024-no-bar-lidar-row',
-  'js/map3d-terrain.js?v=20261025-basemap-picker-sync',
+  'js/map3d-terrain.js?v=20261025-lidar-3d-tile-heal',
   'js/map3d-terrain.js?v=20261024-gesture-only-camera',
   'js/map3d-terrain.js?v=20261023-pwa-only-3d-column',
   'js/map3d-terrain.js?v=20261020-outline-camera-handoff',
