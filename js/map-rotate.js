@@ -1,13 +1,16 @@
-/* DetectLab map rotation + compass with tap rotation lock
+/* DetectLab map rotation + Google-Earth-style compass
  *
  * Leaflet 1.9 has no built-in bearing. This module:
  *  - rotates the map pane around the viewport centre
  *  - keeps click / pan / pinch coordinates correct
  *  - lets the user twist the map with two fingers (touch)
  *    or Alt/Option-drag / Ctrl-wheel (desktop) with stable deadband
- *  - shows a bottom-left column of three 38x38 map buttons:
- *      * compass (tap -> resets orientation to true north)
- *      * rotation lock (tap -> toggles screen-turning lock)
+ *  - shows a bottom-left column of 38x38 map buttons:
+ *      * compass — the rose follows the camera continuously, a tap eases
+ *        the view back to true north, a horizontal drag on the rose turns
+ *        the view (the same two gestures as Google Earth's compass).
+ *        There is intentionally no rotation lock: rotation is always
+ *        available, exactly as in Google Earth.
  *      * Detect toggle (tap -> toggles activity detection; PWA only,
  *        hidden on desktop via CSS - desktop keeps the .map-controls switch)
  */
@@ -20,7 +23,9 @@
     var SNAP = 3.0; // Snap to north when within 3 degrees
     var TOUCH_ROTATE_THRESHOLD = 9.0; // Intentional twist threshold in degrees
     var MIN_TOUCH_DISTANCE = 35; // Minimum pixel distance between fingers for angular stability
-    var STORAGE_LOCK_KEY = 'detectlab_rotation_locked';
+    var COMPASS_DRAG_THRESHOLD = 3; // px of horizontal travel before a press becomes a drag
+    var COMPASS_DRAG_SENSITIVITY = 0.55; // degrees of bearing per dragged pixel
+    var RESET_DURATION = 320; // ms — Google Earth's ease back to north
 
     function wrapDeg(deg) {
         deg = deg % 360;
@@ -58,7 +63,6 @@
         rotate: false,
         touchRotate: true,
         keyRotate: true,
-        rotateLocked: false,
         bearing: 0
     });
 
@@ -67,33 +71,9 @@
             return this._bearing || 0;
         },
 
-        isRotateLocked: function () {
-            return !!this._rotateLocked;
-        },
-
-        setRotateLocked: function (locked, options) {
-            locked = !!locked;
-            if (this._rotateLocked === locked) return this;
-            this._rotateLocked = locked;
-            try {
-                localStorage.setItem(STORAGE_LOCK_KEY, locked ? 'true' : 'false');
-            } catch (err) {}
-            if (this._container) {
-                this._container.classList.toggle('is-rotation-locked', locked);
-            }
-            if (this.compassControl && (!options || !options.fromCompass)) {
-                this.compassControl.setLocked(locked, { fromMap: true });
-            }
-            this.fire('rotatelockchange', { locked: locked });
-            return this;
-        },
-
         setBearing: function (deg, options) {
             if (!this._rotate) return this;
             options = options || {};
-            if (this._rotateLocked && !options.force && !options.noLockCheck) {
-                return this;
-            }
             var next = wrapDeg(deg);
             if (Math.abs(next) < SNAP) next = 0;
             if (next === this._bearing) {
@@ -117,14 +97,23 @@
             if (!this._rotate || !this._bearing) return this;
             var map = this;
             var from = this._bearing;
-            if (Math.abs(from) < 1) return this.setBearing(0, { force: true });
+            if (Math.abs(from) < 1) return this.setBearing(0);
+            var reduceMotion = false;
+            try {
+                reduceMotion = !!(window.matchMedia &&
+                    window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+            } catch (err) {}
+            if (reduceMotion) {
+                this.setBearing(0);
+                this.fire('moveend');
+                return this;
+            }
             var start = null;
-            var duration = 280;
             function step(ts) {
                 if (start === null) start = ts;
-                var t = Math.min(1, (ts - start) / duration);
+                var t = Math.min(1, (ts - start) / RESET_DURATION);
                 var eased = 1 - Math.pow(1 - t, 3);
-                map.setBearing(from * (1 - eased), { noMove: t < 1, force: true });
+                map.setBearing(from * (1 - eased), { noMove: t < 1 });
                 if (t < 1) L.Util.requestAnimFrame(step);
                 else map.fire('moveend');
             }
@@ -289,14 +278,14 @@
             L.DomEvent.off(document, 'touchend touchcancel', this._onEnd, this);
         },
         _onGestureStart: function (e) {
-            if (!this._map._rotate || this._map.isRotateLocked()) return;
+            if (!this._map._rotate) return;
             this._usingGesture = true;
             this._gestureBearing = this._map.getBearing();
             this._gestureMoved = false;
             e.preventDefault();
         },
         _onGestureChange: function (e) {
-            if (!this._map._rotate || this._map.isRotateLocked() || typeof e.rotation !== 'number') return;
+            if (!this._map._rotate || typeof e.rotation !== 'number') return;
             var rot = e.rotation;
             if (!this._gestureMoved) {
                 if (Math.abs(rot) < TOUCH_ROTATE_THRESHOLD) return;
@@ -314,7 +303,7 @@
         },
         _onStart: function (e) {
             if (this._usingGesture) return;
-            if (!e.touches || e.touches.length !== 2 || !this._map._rotate || this._map.isRotateLocked()) return;
+            if (!e.touches || e.touches.length !== 2 || !this._map._rotate) return;
             var a = this._map.mouseEventToContainerPoint(e.touches[0]);
             var b = this._map.mouseEventToContainerPoint(e.touches[1]);
             if (a.distanceTo(b) < MIN_TOUCH_DISTANCE) return;
@@ -326,7 +315,7 @@
         },
         _onMove: function (e) {
             if (this._usingGesture) return;
-            if (!e.touches || e.touches.length !== 2 || this._map.isRotateLocked()) return;
+            if (!e.touches || e.touches.length !== 2) return;
             var a = this._map.mouseEventToContainerPoint(e.touches[0]);
             var b = this._map.mouseEventToContainerPoint(e.touches[1]);
             if (a.distanceTo(b) < MIN_TOUCH_DISTANCE) return;
@@ -367,7 +356,7 @@
             return !!(e.altKey && e.button === 0);
         },
         _onDown: function (e) {
-            if (!this._map._rotate || this._map.isRotateLocked() || !this._isRotateMod(e)) return;
+            if (!this._map._rotate || !this._isRotateMod(e)) return;
             this._startX = e.clientX;
             this._startBearing = this._map.getBearing();
             this._moved = false;
@@ -380,7 +369,6 @@
             L.DomEvent.stopPropagation(e);
         },
         _onMove: function (e) {
-            if (this._map.isRotateLocked()) return;
             var rawDelta = (e.clientX - this._startX) * 0.35;
             if (!this._moved) {
                 if (Math.abs(rawDelta) < 2.5) return;
@@ -400,7 +388,7 @@
             this._moved = false;
         },
         _onWheel: function (e) {
-            if (!this._map._rotate || this._map.isRotateLocked() || !(e.altKey || (e.ctrlKey && e.shiftKey))) return;
+            if (!this._map._rotate || !(e.altKey || (e.ctrlKey && e.shiftKey))) return;
             var delta = e.deltaY || e.wheelDelta || 0;
             this._map.setBearing(this._map.getBearing() + (delta > 0 ? 5 : -5));
             e.preventDefault();
@@ -408,6 +396,18 @@
         }
     });
 
+    /* Google-Earth-style compass.
+     *
+     * Movement: the rose is driven straight off the map's own `rotate` event,
+     * so it tracks the camera frame by frame — during a two-finger twist, an
+     * Alt-drag or a drag on the rose itself — and it never lags behind the
+     * imagery.
+     *
+     * Function: a tap eases the view back to true north (320 ms, cubic
+     * ease-out, the same gesture Google Earth binds to its compass), and a
+     * horizontal drag on the rose turns the view. Rotation is always
+     * available: there is no lock to release first.
+     */
     L.Control.Compass = L.Control.extend({
         options: {
             position: 'bottomleft'
@@ -415,45 +415,30 @@
         onAdd: function (map) {
             var self = this;
             this._map = map;
-            this._isLocked = map.isRotateLocked ? map.isRotateLocked() : false;
+            this._drag = null;
+            this._suppressClick = false;
 
             var wrap = this._container = L.DomUtil.create('div', 'leaflet-control detectlab-compass');
             var col = this._track = L.DomUtil.create('div', 'detectlab-compass-col', wrap);
             col.id = 'compassCol';
 
-            // 1. Compass rose (tap -> reset to true north).
+            // 1. Compass rose (tap -> face north; horizontal drag -> turn).
             var btn = this._btn = L.DomUtil.create('button', 'detectlab-compass-btn', col);
             btn.type = 'button';
-            btn.setAttribute('aria-label', 'Reset north');
-            btn.title = 'Reseteaza nordul / Reset north';
+            btn.setAttribute('aria-label', 'Compass — drag to rotate, press Enter to face north');
+            btn.title = 'Busola — trage pentru rotire, atinge pentru nord / Drag to rotate, tap for north';
             btn.innerHTML =
                 '<span class="detectlab-compass-rose" aria-hidden="true">' +
-                    '<svg viewBox="0 0 48 48">' +
-                        '<circle class="dl-compass-ring" cx="24" cy="24" r="21.5"/>' +
-                        '<path class="dl-compass-needle-n" d="M24 7 L28.2 24 L24 21.4 L19.8 24 Z"/>' +
-                        '<path class="dl-compass-needle-s" d="M24 41 L28.2 24 L24 26.6 L19.8 24 Z"/>' +
-                        '<circle class="dl-compass-hub" cx="24" cy="24" r="3"/>' +
-                        '<text class="dl-compass-n" x="24" y="16" text-anchor="middle">N</text>' +
+                    '<svg viewBox="0 0 40 40" focusable="false">' +
+                        '<circle class="dl-c-ring" cx="20" cy="20" r="17.4"/>' +
+                        '<path class="dl-c-needle-n" d="M20 5.4 L23.2 20 L20 18.3 L16.8 20 Z"/>' +
+                        '<path class="dl-c-needle-s" d="M20 34.6 L23.2 20 L20 21.7 L16.8 20 Z"/>' +
+                        '<circle class="dl-c-hub" cx="20" cy="20" r="1.5"/>' +
                     '</svg>' +
                 '</span>';
             this._rose = btn.querySelector('.detectlab-compass-rose');
 
-            // 2. Rotation lock toggle (tap -> lock / unlock screen turning).
-            var lock = this._dock = L.DomUtil.create('button', 'detectlab-compass-lock', col);
-            lock.type = 'button';
-            lock.id = 'compassLockBtn';
-            lock.setAttribute('aria-label', 'Toggle rotation lock');
-            lock.innerHTML =
-                '<svg class="dl-lock-icon-unlocked" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-                    '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>' +
-                    '<path d="M7 11V7a5 5 0 0 1 9.9-1"/>' +
-                '</svg>' +
-                '<svg class="dl-lock-icon-locked" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-                    '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>' +
-                    '<path d="M7 11V7a5 5 0 0 1 10 0v4"/>' +
-                '</svg>';
-
-            // 3. Activity-detection toggle (PWA only, hidden on desktop via CSS).
+            // 2. Activity-detection toggle (PWA only, hidden on desktop via CSS).
             var det = this._detectBtn = L.DomUtil.create('button', 'compass-detect-btn', col);
             det.type = 'button';
             det.id = 'pwaDetectBtn';
@@ -471,62 +456,104 @@
             L.DomEvent.disableClickPropagation(wrap);
             L.DomEvent.disableScrollPropagation(wrap);
 
-            this._onCompassTap = function (e) {
+            this._onCompassClick = function (e) {
                 L.DomEvent.stop(e);
+                // A press that turned the view ends with a click on the same
+                // button; that click must not also snap back to north.
+                if (self._suppressClick) {
+                    self._suppressClick = false;
+                    return;
+                }
                 if (self._map) self._map.resetBearing();
             };
-            this._onLockTap = function (e) {
-                L.DomEvent.stop(e);
-                self.setLocked(!self._isLocked);
+
+            this._onPointerDown = function (e) {
+                if (!self._map) return;
+                if (e.button !== undefined && e.button > 0) return;
+                if (typeof e.clientX !== 'number') return;
+                self._drag = {
+                    startX: e.clientX,
+                    bearing: self._map.getBearing(),
+                    moved: false
+                };
+                btn.classList.add('is-dragging');
+                // Propagation only: preventing the default here would also eat
+                // the click that a plain tap needs in order to face north.
+                L.DomEvent.stopPropagation(e);
             };
+
+            this._onPointerMove = function (e) {
+                var drag = self._drag;
+                if (!drag || !self._map || typeof e.clientX !== 'number') return;
+                var dx = e.clientX - drag.startX;
+                if (!drag.moved) {
+                    if (Math.abs(dx) < COMPASS_DRAG_THRESHOLD) return;
+                    drag.moved = true;
+                    self._suppressClick = true;
+                }
+                self._map.setBearing(drag.bearing + dx * COMPASS_DRAG_SENSITIVITY, { noMove: true });
+                L.DomEvent.preventDefault(e);
+            };
+
+            this._onPointerUp = function (e) {
+                var drag = self._drag;
+                if (!drag) return;
+                self._drag = null;
+                btn.classList.remove('is-dragging');
+                if (drag.moved && self._map) self._map.fire('moveend');
+                if (self._suppressClick) {
+                    // pointerup is followed by click in the same interaction;
+                    // clear the flag right after it so the next tap works.
+                    setTimeout(function () { self._suppressClick = false; }, 0);
+                }
+                if (e) L.DomEvent.stopPropagation(e);
+            };
+
+            this._onCompassKeyDown = function (e) {
+                if (!self._map) return;
+                var step = e.shiftKey ? 15 : 5;
+                if (e.key === 'ArrowLeft') {
+                    self._map.setBearing(self._map.getBearing() - step);
+                } else if (e.key === 'ArrowRight') {
+                    self._map.setBearing(self._map.getBearing() + step);
+                } else if (e.key === 'Home') {
+                    self._map.resetBearing();
+                } else {
+                    return;
+                }
+                L.DomEvent.stop(e);
+            };
+
             this._onDetectTap = function (e) {
                 L.DomEvent.stop(e);
                 if (typeof window.togglePwaDetection === 'function') window.togglePwaDetection();
             };
-            btn.addEventListener('click', this._onCompassTap);
-            lock.addEventListener('click', this._onLockTap);
+
+            btn.addEventListener('click', this._onCompassClick);
+            btn.addEventListener('pointerdown', this._onPointerDown);
+            btn.addEventListener('keydown', this._onCompassKeyDown);
             det.addEventListener('click', this._onDetectTap);
+            document.addEventListener('pointermove', this._onPointerMove, { passive: false });
+            document.addEventListener('pointerup', this._onPointerUp);
+            document.addEventListener('pointercancel', this._onPointerUp);
 
             this._onRotate = L.bind(this._update, this);
-            this._onLockChange = L.bind(this._updateLock, this);
             map.on('rotate', this._onRotate);
-            map.on('rotatelockchange', this._onLockChange);
 
-            this.setLocked(this._isLocked, { fromMap: true });
             this._update();
             return wrap;
         },
         onRemove: function (map) {
             map.off('rotate', this._onRotate);
-            map.off('rotatelockchange', this._onLockChange);
-            if (this._btn && this._onCompassTap) this._btn.removeEventListener('click', this._onCompassTap);
-            if (this._dock && this._onLockTap) this._dock.removeEventListener('click', this._onLockTap);
+            if (this._btn) {
+                this._btn.removeEventListener('click', this._onCompassClick);
+                this._btn.removeEventListener('pointerdown', this._onPointerDown);
+                this._btn.removeEventListener('keydown', this._onCompassKeyDown);
+            }
             if (this._detectBtn && this._onDetectTap) this._detectBtn.removeEventListener('click', this._onDetectTap);
-        },
-        setLocked: function (locked, options) {
-            locked = !!locked;
-            this._isLocked = locked;
-            if (this._dock) {
-                if (locked) {
-                    this._dock.setAttribute('aria-label', 'Screen rotation locked. Tap to unlock.');
-                    this._dock.title = 'Rotirea ecranului este blocata / Screen rotation locked. Atinge pentru a debloca / Tap to unlock.';
-                } else {
-                    this._dock.setAttribute('aria-label', 'Screen rotation unlocked. Tap to lock.');
-                    this._dock.title = 'Atinge pentru a bloca rotirea / Tap to lock rotation.';
-                }
-            }
-            if (this._track) {
-                this._track.classList.toggle('is-locked', locked);
-            }
-            if (this._map && (!options || !options.fromMap)) {
-                this._map.setRotateLocked(locked, { fromCompass: true });
-            }
-            this._update();
-        },
-        _updateLock: function (e) {
-            if (e && e.locked !== undefined && e.locked !== this._isLocked) {
-                this.setLocked(e.locked, { fromMap: true });
-            }
+            document.removeEventListener('pointermove', this._onPointerMove);
+            document.removeEventListener('pointerup', this._onPointerUp);
+            document.removeEventListener('pointercancel', this._onPointerUp);
         },
         _update: function () {
             var bearing = this._map ? this._map.getBearing() : 0;
@@ -534,7 +561,11 @@
                 this._rose.style.transform = 'rotate(' + (-bearing) + 'deg)';
             }
             if (this._btn) {
-                this._btn.classList.toggle('is-rotated', Math.abs(bearing) >= SNAP);
+                var offNorth = Math.abs(bearing) >= SNAP;
+                this._btn.classList.toggle('is-rotated', offNorth);
+                this._btn.setAttribute('aria-label', offNorth
+                    ? 'Compass — ' + Math.round(Math.abs(bearing)) + '° from north. Drag to rotate, press Enter to face north.'
+                    : 'Compass — facing north. Drag to rotate.');
             }
         }
     });
@@ -548,11 +579,11 @@
         this._rotate = true;
         this._bearing = wrapDeg(this.options.bearing || 0);
 
-        var initialLocked = false;
+        // Older builds persisted a rotation lock; drop the stale key so the
+        // removed lock cannot keep a returning visitor's map pinned.
         try {
-            initialLocked = localStorage.getItem(STORAGE_LOCK_KEY) === 'true';
+            localStorage.removeItem('detectlab_rotation_locked');
         } catch (e) {}
-        this._rotateLocked = !!(this.options.rotateLocked || initialLocked);
 
         if (this._mapPane) this._mapPane._dlRotateMap = this;
 
@@ -563,10 +594,6 @@
             if (!this.compassControl) {
                 this.compassControl = L.control.compass({ position: 'bottomleft' });
                 this.compassControl.addTo(this);
-            }
-            if (this._rotateLocked) {
-                this.compassControl.setLocked(true, { fromMap: true });
-                if (this._container) this._container.classList.add('is-rotation-locked');
             }
             this._applyRotateTransform();
             if (this._bearing) this.fire('rotate', { bearing: this._bearing });

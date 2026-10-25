@@ -1,5 +1,10 @@
-// Unit and integration tests for map rotation sensitivity fix + tap compass lock
+// Unit and integration tests for map rotation + the Google-Earth-style compass
 // Usage: node test-map-rotate-lock.js
+//
+// The tap-to-lock rotation lock was removed: the compass now behaves like
+// Google Earth's — the rose follows the camera, a tap eases the view back to
+// north, and a horizontal drag on the rose turns the view. These tests pin
+// that behaviour; the filename is kept so the suite index stays stable.
 'use strict';
 
 const assert = require('assert');
@@ -277,14 +282,29 @@ global.addEventListener = () => {};
 global.removeEventListener = () => {};
 global.PointerEvent = function () {};
 
-const rotateCode = fs.readFileSync(path.join(__dirname, 'js/map-rotate.js'), 'utf8');
-const rotateFn = new Function('L', 'window', 'document', rotateCode);
-rotateFn(L, global, {
+// The compass binds its drag listeners on `document`; keep them reachable so
+// the tests can drive a press / move / release the way a browser would.
+const documentHandlers = {};
+const fakeDocument = {
     documentElement: { style: {} },
     body: createMockElement('body'),
-    addEventListener: () => {},
-    removeEventListener: () => {}
-});
+    addEventListener(type, fn) {
+        documentHandlers[type] = documentHandlers[type] || [];
+        documentHandlers[type].push(fn);
+    },
+    removeEventListener(type, fn) {
+        if (!documentHandlers[type]) return;
+        documentHandlers[type] = documentHandlers[type].filter((l) => l !== fn);
+    }
+};
+
+function fireDocument(type, evt) {
+    (documentHandlers[type] || []).forEach((fn) => fn(evt));
+}
+
+const rotateCode = fs.readFileSync(path.join(__dirname, 'js/map-rotate.js'), 'utf8');
+const rotateFn = new Function('L', 'window', 'document', rotateCode);
+rotateFn(L, global, fakeDocument);
 
 // -------------------------------------------------------------
 // Test 1: Bearing calculations and Snap-to-North threshold
@@ -333,39 +353,29 @@ console.log('  ✔ snap-to-north works within 3.0°');
 console.log('  ✔ transform-origin is 0 0 when the map is not rotated');
 
 // -------------------------------------------------------------
-// Test 2: Rotation Lock API on L.Map
+// Test 2: There is no rotation lock any more
 // -------------------------------------------------------------
-console.log('\n[2] Rotation Lock API on L.Map');
-assert.strictEqual(map.isRotateLocked(), false, 'initially unlocked');
+console.log('\n[2] Rotation is always available (no lock)');
+assert.strictEqual(typeof map.setRotateLocked, 'undefined',
+    'L.Map no longer exposes setRotateLocked');
+assert.strictEqual(typeof map.isRotateLocked, 'undefined',
+    'L.Map no longer exposes isRotateLocked');
 
-let lockEventReceived = null;
-map.on('rotatelockchange', (e) => { lockEventReceived = e.locked; });
+// A bearing stored by an older build must not survive.
+localStorageMock.setItem('detectlab_rotation_locked', 'true');
+const remount = new L.Map(createMockElement('div'), { rotate: true, bearing: 0 });
+assert.strictEqual(localStorageMock.getItem('detectlab_rotation_locked'), null,
+    'the stale lock key is cleared when the map mounts');
 
-map.setRotateLocked(true);
-assert.strictEqual(map.isRotateLocked(), true, 'isRotateLocked returns true when locked');
-assert.strictEqual(lockEventReceived, true, 'rotatelockchange fired with locked: true');
-assert.strictEqual(localStorageMock.getItem('detectlab_rotation_locked'), 'true', 'persists locked=true in localStorage');
-
-// When locked, interactive setBearing is blocked without {force: true}
+// Rotation from the keyboard path, a twist or a drag is never blocked.
 map.setBearing(80);
-assert.strictEqual(map.getBearing(), 15, 'bearing unchanged while locked');
-
-// Forced programmatic setBearing still works
-map.setBearing(80, { force: true });
-assert.strictEqual(map.getBearing(), 80, 'forced bearing succeeds even when locked');
-
-map.setRotateLocked(false);
-assert.strictEqual(map.isRotateLocked(), false, 'isRotateLocked returns false when unlocked');
-assert.strictEqual(lockEventReceived, false, 'rotatelockchange fired with locked: false');
-assert.strictEqual(localStorageMock.getItem('detectlab_rotation_locked'), 'false', 'persists locked=false in localStorage');
-
-map.setBearing(95);
-assert.strictEqual(map.getBearing(), 95, 'bearing updates normally when unlocked');
-console.log('  ✔ map.setRotateLocked(true/false) works and blocks rotation when locked');
+assert.strictEqual(map.getBearing(), 80, 'setBearing applies without a force flag');
+map.setBearing(140);
+assert.strictEqual(map.getBearing(), 140, 'and keeps applying on the next change');
+console.log('  ✔ no lock API, stale lock key cleared, rotation never blocked');
 
 // -------------------------------------------------------------
-// -------------------------------------------------------------
-// Test 3: Compass Control DOM Structure (tap buttons, no slide)
+// Test 3: Compass Control DOM Structure (compass + detect, no lock)
 // -------------------------------------------------------------
 console.log('\n[3] Compass Control DOM Structure');
 const compass = L.control.compass({ position: 'bottomleft' });
@@ -379,84 +389,104 @@ assert.strictEqual(col.id, 'compassCol', 'column carries the compassCol id');
 const btn = compassWrap.querySelector('.detectlab-compass-btn');
 assert(btn, 'compass button exists');
 assert.strictEqual(btn.tagName, 'BUTTON', 'compass is a real <button>');
-assert(btn.querySelector('.detectlab-compass-rose'), 'compass rose needle exists inside button');
-
-const lock = compassWrap.querySelector('.detectlab-compass-lock');
-assert(lock, 'rotation lock button exists');
-assert.strictEqual(lock.tagName, 'BUTTON', 'lock is a real <button>');
-assert.strictEqual(lock.id, 'compassLockBtn', 'lock button carries the compassLockBtn id');
-assert(lock.querySelector('.dl-lock-icon-unlocked'), 'unlocked lock icon exists in lock button');
-assert(lock.querySelector('.dl-lock-icon-locked'), 'locked lock icon exists in lock button');
+assert(btn.querySelector('.detectlab-compass-rose'), 'compass rose exists inside button');
+assert(btn.querySelector('.dl-c-needle-n'), 'the rose carries a north needle');
+assert(btn.querySelector('.dl-c-ring'), 'the rose carries its hairline ring');
+assert(!/compass-lock/.test(compassWrap.className), 'no lock chrome in the container');
 
 const det = compassWrap.querySelector('.compass-detect-btn');
 assert(det, 'detect toggle button exists under the compass');
 assert.strictEqual(det.tagName, 'BUTTON', 'detect toggle is a real <button>');
 assert.strictEqual(det.id, 'pwaDetectBtn', 'detect button carries the pwaDetectBtn id');
 
-// Vertical order inside the column: compass, lock, detect.
-const colKids = col.children.filter((c) => c.tagName === 'BUTTON');
-assert.strictEqual(colKids.length, 3, 'column holds exactly three buttons');
-assert(colKids[0].classList.contains('detectlab-compass-btn'), 'compass is first');
-assert(colKids[1].classList.contains('detectlab-compass-lock'), 'lock is second');
-assert(colKids[2].classList.contains('compass-detect-btn'), 'detect is third');
+// The lock button and its icons are gone; compass + detect remain, in order.
+assert.strictEqual(compassWrap.querySelector('.detectlab-compass-lock'), null,
+    'the rotation-lock button is gone');
+assert.strictEqual(compassWrap.querySelector('#compassLockBtn'), null,
+    'and so is its id');
+assert.strictEqual(compassWrap.querySelector('.dl-lock-icon-unlocked'), null,
+    'no unlocked padlock icon');
+assert.strictEqual(compassWrap.querySelector('.dl-lock-icon-locked'), null,
+    'no locked padlock icon');
 
-// The old slide-to-lock chrome is gone.
+const colKids = col.children.filter((c) => c.tagName === 'BUTTON');
+assert.strictEqual(colKids.length, 2, 'column holds exactly two buttons');
+assert(colKids[0].classList.contains('detectlab-compass-btn'), 'compass is first');
+assert(colKids[1].classList.contains('compass-detect-btn'), 'detect is second');
+
+// The old slide-to-lock chrome stays gone.
 assert(!compassWrap.querySelector('.detectlab-compass-track'), 'no sliding track anymore');
 assert(!compassWrap.querySelector('.detectlab-compass-lock-dock'), 'no lock dock anymore');
 assert(!compassWrap.querySelector('.detectlab-compass-guide'), 'no guide arrow anymore');
 assert(!compassWrap.querySelector('.dl-compass-mini-lock'), 'no mini lock badge anymore');
 assert(!compassWrap.querySelector('.dl-lock-dock-label'), 'no LOCK text label anymore');
-console.log('  ✔ compass column holds compass + lock + detect tap buttons in order');
+console.log('  ✔ compass column holds exactly compass + detect, with no lock chrome');
 
 // -------------------------------------------------------------
-// Test 4: Tap Locking / Unlocking
+// Test 4: Compass follows the camera (Google-Earth movement)
 // -------------------------------------------------------------
-console.log('\n[4] Tap Locking / Unlocking');
-assert.strictEqual(compass._isLocked, false, 'initially unlocked');
-assert(!col.classList.contains('is-locked'), 'column starts without is-locked');
-
-// Tap the lock button -> locked.
-lock.dispatchEvent({ type: 'click' });
-assert.strictEqual(compass._isLocked, true, 'tap locks the compass');
-assert.strictEqual(map.isRotateLocked(), true, 'map rotation is locked');
-assert(col.classList.contains('is-locked'), 'column has is-locked class');
-assert(
-    String(lock.getAttribute('aria-label')).indexOf('locked') !== -1,
-    'lock aria-label announces the locked state, got ' + lock.getAttribute('aria-label')
-);
-
-// Tap again -> unlocked.
-lock.dispatchEvent({ type: 'click' });
-assert.strictEqual(compass._isLocked, false, 'second tap unlocks');
-assert.strictEqual(map.isRotateLocked(), false, 'map is unlocked');
-assert(!col.classList.contains('is-locked'), 'column is-locked removed');
-
-// Lock state also follows the map: an external setRotateLocked(true)
-// reaches the control through the rotatelockchange event.
-map.setRotateLocked(true);
-assert.strictEqual(compass._isLocked, true, 'control follows map lock events');
-assert(col.classList.contains('is-locked'), 'column reflects map lock events');
-map.setRotateLocked(false);
-assert.strictEqual(compass._isLocked, false, 'control follows map unlock events');
-console.log('  ✔ tapping the lock toggles map rotation lock both ways');
-
-// -------------------------------------------------------------
-// Test 5: Compass tap resets north, rose tracks bearing, detect relays taps
-// -------------------------------------------------------------
-console.log('\n[5] Reset north, rose rotation & detect relay');
-map.setRotateLocked(false);
-map.setBearing(45);
+console.log('\n[4] The rose follows the camera');
 const rose = btn.querySelector('.detectlab-compass-rose');
+map.setBearing(45);
 assert.strictEqual(rose.style.transform, 'rotate(-45deg)', 'rose counter-rotates the bearing');
 assert(btn.classList.contains('is-rotated'), 'compass shows is-rotated while off-north');
+assert(/45/.test(String(btn.getAttribute('aria-label'))),
+    'the accessible label reports the current offset from north');
 
-// Tap the compass with a sub-degree bearing -> synchronous reset to 0.
-// (Larger bearings animate back via requestAnimFrame, which is async.)
+map.setBearing(90);
+assert.strictEqual(rose.style.transform, 'rotate(-90deg)', 'rose keeps tracking every change');
+map.setBearing(-30);
+assert.strictEqual(rose.style.transform, 'rotate(30deg)', 'and it tracks negative bearings');
+
+// Frame-by-frame updates come straight off the map's rotate event: the control
+// is a listener, not a poller, so nothing lags behind the imagery.
+assert(typeof compass._onRotate === 'function', 'the control subscribes to the rotate event');
+assert(btn._listeners && btn._listeners.pointerdown, 'the rose is a pointer-drag handle');
+console.log('  ✔ rose tracks the bearing continuously, with an accurate aria-label');
+
+// -------------------------------------------------------------
+// Test 5: Tap resets north, drag turns the view, detect relays
+// -------------------------------------------------------------
+console.log('\n[5] Tap resets north, drag turns the view');
+map.setBearing(45);
+
+// Sub-degree bearings reset synchronously (larger ones animate back).
 map._bearing = 0.5;
 btn.dispatchEvent({ type: 'click' });
 assert.strictEqual(map.getBearing(), 0, 'compass tap resets bearing to north');
 assert.strictEqual(rose.style.transform, 'rotate(0deg)', 'rose returns upright');
 assert(!btn.classList.contains('is-rotated'), 'is-rotated clears at north');
+
+// A horizontal drag on the rose turns the view and swallows the trailing click.
+map.setBearing(10);
+btn.dispatchEvent({ type: 'pointerdown', clientX: 100, clientY: 100, button: 0 });
+assert(btn.classList.contains('is-dragging'), 'pressing the rose enters the drag state');
+fireDocument('pointermove', { type: 'pointermove', clientX: 160, clientY: 100 });
+assert(Math.abs(map.getBearing() - (10 + 60 * 0.55)) < 0.001,
+    'dragging 60px right turns the view by 33° (0.55°/px), got ' + map.getBearing());
+fireDocument('pointerup', { type: 'pointerup' });
+assert(!btn.classList.contains('is-dragging'), 'releasing the rose leaves the drag state');
+map.setBearing(42);
+btn.dispatchEvent({ type: 'click' });
+assert.strictEqual(map.getBearing(), 42,
+    'the click that ends a drag must not also reset north, got ' + map.getBearing());
+
+// A press without movement is still a tap.
+btn.dispatchEvent({ type: 'pointerdown', clientX: 100, clientY: 100, button: 0 });
+fireDocument('pointerup', { type: 'pointerup' });
+map._bearing = 0.4;
+btn.dispatchEvent({ type: 'click' });
+assert.strictEqual(map.getBearing(), 0, 'a press that did not move still resets north');
+
+// Keyboard: arrows nudge, Home resets — the same compass, without a pointer.
+map.setBearing(20);
+btn.dispatchEvent({ type: 'keydown', key: 'ArrowLeft' });
+assert.strictEqual(map.getBearing(), 15, 'ArrowLeft turns 5° left');
+btn.dispatchEvent({ type: 'keydown', key: 'ArrowRight', shiftKey: true });
+assert.strictEqual(map.getBearing(), 30, 'Shift+ArrowRight turns 15° right');
+map._bearing = 0.4;
+btn.dispatchEvent({ type: 'keydown', key: 'Home' });
+assert.strictEqual(map.getBearing(), 0, 'Home faces north');
 
 // Tapping detect relays to the PWA detection toggle (index.html).
 let detectRelayed = false;
@@ -464,25 +494,34 @@ global.togglePwaDetection = function () { detectRelayed = true; };
 det.dispatchEvent({ type: 'click' });
 assert.strictEqual(detectRelayed, true, 'detect tap relays to window.togglePwaDetection');
 delete global.togglePwaDetection;
-console.log('  ✔ compass tap resets north, rose tracks bearing, detect relays taps');
+console.log('  ✔ tap faces north, a horizontal drag turns the view, keys nudge, detect relays');
 
 // -------------------------------------------------------------
-// Test 6: CSS File Coverage
+// Test 6: CSS + docs coverage for the new material and behaviour
 // -------------------------------------------------------------
 console.log('\n[6] CSS Stylesheet Coverage');
 const cssContent = fs.readFileSync(path.join(__dirname, 'css/styles.css'), 'utf8');
 assert(cssContent.includes('.detectlab-compass-col'), 'css includes .detectlab-compass-col');
-assert(cssContent.includes('.detectlab-compass-col.is-locked'), 'css includes locked column state');
 assert(cssContent.includes('.detectlab-compass-btn'), 'css includes .detectlab-compass-btn');
-assert(cssContent.includes('.detectlab-compass-lock'), 'css includes .detectlab-compass-lock');
 assert(cssContent.includes('.compass-detect-btn'), 'css includes .compass-detect-btn');
 assert(cssContent.includes('.compass-detect-btn.detect-active'), 'css includes detect-active state');
-assert(cssContent.includes('.dl-lock-icon-unlocked'), 'css includes .dl-lock-icon-unlocked');
-assert(cssContent.includes('.dl-lock-icon-locked'), 'css includes .dl-lock-icon-locked');
 assert(cssContent.includes('.btn-nearby-pwa'), 'css includes .btn-nearby-pwa');
+assert(!cssContent.includes('.detectlab-compass-lock'), 'css drops .detectlab-compass-lock');
+assert(!cssContent.includes('.detectlab-compass-col.is-locked'), 'css drops the locked column state');
+assert(!cssContent.includes('.dl-lock-icon'), 'css drops the padlock icons');
 assert(!cssContent.includes('.detectlab-compass-track'), 'css drops .detectlab-compass-track');
 assert(!cssContent.includes('.detectlab-compass-lock-dock'), 'css drops .detectlab-compass-lock-dock');
 assert(!cssContent.includes('.dl-compass-mini-lock'), 'css drops .dl-compass-mini-lock');
-console.log('  ✔ all required CSS rules are present and the slide chrome is gone');
 
-console.log('\n\u2705 ALL MAP ROTATION & COMPASS LOCK TESTS PASSED\n');
+// The shared control material: translucent, blurred, violet glyph.
+assert(cssContent.includes('--ctl-bg:') && cssContent.includes('--ctl-blur:') &&
+       cssContent.includes('--ctl-icon:'), 'css declares the shared map-control tokens');
+assert(/\.detectlab-compass-btn[\s\S]{0,900}?backdrop-filter:\s*var\(--ctl-blur\)/.test(cssContent),
+    'the compass pane is blurred');
+assert(/\.detectlab-compass-btn[\s\S]{0,400}?background:\s*var\(--ctl-bg\)/.test(cssContent),
+    'and translucent');
+assert(!/\.detectlab-compass-btn[^{]*\{[^}]*rgba\(10,25,48/.test(cssContent),
+    'the opaque navy button background is gone');
+console.log('  ✔ glass tokens, violet glyphs and the lock-free compass are in the stylesheet');
+
+console.log('\n\u2705 ALL MAP ROTATION & COMPASS TESTS PASSED\n');

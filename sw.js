@@ -794,7 +794,13 @@
 //   never defined) that cut Leaflet's zoomend→moveend chain and skipped
 //   the visibility event the 3D disc listens for. Re-tags js/map-app.js
 //   and js/map3d-terrain.js.
-const CACHE_NAME = 'detectlab-v268-lidar-3d-tile-heal';
+// v269: map controls rebuilt as one glass material (translucent, blurred,
+//   violet glyphs) and the compass made Google-Earth-like — the rose tracks the
+//   camera, a tap eases back to north, a horizontal drag on the rose turns the
+//   view and there is no rotation lock any more. Re-tags css/styles.css,
+//   css/tutorial.css, css/offline-maps.css, css/map3d-terrain.css,
+//   js/map-rotate.js and js/tutorial.js.
+const CACHE_NAME = 'detectlab-v270-layer-glass';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -853,6 +859,24 @@ const PRECACHE_URLS = [
   'js/offline-maps.js?v=20261024-uk-historical-maps',
   'js/vertical-opacity-control.js?v=20261024-uk-historical-maps',
   'css/styles.css?v=20261024-asig-catalogue',
+  // v269: the map controls are one glass material now — translucent, blurred,
+  // violet glyphs — and the compass is Google-Earth-like: the rose follows the
+  // camera, a tap eases the view back to north, a horizontal drag on the rose
+  // turns the view. The rotation-lock button and its L.Map API are gone, so
+  // css/styles.css, css/tutorial.css, css/offline-maps.css, css/map3d-terrain.css,
+  // js/map-rotate.js and js/tutorial.js are re-tagged.
+  // v270: the layers window joined the same material — the panel and every row
+  // in it (top-level AND the nested `*SubLayers` rows) are the translucent
+  // violet glass, and each historical-map row carries a photo of one of its own
+  // tiles, mean-ed out under a violet wash. The row chrome lives in the new
+  // js/layer-panel-rows.js; the skin tag moves to ?v=20261025-layer-glass.
+  'css/styles.css?v=20261025-layer-glass',
+  'css/tutorial.css?v=20261025-layer-glass',
+  'css/offline-maps.css?v=20261025-layer-glass',
+  'css/map3d-terrain.css?v=20261025-layer-glass',
+  'js/map-rotate.js?v=20261025-earth-compass',
+  'js/tutorial.js?v=20261025-layer-glass',
+  'js/layer-panel-rows.js?v=20261025-layer-glass',
   'js/layer-registry.js?v=20261017-albania-asig',
   'js/translations.js?v=20261017-albania-asig',
   'js/translations.js?v=20261017-albania-asig',

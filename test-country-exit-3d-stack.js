@@ -122,8 +122,8 @@ console.log('[Test] “Exit view” and the 2D/3D switch share the bottom-centre
     const pwa = ruleOf(skinCss, 'body.is-pwa .m3d-toggle-group');
     assert(!/left:\s*50%/.test(pwa),
         'the PWA switch is not centred: ' + pwa.trim());
-    assert(/bottom:\s*var\(--m3d-anchor-bottom, calc\(192px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\)\)\)/.test(pwa),
-        'the installed-PWA fallback keeps the home-indicator inset (192px + inset)');
+    assert(/bottom:\s*var\(--m3d-anchor-bottom, calc\(146px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\)\)\)/.test(pwa),
+        'the installed-PWA fallback keeps the home-indicator inset (146px + inset)');
     assert(/left:\s*var\(--m3d-anchor-left, 10px\)/.test(pwa),
         'and --m3d-anchor-left, left-aligned with the base-layer button');
     const shared = ruleOf(skinCss, '.m3d-toggle-group');
@@ -137,11 +137,11 @@ console.log('[Test] “Exit view” and the 2D/3D switch share the bottom-centre
         'the PWA 3D bar rides on the switch’s measured top edge, so it never covers the switch');
 
     /* The arithmetic that keeps the pill tappable: the bar's fallback bottom
-       (236px + inset + 8px) is far above the lifted pill's top edge
+       (190px + inset + 8px) is far above the lifted pill's top edge
        (60px + 35px), and the switch's own column starts 10px in from the left
        edge, i.e. outside a centred pill's box on a 390px phone. */
     const PILL_TOP_PWA = 60 + 35;
-    assert.strictEqual(236 + 8 > PILL_TOP_PWA, true,
+    assert.strictEqual(190 + 8 > PILL_TOP_PWA, true,
         'the PWA 3D bar starts above the pill’s top edge even before the lift');
     const SWITCH_COLUMN_RIGHT = 11 + 44 + 6 + 44;   /* left edge + switch + gap + refresh */
     assert.strictEqual(SWITCH_COLUMN_RIGHT < (390 - 130) / 2, true,
@@ -167,7 +167,7 @@ console.log('[Test] “Exit view” and the 2D/3D switch share the bottom-centre
      * the precache so an installed shell still finds the copy it references. */
     assert(sw.indexOf("'" + 'css/map3d-terrain.css?v=' + TAG + "'") !== -1,
         'sw.js still precaches the v248 skin an installed shell may ask for');
-    const SKIN_TAG = '20261024-no-bar-lidar-row';
+    const SKIN_TAG = '20261025-layer-glass';
     assert(html.indexOf('css/map3d-terrain.css?v=' + SKIN_TAG) !== -1 &&
         sw.indexOf("'" + 'css/map3d-terrain.css?v=' + SKIN_TAG + "'") !== -1,
         'index.html loads and sw.js precaches the re-tagged 3D skin');

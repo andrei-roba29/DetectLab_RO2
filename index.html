@@ -26,12 +26,12 @@
     <link rel="stylesheet" href="css/leaflet.photon.css">
     <link rel="stylesheet" href="css/leaflet-measure.css">
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
-    <link rel="stylesheet" href="css/styles.css?v=20261024-asig-catalogue">
+    <link rel="stylesheet" href="css/styles.css?v=20261025-layer-glass">
     <!-- 3D TERRAIN VIEW (2D ⇄ 3D) — MapLibre GL JS, vendored like Leaflet.
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
     <link rel="stylesheet" href="css/maplibre-gl.css?v=20261013-3d-terrain">
-    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261024-no-bar-lidar-row">
+    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261025-layer-glass">
     <link rel="stylesheet" href="css/hist-shift.css?v=20261014-hist-shift">
     <!-- „Alte hărți / Other maps” — punctele verzi + suprapunerea liberă a
          hărților ne-georeferențiate (Hungaricana). -->
@@ -39,8 +39,8 @@
     <link rel="stylesheet" href="css/globe-country-picker.css?v=20261021-gate-safe-area">
     <link rel="stylesheet" href="css/country-dock.css?v=20261021-country-exit-3d-stack">
     <link rel="stylesheet" href="css/library-of-babel.css?v=20260917-babel-epochs">
-    <link rel="stylesheet" href="css/tutorial.css?v=20260922-mobile-fs-controls">
-    <link rel="stylesheet" href="css/offline-maps.css?v=20260916-pwa-panel-offline-exit">
+    <link rel="stylesheet" href="css/tutorial.css?v=20261025-layer-glass">
+    <link rel="stylesheet" href="css/offline-maps.css?v=20261025-layer-glass">
     <style>
         /* PWA Specific Styles */
         body.is-pwa .nav-links {
@@ -87,6 +87,17 @@
 
         body.is-pwa #detectlab-map .leaflet-pane,
         body.is-pwa #detectlab-map .leaflet-map-pane {
+            touch-action: none !important;
+            -ms-touch-action: none !important;
+        }
+
+        /* The compass is a drag handle, not a static control: it keeps
+           touch-action:none even in PWA mode (the rule above would otherwise
+           hand a horizontal drag to the browser as a pan gesture and cancel the
+           pointer stream mid-turn). Higher specificity than the .leaflet-control
+           rule, so it wins without another !important cascade. */
+        body.is-pwa #detectlab-map .leaflet-control.detectlab-compass,
+        body.is-pwa #detectlab-map .detectlab-compass .detectlab-compass-btn {
             touch-action: none !important;
             -ms-touch-action: none !important;
         }
@@ -237,9 +248,14 @@
             min-height: max(100vh, var(--dl-vvh, 100vh)) !important;
             max-height: none !important;
             padding-bottom: var(--pwa-panel-bottom-clearance) !important;
+            /* Same violet glass as the website panel, one notch denser: the
+               bottom safe-area gutter cannot be blurred (the transparent
+               strip below must stay blurred-free), so the pane carries a
+               little more of its own tint here instead of leaning on the
+               backdrop. */
             background:
-                radial-gradient(circle at 100% 0%, rgba(107,63,160,0.16), transparent 55%) top right / 100% calc(100% - var(--pwa-panel-bottom-clearance)) no-repeat,
-                linear-gradient(180deg, rgba(10,20,42,0.97) 0%, rgba(6,14,30,0.97) calc(100% - 14px), rgba(6,14,30,0) 100%) top right / 100% calc(100% - var(--pwa-panel-bottom-clearance)) no-repeat !important;
+                radial-gradient(circle at 100% 0%, rgba(107,63,160,0.30), transparent 55%) top right / 100% calc(100% - var(--pwa-panel-bottom-clearance)) no-repeat,
+                linear-gradient(180deg, rgba(20,14,34,0.86) 0%, rgba(12,9,24,0.90) calc(100% - 14px), rgba(12,9,24,0) 100%) top right / 100% calc(100% - var(--pwa-panel-bottom-clearance)) no-repeat !important;
             background-color: transparent !important;
             -webkit-backdrop-filter: none !important;
             backdrop-filter: none !important;
@@ -395,17 +411,21 @@
             padding: 0;
             gap: 0;
             justify-content: center;
-            background: rgba(10,25,48,0.88);
-            border: 1px solid rgba(184,216,240,0.18);
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.35);
-            -webkit-backdrop-filter: blur(6px);
-            backdrop-filter: blur(6px);
+            /* Same glass pane as every other map control (css/styles.css :root). */
+            color: var(--ctl-icon, #BBA9F2);
+            background: var(--ctl-bg, rgba(24, 19, 40, 0.45));
+            border: 1px solid var(--ctl-border, rgba(198, 180, 255, 0.20));
+            border-radius: var(--ctl-radius, 12px);
+            box-shadow: var(--ctl-shadow, 0 6px 18px rgba(4, 6, 18, 0.32));
+            -webkit-backdrop-filter: var(--ctl-blur, blur(18px) saturate(150%));
+            backdrop-filter: var(--ctl-blur, blur(18px) saturate(150%));
+            transition: background-color .18s ease, border-color .18s ease, color .18s ease;
         }
         #pwaUserTrigger.pwa-user-trigger:hover,
         #pwaUserTrigger.pwa-user-trigger.active {
-            background: rgba(107,63,160,0.82);
-            border-color: rgba(107,63,160,0.6);
+            color: var(--ctl-icon-hover, #DCD2FB);
+            background: var(--ctl-bg-hover, rgba(45, 33, 74, 0.60));
+            border-color: var(--ctl-border-hover, rgba(198, 180, 255, 0.38));
         }
         #pwaUserTrigger #pwaAvatar {
             width: 24px;
@@ -419,11 +439,13 @@
             display: flex;
             align-items: center;
             gap: 4px;
-            background: rgba(184, 216, 240, 0.08);
-            border: 1px solid rgba(184, 216, 240, 0.2);
-            border-radius: 8px;
+            background: var(--ctl-bg, rgba(24, 19, 40, 0.45));
+            border: 1px solid var(--ctl-border, rgba(198, 180, 255, 0.20));
+            border-radius: var(--ctl-radius, 12px);
             padding: 5px 10px;
-            color: rgba(245, 240, 235, 0.85);
+            color: var(--ctl-icon-hover, #DCD2FB);
+            -webkit-backdrop-filter: var(--ctl-blur, blur(18px) saturate(150%));
+            backdrop-filter: var(--ctl-blur, blur(18px) saturate(150%));
             font-family: 'Outfit', sans-serif;
             font-size: 0.72rem;
             font-weight: 600;
@@ -433,8 +455,8 @@
         }
         .pwa-bar-trigger:hover,
         .pwa-bar-trigger.active {
-            background: rgba(107, 63, 160, 0.3);
-            border-color: rgba(107, 63, 160, 0.5);
+            background: var(--ctl-bg-hover, rgba(45, 33, 74, 0.60));
+            border-color: var(--ctl-border-hover, rgba(198, 180, 255, 0.38));
             color: #fff;
         }
         .pwa-bar-trigger svg {
@@ -794,10 +816,12 @@
            unfold from it. Folded — the default — the control is a single line
            tall, so it never crowds the map (especially on a phone). */
         .arcgis-basemap-ctrl {
-            background: rgba(8, 14, 28, 0.9);
-            border: 1px solid rgba(184, 216, 240, 0.28);
-            border-radius: 10px;
-            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+            background: var(--ctl-bg, rgba(24, 19, 40, 0.45));
+            border: 1px solid var(--ctl-border, rgba(198, 180, 255, 0.20));
+            border-radius: var(--ctl-radius, 12px);
+            box-shadow: var(--ctl-shadow, 0 6px 18px rgba(4, 6, 18, 0.32));
+            -webkit-backdrop-filter: var(--ctl-blur, blur(18px) saturate(150%));
+            backdrop-filter: var(--ctl-blur, blur(18px) saturate(150%));
             overflow: hidden;
             min-width: 38px;
             width: 38px;
@@ -814,7 +838,7 @@
             padding: 8px;
             border: 0;
             background: transparent;
-            color: rgba(245, 240, 235, 0.9);
+            color: var(--ctl-icon, #BBA9F2);
             font-family: inherit;
             font-size: 0.72rem;
             font-weight: 600;
@@ -823,9 +847,9 @@
             cursor: pointer;
             white-space: nowrap;
         }
-        .arcgis-basemap-header:hover { background: rgba(184, 216, 240, 0.1); color: #fff; }
-        .arcgis-basemap-header:focus-visible { outline: 2px solid #b9ff14; outline-offset: -2px; }
-        .arcgis-basemap-header-icon { display: inline-flex; align-items: center; justify-content: center; color: #b9ff14; }
+        .arcgis-basemap-header:hover { background: var(--ctl-bg-hover, rgba(45, 33, 74, 0.60)); color: var(--ctl-icon-hover, #DCD2FB); }
+        .arcgis-basemap-header:focus-visible { outline: 2px solid var(--ctl-border-engaged, rgba(206, 190, 255, 0.55)); outline-offset: -2px; }
+        .arcgis-basemap-header-icon { display: inline-flex; align-items: center; justify-content: center; color: inherit; }
         .arcgis-basemap-header-label { display: none !important; }
         .arcgis-basemap-chevron { display: none !important; }
         .arcgis-basemap-ctrl.is-open .arcgis-basemap-chevron { transform: rotate(180deg); }
@@ -847,7 +871,7 @@
             width: 100%;
             padding: 6px 10px;
             border: 0;
-            border-bottom: 1px solid rgba(184, 216, 240, 0.12);
+            border-bottom: 1px solid rgba(198, 180, 255, 0.12);
             background: transparent;
             color: rgba(245, 240, 235, 0.85);
             font-size: 0.72rem;
@@ -858,11 +882,11 @@
             white-space: nowrap;
         }
         .arcgis-basemap-btn:hover { background: rgba(184, 216, 240, 0.1); color: #fff; }
-        .arcgis-basemap-btn:focus-visible { outline: 2px solid #b9ff14; outline-offset: -2px; }
+        .arcgis-basemap-btn:focus-visible { outline: 2px solid var(--ctl-border-engaged, rgba(206, 190, 255, 0.55)); outline-offset: -2px; }
         .arcgis-basemap-btn.active {
-            background: rgba(107, 63, 160, 0.35);
+            background: var(--ctl-bg-engaged, rgba(126, 94, 214, 0.26));
             color: #fff;
-            box-shadow: inset 2px 0 0 rgba(185, 255, 0, 0.65);
+            box-shadow: inset 2px 0 0 rgba(198, 180, 255, 0.55);
         }
         .arcgis-basemap-hs {
             display: flex;
@@ -875,7 +899,7 @@
             cursor: pointer;
             white-space: nowrap;
         }
-        .arcgis-basemap-hs input { margin: 0; accent-color: #b9ff14; }
+        .arcgis-basemap-hs input { margin: 0; accent-color: #9C7BF0; }
         .arcgis-basemap-ctrl.is-open {
             min-width: 164px;
             width: auto;
@@ -2086,7 +2110,7 @@
 
                             </div>
                             <!-- Sub-layer: Austrian Map 1910 / Harta Austriacă 1910 -->
-                            <div id="austrianMapRow">
+                            <div id="austrianMapRow" data-preview-layer="hist.austrian">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="none" stroke="#e8a070" stroke-width="1" /><path d="M2 6 L4 4 L6 6 L8 4" stroke="#e8a070" stroke-width="0.7" fill="none" /></svg>
@@ -2110,7 +2134,7 @@
                             </div>
 
                             <!-- Sub-layer: Planuri de tragere / Firing Plans -->
-                            <div id="firingPlansRow">
+                            <div id="firingPlansRow" data-preview-layer="hist.firing-plans">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="none" stroke="#e87070" stroke-width="1" /><line x1="3" y1="3" x2="7" y2="7" stroke="#e87070" stroke-width="0.7" /><line x1="7" y1="3" x2="3" y2="7" stroke="#e87070" stroke-width="0.7" /></svg>
@@ -2134,7 +2158,7 @@
                             </div>
 
                             <!-- Sub-layer: Harta Sovietică 1970 / Soviet Map 1970s -->
-                            <div id="sovietMapRow">
+                            <div id="sovietMapRow" data-preview-layer="hist.soviet-1970">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="none" stroke="#e05050" stroke-width="1" /><path d="M5 2.5 L5.6 4.2 L7.4 4.2 L6 5.3 L6.5 7 L5 6 L3.5 7 L4 5.3 L2.6 4.2 L4.4 4.2 Z" fill="#e05050" stroke="none" /></svg>
@@ -3882,7 +3906,7 @@
                         <div id="histPremiumSubLayers" style="margin-top:0;padding-left:6px;border-left:2px solid rgba(200,169,110,0.3);display:flex;flex-direction:column;gap:8px;overflow:hidden;transition:max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;max-height:0;opacity:0;">
 
                             <!-- Harta Iosefină + -->
-                            <div id="josephineRow">
+                            <div id="josephineRow" data-preview-layer="premium.josephine">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#c8a96e" /></svg>
@@ -3909,7 +3933,7 @@
                             </div>
 
                             <!-- Bucovina 1861-1864 -->
-                            <div id="bucovinaRow">
+                            <div id="bucovinaRow" data-preview-layer="premium.bucovina">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#c8a96e" /></svg>
@@ -3936,7 +3960,7 @@
                             </div>
 
                             <!-- Harta Austro-Ungară 1861-1864 -->
-                            <div id="austrohuRow">
+                            <div id="austrohuRow" data-preview-layer="premium.austro-hungarian">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -3963,7 +3987,7 @@
                             </div>
 
                             <!-- Moldova 1868 -->
-                            <div id="moldova1868Row">
+                            <div id="moldova1868Row" data-preview-layer="premium.moldova-1868">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -3990,7 +4014,7 @@
                             </div>
 
                             <!-- Moldova WWII -->
-                            <div id="moldovaWwiiRow">
+                            <div id="moldovaWwiiRow" data-preview-layer="premium.moldova-wwii">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -4017,7 +4041,7 @@
                             </div>
 
                             <!-- Harta tactică poloneză 1933 -->
-                            <div id="polishTactical1933Row">
+                            <div id="polishTactical1933Row" data-preview-layer="premium.polish-tactical-1933">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -4044,7 +4068,7 @@
                             </div>
 
                             <!-- WWI -->
-                            <div id="ww1Row">
+                            <div id="ww1Row" data-preview-layer="premium.ww1">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -4071,7 +4095,7 @@
                             </div>
 
                             <!-- WWII -->
-                            <div id="ww2Row">
+                            <div id="ww2Row" data-preview-layer="premium.ww2">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -4098,7 +4122,7 @@
                             </div>
 
                             <!-- Moldova 1771 -->
-                            <div id="moldova1771Row">
+                            <div id="moldova1771Row" data-preview-layer="premium.moldova-1771">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -4125,7 +4149,7 @@
                             </div>
 
                             <!-- Banat 1769-1772 -->
-                            <div id="banatRow">
+                            <div id="banatRow" data-preview-layer="premium.banat">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -4152,7 +4176,7 @@
                             </div>
 
                             <!-- Harta Transilvaniei 1859 (Tiled Map Service ArcGIS Online) -->
-                            <div id="transylvania1859Row">
+                            <div id="transylvania1859Row" data-preview-layer="premium.transylvania-1859">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -4179,7 +4203,7 @@
                             </div>
 
                             <!-- Übersichtskarte von Mitteleuropa 1:300 000 (1893–1945) (CENAGIS / IH PAN) -->
-                            <div id="mitteleuropaRow">
+                            <div id="mitteleuropaRow" data-preview-layer="premium.mitteleuropa">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -4206,7 +4230,7 @@
                             </div>
 
                             <!-- Harta generală a Regatului Poloniei – Wojciech Chrzanowski 1859 (CENAGIS / IH PAN) -->
-                            <div id="chrzanowskiRow">
+                            <div id="chrzanowskiRow" data-preview-layer="premium.chrzanowski">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -4233,7 +4257,7 @@
                             </div>
 
                             <!-- Special-Karte von Central-Europa – Daniel Gottlob Reymann (1806–1908) (CENAGIS / IH PAN) -->
-                            <div id="reymannRow">
+                            <div id="reymannRow" data-preview-layer="premium.reymann">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -4260,7 +4284,7 @@
                             </div>
 
                             <!-- Karte des Deutschen Reiches 1:100 000 (1878–1945) (CENAGIS / IH PAN) -->
-                            <div id="kdr100kRow">
+                            <div id="kdr100kRow" data-preview-layer="premium.kdr-100k">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -4287,7 +4311,7 @@
                             </div>
 
                             <!-- Karte des Deutschen Reiches – Großblatt 1:100 000 (1914–1944) (CENAGIS / IH PAN) -->
-                            <div id="kdrGbRow">
+                            <div id="kdrGbRow" data-preview-layer="premium.kdr-gb">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -4314,7 +4338,7 @@
                             </div>
 
                             <!-- WIG 1:100 000 – Harta tactică a Poloniei (1919–1939) (CENAGIS / IH PAN) -->
-                            <div id="wig100kRow">
+                            <div id="wig100kRow" data-preview-layer="premium.wig-100k">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -4341,7 +4365,7 @@
                             </div>
 
                             <!-- Hartă administrativă a Galiției și Lodomeriei – 1855 (Tiled Map Service ArcGIS Online) -->
-                            <div id="galicia1855Row">
+                            <div id="galicia1855Row" data-preview-layer="premium.galicia-1855">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -4370,7 +4394,7 @@
                             <!-- United Kingdom · Ordnance Survey / Bartholomew historical maps
                                  (MapTiler tiles, National Library of Scotland collection). -->
                             <!-- Ordnance Survey 1893-1896 — London five-foot 1:1,056 -->
-                            <div id="ukOsLondon1893Row">
+                            <div id="ukOsLondon1893Row" data-preview-layer="premium.uk-os-london-1893">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -4397,7 +4421,7 @@
                             </div>
 
                             <!-- Ordnance Survey Historical Maps 1919-1947 -->
-                            <div id="ukOs1919Row">
+                            <div id="ukOs1919Row" data-preview-layer="premium.uk-os-gb-1919">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -4424,7 +4448,7 @@
                             </div>
 
                             <!-- Ordnance Survey 1888-1913 — County Series six-inch 1:10,560 -->
-                            <div id="ukOs10k1888Row">
+                            <div id="ukOs10k1888Row" data-preview-layer="premium.uk-os-10k-1888">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -4451,7 +4475,7 @@
                             </div>
 
                             <!-- Ordnance Survey 1937-1961 — Provisional edition 1:25,000 -->
-                            <div id="ukOs25k1937Row">
+                            <div id="ukOs25k1937Row" data-preview-layer="premium.uk-os-25k-1937">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -4478,7 +4502,7 @@
                             </div>
 
                             <!-- Ordnance Survey 'Hills' edition, 1885-1903 — one-inch 1:63,360 (PNG overlay) -->
-                            <div id="ukOsHills1885Row">
+                            <div id="ukOsHills1885Row" data-preview-layer="premium.uk-os-hills-1885">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -4505,7 +4529,7 @@
                             </div>
 
                             <!-- Ordnance Survey 1955-1961 — One-Inch Seventh Series 1:63,360 -->
-                            <div id="ukOs63k1955Row">
+                            <div id="ukOs63k1955Row" data-preview-layer="premium.uk-os-63k-1955">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -4532,7 +4556,7 @@
                             </div>
 
                             <!-- Ordnance Survey 1900s — seamless five-scale pyramid (hybrid format) -->
-                            <div id="ukOs1900sRow">
+                            <div id="ukOs1900sRow" data-preview-layer="premium.uk-os-1900s">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -4559,7 +4583,7 @@
                             </div>
 
                             <!-- UK Bartholomew Ireland 1940s — Quarter-Inch (PNG overlay) -->
-                            <div id="ukBaire1940Row">
+                            <div id="ukBaire1940Row" data-preview-layer="premium.uk-bartholomew-ireland-1940">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#ffc832" /></svg>
@@ -5278,7 +5302,7 @@
                             <path d="M13 10 Q15 8 17 10" stroke-width="1.3" />
                             <path d="M11 7.5 Q15 4.5 19 7.5" stroke-width="1.3" />
                         </svg>
-                        <span class="detect-lock-icon">🔒</span>
+                        <span class="detect-lock-icon" aria-hidden="true"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10.5" width="16" height="10.5" rx="2.6"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg></span>
                     </label>
                     <label class="detect-switch">
                         <input type="checkbox" id="detectSwitch" onchange="toggleDetection(this.checked, true)">
@@ -6000,7 +6024,7 @@
          update per layer per gesture and a page-wide budget on live tiles.
          Must load right after Leaflet and before map-app.js. -->
     <script src="js/tile-perf.js?v=20260918-tile-seamless"></script>
-    <script src="js/map-rotate.js?v=20261016-rotated-vector-clip"></script>
+    <script src="js/map-rotate.js?v=20261025-earth-compass"></script>
     <script src="js/L.Control.Layers.Tree.min.js"></script>
     <script src="js/L.Control.Locate.min.js"></script>
     <script src="js/leaflet-hash.js"></script>
@@ -6126,6 +6150,13 @@
          js/finland-layers.config.js. -->
     <script src="js/finland-layers.js?v=20261019-finland-filter"></script>
     <script src="js/historical-eu-maps.js?v=20261013-flat-hist-maps"></script>
+    <!-- The layers window's own row chrome: tags every nested `*SubLayers`
+         row with the shared glass material and gives each historical-map row
+         a photo of one of its own tiles (mean-ed out under a violet wash)
+         behind the switch, the slider and the labels it already carries.
+         Reads the endpoints from js/layer-registry.js only, so it has to load
+         after it. See LAYER_WINDOW_GLASS.md. -->
+    <script src="js/layer-panel-rows.js?v=20261025-layer-glass"></script>
     <!-- 2D ⇄ 3D: MapLibre GL viewer draped over the DEM. The 3D deck is the
          mirror of the live 2D Leaflet map — raster, WMS/WMTS, image overlays,
          GeoJSON, markers, clusters and heatmaps included (js/map3d-mirror.js)
@@ -6169,7 +6200,7 @@
     <script src="js/pdf-writer.js?v=20260827-arch-report"></script>
     <script src="js/archeo-report-pdf.js?v=20260928-eu-domain"></script>
     <script src="js/archeo-report.js?v=20261020-3d-analysis-points"></script>
-    <script src="js/tutorial.js?v=20260923-pwa-br-stack-account"></script>
+    <script src="js/tutorial.js?v=20261025-layer-glass"></script>
 
     <!-- AUTH MODAL -->
     <style>

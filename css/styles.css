@@ -5,6 +5,29 @@
             --orange: #E8772A;
             --red: #C42B2B;
             --white: #F5F0EB;
+
+            /* ── MAP CONTROL SURFACE ──
+               One material for every icon control that floats over the map:
+               a pane of tinted glass (translucent, blurred, hairline edge)
+               with a violet glyph. Deliberately quiet — no coloured glows, no
+               gradients, no lettering — so the controls read as instruments on
+               the imagery instead of badges. Change a token here and every
+               map button follows. */
+            --ctl-radius: 12px;
+            --ctl-bg: rgba(24, 19, 40, 0.45);
+            --ctl-bg-hover: rgba(45, 33, 74, 0.60);
+            --ctl-bg-press: rgba(38, 27, 64, 0.68);
+            --ctl-bg-engaged: rgba(126, 94, 214, 0.26);
+            --ctl-border: rgba(198, 180, 255, 0.20);
+            --ctl-border-hover: rgba(198, 180, 255, 0.38);
+            --ctl-border-engaged: rgba(206, 190, 255, 0.55);
+            --ctl-icon: #BBA9F2;
+            --ctl-icon-hover: #DCD2FB;
+            --ctl-icon-engaged: #F0EBFF;
+            --ctl-live: #F08298;   /* live / recording status only */
+            --ctl-blur: blur(18px) saturate(150%);
+            --ctl-shadow: 0 6px 18px rgba(4, 6, 18, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+            --ctl-shadow-hover: 0 8px 22px rgba(4, 6, 18, 0.40), inset 0 1px 0 rgba(255, 255, 255, 0.10);
         }
 
         *, *::before, *::after {
@@ -2449,8 +2472,11 @@
             inset: 0;
             border-radius: 12px;
             cursor: pointer;
-            background: rgba(184,216,240,0.13);
-            border: 1px solid rgba(184,216,240,0.2);
+            /* The idle switch speaks the control material too: it sits inside
+               the glass rows now, where the old sky-blue track read as a
+               different component. */
+            background: rgba(198,180,255,0.13);
+            border: 1px solid var(--ctl-border);
             transition: background 0.25s, border-color 0.25s, box-shadow 0.25s;
         }
 
@@ -2462,7 +2488,7 @@
                 width: 17px;
                 height: 17px;
                 border-radius: 50%;
-                background: rgba(184,216,240,0.55);
+                background: rgba(198,180,255,0.58);
                 box-shadow: 0 1px 3px rgba(0,0,0,0.4);
                 transition: transform 0.25s, background 0.25s;
             }
@@ -3432,26 +3458,56 @@
                 color: var(--sky);
             }
 
-        /* Leaflet dark-theme overrides */
+        /* Leaflet zoom control — the shared glass pane (tokens in :root). */
         #detectlab-map .leaflet-control-zoom a {
-            background: rgba(10,25,48,0.88) !important;
-            color: #B8D8F0 !important;
-            border: 1px solid rgba(184,216,240,0.18) !important;
-            border-radius: 10px !important;
             width: 38px !important;
             height: 38px !important;
             line-height: 38px !important;
-            backdrop-filter: blur(6px);
-            transition: all 0.2s ease;
+            background: var(--ctl-bg) !important;
+            color: var(--ctl-icon) !important;
+            border: 1px solid var(--ctl-border) !important;
+            border-radius: var(--ctl-radius) !important;
+            box-shadow: var(--ctl-shadow);
+            -webkit-backdrop-filter: var(--ctl-blur);
+            backdrop-filter: var(--ctl-blur);
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.05rem;
+            font-weight: 300;
+            transition: background-color .18s ease, border-color .18s ease,
+                        color .18s ease, box-shadow .18s ease;
         }
 
             #detectlab-map .leaflet-control-zoom a:hover {
-                background: rgba(107,63,160,0.82) !important;
-                color: #fff !important;
+                background: var(--ctl-bg-hover) !important;
+                border-color: var(--ctl-border-hover) !important;
+                color: var(--ctl-icon-hover) !important;
+                box-shadow: var(--ctl-shadow-hover);
+            }
+
+            #detectlab-map .leaflet-control-zoom a:active,
+            #detectlab-map .leaflet-control-zoom a.leaflet-control-zoom-in:active,
+            #detectlab-map .leaflet-control-zoom a.leaflet-control-zoom-out:active {
+                background: var(--ctl-bg-press) !important;
+            }
+
+            #detectlab-map .leaflet-control-zoom a:focus-visible {
+                outline: 2px solid var(--ctl-border-engaged);
+                outline-offset: 2px;
+            }
+
+            #detectlab-map .leaflet-control-zoom a.leaflet-disabled {
+                background: var(--ctl-bg) !important;
+                color: rgba(187, 169, 242, 0.34) !important;
             }
 
         #detectlab-map .leaflet-control-zoom {
             border: none !important;
+        }
+
+        /* Two separate panes with the same 8px rhythm as the icon column,
+           not one lozenge pressed out of two 12px corners. */
+        #detectlab-map .leaflet-control-zoom a + a {
+            margin-top: 6px;
         }
 
         #detectlab-map {
@@ -3513,33 +3569,38 @@
         .btn-live-location {
             width: 38px;
             height: 38px;
-            background: rgba(10,25,48,0.88) !important;
-            border: 1px solid rgba(184,216,240,0.18) !important;
-            border-radius: 10px !important;
-            backdrop-filter: blur(6px);
+            background: var(--ctl-bg) !important;
+            border: 1px solid var(--ctl-border) !important;
+            border-radius: var(--ctl-radius) !important;
+            color: var(--ctl-icon);
+            box-shadow: var(--ctl-shadow);
+            -webkit-backdrop-filter: var(--ctl-blur);
+            backdrop-filter: var(--ctl-blur);
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: background 0.2s, border-color 0.2s;
-            color: #B8D8F0;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+            transition: background-color .18s ease, border-color .18s ease,
+                        color .18s ease, box-shadow .18s ease;
         }
 
             .btn-live-location:hover {
-                background: rgba(107,63,160,0.82) !important;
-                border-color: rgba(107,63,160,0.6) !important;
-                color: #fff;
+                background: var(--ctl-bg-hover) !important;
+                border-color: var(--ctl-border-hover) !important;
+                color: var(--ctl-icon-hover);
+                box-shadow: var(--ctl-shadow-hover);
             }
 
+            /* Live = a status, not a mode: a muted rose, never a neon red. */
             .btn-live-location.active {
-                background: rgba(196,43,43,0.25) !important;
-                border-color: rgba(196,43,43,0.7) !important;
-                color: #ff4444;
+                background: rgba(240, 130, 152, 0.16) !important;
+                border-color: rgba(240, 130, 152, 0.50) !important;
+                color: var(--ctl-live);
             }
 
                 .btn-live-location.active:hover {
-                    background: rgba(196,43,43,0.55) !important;
+                    background: rgba(240, 130, 152, 0.24) !important;
+                    color: #FFD3DC;
                 }
         /* Pulsing red dot marker for live location */
         .live-location-marker {
@@ -3577,13 +3638,14 @@
             display: none !important;
         }
 
-        /* ── MAP COMPASS + ROTATION LOCK + DETECT (bottom-left) ──
-           Three stacked 38×38 buttons in the standard map-button theme
-           (same as zoom / locate / measure / offline): navy background,
-           #B8D8F0 glyph, purple hover. Tap the compass to reset north, tap
-           the lock to freeze map rotation, tap Detect (PWA only — desktop
-           keeps the switch in the .map-controls row) to toggle activity
-           detection. No labels, no slide gesture. */
+        /* ── COMPASS + DETECT (bottom-left) ──
+           Two stacked 38×38 controls in the shared glass material. The compass
+           behaves like Google Earth's: the rose follows the camera frame by
+           frame, a tap eases the view back to true north, and a horizontal
+           drag on the rose turns the view. There is no rotation lock — the map
+           can always be turned. Detect (PWA only; desktop keeps the switch in
+           the .map-controls row) toggles activity detection. No labels, no
+           badges, no slide gesture. */
         #detectlab-map .detectlab-compass {
             margin: 0 0 10px 10px !important;
             border: none !important;
@@ -3598,7 +3660,6 @@
             gap: 8px;
         }
         .detectlab-compass-btn,
-        .detectlab-compass-lock,
         .compass-detect-btn {
             width: 38px;
             height: 38px;
@@ -3606,72 +3667,72 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: rgba(10,25,48,0.88);
-            border: 1px solid rgba(184,216,240,0.18);
-            border-radius: 10px;
-            color: #B8D8F0;
+            background: var(--ctl-bg);
+            border: 1px solid var(--ctl-border);
+            border-radius: var(--ctl-radius);
+            color: var(--ctl-icon);
+            box-shadow: var(--ctl-shadow);
+            -webkit-backdrop-filter: var(--ctl-blur);
+            backdrop-filter: var(--ctl-blur);
             cursor: pointer;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.35);
-            -webkit-backdrop-filter: blur(6px);
-            backdrop-filter: blur(6px);
-            transition: background 0.2s, border-color 0.2s, color 0.2s;
+            transition: background-color .18s ease, border-color .18s ease,
+                        color .18s ease, box-shadow .18s ease;
         }
         .detectlab-compass-btn:hover,
-        .detectlab-compass-lock:hover,
         .compass-detect-btn:hover {
-            background: rgba(107,63,160,0.82);
-            border-color: rgba(107,63,160,0.6);
-            color: #fff;
+            background: var(--ctl-bg-hover);
+            border-color: var(--ctl-border-hover);
+            color: var(--ctl-icon-hover);
+            box-shadow: var(--ctl-shadow-hover);
         }
         .detectlab-compass-btn:focus-visible,
-        .detectlab-compass-lock:focus-visible,
         .compass-detect-btn:focus-visible {
-            outline: 2px solid rgba(184,216,240,0.75);
+            outline: 2px solid var(--ctl-border-engaged);
             outline-offset: 2px;
         }
-        /* Locked rotation: the lock button keeps the pressed (purple) look. */
-        .detectlab-compass-col.is-locked .detectlab-compass-lock {
-            background: rgba(107,63,160,0.82);
-            border-color: rgba(107,63,160,0.6);
-            color: #fff;
+        /* The compass is a handle, so it says so: grab to turn, grabbing while
+           the view follows the pointer. touch-action:none keeps a phone's
+           pan/pinch from stealing the drag. */
+        .detectlab-compass-btn {
+            cursor: grab;
+            touch-action: none;
         }
-        .dl-lock-icon-unlocked {
-            display: block;
+        .detectlab-compass-btn:active,
+        .detectlab-compass-btn.is-dragging {
+            cursor: grabbing;
+            background: var(--ctl-bg-press);
         }
-        .dl-lock-icon-locked {
-            display: none;
+        /* Off north, the rose brightens a little; the pane stays quiet. */
+        .detectlab-compass-btn.is-rotated {
+            border-color: var(--ctl-border-hover);
         }
-        .detectlab-compass-col.is-locked .dl-lock-icon-unlocked {
-            display: none;
+        .detectlab-compass-btn.is-rotated .dl-c-needle-n {
+            fill: var(--ctl-icon-hover);
         }
-        .detectlab-compass-col.is-locked .dl-lock-icon-locked {
-            display: block;
-        }
-        /* Detect ON mirrors the live-location active state (red = recording). */
+        /* Detect ON is a live status (recording), so it keeps the muted rose
+           instead of the violet "engaged mode" fill. */
         .compass-detect-btn.detect-active {
-            background: rgba(196,43,43,0.25);
-            border-color: rgba(196,43,43,0.7);
-            color: #ff6b6b;
+            background: rgba(240, 130, 152, 0.16);
+            border-color: rgba(240, 130, 152, 0.50);
+            color: var(--ctl-live);
         }
         .compass-detect-btn.detect-active:hover {
-            background: rgba(196,43,43,0.55);
-            color: #fff;
+            background: rgba(240, 130, 152, 0.24);
+            border-color: rgba(240, 130, 152, 0.62);
+            color: #FFD3DC;
         }
         /* The Detect toggle lives here only in PWA mode — desktop keeps the
            switch in the .map-controls row below the map. */
         body:not(.is-pwa) .compass-detect-btn {
             display: none;
         }
-        /* Off-north map: thin red ring, same red as the other active states. */
-        .detectlab-compass-btn.is-rotated {
-            border-color: rgba(196,43,43,0.75);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.35), 0 0 0 1px rgba(196,43,43,0.35);
-        }
-        /* Monochrome compass rose in the button palette. */
+        /* Monochrome-violet compass rose: a hairline ring, a two-tone needle
+           and a single hub dot. No letters, so nothing can end up upside down
+           when the view is turned. */
         .detectlab-compass-rose {
             display: block;
-            width: 30px;
-            height: 30px;
+            width: 26px;
+            height: 26px;
             transform-origin: 50% 50%;
             will-change: transform;
             pointer-events: none;
@@ -3681,26 +3742,20 @@
             width: 100%;
             height: 100%;
         }
-        .dl-compass-ring {
-            fill: rgba(184,216,240,0.06);
-            stroke: rgba(184,216,240,0.55);
-            stroke-width: 1.4;
+        .dl-c-ring {
+            fill: none;
+            stroke: rgba(198, 180, 255, 0.30);
+            stroke-width: 1.2;
         }
-        .dl-compass-hub {
-            fill: #F5F0EB;
+        .dl-c-needle-n {
+            fill: #C6B4FA;
+            transition: fill .18s ease;
         }
-        .dl-compass-needle-n {
-            fill: #F5F0EB;
+        .dl-c-needle-s {
+            fill: rgba(198, 180, 255, 0.28);
         }
-        .dl-compass-needle-s {
-            fill: rgba(184,216,240,0.45);
-        }
-        .dl-compass-n {
-            fill: #B8D8F0;
-            font-family: 'Outfit', sans-serif;
-            font-size: 8px;
-            font-weight: 700;
-            letter-spacing: 0.04em;
+        .dl-c-hub {
+            fill: #EDE9FE;
         }
         #detectlab-map.is-map-rotated {
             cursor: grab;
@@ -3710,70 +3765,75 @@
         .btn-measure {
             width: 38px;
             height: 38px;
-            background: rgba(10,25,48,0.88) !important;
-            border: 1px solid rgba(184,216,240,0.18) !important;
-            border-radius: 10px !important;
-            backdrop-filter: blur(6px);
+            background: var(--ctl-bg) !important;
+            border: 1px solid var(--ctl-border) !important;
+            border-radius: var(--ctl-radius) !important;
+            color: var(--ctl-icon);
+            box-shadow: var(--ctl-shadow);
+            -webkit-backdrop-filter: var(--ctl-blur);
+            backdrop-filter: var(--ctl-blur);
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: background 0.2s, border-color 0.2s;
-            color: #B8D8F0;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+            transition: background-color .18s ease, border-color .18s ease,
+                        color .18s ease, box-shadow .18s ease;
         }
 
             .btn-measure:hover {
-                background: rgba(107,63,160,0.82) !important;
-                border-color: rgba(107,63,160,0.6) !important;
-                color: #fff;
+                background: var(--ctl-bg-hover) !important;
+                border-color: var(--ctl-border-hover) !important;
+                color: var(--ctl-icon-hover);
+                box-shadow: var(--ctl-shadow-hover);
             }
 
-            .btn-measure.active {
-                background: rgba(232,119,42,0.25) !important;
-                border-color: rgba(232,119,42,0.7) !important;
-                color: #E8772A;
+            /* Engaged tool: a soft violet wash, same as every other map mode. */
+            .btn-measure.active,
+            .btn-coord.active,
+            .btn-track.active,
+            .btn-nearby-pwa.is-active,
+            .btn-offline-maps.active {
+                background: var(--ctl-bg-engaged) !important;
+                border-color: var(--ctl-border-engaged) !important;
+                color: var(--ctl-icon-engaged);
             }
 
-                .btn-measure.active:hover {
-                    background: rgba(232,119,42,0.55) !important;
+                .btn-measure.active:hover,
+                .btn-coord.active:hover,
+                .btn-track.active:hover,
+                .btn-nearby-pwa.is-active:hover,
+                .btn-offline-maps.active:hover {
+                    background: rgba(126, 94, 214, 0.34) !important;
+                    color: #FFFFFF;
                 }
 
         /* ── PWA NEARBY-DETECTORISTS BUTTON (last in the left stack) ──
-           Same 38×38 theme as the other map icons; the blue active state
-           mirrors the desktop .btn-nearby-detectors.is-active identity. */
+           Shared glass pane; the engaged state is defined once, above, with
+           the other map modes. */
         .btn-nearby-pwa {
             width: 38px;
             height: 38px;
-            background: rgba(10,25,48,0.88) !important;
-            border: 1px solid rgba(184,216,240,0.18) !important;
-            border-radius: 10px !important;
-            backdrop-filter: blur(6px);
+            background: var(--ctl-bg) !important;
+            border: 1px solid var(--ctl-border) !important;
+            border-radius: var(--ctl-radius) !important;
+            color: var(--ctl-icon);
+            box-shadow: var(--ctl-shadow);
+            -webkit-backdrop-filter: var(--ctl-blur);
+            backdrop-filter: var(--ctl-blur);
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: background 0.2s, border-color 0.2s, color 0.2s;
-            color: #B8D8F0;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+            transition: background-color .18s ease, border-color .18s ease,
+                        color .18s ease, box-shadow .18s ease;
         }
 
             .btn-nearby-pwa:hover {
-                background: rgba(107,63,160,0.82) !important;
-                border-color: rgba(107,63,160,0.6) !important;
-                color: #fff;
+                background: var(--ctl-bg-hover) !important;
+                border-color: var(--ctl-border-hover) !important;
+                color: var(--ctl-icon-hover);
+                box-shadow: var(--ctl-shadow-hover);
             }
-
-            .btn-nearby-pwa.is-active {
-                background: rgba(43,150,196,0.25) !important;
-                border-color: rgba(83,182,226,0.7) !important;
-                color: #7fd4f5;
-            }
-
-                .btn-nearby-pwa.is-active:hover {
-                    background: rgba(43,150,196,0.55) !important;
-                    color: #fff;
-                }
 
         .transp-panel .transp-layer-row {
             height: auto !important;
@@ -3803,59 +3863,49 @@
         .btn-coord {
             width: 38px;
             height: 38px;
-            background: rgba(10,25,48,0.88) !important;
-            border: 1px solid rgba(184,216,240,0.18) !important;
-            border-radius: 10px !important;
-            backdrop-filter: blur(6px);
+            background: var(--ctl-bg) !important;
+            border: 1px solid var(--ctl-border) !important;
+            border-radius: var(--ctl-radius) !important;
+            color: var(--ctl-icon);
+            box-shadow: var(--ctl-shadow);
+            -webkit-backdrop-filter: var(--ctl-blur);
+            backdrop-filter: var(--ctl-blur);
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: background 0.2s, border-color 0.2s;
-            color: #B8D8F0;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+            transition: background-color .18s ease, border-color .18s ease,
+                        color .18s ease, box-shadow .18s ease;
         }
         .btn-coord:hover {
-            background: rgba(107,63,160,0.82) !important;
-            border-color: rgba(107,63,160,0.6) !important;
-            color: #fff;
-        }
-        .btn-coord.active {
-            background: rgba(184,216,240,0.18) !important;
-            border-color: rgba(184,216,240,0.6) !important;
-            color: #fff;
-        }
-        .btn-coord.active:hover {
-            background: rgba(184,216,240,0.30) !important;
+            background: var(--ctl-bg-hover) !important;
+            border-color: var(--ctl-border-hover) !important;
+            color: var(--ctl-icon-hover);
+            box-shadow: var(--ctl-shadow-hover);
         }
         /* ── CUSTOM TRACK BUTTON ── */
         .btn-track {
             width: 38px;
             height: 38px;
-            background: rgba(10,25,48,0.88) !important;
-            border: 1px solid rgba(184,216,240,0.18) !important;
-            border-radius: 10px !important;
-            backdrop-filter: blur(6px);
+            background: var(--ctl-bg) !important;
+            border: 1px solid var(--ctl-border) !important;
+            border-radius: var(--ctl-radius) !important;
+            color: var(--ctl-icon);
+            box-shadow: var(--ctl-shadow);
+            -webkit-backdrop-filter: var(--ctl-blur);
+            backdrop-filter: var(--ctl-blur);
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: background 0.2s, border-color 0.2s;
-            color: #B8D8F0;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+            transition: background-color .18s ease, border-color .18s ease,
+                        color .18s ease, box-shadow .18s ease;
         }
         .btn-track:hover {
-            background: rgba(232,119,42,0.82) !important;
-            border-color: rgba(232,119,42,0.6) !important;
-            color: #fff;
-        }
-        .btn-track.active {
-            background: rgba(232,119,42,0.25) !important;
-            border-color: rgba(232,119,42,0.7) !important;
-            color: #E8772A;
-        }
-        .btn-track.active:hover {
-            background: rgba(232,119,42,0.55) !important;
+            background: var(--ctl-bg-hover) !important;
+            border-color: var(--ctl-border-hover) !important;
+            color: var(--ctl-icon-hover);
+            box-shadow: var(--ctl-shadow-hover);
         }
         /* Coord popup tooltip */
         .coord-popup .leaflet-popup-content-wrapper {
@@ -4034,14 +4084,26 @@
             display: block;
             padding: 22px 16px 0;
             width: 272px;
+            /* Same material as the map controls (--ctl-*): the window is a
+               translucent violet glass pane, not the near-opaque navy slab it
+               used to be. The two alpha stops are variables so the LiDAR /
+               archeology drag path can thicken the pane when it drops the
+               backdrop blur for performance (see the drag rules further
+               down). */
+            --panel-top-alpha: 0.66;
+            --panel-bottom-alpha: 0.76;
             background:
-                radial-gradient(circle at 100% 0%, rgba(107,63,160,0.16), transparent 55%),
-                linear-gradient(180deg, rgba(10,20,42,0.97) 0%, rgba(6,14,30,0.97) 100%);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(184,216,240,0.16);
+                radial-gradient(circle at 100% 0%, rgba(107,63,160,0.30), transparent 55%),
+                radial-gradient(circle at 0% 100%, rgba(126,94,214,0.16), transparent 60%),
+                linear-gradient(180deg,
+                    rgba(20,14,34,var(--panel-top-alpha)) 0%,
+                    rgba(12,9,24,var(--panel-bottom-alpha)) 100%);
+            -webkit-backdrop-filter: var(--ctl-blur);
+            backdrop-filter: var(--ctl-blur);
+            border: 1px solid var(--ctl-border);
             border-right: none;
             border-radius: 16px 0 0 16px;
-            box-shadow: -10px 0 40px rgba(0,0,0,0.55), inset 1px 0 0 rgba(255,255,255,0.03);
+            box-shadow: -10px 0 40px rgba(4,6,18,0.42), inset 1px 0 0 rgba(255,255,255,0.05);
             transition: transform 0.35s cubic-bezier(0.4,0,0.2,1), opacity 0.35s, visibility 0s linear 0.35s;
             pointer-events: none;
             visibility: hidden;
@@ -4089,7 +4151,7 @@
             display: flex;
             align-items: center;
             gap: 9px;
-            border-bottom: 1px solid rgba(184,216,240,0.14);
+            border-bottom: 1px solid rgba(198,180,255,0.14);
         }
 
             .transp-panel-title svg {
@@ -4159,24 +4221,98 @@
             box-shadow: 0 0 4px rgba(0,0,0,0.5);
         }
 
-        .transp-layer-row {
+        /* ── Layer rows: one material with the window and the map controls ──
+           `.dl-sublayer-row` is tagged at runtime (js/layer-panel-rows.js) on
+           every nested row the catalogue renders inside a *SubLayers group, so
+           the accordion children get the same box as the top-level rows
+           instead of floating bare on the panel background.
+           The rows deliberately carry NO backdrop-filter of their own: the
+           window above them already creates a backdrop root, so a row-level
+           blur would only re-blur the pane's own flat tint (invisible) while
+           each row still bought its own compositing layer — on a phone that is
+           dozens of layers over a live map, the exact cost the LiDAR drag path
+           had to work around. The translucency + the control border + the
+           inset highlight are what make them read as glass inside the pane. */
+        .transp-layer-row,
+        .dl-sublayer-row {
+            --row-radius: var(--ctl-radius);
+            position: relative;
             margin-bottom: 10px;
             padding: 14px 15px 16px;
-            background: rgba(184,216,240,0.035);
-            border: 1px solid rgba(184,216,240,0.09);
-            border-radius: 12px;
+            background: var(--ctl-bg);
+            border: 1px solid var(--ctl-border);
+            border-radius: var(--row-radius);
+            box-shadow: var(--ctl-shadow);
             transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, transform 0.2s ease;
         }
 
-            .transp-layer-row:hover {
-                background: rgba(184,216,240,0.06);
-                border-color: rgba(184,216,240,0.18);
-                box-shadow: 0 4px 18px rgba(0,0,0,0.28);
+            /* Nested rows are the compact cut of the same box: they live
+               inside an accordion, so they keep a smaller radius, a tighter
+               padding and a shorter gap. */
+            #transpPanel .dl-sublayer-row {
+                --row-radius: 10px;
+                /* The *SubLayers containers are flex columns with their own
+                   gap; a large margin here would double the spacing. */
+                margin-bottom: 2px;
+                padding: 10px 11px 12px;
+                box-shadow: 0 4px 14px rgba(4,6,18,0.26), inset 0 1px 0 rgba(255,255,255,0.06);
+            }
+
+            .transp-layer-row:hover,
+            .dl-sublayer-row:hover {
+                background: var(--ctl-bg-hover);
+                border-color: var(--ctl-border-hover);
+                box-shadow: var(--ctl-shadow-hover);
             }
 
             .transp-layer-row:last-child {
                 margin-bottom: 0;
             }
+
+        /* ── Historical sublayer rows carry a photo of one of their own tiles ──
+           `--row-preview` is set by js/layer-panel-rows.js once the tile has
+           actually loaded, so a dead service leaves the plain glass row behind
+           instead of an empty box. The photo is deliberately mean-ed out
+           (heavy blur, low saturation, low brightness) and then washed with
+           violet, because the slider, the switch, the info button and the
+           label all sit on top of it and have to stay readable. */
+        .transp-layer-row[data-row-preview]::before,
+        .dl-sublayer-row[data-row-preview]::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            border-radius: inherit;
+            background-image: var(--row-preview);
+            background-position: center;
+            background-size: cover;
+            background-repeat: no-repeat;
+            filter: blur(7px) saturate(0.45) brightness(0.72) contrast(0.95);
+            /* The blur softens the edges outwards; clip them back to the row. */
+            -webkit-clip-path: inset(0 round var(--row-radius));
+            clip-path: inset(0 round var(--row-radius));
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        .transp-layer-row[data-row-preview]::after,
+        .dl-sublayer-row[data-row-preview]::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            border-radius: inherit;
+            background:
+                linear-gradient(180deg, rgba(45,33,74,0.44) 0%, rgba(14,10,26,0.68) 100%),
+                radial-gradient(120% 90% at 100% 0%, rgba(126,94,214,0.30), transparent 62%);
+            pointer-events: none;
+        }
+
+        .transp-layer-row[data-row-preview] > *,
+        .dl-sublayer-row[data-row-preview] > * {
+            position: relative;
+            z-index: 1;
+        }
 
         .transp-layer-label {
             display: flex;
@@ -4203,15 +4339,16 @@
             gap: 8px;
             margin-bottom: 16px;
             padding-bottom: 16px;
-            border-bottom: 1px solid rgba(184,216,240,0.14);
+            border-bottom: 1px solid rgba(198,180,255,0.14);
         }
         .transp-panel-tabs button {
             flex: 1;
             padding: 9px 10px;
-            background: rgba(107,63,160,0.10);
-            border: 1px solid rgba(107,63,160,0.22);
-            border-radius: 8px;
-            color: rgba(184,216,240,0.6);
+            background: var(--ctl-bg);
+            border: 1px solid var(--ctl-border);
+            border-radius: 10px;
+            color: var(--ctl-icon);
+            opacity: 0.8;
             font-family: 'Outfit', sans-serif;
             font-size: 0.7rem;
             font-weight: 600;
@@ -4221,15 +4358,17 @@
             transition: all 0.25s ease;
         }
         .transp-panel-tabs button:hover {
-            background: rgba(107,63,160,0.22);
-            border-color: rgba(107,63,160,0.45);
-            color: rgba(184,216,240,0.85);
+            background: var(--ctl-bg-hover);
+            border-color: var(--ctl-border-hover);
+            color: var(--ctl-icon-hover);
+            opacity: 1;
         }
         .transp-panel-tabs button.active {
-            background: linear-gradient(135deg, rgba(107,63,160,0.55), rgba(107,63,160,0.32));
-            border-color: rgba(160,112,232,0.75);
-            color: #EDE6FA;
-            box-shadow: 0 0 14px rgba(107,63,160,0.35), inset 0 1px 0 rgba(255,255,255,0.08);
+            background: var(--ctl-bg-engaged);
+            border-color: var(--ctl-border-engaged);
+            color: var(--ctl-icon-engaged);
+            opacity: 1;
+            box-shadow: 0 0 14px rgba(126,94,214,0.30), inset 0 1px 0 rgba(255,255,255,0.10);
         }
 
         /* ── Premium catalogue for free members ──
@@ -4348,7 +4487,12 @@
 
         .transp-layer-row.is-premium-locked {
             border-color: rgba(255,200,50,0.18);
-            background: linear-gradient(145deg, rgba(255,200,50,0.035), rgba(184,216,240,0.025));
+            /* The lock hint is a gold wash ON TOP of the shared glass — it used
+               to replace the row background outright, which would have dropped
+               the material for every free visitor. */
+            background:
+                linear-gradient(145deg, rgba(255,200,50,0.06), rgba(255,200,50,0)),
+                var(--ctl-bg);
         }
 
         .transp-layer-row.is-premium-locked:hover {
@@ -5656,8 +5800,8 @@
         }
 
         /* Butoane identice cu celelalte iconițe de pe hartă (zoom / locație /
-           măsură / offline): pătrat 38×38 cu colțuri rotunjite, fond
-           bleumarin, glif #B8D8F0, hover mov — fără culori per strat.
+           măsură / offline): pătrat 38×38 din același material de sticlă
+           (--ctl-*), glif violet, fără culori per strat.
            Suprascriu poziționarea absolută bottom-center a variantelor
            flotante de pe hartă. Selectorul e pe CLASA containerului, nu pe
            id-ul primei oglinzi: aceleași butoane ajung și în oglinda secundară
@@ -5685,15 +5829,16 @@
             align-items: center;
             justify-content: center;
             pointer-events: auto;
-            background: rgba(10,25,48,0.88) !important;
-            border: 1px solid rgba(184,216,240,0.18) !important;
-            border-radius: 10px !important;
-            color: #B8D8F0;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.35);
-            -webkit-backdrop-filter: blur(6px);
-            backdrop-filter: blur(6px);
+            background: var(--ctl-bg) !important;
+            border: 1px solid var(--ctl-border) !important;
+            border-radius: var(--ctl-radius) !important;
+            color: var(--ctl-icon);
+            box-shadow: var(--ctl-shadow);
+            -webkit-backdrop-filter: var(--ctl-blur);
+            backdrop-filter: var(--ctl-blur);
             cursor: pointer;
-            transition: background 0.2s, border-color 0.2s, color 0.2s;
+            transition: background-color .18s ease, border-color .18s ease,
+                        color .18s ease, box-shadow .18s ease;
             white-space: normal;
             letter-spacing: 0;
         }
@@ -5723,15 +5868,16 @@
         .vertical-opacity-actions #iosBldSearchHelpBtn:hover,
         .vertical-opacity-actions #iosBldSettingsBtn:hover,
         .vertical-opacity-actions #iosBldSuggestBtn:hover {
-            background: rgba(107,63,160,0.82) !important;
-            border-color: rgba(107,63,160,0.6) !important;
-            color: #fff;
+            background: var(--ctl-bg-hover) !important;
+            border-color: var(--ctl-border-hover) !important;
+            color: var(--ctl-icon-hover);
+            box-shadow: var(--ctl-shadow-hover);
         }
         .vertical-opacity-actions #iosBldSuggestBtn.active,
         .vertical-opacity-actions #iosBldSuggestBtn.active:hover {
-            background: rgba(107,63,160,0.82) !important;
-            border-color: rgba(107,63,160,0.6) !important;
-            color: #fff;
+            background: var(--ctl-bg-engaged) !important;
+            border-color: var(--ctl-border-engaged) !important;
+            color: var(--ctl-icon-engaged);
         }
         .vertical-opacity-actions #apm20SearchHelpBtn svg,
         .vertical-opacity-actions #iosBldSearchHelpBtn svg,
@@ -6140,20 +6286,26 @@
            backdrop blur, so on a phone every single frame of the drag forced
            the compositor to re-blur the whole panel over freshly painted map
            pixels — the dominant cost of the lag reported in the installed PWA.
-           The panel's own background is already 97% opaque, so dropping the
-           blur for the duration of the drag is visually imperceptible while
-           removing that per-frame work entirely. The same applies to the
-           panel's large soft box-shadow and the row transitions, which would
-           otherwise animate on each style change. */
+           The panel used to be 97% opaque, so dropping the blur for the drag
+           was imperceptible. It is a translucent glass pane now, so the two
+           alpha stops are raised to near-solid for the duration of the drag:
+           the pane still reads like the same window, the re-blur work is gone,
+           and nothing flashes back in once the finger lifts. The row-level
+           backdrop blur is dropped the same way, together with the row
+           transitions that would otherwise animate on each style change. */
         body.lidar-distance-dragging .transp-panel,
         body.arch-distance-dragging .transp-panel {
+            --panel-top-alpha: 0.92;
+            --panel-bottom-alpha: 0.94;
             backdrop-filter: none !important;
             -webkit-backdrop-filter: none !important;
             box-shadow: -10px 0 40px rgba(0,0,0,0.55) !important;
         }
         body.lidar-distance-dragging .transp-layer-row,
+        body.lidar-distance-dragging .dl-sublayer-row,
         body.lidar-distance-dragging .transp-panel *,
         body.arch-distance-dragging .transp-layer-row,
+        body.arch-distance-dragging .dl-sublayer-row,
         body.arch-distance-dragging .transp-panel * {
             transition: none !important;
         }
@@ -7385,15 +7537,21 @@
                 pointer-events: none;
             }
 
+        /* Premium gate on the Detect switch: a hairline padlock in the map
+           palette, not the 🔒 emoji it used to render. */
         .detect-lock-icon {
             display: none;
-            font-size: 0.75rem;
-            color: rgba(184,216,240,0.55);
-            margin-left: 2px;
+            align-items: center;
+            color: var(--ctl-icon, #BBA9F2);
+            margin-left: 3px;
+        }
+
+        .detect-lock-icon svg {
+            display: block;
         }
 
         .detect-toggle-wrap.locked .detect-lock-icon {
-            display: inline;
+            display: inline-flex;
         }
 
         /* Desktop fullscreen uses Leaflet's normal 10px left control inset,

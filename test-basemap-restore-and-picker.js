@@ -225,7 +225,7 @@ const TAG = '20261025-lidar-3d-tile-heal';
     assert(/Re-tags js\/map-app\.js and js\/map3d-terrain\.js\./.test(swJs),
         'sw.js logs the re-tag');
     /* Assets this fix did NOT touch keep their own tags. */
-    assert(indexHtml.includes('css/map3d-terrain.css?v=20261024-no-bar-lidar-row') &&
+    assert(indexHtml.includes('css/map3d-terrain.css?v=20261025-layer-glass') &&
         indexHtml.includes('js/layer-registry.js?v=20261024-uk-historical-maps'),
         'untagged assets keep the tag of whatever last changed them');
     console.log('  ✓ cache wiring: ?v=' + TAG + ', shell v' + version);
