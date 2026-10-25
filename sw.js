@@ -800,7 +800,7 @@
 //   view and there is no rotation lock any more. Re-tags css/styles.css,
 //   css/tutorial.css, css/offline-maps.css, css/map3d-terrain.css,
 //   js/map-rotate.js and js/tutorial.js.
-const CACHE_NAME = 'detectlab-v270-layer-glass';
+const CACHE_NAME = 'detectlab-v271-pastel-orange-sliders';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -877,6 +877,12 @@ const PRECACHE_URLS = [
   'js/map-rotate.js?v=20261025-earth-compass',
   'js/tutorial.js?v=20261025-layer-glass',
   'js/layer-panel-rows.js?v=20261025-layer-glass',
+  // v271: unified slim 3D-style pastel faded semitransparent orange sliders
+  // and blurred button-box (--ctl-*) slider containers across desktop & PWA.
+  'css/styles.css?v=20261025-pastel-orange-sliders',
+  'css/map3d-terrain.css?v=20261025-pastel-orange-sliders',
+  'css/other-maps.css?v=20261025-pastel-orange-sliders',
+  'js/vertical-opacity-control.js?v=20261025-pastel-orange-sliders',
   'js/layer-registry.js?v=20261017-albania-asig',
   'js/translations.js?v=20261017-albania-asig',
   'js/translations.js?v=20261017-albania-asig',

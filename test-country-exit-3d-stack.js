@@ -167,7 +167,7 @@ console.log('[Test] “Exit view” and the 2D/3D switch share the bottom-centre
      * the precache so an installed shell still finds the copy it references. */
     assert(sw.indexOf("'" + 'css/map3d-terrain.css?v=' + TAG + "'") !== -1,
         'sw.js still precaches the v248 skin an installed shell may ask for');
-    const SKIN_TAG = '20261025-layer-glass';
+    const SKIN_TAG = '20261025-pastel-orange-sliders';
     assert(html.indexOf('css/map3d-terrain.css?v=' + SKIN_TAG) !== -1 &&
         sw.indexOf("'" + 'css/map3d-terrain.css?v=' + SKIN_TAG + "'") !== -1,
         'index.html loads and sw.js precaches the re-tagged 3D skin');

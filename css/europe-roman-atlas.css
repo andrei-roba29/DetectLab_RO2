@@ -73,7 +73,51 @@ legend { padding: 0 5px; color: #9fb3c9; font-size: 12px; font-weight: 600; }
 .opt input { flex: 0 0 auto; margin: 2px 0 0; }
 .opt strong { font-weight: 700; }
 .range-row { color: #9fb3c9; font-size: 11px; }
-.range-row input[type="range"] { flex: 1; min-width: 60px; accent-color: #cc2222; }
+.range-row input[type="range"] {
+  flex: 1;
+  min-width: 60px;
+  height: 3px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(245, 240, 235, 0.16);
+  accent-color: rgba(244, 176, 128, 0.82);
+  cursor: pointer;
+}
+.range-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(244, 176, 128, 0.74);
+  border: 1px solid rgba(255, 228, 206, 0.52);
+  box-shadow: 0 1px 4px rgba(4, 6, 18, 0.36);
+  cursor: pointer;
+}
+.range-row input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(244, 176, 128, 0.74);
+  border: 1px solid rgba(255, 228, 206, 0.52);
+  box-shadow: 0 1px 4px rgba(4, 6, 18, 0.36);
+  cursor: pointer;
+}
+.range-row input[type="range"]::-moz-range-track {
+  height: 3px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(245, 240, 235, 0.16);
+}
+.range-row input[type="range"]::-moz-range-progress {
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(242, 170, 121, 0.52);
+}
 .select-label { color: #9fb3c9; font-size: 11px; margin: 1px 0 -4px; }
 .country-actions button { flex: 1; }
 button.quiet { background: rgba(255,255,255,.055); color: #dce6f1; }

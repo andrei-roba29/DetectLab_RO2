@@ -346,8 +346,8 @@ const narrowSecondaryPanel = stylesRules.find(r =>
     /max-width: 600px/.test(r.inside) &&
     r.selector === 'body.vo-josephine-docked.vo-josephine-docked-secondary #iosBldSettingsPanel');
 assert(narrowSecondaryPanel, 'the narrow-screen secondary anchor of the settings panel must exist');
-assert(narrowSecondaryPanel.declarations.width && /100vw - 196px/.test(narrowSecondaryPanel.declarations.width.value),
-    'beside the secondary mirror the phone-width panel must be min(280px, calc(100vw - 196px)), got ' +
+assert(narrowSecondaryPanel.declarations.width && /100vw - 176px/.test(narrowSecondaryPanel.declarations.width.value),
+    'beside the secondary mirror the phone-width panel must be min(280px, calc(100vw - 176px)), got ' +
     (narrowSecondaryPanel.declarations.width && narrowSecondaryPanel.declarations.width.value));
 
 /* ───────────── installed PWAs must actually receive the new shell ───────────── */

@@ -60,7 +60,7 @@ const focusSource = read('js/lidar-3d-focus.js');
 const TAG = '20261020-lidar-disc-route';
 const TAG_MIRROR = '20261021-lidar-canvas-tiles';
 const TAG_VIEWER = '20261025-lidar-3d-tile-heal';
-const TAG_CSS = '20261025-layer-glass';
+const TAG_CSS = '20261025-pastel-orange-sliders';
 
 /* One real event-loop turn: the viewer runs its entry gate through a promise,
  * so the dialog is not in the DOM in the same tick as open(). */

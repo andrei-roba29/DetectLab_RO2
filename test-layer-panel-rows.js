@@ -223,14 +223,15 @@ console.log('  ✓ previews load only for visible rows, once, and fail soft');
 
 /* ── 6. Wiring: cache-busting, precache, shell version ─────────────────── */
 const TAG = '20261025-layer-glass';
+const STYLES_TAG = '20261025-pastel-orange-sliders';
 assert(html.includes('js/layer-panel-rows.js?v=' + TAG), 'index.html loads the row chrome, versioned');
 assert(sw.includes("'js/layer-panel-rows.js?v=" + TAG + "'"), 'sw.js precaches the row chrome');
 const stylesUrl = (html.match(/href="(css\/styles\.css\?v=[^"]+)"/) || [])[1];
-assert(stylesUrl && stylesUrl.endsWith(TAG), 'the restyled stylesheet is re-tagged (' + stylesUrl + ')');
+assert(stylesUrl && stylesUrl.endsWith(STYLES_TAG), 'the restyled stylesheet is re-tagged (' + stylesUrl + ')');
 assert(sw.includes("'" + stylesUrl + "'"), 'sw.js precaches the live stylesheet URL');
 const cacheNum = Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1] || 0);
 assert(cacheNum >= 270, 'the service-worker cache is bumped for the new shell (got v' + cacheNum + ')');
-const stylesTagPos = html.indexOf('css/styles.css?v=' + TAG);
+const stylesTagPos = html.indexOf('css/styles.css?v=' + STYLES_TAG);
 const rowsTagPos = html.indexOf('js/layer-panel-rows.js?v=' + TAG);
 const registryTagPos = html.indexOf('js/layer-registry.js?v=');
 assert(registryTagPos !== -1 && registryTagPos < rowsTagPos,
