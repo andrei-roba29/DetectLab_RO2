@@ -3,6 +3,10 @@
 Two changes to the icon controls that float over the map, plus a behaviour
 change to the compass.
 
+The layers window joined the same material in phase 2 — the pane, its
+top-level rows and every nested sublayer row, plus a tile photo per historical
+sheet: see `LAYER_WINDOW_GLASS.md`.
+
 ## 1. The buttons are one translucent “glass pane”, violet on purpose
 
 Every map icon (zoom **+ / −**, live location, measure, coordinates, trail,
@@ -100,10 +104,12 @@ describes the two real gestures: tap to face north, drag to rotate, no lock.
 
 `index.html` re-tags `css/styles.css`, `css/tutorial.css`,
 `css/offline-maps.css`, `css/map3d-terrain.css`, `js/tutorial.js`
-(`?v=20261025-glass-controls`) and `js/map-rotate.js`
+(`?v=20261025-layer-glass`) and `js/map-rotate.js`
 (`?v=20261025-earth-compass`); the same URLs are appended to
 `PRECACHE_URLS` in `sw.js` and `CACHE_NAME` moves to
-`detectlab-v269-glass-compass`. Older tags stay in the precache list, so an
+`detectlab-v269-glass-compass` (phase 2 of the same release moved the skin tag
+to `?v=20261025-layer-glass` and the shell to `detectlab-v270-layer-glass`;
+see `LAYER_WINDOW_GLASS.md`). Older tags stay in the precache list, so an
 installed shell still finds the copy it references.
 
 ## 5. Tests

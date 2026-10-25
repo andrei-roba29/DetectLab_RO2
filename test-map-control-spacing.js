@@ -35,7 +35,7 @@ for (const file of ['css/styles.css', 'css/map3d-terrain.css']) {
     /* Each asset carries the tag of whatever last changed it: both the map
      * control material in styles.css and the 2D/3D switch skin in the terrain
      * stylesheet changed with the glass-controls release. */
-    const tag = '20261025-glass-controls';
+    const tag = '20261025-layer-glass';
     const url = file + '?v=' + tag;
     assert(html.includes(url) && sw.includes("'" + url + "'"), 'cache-busted and precached: ' + file);
 }

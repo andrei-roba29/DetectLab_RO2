@@ -800,7 +800,7 @@
 //   view and there is no rotation lock any more. Re-tags css/styles.css,
 //   css/tutorial.css, css/offline-maps.css, css/map3d-terrain.css,
 //   js/map-rotate.js and js/tutorial.js.
-const CACHE_NAME = 'detectlab-v269-glass-compass';
+const CACHE_NAME = 'detectlab-v270-layer-glass';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -865,12 +865,18 @@ const PRECACHE_URLS = [
   // turns the view. The rotation-lock button and its L.Map API are gone, so
   // css/styles.css, css/tutorial.css, css/offline-maps.css, css/map3d-terrain.css,
   // js/map-rotate.js and js/tutorial.js are re-tagged.
-  'css/styles.css?v=20261025-glass-controls',
-  'css/tutorial.css?v=20261025-glass-controls',
-  'css/offline-maps.css?v=20261025-glass-controls',
-  'css/map3d-terrain.css?v=20261025-glass-controls',
+  // v270: the layers window joined the same material — the panel and every row
+  // in it (top-level AND the nested `*SubLayers` rows) are the translucent
+  // violet glass, and each historical-map row carries a photo of one of its own
+  // tiles, mean-ed out under a violet wash. The row chrome lives in the new
+  // js/layer-panel-rows.js; the skin tag moves to ?v=20261025-layer-glass.
+  'css/styles.css?v=20261025-layer-glass',
+  'css/tutorial.css?v=20261025-layer-glass',
+  'css/offline-maps.css?v=20261025-layer-glass',
+  'css/map3d-terrain.css?v=20261025-layer-glass',
   'js/map-rotate.js?v=20261025-earth-compass',
-  'js/tutorial.js?v=20261025-glass-controls',
+  'js/tutorial.js?v=20261025-layer-glass',
+  'js/layer-panel-rows.js?v=20261025-layer-glass',
   'js/layer-registry.js?v=20261017-albania-asig',
   'js/translations.js?v=20261017-albania-asig',
   'js/translations.js?v=20261017-albania-asig',
