@@ -37,7 +37,7 @@ assert(indexHtml.includes('body.is-pwa .transp-panel'), 'page should retain its 
 assert(indexHtml.includes('id="verticalOpacityControlSecondary"') &&
     indexHtml.includes('id="verticalOpacitySliderSecondary"'),
     'the page should ship a second map-side mirror slot');
-assert(/\.vertical-opacity-control\.vertical-opacity-secondary\s*\{[^}]*right:\s*calc\(38px\s*\+\s*50px\s*\+\s*14px/.test(stylesCss),
+assert(/\.vertical-opacity-control\.vertical-opacity-secondary\s*\{[^}]*right:\s*calc\(38px\s*\+\s*38px\s*\+\s*12px/.test(stylesCss),
     'the second mirror needs its own side-by-side desktop anchor');
 assert(/opacity-layer-mirrored/.test(stylesCss),
     'mirrored panel rows need a dedicated visual state');
@@ -46,7 +46,7 @@ assert(/opacity-layer-mirrored/.test(stylesCss),
 // the only writing-mode child. The PWA path therefore owns a fixed title column
 // and a concrete rotated label box; this is the regression that desktop-only
 // checks would miss.
-assert(/body\.is-pwa \.vertical-opacity-control\s*\{[^}]*grid-template-columns:\s*14px\s+1fr/.test(stylesCss),
+assert(/body\.is-pwa \.vertical-opacity-control\s*\{[^}]*grid-template-columns:\s*12px\s+1fr/.test(stylesCss),
     'the PWA mirror must reserve a title column beside the slider');
 assert(/body\.is-pwa \.vertical-opacity-title\s*\{[^}]*position:\s*absolute/.test(stylesCss) &&
     /body\.is-pwa \.vertical-opacity-title\s*\{[^}]*height:\s*calc\(100%\s*-\s*42px\)/.test(stylesCss),
@@ -470,11 +470,12 @@ close.click();
     // purple radial gradient left.
     const controlRule = /\.vertical-opacity-control\s*\{([^}]*)\}/.exec(stylesCss);
     assert(controlRule, '.vertical-opacity-control must be styled');
-    assert(/width:\s*50px/.test(controlRule[1]), 'the mirror card is narrow (50px, down from 68px)');
-    assert(/backdrop-filter:\s*blur\(/.test(controlRule[1]), 'the card blurs what is behind it');
-    assert(/background:\s*rgba\([^)]*0\.38\)/.test(controlRule[1]) &&
+    assert(/width:\s*38px/.test(controlRule[1]), 'the mirror card is slim (38px, matching the map control buttons)');
+    assert(/backdrop-filter:\s*var\(--ctl-blur\)/.test(controlRule[1]), 'the card blurs what is behind it via --ctl-blur');
+    assert(/background:\s*var\(--ctl-bg\)/.test(controlRule[1]) &&
+        /border:\s*1px\s+solid\s+var\(--ctl-border\)/.test(controlRule[1]) &&
         !/radial-gradient/.test(controlRule[1]),
-        'semi-transparent background instead of the old purple panel');
+        'blurred semitransparent button-box material (--ctl-bg / --ctl-border)');
 
     // Percentage visible only while the opacity changes.
     assert(/\.vertical-opacity-control\[data-kind="opacity"\]\s+\.vertical-opacity-value\s*\{[^}]*visibility\s*:\s*hidden/.test(stylesCss),
@@ -482,9 +483,19 @@ close.click();
     assert(/\.vertical-opacity-control\[data-kind="opacity"\]\s+\.vertical-opacity-value\.visible/.test(stylesCss),
         'the opacity percentage chip has a while-changing visible state');
 
-    // Each analysis layer paints its own slider with the colour of the pin and
-    // of the radius circle it draws on the map: one rule per layer, carrying the
-    // palette on BOTH the panel row and its mirror.
+    // Unified slim 3D-style pastel faded semitransparent orange sliders across
+    // both the layer window (.transp-slider) and the vertical map mirrors
+    // (.vertical-opacity-slider), while retaining the per-layer auxiliary vars.
+    assert(/--slider-track-h:\s*3px/.test(stylesCss) &&
+        /--slider-thumb-size:\s*12px/.test(stylesCss) &&
+        /--slider-v-thumb-size:\s*13px/.test(stylesCss) &&
+        /--slider-fill:\s*rgba\(242,\s*170,\s*121,\s*0\.52\)/.test(stylesCss) &&
+        /--slider-thumb-bg:\s*rgba\(244,\s*176,\s*128,\s*0\.74\)/.test(stylesCss),
+        'root defines the slim pastel faded semitransparent orange slider tokens');
+    assert(/\.transp-slider[\s\S]{0,400}?var\(--slider-fill\)/.test(stylesCss) &&
+        /\.vertical-opacity-slider\s*\{[\s\S]{0,450}?var\(--slider-fill\)/.test(stylesCss),
+        'both layer-window sliders and vertical map sliders share the pastel orange fill');
+
     const rules = (stylesCss.match(/[^{}]+\{[^{}]*\}/g) || []).map(function (rule) {
         return { selector: rule.split('{')[0].trim(), body: rule.slice(rule.indexOf('{') + 1, rule.lastIndexOf('}')) };
     });
@@ -505,16 +516,8 @@ close.click();
             rowId + ' must carry ' + colour + '/' + strong + ' (got: ' + rowPalette.slice(0, 120) + ')');
         const mirrorPalette = paletteOf('[data-owner="' + id + '"]');
         assert(mirrorPalette === rowPalette || mirrorPalette.indexOf(colour) !== -1,
-            id + "'s vertical mirror must carry the same colour as its panel range");
+            id + "'s vertical mirror must carry the same colour variables as its panel range");
     });
-    // …and the shared rules read those variables, so panel + mirror can not drift.
-    const distanceBlock = stylesCss.split('OGLINDA DE DISTAN')[1].split('SATELLITE ')[0];
-    assert(/linear-gradient\(90deg,\s*var\(--dl-layer-soft\),\s*var\(--dl-layer-colour\)\)/.test(distanceBlock),
-        'the ranges take their track from the per-layer variables, not from a copy-pasted colour');
-    assert(/\.transp-slider/.test(distanceBlock) && /\.vertical-opacity-slider/.test(distanceBlock),
-        'both the panel range and its mirror are painted from those variables');
-    assert(/::-moz-range-thumb/.test(distanceBlock),
-        'Firefox thumbs are coloured too, not only the WebKit ones');
 }
 
 console.log('✅ test-vertical-opacity-control.js passed: layer click, vertical sync, century mirror, filtering and close behavior work.');

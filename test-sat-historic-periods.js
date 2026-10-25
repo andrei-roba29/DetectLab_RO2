@@ -183,7 +183,7 @@ console.log('[4] Map-side vertical mirrors (opacity + period shown together)');
     check('vertical period slider mirrors the four stops',
         /<input[^>]*id="verticalSatPeriodSlider"[^>]*min="0"[^>]*max="3"/.test(indexHtml));
     check('CSS anchors the period mirror to the left of the opacity mirror',
-        /\.vertical-period-control\s*\{[^}]*right:\s*calc\(38px \+ 50px \+ 14px/.test(stylesCss));
+        /\.vertical-period-control\s*\{[^}]*right:\s*calc\(38px \+ 38px \+ 12px/.test(stylesCss));
     check('panel period slider ships stop markers',
         /input\.transp-slider\.sat-period-slider/.test(stylesCss));
     check('tick labels have an active state', /\.sat-period-ticks span\.active/.test(stylesCss));
@@ -268,18 +268,18 @@ console.log('[4] Map-side vertical mirrors (opacity + period shown together)');
     const phoneOpacity = resolveRight(opacityOnly, phoneWidth);
     const phonePeriod = resolveRight(rightRules, phoneWidth);
 
-    check('desktop keeps the classic anchors (38px / 38 + 50 + 14)',
+    check('desktop keeps the slim anchors (38px / 38 + 38 + 12)',
         desktopOpacity.right === 'calc(38px + env(safe-area-inset-right, 0px))' &&
-        desktopPeriod.right === 'calc(38px + 50px + 14px + env(safe-area-inset-right, 0px))');
-    check('phone/PWA narrows the opacity mirror to 34px + 46px wide',
+        desktopPeriod.right === 'calc(38px + 38px + 12px + env(safe-area-inset-right, 0px))');
+    check('phone/PWA narrows the opacity mirror to 34px + 36px wide',
         phoneOpacity.right === 'calc(34px + env(safe-area-inset-right, 0px))');
     check('phone/PWA moves the period mirror left by its width + the gap',
-        phonePeriod.right === 'calc(34px + 46px + 14px + env(safe-area-inset-right, 0px))');
+        phonePeriod.right === 'calc(34px + 36px + 12px + env(safe-area-inset-right, 0px))');
     check('phone/PWA: the mirrors cannot overlap (period edge ≥ mirror + gap)',
-        calcPxTotal(phonePeriod.right) - calcPxTotal(phoneOpacity.right) >= 46 + 10,
+        calcPxTotal(phonePeriod.right) - calcPxTotal(phoneOpacity.right) >= 36 + 10,
         phonePeriod.right + ' vs ' + phoneOpacity.right);
     check('desktop: the mirrors cannot overlap either',
-        calcPxTotal(desktopPeriod.right) - calcPxTotal(desktopOpacity.right) >= 50 + 10);
+        calcPxTotal(desktopPeriod.right) - calcPxTotal(desktopOpacity.right) >= 38 + 10);
     check('a two-class period anchor wins the cascade at both widths',
         desktopPeriod.classes === 2 && phonePeriod.classes === 2);
 }

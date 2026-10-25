@@ -28,6 +28,21 @@
             --ctl-blur: blur(18px) saturate(150%);
             --ctl-shadow: 0 6px 18px rgba(4, 6, 18, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.07);
             --ctl-shadow-hover: 0 8px 22px rgba(4, 6, 18, 0.40), inset 0 1px 0 rgba(255, 255, 255, 0.10);
+
+            /* ── SLIM 3D-STYLE PASTEL FADED SEMITRANSPARENT ORANGE SLIDER TOKENS ──
+               Shared by layer-window sliders, on-map vertical mirrors, 3D controls,
+               custom map overlays, and settings panels. */
+            --slider-track-h: 3px;
+            --slider-thumb-size: 12px;
+            --slider-v-thumb-size: 13px;
+            --slider-track-bg: rgba(245, 240, 235, 0.14);
+            --slider-fill: rgba(242, 170, 121, 0.52);
+            --slider-fill-soft: rgba(242, 170, 121, 0.24);
+            --slider-thumb-bg: rgba(244, 176, 128, 0.74);
+            --slider-thumb-bg-hover: rgba(248, 188, 144, 0.88);
+            --slider-thumb-border: rgba(255, 228, 206, 0.52);
+            --slider-thumb-shadow: 0 1px 4px rgba(4, 6, 18, 0.36);
+            --slider-value-color: rgba(246, 186, 142, 0.92);
         }
 
         *, *::before, *::after {
@@ -274,46 +289,95 @@
             left: 50%;
             transform: translateX(-50%);
             z-index: 950;
-            width: 300px;
-            background: rgba(13, 28, 60, 0.94);
-            border: 1px solid rgba(200,169,110,0.35);
-            border-radius: 14px;
-            padding: 16px 18px;
-            color: #f5d98a;
+            width: 288px;
+            background: var(--ctl-bg);
+            border: 1px solid var(--ctl-border);
+            border-radius: var(--ctl-radius);
+            padding: 12px 14px;
+            color: var(--slider-value-color);
             font-family: 'Outfit', sans-serif;
-            backdrop-filter: blur(12px);
-            box-shadow: 0 8px 28px rgba(0,0,0,0.55);
+            -webkit-backdrop-filter: var(--ctl-blur);
+            backdrop-filter: var(--ctl-blur);
+            box-shadow: var(--ctl-shadow);
         }
         #iosBldSettingsPanel.open { display: block; }
         #iosBldSettingsPanel h4 {
-            font-size: 0.78rem;
+            font-size: 0.75rem;
             text-transform: uppercase;
             letter-spacing: 0.08em;
-            color: #B8D8F0;
-            margin: 0 0 12px;
+            color: rgba(245, 240, 235, 0.88);
+            margin: 0 0 10px;
             font-weight: 600;
         }
         #iosBldSettingsPanel .ios-bld-field {
             display: flex;
             flex-direction: column;
-            gap: 5px;
-            margin-bottom: 12px;
+            gap: 4px;
+            margin-bottom: 10px;
         }
         #iosBldSettingsPanel label {
             font-size: 0.72rem;
-            color: #B8D8F0;
+            color: rgba(245, 240, 235, 0.8);
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         #iosBldSettingsPanel .ios-bld-val {
-            font-family: 'SF Mono', Consolas, monospace;
-            color: #f5d98a;
+            font-family: 'Outfit', sans-serif;
+            font-variant-numeric: tabular-nums;
+            color: var(--slider-value-color);
             font-size: 0.72rem;
+            font-weight: 600;
         }
         #iosBldSettingsPanel input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
             width: 100%;
-            accent-color: #E8772A;
+            height: var(--slider-track-h);
+            margin: 3px 0;
+            padding: 0;
+            border: 0;
+            border-radius: 999px;
+            background: linear-gradient(90deg, var(--slider-fill) 0%, var(--slider-fill) var(--slider-pct, 0%), var(--slider-track-bg) var(--slider-pct, 0%), var(--slider-track-bg) 100%);
+            accent-color: rgba(244, 176, 128, 0.82);
+            outline: none;
+            cursor: pointer;
+        }
+        #iosBldSettingsPanel input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: var(--slider-thumb-size);
+            height: var(--slider-thumb-size);
+            border-radius: 50%;
+            background: var(--slider-thumb-bg);
+            border: 1px solid var(--slider-thumb-border);
+            box-shadow: var(--slider-thumb-shadow);
+            cursor: pointer;
+            transition: background 0.15s ease, transform 0.15s ease;
+        }
+        #iosBldSettingsPanel input[type=range]::-webkit-slider-thumb:hover {
+            background: var(--slider-thumb-bg-hover);
+            transform: scale(1.1);
+        }
+        #iosBldSettingsPanel input[type=range]::-moz-range-thumb {
+            width: var(--slider-thumb-size);
+            height: var(--slider-thumb-size);
+            border-radius: 50%;
+            background: var(--slider-thumb-bg);
+            border: 1px solid var(--slider-thumb-border);
+            box-shadow: var(--slider-thumb-shadow);
+            cursor: pointer;
+        }
+        #iosBldSettingsPanel input[type=range]::-moz-range-track {
+            height: var(--slider-track-h);
+            border: 0;
+            border-radius: 999px;
+            background: var(--slider-track-bg);
+        }
+        #iosBldSettingsPanel input[type=range]::-moz-range-progress {
+            height: var(--slider-track-h);
+            border-radius: 999px;
+            background: var(--slider-fill);
         }
         #iosBldSettingsPanel input[type=number],
         #iosBldSettingsPanel input[type=text] {
@@ -4237,8 +4301,8 @@
         .dl-sublayer-row {
             --row-radius: var(--ctl-radius);
             position: relative;
-            margin-bottom: 10px;
-            padding: 14px 15px 16px;
+            margin-bottom: 8px;
+            padding: 10px 12px 11px;
             background: var(--ctl-bg);
             border: 1px solid var(--ctl-border);
             border-radius: var(--row-radius);
@@ -4254,7 +4318,7 @@
                 /* The *SubLayers containers are flex columns with their own
                    gap; a large margin here would double the spacing. */
                 margin-bottom: 2px;
-                padding: 10px 11px 12px;
+                padding: 8px 10px 9px;
                 box-shadow: 0 4px 14px rgba(4,6,18,0.26), inset 0 1px 0 rgba(255,255,255,0.06);
             }
 
@@ -4318,12 +4382,12 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            gap: 10px;
-            font-size: 0.78rem;
-            color: rgba(245,240,235,0.7);
-            margin-bottom: 8px;
+            gap: 8px;
+            font-size: 0.76rem;
+            color: rgba(245,240,235,0.82);
+            margin-bottom: 5px;
             font-weight: 500;
-            letter-spacing: 0.03em;
+            letter-spacing: 0.02em;
         }
 
             .transp-layer-label > span:first-child {
@@ -4593,15 +4657,17 @@
             left: 50%;
             top: -6px;
             transform: translate(-50%, -100%);
-            padding: 3px 9px;
-            background: rgba(20, 26, 34, 0.96);
-            border: 1px solid rgba(232, 179, 75, 0.55);
+            padding: 3px 8px;
+            background: var(--ctl-bg-hover);
+            border: 1px solid var(--ctl-border-hover);
             border-radius: 8px;
-            color: #E8B34B;
-            font: 700 0.7rem/1.25 'Cinzel', serif;
+            color: var(--slider-value-color);
+            font: 600 0.68rem/1.25 'Outfit', sans-serif;
             letter-spacing: 0.02em;
             white-space: nowrap;
-            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+            -webkit-backdrop-filter: var(--ctl-blur);
+            backdrop-filter: var(--ctl-blur);
+            box-shadow: var(--ctl-shadow);
             pointer-events: none;
             opacity: 0;
             visibility: hidden;
@@ -4615,9 +4681,9 @@
             width: 8px;
             height: 8px;
             transform: translateX(-50%) rotate(45deg);
-            background: rgba(20, 26, 34, 0.96);
-            border-right: 1px solid rgba(232, 179, 75, 0.55);
-            border-bottom: 1px solid rgba(232, 179, 75, 0.55);
+            background: var(--ctl-bg-hover);
+            border-right: 1px solid var(--ctl-border-hover);
+            border-bottom: 1px solid var(--ctl-border-hover);
         }
         .battles-century-tip.visible {
             opacity: 1;
@@ -4851,90 +4917,134 @@
         }
 
             .transp-layer-label span.pct {
-                font-family: 'Cinzel', serif;
-                font-size: 0.76rem;
-                color: var(--sky);
-                font-weight: 700;
-                min-width: 38px;
+                font-family: 'Outfit', sans-serif;
+                font-variant-numeric: tabular-nums;
+                font-size: 0.68rem;
+                color: var(--slider-value-color);
+                font-weight: 600;
+                min-width: 34px;
                 text-align: center;
-                background: rgba(184,216,240,0.09);
-                border: 1px solid rgba(184,216,240,0.16);
-                border-radius: 6px;
-                padding: 2px 4px;
+                background: rgba(242, 170, 121, 0.10);
+                border: 1px solid rgba(242, 170, 121, 0.22);
+                border-radius: 5px;
+                padding: 1px 5px;
             }
 
-        .transp-slider {
+        /* ── UNIFIED SLIM 3D-STYLE PASTEL ORANGE SLIDERS (layer window) ── */
+        .transp-slider,
+        .lidar-country-opacity,
+        .albania-active-slider {
             -webkit-appearance: none;
             appearance: none;
             width: 100%;
-            height: 5px;
-            border-radius: 3px;
-            background: linear-gradient(90deg, rgba(160,112,232,0.55), rgba(184,216,240,0.14));
+            height: var(--slider-track-h);
+            margin: 3px 0;
+            padding: 0;
+            border: 0;
+            border-radius: 999px;
+            background: linear-gradient(
+                90deg,
+                var(--slider-fill) 0%,
+                var(--slider-fill) var(--slider-pct, 0%),
+                var(--slider-track-bg) var(--slider-pct, 0%),
+                var(--slider-track-bg) 100%
+            );
+            accent-color: rgba(244, 176, 128, 0.82);
             outline: none;
             cursor: pointer;
         }
 
-            .transp-slider::-webkit-slider-thumb {
+            .transp-slider::-webkit-slider-thumb,
+            .lidar-country-opacity::-webkit-slider-thumb,
+            .albania-active-slider::-webkit-slider-thumb {
                 -webkit-appearance: none;
                 appearance: none;
-                width: 15px;
-                height: 15px;
+                width: var(--slider-thumb-size);
+                height: var(--slider-thumb-size);
                 border-radius: 50%;
-                background: var(--violet);
-                border: 2px solid rgba(255,255,255,0.85);
-                box-shadow: 0 0 0 4px rgba(107,63,160,0.18), 0 2px 8px rgba(0,0,0,0.5);
+                background: var(--slider-thumb-bg);
+                border: 1px solid var(--slider-thumb-border);
+                box-shadow: var(--slider-thumb-shadow);
                 cursor: pointer;
-                transition: background 0.15s, box-shadow 0.15s, transform 0.15s;
+                transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
             }
 
-                .transp-slider::-webkit-slider-thumb:hover {
-                    background: var(--sky);
-                    transform: scale(1.08);
-                    box-shadow: 0 0 0 5px rgba(184,216,240,0.2), 0 2px 8px rgba(0,0,0,0.5);
+                .transp-slider::-webkit-slider-thumb:hover,
+                .lidar-country-opacity::-webkit-slider-thumb:hover,
+                .albania-active-slider::-webkit-slider-thumb:hover {
+                    background: var(--slider-thumb-bg-hover);
+                    transform: scale(1.1);
                 }
 
-            .transp-slider::-moz-range-thumb {
-                width: 15px;
-                height: 15px;
+            .transp-slider::-moz-range-thumb,
+            .lidar-country-opacity::-moz-range-thumb,
+            .albania-active-slider::-moz-range-thumb {
+                width: var(--slider-thumb-size);
+                height: var(--slider-thumb-size);
                 border-radius: 50%;
-                background: var(--violet);
-                border: 2px solid rgba(255,255,255,0.85);
-                box-shadow: 0 0 0 4px rgba(107,63,160,0.18), 0 2px 8px rgba(0,0,0,0.5);
+                background: var(--slider-thumb-bg);
+                border: 1px solid var(--slider-thumb-border);
+                box-shadow: var(--slider-thumb-shadow);
                 cursor: pointer;
             }
+
+            .transp-slider::-moz-range-track,
+            .lidar-country-opacity::-moz-range-track,
+            .albania-active-slider::-moz-range-track {
+                height: var(--slider-track-h);
+                border: 0;
+                border-radius: 999px;
+                background: var(--slider-track-bg);
+            }
+
+            .transp-slider::-moz-range-progress,
+            .lidar-country-opacity::-moz-range-progress,
+            .albania-active-slider::-moz-range-progress {
+                height: var(--slider-track-h);
+                border-radius: 999px;
+                background: var(--slider-fill);
+            }
+
+            .transp-slider:focus-visible,
+            .lidar-country-opacity:focus-visible,
+            .albania-active-slider:focus-visible {
+                box-shadow: 0 0 0 2px var(--slider-fill-soft);
+            }
+
+        .cenagis-opacity-slider {
+            height: var(--slider-track-h) !important;
+        }
 
         /* ── SELECTED LAYER: VERTICAL OPACITY CONTROL ──
            Every real opacity range in the layer panel is registered by
            vertical-opacity-control.js. The selected range is mirrored here so
            users can tune it over the map after the full layer panel closes.
 
-           Slim frosted-glass card (no more purple panel): a semi-transparent
-           fill blurred with backdrop-filter, a narrow column layout — the
-           layer's INITIALS run vertically along the LEFT side of the slider,
-           written bottom-up (max 3 letters, without years), and
-           the percentage chip only appears while the opacity is changed. */
+           Slim blurred button-box card (--ctl-*): matches the map control
+           buttons (38px wide on desktop, 36px on mobile/PWA) with the slim
+           pastel faded semitransparent orange 3D slider inside. */
         .vertical-opacity-control {
             position: absolute;
             right: calc(38px + env(safe-area-inset-right, 0px));
             top: 50%;
             z-index: 1000;
-            width: 50px;
-            height: 294px;
-            padding: 10px 5px 11px;
+            width: 38px;
+            height: 248px;
+            padding: 9px 3px 8px;
             display: grid;
             grid-template-columns: auto 1fr;
             grid-template-rows: 1fr auto;
-            column-gap: 2px;
-            row-gap: 5px;
+            column-gap: 1px;
+            row-gap: 4px;
             justify-items: center;
             align-items: center;
             color: #F5F0EB;
-            background: rgba(12,20,38,0.38);
-            border: 1px solid rgba(255,255,255,0.22);
-            border-radius: 14px;
-            box-shadow: 0 9px 30px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08);
-            -webkit-backdrop-filter: blur(18px) saturate(150%);
-            backdrop-filter: blur(18px) saturate(150%);
+            background: var(--ctl-bg);
+            border: 1px solid var(--ctl-border);
+            border-radius: var(--ctl-radius);
+            box-shadow: var(--ctl-shadow);
+            -webkit-backdrop-filter: var(--ctl-blur);
+            backdrop-filter: var(--ctl-blur);
             transform: translateY(-50%) translateX(16px) scale(0.96);
             transform-origin: center right;
             opacity: 0;
@@ -4944,7 +5054,12 @@
                „mirror-sole”) să alunece spre marginea din dreapta în același
                ritm cu apariția/dispariția ei, în loc să sară. */
             transition: opacity 0.2s ease, transform 0.2s ease, right 0.2s ease,
+                background-color 0.18s ease, border-color 0.18s ease,
                 visibility 0s linear 0.2s;
+        }
+
+        .vertical-opacity-control:hover {
+            border-color: var(--ctl-border-hover);
         }
 
         .vertical-opacity-control.visible {
@@ -4958,7 +5073,7 @@
         .vertical-opacity-close {
             position: absolute;
             top: 3px;
-            right: 4px;
+            right: 3px;
             /* Pictat DEASUPRA slider-wrap: fără z-index, wrap-ul (poziționat,
                mai târziu în DOM) acoperea jumătatea de jos a butonului și
                îi înghițea click-urile — doar o fâșie subțire de deasupra
@@ -4970,13 +5085,13 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            color: rgba(184,216,240,0.75);
+            color: var(--ctl-icon);
             /* Disc vizibil și în repaus: fără el glifa „×” stinsă era aproape
                imposibil de găsit și de nimerit cu mouse-ul pe desktop. */
-            background: rgba(8,20,41,0.45);
-            border: 1px solid rgba(184,216,240,0.22);
+            background: rgba(24, 19, 40, 0.52);
+            border: 1px solid var(--ctl-border);
             border-radius: 50%;
-            font: 400 17px/1 'Outfit', sans-serif;
+            font: 400 16px/1 'Outfit', sans-serif;
             cursor: pointer;
             touch-action: manipulation;
             transition: color 0.15s, background 0.15s, border-color 0.15s, transform 0.15s;
@@ -4998,22 +5113,22 @@
 
         .vertical-opacity-close:hover,
         .vertical-opacity-close:focus-visible {
-            color: #fff;
-            background: rgba(184,216,240,0.24);
-            border-color: rgba(184,216,240,0.55);
+            color: var(--ctl-icon-hover);
+            background: var(--ctl-bg-hover);
+            border-color: var(--ctl-border-hover);
             transform: scale(1.1);
             outline: none;
         }
 
         .vertical-opacity-close:focus-visible {
-            box-shadow: 0 0 0 2px rgba(184,216,240,0.55);
+            box-shadow: 0 0 0 2px var(--ctl-border-hover);
         }
 
         /* Cursorul e oriunde pe card → X-ul se aprinde ușor, ca ținta să fie
            vizibilă înainte ca mouse-ul să ajungă peste ea. */
         .vertical-opacity-control:hover .vertical-opacity-close {
-            color: rgba(224,242,255,0.95);
-            border-color: rgba(184,216,240,0.4);
+            color: var(--ctl-icon-engaged);
+            border-color: var(--ctl-border-hover);
         }
 
         /* ── SLIDER TITLE: VERTICAL, ON THE LEFT SIDE OF THE SLIDER ──
@@ -5057,10 +5172,13 @@
             max-width: min(196px, calc(100vw - 26px));
             padding: 3px 7px;
             overflow: hidden;
-            color: rgba(184,216,240,0.78);
-            background: rgba(8,20,41,0.86);
-            border: 1px solid rgba(184,216,240,0.2);
+            color: var(--slider-value-color);
+            background: var(--ctl-bg-hover);
+            border: 1px solid var(--ctl-border);
             border-radius: 7px;
+            -webkit-backdrop-filter: var(--ctl-blur);
+            backdrop-filter: var(--ctl-blur);
+            box-shadow: var(--ctl-shadow);
             font: 600 0.5rem/1 'Outfit', sans-serif;
             letter-spacing: 0.12em;
             white-space: nowrap;
@@ -5080,9 +5198,9 @@
             display: block;
             max-height: 100%;
             overflow: hidden;
-            color: rgba(245,240,235,0.92);
-            font: 600 0.62rem/1.3 'Outfit', sans-serif;
-            letter-spacing: 0.05em;
+            color: rgba(245,240,235,0.88);
+            font: 600 0.56rem/1.2 'Outfit', sans-serif;
+            letter-spacing: 0.04em;
             text-shadow: 0 1px 3px rgba(0,0,0,0.55);
             white-space: nowrap;
             writing-mode: vertical-rl;
@@ -5098,8 +5216,8 @@
             grid-column: 2;
             grid-row: 1;
             align-self: stretch;
-            width: 22px;
-            min-height: 146px;
+            width: 16px;
+            min-height: 120px;
         }
 
         /* The range remains logically horizontal and is rotated. This keeps
@@ -5111,11 +5229,20 @@
             position: absolute;
             top: 50%;
             left: 50%;
-            width: 168px;
-            height: 5px;
+            width: 140px;
+            height: var(--slider-track-h);
             margin: 0;
-            border-radius: 4px;
-            background: linear-gradient(90deg, rgba(184,216,240,0.16), rgba(160,112,232,0.82));
+            padding: 0;
+            border: 0;
+            border-radius: 999px;
+            background: linear-gradient(
+                90deg,
+                var(--slider-fill) 0%,
+                var(--slider-fill) var(--slider-pct, 0%),
+                var(--slider-track-bg) var(--slider-pct, 0%),
+                var(--slider-track-bg) 100%
+            );
+            accent-color: rgba(244, 176, 128, 0.82);
             outline: none;
             cursor: pointer;
             touch-action: none;
@@ -5124,41 +5251,54 @@
         }
 
         .vertical-opacity-slider:focus-visible {
-            box-shadow: 0 0 0 3px rgba(184,216,240,0.22);
+            box-shadow: 0 0 0 2px var(--slider-fill-soft);
         }
 
         .vertical-opacity-slider::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
-            width: 20px;
-            height: 20px;
+            width: var(--slider-v-thumb-size);
+            height: var(--slider-v-thumb-size);
             border-radius: 50%;
-            background: #8051bd;
-            border: 2px solid rgba(255,255,255,0.94);
-            box-shadow: 0 0 0 5px rgba(107,63,160,0.22), 0 3px 9px rgba(0,0,0,0.55);
+            background: var(--slider-thumb-bg);
+            border: 1px solid var(--slider-thumb-border);
+            box-shadow: var(--slider-thumb-shadow);
             cursor: grab;
+            transition: background 0.15s ease, transform 0.15s ease;
+        }
+
+        .vertical-opacity-slider::-webkit-slider-thumb:hover {
+            background: var(--slider-thumb-bg-hover);
+            transform: scale(1.08);
         }
 
         .vertical-opacity-slider:active::-webkit-slider-thumb {
             cursor: grabbing;
-            background: var(--sky);
+            background: var(--slider-thumb-bg-hover);
+            transform: scale(1.1);
         }
 
         .vertical-opacity-slider::-moz-range-thumb {
-            width: 17px;
-            height: 17px;
+            width: var(--slider-v-thumb-size);
+            height: var(--slider-v-thumb-size);
             border-radius: 50%;
-            background: #8051bd;
-            border: 2px solid rgba(255,255,255,0.94);
-            box-shadow: 0 0 0 5px rgba(107,63,160,0.22), 0 3px 9px rgba(0,0,0,0.55);
+            background: var(--slider-thumb-bg);
+            border: 1px solid var(--slider-thumb-border);
+            box-shadow: var(--slider-thumb-shadow);
             cursor: grab;
         }
 
         .vertical-opacity-slider::-moz-range-track {
-            height: 5px;
+            height: var(--slider-track-h);
             border: 0;
-            border-radius: 4px;
-            background: linear-gradient(90deg, rgba(184,216,240,0.16), rgba(160,112,232,0.82));
+            border-radius: 999px;
+            background: var(--slider-track-bg);
+        }
+
+        .vertical-opacity-slider::-moz-range-progress {
+            height: var(--slider-track-h);
+            border-radius: 999px;
+            background: var(--slider-fill);
         }
 
         .vertical-opacity-value {
@@ -5166,12 +5306,13 @@
             grid-row: 2;
             min-width: 0;
             max-width: 100%;
-            padding: 2px 4px;
-            color: var(--sky);
-            background: rgba(184,216,240,0.09);
-            border: 1px solid rgba(184,216,240,0.18);
-            border-radius: 7px;
-            font: 700 0.6rem/1.2 'Cinzel', serif;
+            padding: 1px 3px;
+            color: var(--slider-value-color);
+            background: rgba(242, 170, 121, 0.10);
+            border: 1px solid rgba(242, 170, 121, 0.22);
+            border-radius: 6px;
+            font: 600 0.56rem/1.2 'Outfit', sans-serif;
+            font-variant-numeric: tabular-nums;
             text-align: center;
             white-space: nowrap;
         }
@@ -5207,10 +5348,12 @@
             max-width: 110px;
             min-width: 0;
             padding: 4px 7px;
-            border-color: rgba(184,216,240,0.3);
-            border-radius: 6px;
-            background: rgba(8,20,41,0.96);
-            box-shadow: 0 4px 14px rgba(0,0,0,0.42);
+            border-color: var(--ctl-border-hover);
+            border-radius: 8px;
+            background: var(--ctl-bg-hover);
+            -webkit-backdrop-filter: var(--ctl-blur);
+            backdrop-filter: var(--ctl-blur);
+            box-shadow: var(--ctl-shadow);
             font-size: 0.62rem;
             line-height: 1.3;
             white-space: nowrap;
@@ -5227,7 +5370,7 @@
             top: 50%;
             left: 100%;
             border: 5px solid transparent;
-            border-left-color: rgba(8,20,41,0.96);
+            border-left-color: var(--ctl-bg-hover);
             transform: translateY(-50%);
         }
 
@@ -5238,22 +5381,15 @@
             transition-delay: 0s;
         }
 
-        /* ── OGLINDA DE DISTANȚĂ / RAZĂ + CULORILE PE STRAT ──
-           Aceeași geometrie ca la opacitate (slider vertical în dreapta, chip
-           cu valoarea sub el), dar valoarea e în km și poartă o etichetă
-           (DISTANȚĂ / RAZĂ).
-
-           Fiecare strat de analiză își desenează pe hartă pinul și cercul de
-           rază într-o culoare a lui — LIDAR Scanner verde, Zone cu potențial
-           arheologic mov, Raport arheologic albastru. sliderele acelor straturi
-           (atât cele din panou, cât și oglinzile verticale de pe hartă) poartă
-           acum exact aceleași trei culori, ca raza reglată pe slider să arate
-           ca raza desenată pe hartă. js/vertical-opacity-control.js scrie id-ul
-           sliderului în data-owner, iar panoul își ia culoarea din rândul lui. */
+        /* ── OGLINDA DE DISTANȚĂ / RAZĂ ──
+           Aceeași geometrie și același stil pastel-portocaliu semitransparent
+           ca la restul sliderelor (atât în fereastra de straturi, cât și în
+           oglinda verticală de pe hartă), păstrând variabilele stratului doar
+           pentru reperele auxiliare care le citesc. */
         #lidarScannerRow,
         .vertical-opacity-control[data-owner="lidarScannerDistance"] {
-            --dl-layer-colour: #8cff66;         /* aceeași nuanță ca linia cercului */
-            --dl-layer-strong: #39ff14;         /* aceeași nuanță ca umplerea / pinul */
+            --dl-layer-colour: #8cff66;
+            --dl-layer-strong: #39ff14;
             --dl-layer-soft: rgba(57, 255, 20, 0.14);
             --dl-layer-edge: rgba(140, 255, 102, 0.46);
         }
@@ -5274,58 +5410,12 @@
             --dl-layer-edge: rgba(102, 200, 255, 0.46);
         }
 
-        /* Track: the panel range and its vertical mirror share the ramp. */
-        #lidarScannerRow .transp-slider,
-        #archeoPotentialRow .transp-slider,
-        #archReportRow .transp-slider {
-            background: linear-gradient(90deg, var(--dl-layer-soft), var(--dl-layer-colour));
-        }
-
-        .vertical-opacity-control[data-kind="distance"] .vertical-opacity-slider {
-            background: linear-gradient(90deg, var(--dl-layer-soft), var(--dl-layer-colour));
-        }
-
-        /* Thumbs (Chromium / WebKit and Firefox). */
-        #lidarScannerRow .transp-slider::-webkit-slider-thumb,
-        #archeoPotentialRow .transp-slider::-webkit-slider-thumb,
-        #archReportRow .transp-slider::-webkit-slider-thumb,
-        .vertical-opacity-control[data-kind="distance"] .vertical-opacity-slider::-webkit-slider-thumb {
-            background: var(--dl-layer-strong);
-            border-color: rgba(255, 255, 255, 0.9);
-            box-shadow: 0 0 0 4px var(--dl-layer-soft), 0 2px 8px rgba(0, 0, 0, 0.5);
-        }
-
-        #lidarScannerRow .transp-slider::-webkit-slider-thumb:hover,
-        #archeoPotentialRow .transp-slider::-webkit-slider-thumb:hover,
-        #archReportRow .transp-slider::-webkit-slider-thumb:hover {
-            background: var(--dl-layer-colour);
-            box-shadow: 0 0 0 5px var(--dl-layer-soft), 0 2px 8px rgba(0, 0, 0, 0.5);
-        }
-
-        #lidarScannerRow .transp-slider::-moz-range-thumb,
-        #archeoPotentialRow .transp-slider::-moz-range-thumb,
-        #archReportRow .transp-slider::-moz-range-thumb,
-        .vertical-opacity-control[data-kind="distance"] .vertical-opacity-slider::-moz-range-thumb {
-            background: var(--dl-layer-strong);
-            border-color: rgba(255, 255, 255, 0.9);
-            box-shadow: 0 0 0 4px var(--dl-layer-soft), 0 2px 8px rgba(0, 0, 0, 0.5);
-        }
-
-        #lidarScannerRow .transp-slider:focus-visible,
-        #archeoPotentialRow .transp-slider:focus-visible,
-        #archReportRow .transp-slider:focus-visible {
-            box-shadow: 0 0 0 3px var(--dl-layer-soft);
-        }
-
-        /* Value chip under the mirrored range, in the layer colour. The slim
-           glass card is only ~50px wide, so the chip keeps its own background
-           but drops the old minimum width to fit inside it. */
         .vertical-opacity-control[data-kind="distance"] .vertical-opacity-value {
             min-width: 0;
-            padding: 2px 4px;
-            color: var(--dl-layer-colour);
-            background: var(--dl-layer-soft);
-            border-color: var(--dl-layer-edge);
+            padding: 1px 3px;
+            color: var(--slider-value-color);
+            background: rgba(242, 170, 121, 0.10);
+            border-color: rgba(242, 170, 121, 0.22);
         }
 
         /* ── SATELLITE „ISTORIC” PAIR ──
@@ -5336,61 +5426,42 @@
            (2012 / 2018 / 2021 / 2025), so the value chip stays permanently
            visible.
 
-           The selector carries BOTH classes on purpose. A bare
-           `.vertical-period-control` has the same specificity (0,1,0) as the
-           generic `.vertical-opacity-control` rules, so the responsive overrides
-           that appear LATER in this file (notably the @media (max-width:600px)
-           block that narrows the mirror to 46px and moves it to right:34px)
-           used to win the `right` declaration here as well. Both mirrors then
-           landed on the exact same anchor — stacked one on top of the other —
-           so on every phone / installed PWA only the period mirror (the last
-           one in the DOM) was ever visible, while desktop (>600px) showed the
-           pair side by side. Two classes (0,2,0) keep this offset in control
-           of any single-class rule; the mobile block below re-states the
-           narrower geometry with the same specificity. */
+           Two classes (0,2,0) keep this offset in control of any single-class
+           rule; the mobile block below re-states the narrower geometry with
+           the same specificity. */
         .vertical-opacity-control.vertical-period-control {
-            right: calc(38px + 50px + 14px + env(safe-area-inset-right, 0px));
+            right: calc(38px + 38px + 12px + env(safe-area-inset-right, 0px));
         }
 
         .vertical-opacity-control.vertical-opacity-secondary {
-            right: calc(38px + 50px + 14px + env(safe-area-inset-right, 0px));
+            right: calc(38px + 38px + 12px + env(safe-area-inset-right, 0px));
         }
 
-        /* ── O SINGURĂ OGLINDĂ = CEA MAI DIN DREAPTA POZIȚIE ──
-           Clasa „mirror-sole” e pusă de js/vertical-opacity-control.js pe
-           singura oglindă vizibilă. Fără ea, al doilea slot și-ar păstra
-           ancora de pereche (un pas spre stânga) și după închiderea sliderului
-           din dreapta, deci un singur slider pe ecran ar pluti decalat, cu o
-           bandă goală până la marginea hărții. Două clase (0,2,0) ca să bată
-           regula de mai sus a slotului secundar; blocul mobil de mai jos
-           redeclară aceeași geometrie îngustă, tot după regula lui. */
+        /* ── O SINGURĂ OGLINDĂ = CEA MAI DIN DREAPTA POZIȚIE ── */
         .vertical-opacity-control.mirror-sole {
             right: calc(38px + env(safe-area-inset-right, 0px));
         }
 
         .vertical-opacity-control[data-kind="satperiod"] .vertical-opacity-value {
-            font-size: 0.58rem;
-            letter-spacing: 0.02em;
+            font-size: 0.54rem;
+            letter-spacing: 0.01em;
         }
 
         /* Four stop dots on the vertical period track: 2012 at the bottom of
-           the travel, then 2018 and 2021, with 2025 at the top. The dots are
-           spread with background-position percentages, which resolve against
-           (track height − dot size), so they stay evenly aligned with the
-           range thumb's own stops. */
+           the travel, then 2018 and 2021, with 2025 at the top. */
         .vertical-period-control .vertical-opacity-slider-wrap::after {
             content: '';
             position: absolute;
             left: 50%;
             top: 50%;
             width: 5px;
-            height: 169px;
+            height: 141px;
             transform: translate(-50%, -50%);
             background-image:
-                radial-gradient(circle at 50% 50%, rgba(245,240,235,0.9) 1.4px, transparent 2px),
-                radial-gradient(circle at 50% 50%, rgba(245,240,235,0.9) 1.4px, transparent 2px),
-                radial-gradient(circle at 50% 50%, rgba(245,240,235,0.9) 1.4px, transparent 2px),
-                radial-gradient(circle at 50% 50%, rgba(245,240,235,0.9) 1.4px, transparent 2px);
+                radial-gradient(circle at 50% 50%, rgba(255,228,206,0.85) 1.3px, transparent 1.9px),
+                radial-gradient(circle at 50% 50%, rgba(255,228,206,0.85) 1.3px, transparent 1.9px),
+                radial-gradient(circle at 50% 50%, rgba(255,228,206,0.85) 1.3px, transparent 1.9px),
+                radial-gradient(circle at 50% 50%, rgba(255,228,206,0.85) 1.3px, transparent 1.9px);
             background-size: 5px 5px;
             background-position: 50% 0, 50% 33.333%, 50% 66.667%, 50% 100%;
             background-repeat: no-repeat;
@@ -5398,24 +5469,29 @@
             z-index: 1;
         }
 
-        /* Panel „Istoric” slider: same look as every .transp-slider, plus four
-           stop markers aligned with the 2012 / 2018 / 2021 / 2025 tick labels.
-           The 8px inset matches half the thumb width, so the first and last
-           marker sit under the thumb at each end of the travel. */
+        /* Panel „Istoric” slider: same pastel-orange look as every .transp-slider,
+           plus four stop markers aligned with the 2012 / 2018 / 2021 / 2025 ticks.
+           The 6px inset matches half the 12px thumb width. */
         input.transp-slider.sat-period-slider {
             background:
-                radial-gradient(circle at 8px 50%, rgba(245,240,235,0.95) 1.8px, transparent 2.5px),
-                radial-gradient(circle at calc(8px + (100% - 16px) / 3) 50%, rgba(245,240,235,0.95) 1.8px, transparent 2.5px),
-                radial-gradient(circle at calc(8px + (100% - 16px) * 2 / 3) 50%, rgba(245,240,235,0.95) 1.8px, transparent 2.5px),
-                radial-gradient(circle at calc(100% - 8px) 50%, rgba(245,240,235,0.95) 1.8px, transparent 2.5px),
-                linear-gradient(90deg, rgba(160,112,232,0.55), rgba(184,216,240,0.14));
+                radial-gradient(circle at 6px 50%, rgba(255,228,206,0.9) 1.5px, transparent 2.1px),
+                radial-gradient(circle at calc(6px + (100% - 12px) / 3) 50%, rgba(255,228,206,0.9) 1.5px, transparent 2.1px),
+                radial-gradient(circle at calc(6px + (100% - 12px) * 2 / 3) 50%, rgba(255,228,206,0.9) 1.5px, transparent 2.1px),
+                radial-gradient(circle at calc(100% - 6px) 50%, rgba(255,228,206,0.9) 1.5px, transparent 2.1px),
+                linear-gradient(
+                    90deg,
+                    var(--slider-fill) 0%,
+                    var(--slider-fill) var(--slider-pct, 0%),
+                    var(--slider-track-bg) var(--slider-pct, 0%),
+                    var(--slider-track-bg) 100%
+                );
         }
 
         .sat-period-ticks {
             display: flex;
             justify-content: space-between;
-            margin-top: 5px;
-            color: rgba(184,216,240,0.55);
+            margin-top: 4px;
+            color: rgba(245,240,235,0.48);
             font: 500 0.6rem/1 'Outfit', sans-serif;
             letter-spacing: 0.02em;
         }
@@ -5425,7 +5501,7 @@
         }
 
         .sat-period-ticks span.active {
-            color: var(--sky, #B8D8F0);
+            color: var(--slider-value-color);
             font-weight: 700;
         }
 
@@ -5437,21 +5513,20 @@
         }
 
         #transpPanel .opacity-layer-selectable:focus-visible {
-            outline: 2px solid rgba(184,216,240,0.75);
+            outline: 2px solid rgba(246,186,142,0.7);
             outline-offset: 3px;
         }
 
         #transpPanel .opacity-layer-selectable.opacity-layer-selected {
-            box-shadow: 0 0 0 1px rgba(160,112,232,0.68), 0 0 18px rgba(107,63,160,0.22);
+            box-shadow: 0 0 0 1px rgba(242,170,121,0.52), var(--ctl-shadow);
         }
 
         /* A mirrored layer stays recognisable in the panel and is marked only
            by a slightly lighter shade than a resting row (the old "PE HARTĂ"
-           badge under the slider is gone). Multiple rows can carry this state;
-           the focused one keeps the stronger outline above. */
+           badge under the slider is gone). */
         #transpPanel .opacity-layer-selectable.opacity-layer-mirrored {
-            background-color: rgba(184,216,240,0.09);
-            border-color: rgba(184,216,240,0.16);
+            background-color: rgba(45, 33, 74, 0.56);
+            border-color: var(--ctl-border-hover);
             transition: background-color 0.2s ease, border-color 0.2s ease,
                 box-shadow 0.2s ease;
         }
@@ -5471,27 +5546,20 @@
 
         body.is-pwa .vertical-opacity-control {
             top: calc(50% - var(--pwa-bottom-controls-half-clearance, 22px));
-            /* Keep a real title column in the standalone app. Some mobile
-               WebViews collapse an `auto` grid track when its only child uses
-               writing-mode + a transform, which leaves the layer initials
-               painted outside the card (and therefore invisible). */
-            grid-template-columns: 14px 1fr;
+            /* Keep a real title column in the standalone app. */
+            grid-template-columns: 12px 1fr;
         }
 
         /* PWA title fallback: render the initials as a rotated, explicit-size
-           label instead of relying on vertical-writing grid measurement. The
-           label remains on the slider's left side, but has a concrete box and
-           its own stacking level on iOS/Android standalone WebViews.
+           label instead of relying on vertical-writing grid measurement.
            NOTE: this wrapper is positioned, so it must contain ONLY the layer
            initials — the caption chip (.vertical-opacity-caption) is a sibling
-           of the wrapper, anchored to the card, otherwise this box would
-           become the chip's containing block and pull DISTANȚĂ / RAZĂ /
-           ISTORIC down onto the card's top edge (over the × button). */
+           of the wrapper, anchored to the card. */
         body.is-pwa .vertical-opacity-title {
             position: absolute;
             left: 2px;
             top: 50%;
-            width: 14px;
+            width: 12px;
             height: calc(100% - 42px);
             max-height: none;
             display: flex;
@@ -5527,85 +5595,81 @@
         @media (max-width: 600px) {
             .vertical-opacity-control {
                 right: calc(34px + env(safe-area-inset-right, 0px));
-                width: 46px;
-                height: 262px;
-                padding-left: 5px;
-                padding-right: 5px;
+                width: 36px;
+                height: 224px;
+                padding-left: 3px;
+                padding-right: 3px;
             }
 
-            /* Phones / installed PWA: the mirror is 4px narrower here, so the
-               Satellite pair must re-derive its left anchor from THIS width
-               instead of keeping the desktop 50px. Same two-class specificity
-               as the desktop rule above and later in the file → wins, and the
-               two mirrors stay side by side instead of overlapping. */
+            /* Phones / installed PWA: the mirror is 36px wide here, so the
+               Satellite pair and secondary mirror re-derive their left anchor
+               from THIS width instead of keeping the desktop 38px. */
             .vertical-opacity-control.vertical-period-control {
-                right: calc(34px + 46px + 14px + env(safe-area-inset-right, 0px));
+                right: calc(34px + 36px + 12px + env(safe-area-inset-right, 0px));
             }
 
             .vertical-opacity-control.vertical-opacity-secondary {
-                right: calc(34px + 46px + 14px + env(safe-area-inset-right, 0px));
+                right: calc(34px + 36px + 12px + env(safe-area-inset-right, 0px));
             }
 
-            /* O singură oglindă rămâne cea mai din dreapta și pe telefon, deasupra
-               aceleiași ancore de 34px ca primul slot (vezi regula desktop). */
             .vertical-opacity-control.mirror-sole {
                 right: calc(34px + env(safe-area-inset-right, 0px));
             }
 
             .vertical-opacity-slider {
-                width: 142px;
+                width: 120px;
+            }
+
+            .vertical-period-control .vertical-opacity-slider-wrap::after {
+                height: 121px;
             }
 
             .vertical-opacity-layer {
-                font-size: 0.55rem;
+                font-size: 0.52rem;
             }
 
             .vertical-opacity-value {
-                padding: 2px 3px;
-                font-size: 0.56rem;
+                padding: 1px 2px;
+                font-size: 0.52rem;
             }
         }
 
         @media (max-height: 500px) {
             .vertical-opacity-control {
-                height: 222px;
-                /* Must paint above the "?" help button (z-index 1000) when the
-                   RAZĂ / DISTANȚĂ chip floats above the card in landscape. The
-                   chip itself has pointer-events:none, so the help button
-                   remains tappable even where the two overlap. */
+                height: 196px;
                 z-index: 1001;
             }
 
-            /* RAZĂ / DISTANȚĂ / ISTORIC / PERIOADĂ must stay visible even in
-               landscape (user requirement: the word "RAZĂ" and "PERIOADĂ" for
-               Bătălii must appear above its slider whenever the mirror is on
-               screen). The previous display:none hid the chip on every short
-               viewport; the value bubble alone is not enough — the user
-               explicitly asked for the caption. */
             .vertical-opacity-caption:not(:empty) {
                 display: block !important;
                 bottom: calc(100% + 4px);
                 z-index: 3;
             }
 
-            /* The title runs vertically along the card's left side, so on a
-               short screen it shrinks instead of clipping the slider. */
             .vertical-opacity-layer {
-                font-size: 0.5rem;
+                font-size: 0.48rem;
             }
 
             .vertical-opacity-slider {
-                width: 116px;
+                width: 96px;
+            }
+
+            .vertical-period-control .vertical-opacity-slider-wrap::after {
+                height: 97px;
             }
         }
 
         @media (max-height: 360px) {
             .vertical-opacity-control {
-                height: 184px;
+                height: 168px;
             }
 
             .vertical-opacity-slider {
-                width: 82px;
+                width: 74px;
+            }
+
+            .vertical-period-control .vertical-opacity-slider-wrap::after {
+                height: 75px;
             }
 
             .vertical-opacity-layer {
@@ -5965,24 +6029,18 @@
             bottom: auto;
             top: 50%;
             left: auto;
-            right: calc(38px + 50px + 14px + env(safe-area-inset-right, 0px));
+            right: calc(38px + 38px + 12px + env(safe-area-inset-right, 0px));
             transform: translateY(-50%);
         }
-        /* Oglinda Josephine poate sta și în al doilea slot (la 50px + 14px spre
+        /* Oglinda Josephine poate sta și în al doilea slot (la 38px + 12px spre
            stânga de primul): ancora panoului urmărește oglinda, ca panoul să
            rămână în stânga sliderului care i-a deschis iconițele, nu peste el.
            Două clase pe body (0,3,0) bat regula de mai sus (0,2,0). */
         body.vo-josephine-docked.vo-josephine-docked-secondary #iosBldSettingsPanel {
-            right: calc(38px + 50px + 14px + 50px + 14px + env(safe-area-inset-right, 0px));
+            right: calc(38px + 38px + 12px + 38px + 12px + env(safe-area-inset-right, 0px));
         }
         body.is-pwa.vo-josephine-docked #iosBldSettingsPanel {
             top: calc(50% - var(--pwa-bottom-controls-half-clearance, 22px));
-            /* !important obligatoriu: index.html ridică panoul flotant cu
-               `body.is-pwa #iosBldSettingsPanel { bottom: calc(124px + …) !important }`,
-               care bătea `bottom: auto` simplu de aici. Panoul ancorat primea
-               atunci top ȘI bottom simultan și era strivit între ele (cutie de
-               ~290px pentru ~380px de conținut — câmpurile de jos ieșeau din
-               panou). Cu ancora doar pe `top`, înălțimea revine la auto. */
             bottom: auto !important;
         }
         body.vo-josephine-docked .map-frame.is-fullscreen #iosBldSettingsPanel {
@@ -6000,18 +6058,16 @@
                 text-align: right;
             }
             body.vo-josephine-docked #iosBldSettingsPanel {
-                right: calc(34px + 46px + 10px + env(safe-area-inset-right, 0px));
-                width: min(280px, calc(100vw - 140px));
+                right: calc(34px + 36px + 10px + env(safe-area-inset-right, 0px));
+                width: min(280px, calc(100vw - 130px));
             }
             body.vo-josephine-docked.vo-josephine-docked-secondary #iosBldSettingsPanel {
-                right: calc(34px + 46px + 10px + 46px + 10px + env(safe-area-inset-right, 0px));
+                right: calc(34px + 36px + 10px + 36px + 10px + env(safe-area-inset-right, 0px));
                 /* Aceeași margine stângă de 50px ca la ancora primară
-                   (100vw − 140px = 90px dreapta + 50px stânga): ancora secundară
-                   e cu un pas de oglindă (46 + 10) mai la stânga, deci lățimea
-                   scade cu tot atât. Altfel panoul de 272px pornea cu 6px în
-                   afara ecranului la 412px lățime, sub coloana de butoane din
-                   stânga hărții. */
-                width: min(280px, calc(100vw - 196px));
+                   (100vw − 130px = 80px dreapta + 50px stânga): ancora secundară
+                   e cu un pas de oglindă (36 + 10) mai la stânga, deci lățimea
+                   scade cu tot atât. */
+                width: min(280px, calc(100vw - 176px));
             }
         }
 
@@ -6138,43 +6194,10 @@
         .archeo-pot-tag { display:block; font:.68rem/1.25 'Outfit',sans-serif; white-space:nowrap; }
         .archeo-pot-tag b { color:#c4a0f0; font-weight:700; }
 
-        /* Country LiDAR opacity controls are intentionally local to the
-           accordion (they are not mirrored into the desktop quick-opacity
-           control, which remains reserved for the original catalogue). */
-        .lidar-country-opacity {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 100%;
-            height: 5px;
-            border-radius: 3px;
-            background: linear-gradient(90deg, rgba(79,195,247,0.55), rgba(184,216,240,0.14));
-            outline: none;
-            cursor: pointer;
-        }
-        .lidar-country-opacity::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 15px;
-            height: 15px;
-            border-radius: 50%;
-            background: #29b6f6;
-            border: 2px solid rgba(255,255,255,0.85);
-            box-shadow: 0 0 0 4px rgba(79,195,247,0.18), 0 2px 8px rgba(0,0,0,0.5);
-            cursor: pointer;
-        }
-        .lidar-country-opacity::-moz-range-thumb {
-            width: 15px;
-            height: 15px;
-            border-radius: 50%;
-            background: #29b6f6;
-            border: 2px solid rgba(255,255,255,0.85);
-            box-shadow: 0 0 0 4px rgba(79,195,247,0.18), 0 2px 8px rgba(0,0,0,0.5);
-            cursor: pointer;
-        }
-
-        /* Free European LiDAR selectors stay compact inside the accordion. */
-        .lidar-country-row { padding: 5px 0 8px; border-bottom: 1px solid rgba(79,195,247,0.10); }
-        .lidar-country-row:last-child { border-bottom: 0; }
+        /* Country LiDAR opacity controls share the unified slim pastel-orange
+           slider look declared with .transp-slider above; their rows inside
+           #lidarSubLayers receive .dl-sublayer-row from js/layer-panel-rows.js. */
+        .lidar-country-row { padding: 7px 9px 8px; }
         .lidar-country-select {
             width: 100%;
             box-sizing: border-box;
@@ -8436,6 +8459,7 @@
 
 .danish-layer-slider {
     margin-left: 19px;
+    width: calc(100% - 19px);
 }
 
 .danish-layer-status {
@@ -8638,6 +8662,7 @@
 
 .albania-layer-slider {
     margin-left: 19px;
+    width: calc(100% - 19px);
 }
 
 .albania-layer-status {
@@ -8713,13 +8738,14 @@
 }
 
 .albania-active-item {
-    border: 1px solid rgba(245, 240, 235, 0.14);
-    border-radius: 5px;
-    padding: 5px 7px;
-    background: rgba(13, 26, 43, 0.55);
+    border: 1px solid var(--ctl-border);
+    border-radius: 8px;
+    padding: 6px 8px;
+    background: var(--ctl-bg);
+    box-shadow: 0 4px 14px rgba(4, 6, 18, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.06);
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
 }
 
 .albania-active-top {
@@ -9005,6 +9031,7 @@
 
 .finland-layer-slider {
     margin-left: 19px;
+    width: calc(100% - 19px);
 }
 
 .finland-layer-status {

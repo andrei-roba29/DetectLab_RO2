@@ -230,8 +230,29 @@
     var syncTimer = null;
     var periodTipTimer = null;
     var periodTipPinned = false;
-    var PERIOD_THUMB_SIZE = 20;
+    var PERIOD_THUMB_SIZE = 13;
     var PERIOD_TIP_HIDE_DELAY = 900;
+
+    /* Syncs `--slider-pct` (0%–100%) on any `<input type="range">` so WebKit /
+       Chromium tracks paint a pastel faded semitransparent orange progress bar
+       matching the 3D slider look. Guarded for minimal DOM mocks in Node tests. */
+    function syncSliderFill(el) {
+        if (!el || !el.style || typeof el.style.setProperty !== 'function') return;
+        var min = (el.min !== '' && el.min != null && isFinite(Number(el.min))) ? Number(el.min) : 0;
+        var max = (el.max !== '' && el.max != null && isFinite(Number(el.max))) ? Number(el.max) : 100;
+        var val = (el.value !== '' && el.value != null && isFinite(Number(el.value))) ? Number(el.value) : min;
+        var span = max - min;
+        var pct = span > 0 ? ((val - min) / span) * 100 : 0;
+        if (pct < 0) pct = 0;
+        if (pct > 100) pct = 100;
+        el.style.setProperty('--slider-pct', pct.toFixed(2) + '%');
+    }
+
+    function syncAllSlidersIn(rootNode) {
+        if (!rootNode || typeof rootNode.querySelectorAll !== 'function') return;
+        var list = rootNode.querySelectorAll('input[type="range"]');
+        for (var i = 0; i < list.length; i++) syncSliderFill(list[i]);
+    }
 
     /* Acțiuni rapide ancorate sub sliderul vertical: butonul „Ajutor de
        căutare” (APM 2.0) și cele trei butoane Iosefină Premium (căutare
@@ -982,6 +1003,8 @@
         if (String(slot.slider.value) !== String(slot.source.value)) {
             slot.slider.value = slot.source.value;
         }
+        syncSliderFill(slot.source);
+        syncSliderFill(slot.slider);
         slot.output.textContent = slot.formatter(slot.source.value);
         slot.slider.setAttribute('aria-valuetext', slot.output.textContent);
         if (slot === activeSlot) {
@@ -1015,6 +1038,7 @@
 
     function updatePeriodOutput() {
         if (!periodSlider || !periodOutput) return;
+        syncSliderFill(periodSlider);
         periodOutput.textContent = satPeriodLabel(periodSlider.value);
         periodSlider.setAttribute('aria-valuetext', periodOutput.textContent);
     }
@@ -1032,6 +1056,8 @@
         if (String(periodSlider.value) !== String(periodSource.value)) {
             periodSlider.value = periodSource.value;
         }
+        syncSliderFill(periodSource);
+        syncSliderFill(periodSlider);
         updatePeriodOutput();
     }
 
@@ -1617,6 +1643,41 @@
         /* Sliderele de distanță/rază ale straturilor de analiză: înregistrate
            explicit (vezi DISTANCE_SOURCES), cu dock de acțiune centrat jos. */
         for (var d = 0; d < DISTANCE_SOURCES.length; d++) registerDistanceSource(DISTANCE_SOURCES[d]);
+
+        /* Keep `--slider-pct` filled progress live on every `<input type="range">`
+           across the app (layer panel, vertical mirrors, country/CENAGIS rows,
+           Other Maps, Josephine settings, and 3D controls). */
+        syncAllSlidersIn(document);
+        if (typeof document.addEventListener === 'function') {
+            var onAnyRangeUpdate = function (event) {
+                var t = event && event.target;
+                if (t && (t.type === 'range' || (t.getAttribute && t.getAttribute('type') === 'range'))) {
+                    syncSliderFill(t);
+                }
+            };
+            document.addEventListener('input', onAnyRangeUpdate, true);
+            document.addEventListener('change', onAnyRangeUpdate, true);
+        }
+        try {
+            if (typeof MutationObserver === 'function' && document.body) {
+                var rangeObserver = new MutationObserver(function (mutations) {
+                    for (var m = 0; m < mutations.length; m++) {
+                        var added = mutations[m].addedNodes;
+                        if (!added) continue;
+                        for (var n = 0; n < added.length; n++) {
+                            var node = added[n];
+                            if (!node || node.nodeType !== 1) continue;
+                            if (node.tagName === 'INPUT' && node.type === 'range') {
+                                syncSliderFill(node);
+                            } else {
+                                syncAllSlidersIn(node);
+                            }
+                        }
+                    }
+                });
+                rangeObserver.observe(document.body, { childList: true, subtree: true });
+            }
+        } catch (e) { /* DOM-only tests */ }
 
         function wireMirrorSlot(slot) {
             if (!slot || !slot.slider) return;
