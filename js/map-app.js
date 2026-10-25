@@ -14421,11 +14421,18 @@
 
                     var allDefs = layerDefs.concat(internationalLayerDefs);
                     var groupVisible = { hist: false, lidar: false, roman: false, histPremium: false, vegfp: false };
+                    // Every row marked in this pass, so the group pass below can
+                    // ask "is any child of this group row available?" without
+                    // resolving the same rows a second time.
+                    var markedRows = [];
                     allDefs.forEach(function(def) {
                         var visible = isIntersecting(mapBounds, def.bounds);
                         var rowEl = null;
                         try { rowEl = def.getRow(); } catch(e) { rowEl = null; }
-                        if (rowEl) setViewportAvailability(rowEl, visible);
+                        if (rowEl) {
+                            setViewportAvailability(rowEl, visible);
+                            markedRows.push({ el: rowEl, visible: visible });
+                        }
                         if (def.group && visible && rowEl) groupVisible[def.group] = true;
                     });
 
@@ -14478,11 +14485,30 @@
                     // Parent rows disappear when no child layer is available in
                     // this viewport. The arrows remain ordinary controls, never
                     // availability indicators.
+                    //
+                    // A group must stay available when ANY child inside it is
+                    // available — decided BOTH ways, exactly like the country
+                    // filter below: through `def.group` AND through DOM
+                    // containment. The European LiDAR rows (Netherlands … UK …
+                    // plus the 50 hillshade derivate rows) deliberately carry no
+                    // group key — only the Romanian county rows can set
+                    // `groupVisible.lidar` — so as soon as the viewport left
+                    // Romania (e.g. zoomed onto the UK) the whole LiDAR section
+                    // was hidden, UK row included, even though that row's own
+                    // coverage intersected the view: the layer "disappeared as
+                    // if it did not cover the region in the viewport". Counting
+                    // available rows nested inside the group row fixes that and
+                    // keeps the rule identical on both filters.
                     Object.keys(groups).forEach(function(gKey) {
                         var groupRow = getGroupRow(gKey);
                         if (!groupRow) return;
                         var anyAvailable = groupVisible[gKey];
                         if (gKey === 'histPremium' && euCount > 0) anyAvailable = true;
+                        if (!anyAvailable) {
+                            anyAvailable = markedRows.some(function(entry) {
+                                return entry.visible && rowInsideGroupRow(entry.el, groupRow);
+                            });
+                        }
                         setViewportAvailability(groupRow, anyAvailable);
                     });
 

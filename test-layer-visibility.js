@@ -242,6 +242,32 @@ test('partial overlaps and boundary contact count; rows return when coverage ent
     groups.forEach(group => assert.equal(h.row(group + 'ExpandIcon').classList.contains(ARROW_CLASS), false));
 });
 
+test('LiDAR group row survives viewports outside Romania (UK zoom-in)', () => {
+    // The European LiDAR rows (incl. the UK/EA row) live INSIDE the LiDAR
+    // group row but carry no `group` key, so before the containment fallback
+    // only the Romanian county rows could keep the group available: zooming
+    // onto the UK (Romania leaving the viewport) hid the whole LiDAR section
+    // — UK row included — as if its coverage did not intersect the view.
+    const UK_ENGLAND = [[50.5, -2.5], [53.5, 1.5]];
+    const h = setup({ local: new MapMock(UK_ENGLAND) });
+    h.check();
+    assert.equal(highlighted(h, 'lidarUkLidarRow'), true, 'UK row stays in the panel over England');
+    const groupRow = h.row('lidarExpandIcon').closest('.transp-layer-row');
+    assert.equal(groupRow.classList.contains(ROW_CLASS), false,
+        'LiDAR group row stays available while a European LiDAR row intersects the viewport');
+    // A viewport with no LiDAR coverage at all (mid-Atlantic) still hides it.
+    h.local.setBounds(OUTSIDE);
+    h.local.fire('moveend');
+    assert.equal(highlighted(h, 'lidarUkLidarRow'), false, 'UK row leaves when its coverage leaves');
+    assert.equal(groupRow.classList.contains(ROW_CLASS), true,
+        'LiDAR group row hides only when no child layer intersects the viewport');
+    // Back over Romania the tagged-county path keeps working.
+    h.local.setBounds(BANAT);
+    h.local.fire('zoomend');
+    assert.equal(groupRow.classList.contains(ROW_CLASS), false, 'Romanian viewport keeps the group too');
+    groups.forEach(group => assert.equal(h.row(group + 'ExpandIcon').classList.contains(ARROW_CLASS), false));
+});
+
 test('moveend, zoomend and resize listen on the active map, without duplicate subscriptions', () => {
     const active = new MapMock(OUTSIDE);
     const h = setup({ exposed: active, pwa: true });
