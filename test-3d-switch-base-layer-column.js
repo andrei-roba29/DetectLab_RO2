@@ -380,9 +380,14 @@ console.log('[Test] the 2D/3D switch sits right above the base-layer button…')
  * 6. Assets are re-tagged and precached
  * ══════════════════════════════════════════════════════════════════════════ */
 {
-    const TAG = '20261024-no-bar-lidar-row';
+    /* Each asset carries the tag of whatever last changed it: the skin by the
+     * 2D/3D switch moving into the bottom-left control column, the viewer by
+     * the basemap-picker sync fix. */
+    const TAG_CSS = '20261024-no-bar-lidar-row';
+    const TAG_VIEWER = '20261025-basemap-picker-sync';
     for (const asset of ['css/map3d-terrain.css', 'js/map3d-terrain.js']) {
-        const url = asset + '?v=' + TAG;
+        const tag = asset === 'css/map3d-terrain.css' ? TAG_CSS : TAG_VIEWER;
+        const url = asset + '?v=' + tag;
         assert(html.includes(url), 'index.html loads ' + url);
         assert(sw.includes("'" + url + "'"), 'sw.js precaches ' + url);
     }
@@ -390,7 +395,9 @@ console.log('[Test] the 2D/3D switch sits right above the base-layer button…')
     assert(version >= 255, 'the app-shell cache moved past v254 (found v' + version + ')');
     assert(/Re-tags css\/map3d-terrain\.css and js\/map3d-terrain\.js\./.test(sw),
         'sw.js logs the change the way the other shell bumps do');
-    console.log('  ✓ re-tagged ?v=' + TAG + ' and CACHE_NAME v' + version);
+    assert(/Re-tags js\/map-app\.js and js\/map3d-terrain\.js\./.test(sw),
+        'sw.js logs the basemap-picker sync bump too');
+    console.log('  ✓ re-tagged ?v=' + TAG_VIEWER + ' and CACHE_NAME v' + version);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
