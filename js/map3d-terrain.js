@@ -519,6 +519,14 @@
 
     function shouldProxy(host) {
         if (!proxyBase()) return false;
+        /* A host the registry documents as CORS-serving (“never” through the
+         * proxy — the ArcGIS tile hosts above all, tiles.arcgis.com serving
+         * the Romanian 1 m / 2–5 m LiDAR pyramids) is never rerouted, whatever
+         * a runtime verdict says. One misread failure used to send those
+         * pyramids through the proxy for the rest of the session, where a
+         * cold function answers blank tiles and the prepared disc “loads” as
+         * nothing but the base map. The declaration wins. */
+        if (registryHostPolicy(host) === 'never') return false;
         if (state.proxyHosts[host]) return true;
         if (state.directHosts[host]) return false;
         /* A verdict from this session (set when a host healed, or by an earlier
@@ -535,6 +543,9 @@
      */
     function healHost(host, layerId) {
         if (!host || state.proxyHosts[host]) return;
+        /* Declared CORS hosts are never healed onto the proxy (shouldProxy
+         * would ignore the verdict anyway — keep both honest). */
+        if (registryHostPolicy(host) === 'never') return;
         state.proxyHosts[host] = true;
         writeHostCache(host, false);
         var retried = 0;
@@ -574,6 +585,15 @@
     /** Did the service answer with an HTTP status (rather than fail the fetch)? */
     function answeredWithStatus(error) {
         return !!(error && /^\d{3}\s+for\s/.test(String(error.message || '')));
+    }
+
+    /** A request the caller cancelled — never a verdict about the host.
+     * MapLibre aborts tile loads whenever the camera moves or a source
+     * reloads, and the prefetch aborts its own tiles at its 45 s deadline;
+     * both arrive here as an AbortError, indistinguishable from a genuine
+     * network failure unless the name is checked. */
+    function isAbortError(error) {
+        return !!(error && (error.name === 'AbortError' || error.code === 20));
     }
 
     /** Fetch one tile, healing a host that turns out to have no CORS. */
@@ -705,14 +725,27 @@
          * refuses the host (403 = not on its allow-list). */
         if (options.preferProxy && proxyBase()) useProxy = true;
         var target = useProxy ? proxiedUrl() : url;
+        /* A “blank” from the proxy is an upstream failure wearing a 200 (a
+         * 1×1 transparent PNG + X-Map3D-Tile: blank): fine to hand MapLibre
+         * for one frame, but the caller must know — cached as if it were the
+         * tile, it turns into a permanently invisible piece of the disc, and
+         * counted by the prefetch it is a “prepared” tile that does not
+         * exist. fetchTile flags it; the caches stay out of it (below). */
+        var blankTile = false;
+        function noteBlank(response) {
+            if (response && response.headers && response.headers.get('X-Map3D-Tile') === 'blank') {
+                blankTile = true;
+                if (!state.blankWarned[target]) {
+                    state.blankWarned[target] = true;
+                    pushError('proxy returned a blank tile (' + (response.headers.get('X-Map3D-Upstream') || '?') +
+                        ') for ' + url.slice(0, 120));
+                }
+            }
+        }
         return root.fetch(target, { mode: 'cors', credentials: 'omit', signal: signal })
             .then(function (response) {
                 if (response && response.ok) {
-                    if (response.headers && response.headers.get('X-Map3D-Tile') === 'blank' && !state.blankWarned[target]) {
-                        state.blankWarned[target] = true;
-                        pushError('proxy returned a blank tile (' + (response.headers.get('X-Map3D-Upstream') || '?') +
-                            ') for ' + url.slice(0, 120));
-                    }
+                    noteBlank(response);
                     return response;
                 }
                 if (useProxy && response && response.status === 403) {
@@ -725,6 +758,19 @@
                 throw new Error(((response && response.status) || 0) + ' for ' + target);
             })
             .catch(function (error) {
+                /* A cancelled request is not a CORS verdict either: MapLibre
+                 * aborts tile loads on every camera move and source reload,
+                 * and the prefetch aborts its own tiles at its deadline.
+                 * Reading an abort as “no CORS” moved tiles.arcgis.com onto
+                 * the proxy for the whole browser session (sessionStorage
+                 * included) and then retried with the same dead signal, so
+                 * the tile failed anyway and every later tile of the
+                 * Romanian LiDAR pyramids paid the proxy hop — where a cold
+                 * function answers blanks and the layer “never loads” (the
+                 * “Romania 1m/pixel agregare appears for a moment, then only
+                 * the base map is visible” report). Nobody is waiting for
+                 * this tile any more: let the abort be an abort. */
+                if (isAbortError(error)) throw error;
                 /* The service ANSWERED (a 404 for a tile beyond its coverage, a
                  * 500, …): that is not a CORS verdict. Treating every HTTP
                  * error as “no CORS” moved whole hosts onto the proxy for the
@@ -737,7 +783,7 @@
                      * still serve the tile directly — better than a hole. */
                     return root.fetch(url, { mode: 'cors', credentials: 'omit', signal: signal });
                 }
-                if (!useProxy && proxyBase() && host) {
+                if (!useProxy && proxyBase() && host && registryHostPolicy(host) !== 'never') {
                     /* A CORS-less host fails exactly like this: remember the
                      * verdict for the session and retry through the proxy. */
                     state.proxyHosts[host] = true;
@@ -749,9 +795,12 @@
             })
             .then(function (response) {
                 if (!response || !response.ok) throw new Error(((response && response.status) || 0) + ' for ' + url);
+                /* The fallback fetches in the catch above never passed the
+                 * first .then, so the blank check runs here too. */
+                noteBlank(response);
                 return response.arrayBuffer();
             })
-            .then(function (data) { return { data: data }; });
+            .then(function (data) { return { data: data, blank: blankTile }; });
     }
 
     /* ═══════════════════════════════════════════════════════════════════════
@@ -1085,6 +1134,13 @@
             }
             return request
                 .then(function (fetched) {
+                    /* A proxy blank must never pose as a prepared tile: it
+                     * would be prime-cached, counted as downloaded by the
+                     * dialog and then draped as a transparent nothing — the
+                     * fetches “finish”, 3D opens, and only the base map
+                     * shows. Counting it failed is honest: the dialog says
+                     * so and the live view asks the service again. */
+                    if (fetched.blank) throw new Error('the tile proxy answered a blank tile for ' + entry.url);
                     primedPut(entry.url, fetched.data, false);
                     report.bytes += primeBytesOf(fetched.data);
                     var layer = key && MIRROR.layerByKey ? MIRROR.layerByKey(key) : null;
@@ -1239,6 +1295,12 @@
                 var isWms = !!((layer.options && (layer.options.layers || layer.options.layer)) ||
                     /[?&](service=wms|request=getmap)/i.test(url));
                 return fetchTile(url, abortController, { preferProxy: isWms }).then(function (tile) {
+                    /* A proxy blank is an upstream error, not pixels: hand
+                     * MapLibre the transparent tile for this frame but keep
+                     * it out of the blend/clip/primed caches, so the next
+                     * request asks the service again instead of serving the
+                     * stored nothing for the rest of the session. */
+                    if (tile.blank) return { data: MIRROR.disc.blankTile() };
                     return blendedTile(layer, url, tile.data).then(function (data) {
                         return clipFocusedTile(key, url, data, coords).then(function (bytes) { return { data: bytes }; });
                     });
@@ -1300,6 +1362,9 @@
              * definition (`?layer=…&m=<mode>`), never relayed URL by URL. */
             var proxyUrl = def ? REGISTRY.proxyTemplate(def, { time: REGISTRY.timeOf(def), mode: REGISTRY.modeOf(def, {}) }) : null;
             return fetchTile(url, abortController, { proxyUrl: proxyUrl }).then(function (tileData) {
+                /* Same rule as the dl2d route: a proxy blank is served for
+                 * this frame only and never reaches the clip cache. */
+                if (tileData.blank) return { data: MIRROR.disc.blankTile() };
                 return clipFocusedTile('def:' + defId, url, tileData.data, { z: z, x: x, y: y })
                     .then(function (bytes) { return { data: bytes }; });
             });
@@ -3905,6 +3970,13 @@
             try { map.moveLayer(order[i], above || undefined); } catch (e) { /* ignore */ }
         }
         state.deckOrder = order;
+        /* The focus outline is not a deck entry, so the re-stack above
+         * leaves it wherever the layers it was once added over have since
+         * been moved to — in practice underneath the opaque background,
+         * where the dashed ring that says “your LiDAR disc is here” could
+         * never be seen. An annotation belongs on top of the map it
+         * annotates. */
+        try { if (map.getLayer(FOCUS_LINE)) map.moveLayer(FOCUS_LINE); } catch (e) { /* ignore */ }
     }
 
     /* Layers that never load a single tile almost always mean “no CORS”. */

@@ -7852,6 +7852,28 @@
                 var T = tr[lang] || tr.en;
                 return (T && T.lidar_zoom_in_more) || (tr.en && tr.en.lidar_zoom_in_more) || fallback;
             }
+            // Is the map zoomed in far enough for every enabled canvas-drawn
+            // source that carries a zoom gate? The gate tag on a layer is
+            // either the minimum zoom itself (a number) or a plain flag, in
+            // which case the layer's own minZoom is the gate. This helper
+            // was called but never defined: every LiDAR enable and every
+            // zoomend with LiDAR visible threw a ReferenceError, which cut
+            // Leaflet's zoomend→moveend chain (tile refresh, the 3D view's
+            // live sync) and skipped the detectlab:lidar-visibility-changed
+            // dispatch the 3D focus disc listens for.
+            function _lidarCanvasZoomOpen() {
+                var zoom = -Infinity;
+                try { zoom = Number(map.getZoom()); } catch (e) { zoom = -Infinity; }
+                return !Object.keys(LIDAR_SUB_LAYERS).some(function (key) {
+                    var cfg = LIDAR_SUB_LAYERS[key];
+                    if (!cfg || !cfg.enabled || !cfg.leafletLayer) return false;
+                    var gate = cfg.leafletLayer._detectlabCanvasZoomGate;
+                    if (!gate || !_lidarGroup.hasLayer(cfg.leafletLayer)) return false;
+                    var minZoom = (typeof gate === 'number' && isFinite(gate)) ? gate
+                        : Number((cfg.leafletLayer.options && cfg.leafletLayer.options.minZoom) || 0);
+                    return zoom < minZoom;
+                });
+            }
             function _lidarZoomGateNeeded() {
                 if (!_lidarVisible || _lidarCanvasZoomOpen()) return false;
                 return Object.keys(LIDAR_SUB_LAYERS).some(function (key) {

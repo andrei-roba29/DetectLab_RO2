@@ -49,7 +49,7 @@ const viewer = read('js/map3d-terrain.js');
 const indexHtml = read('index.html');
 const swJs = read('sw.js');
 
-const TAG = '20261025-basemap-picker-sync';
+const TAG = '20261025-lidar-3d-tile-heal';
 
 /* ══════════════════════════════════════════════════════════════════════════
  * A. The real basemap block, run end to end
