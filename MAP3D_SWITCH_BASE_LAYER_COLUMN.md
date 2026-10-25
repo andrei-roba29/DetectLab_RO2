@@ -45,8 +45,7 @@ stays bottom-centre (`66px` desktop, `58px` phones) and the bar stays at
 ┌──────────────┐
 │  [3D]  [↻]   │  ← .m3d-toggle-group   (z 960, in .map-wrapper)
 │  [layers]    │  ← #arcgisBasemapCtrl  (Leaflet control, bottomleft)
-│  [N]         │  ← compass
-│  [lock]      │  ← rotation lock
+│  [N]         │  ← compass (drag to rotate, tap for north)
 │  [Detect]    │  ← installed PWA only
 └──────────────┘
 ```
@@ -60,8 +59,8 @@ Leaflet stacks that corner **in flow** and every environment moves it:
 
 | Environment | What moves the corner | Column height above the wrapper's bottom edge |
 |---|---|---|
-| Website | compass 38 + 8 + lock 38, two 10px Leaflet margins, the 34px control | measured and published, but **not consumed**: the website switch stays bottom-centre (`66px`) |
-| Installed PWA | `body.is-pwa .leaflet-bottom { bottom: env(safe-area-inset-bottom) }` (index.html) **and** the third `.compass-detect-btn` | control top **184px + inset** → switch bottom **192px + inset** |
+| Website | compass 38, two 10px Leaflet margins, the 34px control | measured and published, but **not consumed**: the website switch stays bottom-centre (`66px`) |
+| Installed PWA | `body.is-pwa .leaflet-bottom { bottom: env(safe-area-inset-bottom) }` (index.html) **and** the second `.compass-detect-btn` | control top **138px + inset** → switch bottom **146px + inset** |
 | Mobile web, fullscreen | `body:not(.is-pwa) .map-frame.is-fullscreen #detectlab-map .leaflet-bottom.leaflet-left { position: fixed; bottom: calc(56px + inset) }` (css/styles.css) | the whole corner is fixed 56px above the browser bar |
 | Base-layer list open | `.arcgis-basemap-ctrl.is-open` grows the control **upward** | the switch steps up with it (PWA only) |
 
@@ -71,9 +70,9 @@ but `css/map3d-terrain.css` only consumes them under `body.is-pwa`:
 
 | Property | Meaning | PWA fallback (consumed under `body.is-pwa`) |
 |---|---|---|
-| `--m3d-anchor-bottom` | wrapper bottom → the control's top edge **+ 8px gap** | `calc(192px + inset)` |
+| `--m3d-anchor-bottom` | wrapper bottom → the control's top edge **+ 8px gap** | `calc(146px + inset)` |
 | `--m3d-anchor-left` | wrapper left → the control's left edge | `10px` |
-| `--m3d-stack-top` | wrapper bottom → the **switch's own** top edge | `calc(236px + inset)` |
+| `--m3d-stack-top` | wrapper bottom → the **switch's own** top edge | `calc(190px + inset)` |
 
 The website keeps its own constants instead — switch `bottom: 66px`,
 `left: 50%`, `translateX(-50%)`; bar `bottom: 34px`, centred — so nothing on
@@ -101,7 +100,7 @@ longer sit at a fixed `bottom: 34px` in the same corner:
 |---|---|
 | Website, desktop | centred over the bottom-centre switch, `bottom: 34px`, `left: 50%`, `translateX(-50%)`, `width: 208px`, `max-height: calc(100% - 72px)` — unchanged |
 | Website, phones ≤ 720px | same centred `bottom: 34px` placement; only width, font-size and padding narrow — unchanged |
-| Installed PWA, phones ≤ 720px | tucked under the search bar on the left, `top: 56px`, `left: 8px`, `bottom: auto`, `max-height: calc(100% - 64px - var(--m3d-stack-top, 190px))` — the cap keeps landscape (390px of height) from putting the bar over the switch |
+| Installed PWA, phones ≤ 720px | tucked under the search bar on the left, `top: 56px`, `left: 8px`, `bottom: auto`, `max-height: calc(100% - 64px - var(--m3d-stack-top, 144px))` — the cap keeps landscape (390px of height) from putting the bar over the switch |
 | Installed PWA, 3D (desktop/tablet) | centred over the column switch, `bottom: calc(var(--m3d-stack-top) + 8px)`, `left: 50%`, `translateX(-50%)`, `width: 280px`, `max-height: calc(100% - var(--m3d-stack-top) - 72px)` |
 
 Where the bar has less room than its contents (short/landscape screens) it
@@ -123,8 +122,8 @@ scrolls, exactly as it already did — `overflow-y: auto` is untouched.
 
 One accepted consequence of joining the corner: while the offline-maps picker
 (`.offline-map-panel`, `z-index 1300`, bottom-left) is open it covers the
-switch — exactly as it already covers the base-layer button, the compass and
-the rotation lock beneath it. The panel is a deliberate, closable overlay, and
+switch — exactly as it already covers the base-layer button and the compass
+beneath it. The panel is a deliberate, closable overlay, and
 the switch is now part of the stack it parks on.
 
 ## Assets
@@ -140,7 +139,7 @@ precache list, so an installed shell still finds the copy it references.
   (the three properties, the fallbacks, no centred anchor and no lift
   variables left, the bar's three layouts), the viewer contract (what is
   measured, published, watched and retried), and the measurement itself run in
-  a `vm` against a stub column: website `146px`, PWA `192px + inset`, an open
+  a `vm` against a stub column: website `100px`, PWA `146px + inset`, an open
   base-layer list, a missing control and a not-yet-laid-out control. Optional
   real-cascade geometry in Chromium (a stub Leaflet corner + the extracted
   measurement): `PUPPETEER_MODULE_DIR=/path/to/node_modules node

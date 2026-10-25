@@ -92,7 +92,7 @@ for (const action of ['reset', 'north', 'flat']) {
 }
 assert(!/\.m3d-lidar\b/.test(ensureBar) && !/\.m3d-lidar\b/.test(skin),
     'the duplicate .m3d-lidar box in #map3d-bar is removed from both desktop and PWA');
-const SLIDER_TAGS = { 'js/map3d-terrain.js': '20261025-lidar-3d-tile-heal', 'css/map3d-terrain.css': '20261024-no-bar-lidar-row' };
+const SLIDER_TAGS = { 'js/map3d-terrain.js': '20261025-lidar-3d-tile-heal', 'css/map3d-terrain.css': '20261025-glass-controls' };
 for (const file of ['js/map3d-terrain.js', 'css/map3d-terrain.css']) {
     const url = file + '?v=' + SLIDER_TAGS[file];
     assert(html.includes(url) && sw.includes("'" + url + "'"), 'updated asset cache wiring: ' + file);

@@ -51,7 +51,7 @@ const focusSource = read('js/lidar-3d-focus.js');
 const TAG = '20261020-lidar-disc-route';
 const TAG_MIRROR = '20261021-lidar-canvas-tiles';
 const TAG_VIEWER = '20261025-lidar-3d-tile-heal';
-const TAG_CSS = '20261024-no-bar-lidar-row';
+const TAG_CSS = '20261025-glass-controls';
 
 /* One real event-loop turn: the viewer runs its entry gate through a promise,
  * so the dialog is not in the DOM in the same tick as open(). */
@@ -361,7 +361,7 @@ const fakeCanvas = function () {
      * base-layer button, placed by the anchor js/map3d-terrain.js measures
      * (its installed-PWA fallback still rides the home-indicator inset).
      * See MAP3D_SWITCH_BASE_LAYER_COLUMN.md. */
-    assert(/bottom: var\(--m3d-anchor-bottom, calc\(192px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\)\)\)/.test(pwaToggleRule) &&
+    assert(/bottom: var\(--m3d-anchor-bottom, calc\(146px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\)\)\)/.test(pwaToggleRule) &&
            /body\.is-pwa \{\s*--map3d-safe-area-bottom: env\(safe-area-inset-bottom, 0px\);/.test(skin) &&
            /padding: 10px 10px calc\(10px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\)\)/.test(skin) &&
            /min-height: 44px/.test(miniPillRule),

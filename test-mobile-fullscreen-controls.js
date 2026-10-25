@@ -124,11 +124,12 @@ ok('"?" quick guide stays pinned in the top-right corner in mobile fullscreen');
    styles.css is re-versioned by every later release (v127 bumped it to
    ?v=20260922-vo-actions-both-slots), so assert the LIVE relationship — the
    exact URL the page requests must be in PRECACHE_URLS — instead of one
-   frozen tag. tutorial.css keeps this release's tag. */
+   frozen tag. tutorial.css carries the tag of the release that last changed
+   it (the glass-controls pass gave the "?" button the shared pane). */
 const stylesUrl = (html.match(/href="(css\/styles\.css\?v=[^"]+)"/) || [])[1];
 assert(stylesUrl, 'index.html requests a cache-busted styles.css');
 assert(sw.includes("'" + stylesUrl + "'"), 'sw.js pre-caches the live styles.css URL (' + stylesUrl + ')');
-const TAG = '20260922-mobile-fs-controls';
+const TAG = '20261025-glass-controls';
 assert(html.includes('css/tutorial.css?v=' + TAG), 'index.html requests the bumped tutorial.css');
 assert(sw.includes("'css/tutorial.css?v=" + TAG + "'"), 'sw.js pre-caches the bumped tutorial.css');
 const cacheNum = Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1] || 0);

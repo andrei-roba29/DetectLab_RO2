@@ -26,12 +26,12 @@
     <link rel="stylesheet" href="css/leaflet.photon.css">
     <link rel="stylesheet" href="css/leaflet-measure.css">
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
-    <link rel="stylesheet" href="css/styles.css?v=20261024-asig-catalogue">
+    <link rel="stylesheet" href="css/styles.css?v=20261025-glass-controls">
     <!-- 3D TERRAIN VIEW (2D ⇄ 3D) — MapLibre GL JS, vendored like Leaflet.
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
     <link rel="stylesheet" href="css/maplibre-gl.css?v=20261013-3d-terrain">
-    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261024-no-bar-lidar-row">
+    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261025-glass-controls">
     <link rel="stylesheet" href="css/hist-shift.css?v=20261014-hist-shift">
     <!-- „Alte hărți / Other maps” — punctele verzi + suprapunerea liberă a
          hărților ne-georeferențiate (Hungaricana). -->
@@ -39,8 +39,8 @@
     <link rel="stylesheet" href="css/globe-country-picker.css?v=20261021-gate-safe-area">
     <link rel="stylesheet" href="css/country-dock.css?v=20261021-country-exit-3d-stack">
     <link rel="stylesheet" href="css/library-of-babel.css?v=20260917-babel-epochs">
-    <link rel="stylesheet" href="css/tutorial.css?v=20260922-mobile-fs-controls">
-    <link rel="stylesheet" href="css/offline-maps.css?v=20260916-pwa-panel-offline-exit">
+    <link rel="stylesheet" href="css/tutorial.css?v=20261025-glass-controls">
+    <link rel="stylesheet" href="css/offline-maps.css?v=20261025-glass-controls">
     <style>
         /* PWA Specific Styles */
         body.is-pwa .nav-links {
@@ -87,6 +87,17 @@
 
         body.is-pwa #detectlab-map .leaflet-pane,
         body.is-pwa #detectlab-map .leaflet-map-pane {
+            touch-action: none !important;
+            -ms-touch-action: none !important;
+        }
+
+        /* The compass is a drag handle, not a static control: it keeps
+           touch-action:none even in PWA mode (the rule above would otherwise
+           hand a horizontal drag to the browser as a pan gesture and cancel the
+           pointer stream mid-turn). Higher specificity than the .leaflet-control
+           rule, so it wins without another !important cascade. */
+        body.is-pwa #detectlab-map .leaflet-control.detectlab-compass,
+        body.is-pwa #detectlab-map .detectlab-compass .detectlab-compass-btn {
             touch-action: none !important;
             -ms-touch-action: none !important;
         }
@@ -395,17 +406,21 @@
             padding: 0;
             gap: 0;
             justify-content: center;
-            background: rgba(10,25,48,0.88);
-            border: 1px solid rgba(184,216,240,0.18);
-            border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.35);
-            -webkit-backdrop-filter: blur(6px);
-            backdrop-filter: blur(6px);
+            /* Same glass pane as every other map control (css/styles.css :root). */
+            color: var(--ctl-icon, #BBA9F2);
+            background: var(--ctl-bg, rgba(24, 19, 40, 0.45));
+            border: 1px solid var(--ctl-border, rgba(198, 180, 255, 0.20));
+            border-radius: var(--ctl-radius, 12px);
+            box-shadow: var(--ctl-shadow, 0 6px 18px rgba(4, 6, 18, 0.32));
+            -webkit-backdrop-filter: var(--ctl-blur, blur(18px) saturate(150%));
+            backdrop-filter: var(--ctl-blur, blur(18px) saturate(150%));
+            transition: background-color .18s ease, border-color .18s ease, color .18s ease;
         }
         #pwaUserTrigger.pwa-user-trigger:hover,
         #pwaUserTrigger.pwa-user-trigger.active {
-            background: rgba(107,63,160,0.82);
-            border-color: rgba(107,63,160,0.6);
+            color: var(--ctl-icon-hover, #DCD2FB);
+            background: var(--ctl-bg-hover, rgba(45, 33, 74, 0.60));
+            border-color: var(--ctl-border-hover, rgba(198, 180, 255, 0.38));
         }
         #pwaUserTrigger #pwaAvatar {
             width: 24px;
@@ -419,11 +434,13 @@
             display: flex;
             align-items: center;
             gap: 4px;
-            background: rgba(184, 216, 240, 0.08);
-            border: 1px solid rgba(184, 216, 240, 0.2);
-            border-radius: 8px;
+            background: var(--ctl-bg, rgba(24, 19, 40, 0.45));
+            border: 1px solid var(--ctl-border, rgba(198, 180, 255, 0.20));
+            border-radius: var(--ctl-radius, 12px);
             padding: 5px 10px;
-            color: rgba(245, 240, 235, 0.85);
+            color: var(--ctl-icon-hover, #DCD2FB);
+            -webkit-backdrop-filter: var(--ctl-blur, blur(18px) saturate(150%));
+            backdrop-filter: var(--ctl-blur, blur(18px) saturate(150%));
             font-family: 'Outfit', sans-serif;
             font-size: 0.72rem;
             font-weight: 600;
@@ -433,8 +450,8 @@
         }
         .pwa-bar-trigger:hover,
         .pwa-bar-trigger.active {
-            background: rgba(107, 63, 160, 0.3);
-            border-color: rgba(107, 63, 160, 0.5);
+            background: var(--ctl-bg-hover, rgba(45, 33, 74, 0.60));
+            border-color: var(--ctl-border-hover, rgba(198, 180, 255, 0.38));
             color: #fff;
         }
         .pwa-bar-trigger svg {
@@ -794,10 +811,12 @@
            unfold from it. Folded — the default — the control is a single line
            tall, so it never crowds the map (especially on a phone). */
         .arcgis-basemap-ctrl {
-            background: rgba(8, 14, 28, 0.9);
-            border: 1px solid rgba(184, 216, 240, 0.28);
-            border-radius: 10px;
-            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+            background: var(--ctl-bg, rgba(24, 19, 40, 0.45));
+            border: 1px solid var(--ctl-border, rgba(198, 180, 255, 0.20));
+            border-radius: var(--ctl-radius, 12px);
+            box-shadow: var(--ctl-shadow, 0 6px 18px rgba(4, 6, 18, 0.32));
+            -webkit-backdrop-filter: var(--ctl-blur, blur(18px) saturate(150%));
+            backdrop-filter: var(--ctl-blur, blur(18px) saturate(150%));
             overflow: hidden;
             min-width: 38px;
             width: 38px;
@@ -814,7 +833,7 @@
             padding: 8px;
             border: 0;
             background: transparent;
-            color: rgba(245, 240, 235, 0.9);
+            color: var(--ctl-icon, #BBA9F2);
             font-family: inherit;
             font-size: 0.72rem;
             font-weight: 600;
@@ -823,9 +842,9 @@
             cursor: pointer;
             white-space: nowrap;
         }
-        .arcgis-basemap-header:hover { background: rgba(184, 216, 240, 0.1); color: #fff; }
-        .arcgis-basemap-header:focus-visible { outline: 2px solid #b9ff14; outline-offset: -2px; }
-        .arcgis-basemap-header-icon { display: inline-flex; align-items: center; justify-content: center; color: #b9ff14; }
+        .arcgis-basemap-header:hover { background: var(--ctl-bg-hover, rgba(45, 33, 74, 0.60)); color: var(--ctl-icon-hover, #DCD2FB); }
+        .arcgis-basemap-header:focus-visible { outline: 2px solid var(--ctl-border-engaged, rgba(206, 190, 255, 0.55)); outline-offset: -2px; }
+        .arcgis-basemap-header-icon { display: inline-flex; align-items: center; justify-content: center; color: inherit; }
         .arcgis-basemap-header-label { display: none !important; }
         .arcgis-basemap-chevron { display: none !important; }
         .arcgis-basemap-ctrl.is-open .arcgis-basemap-chevron { transform: rotate(180deg); }
@@ -847,7 +866,7 @@
             width: 100%;
             padding: 6px 10px;
             border: 0;
-            border-bottom: 1px solid rgba(184, 216, 240, 0.12);
+            border-bottom: 1px solid rgba(198, 180, 255, 0.12);
             background: transparent;
             color: rgba(245, 240, 235, 0.85);
             font-size: 0.72rem;
@@ -858,11 +877,11 @@
             white-space: nowrap;
         }
         .arcgis-basemap-btn:hover { background: rgba(184, 216, 240, 0.1); color: #fff; }
-        .arcgis-basemap-btn:focus-visible { outline: 2px solid #b9ff14; outline-offset: -2px; }
+        .arcgis-basemap-btn:focus-visible { outline: 2px solid var(--ctl-border-engaged, rgba(206, 190, 255, 0.55)); outline-offset: -2px; }
         .arcgis-basemap-btn.active {
-            background: rgba(107, 63, 160, 0.35);
+            background: var(--ctl-bg-engaged, rgba(126, 94, 214, 0.26));
             color: #fff;
-            box-shadow: inset 2px 0 0 rgba(185, 255, 0, 0.65);
+            box-shadow: inset 2px 0 0 rgba(198, 180, 255, 0.55);
         }
         .arcgis-basemap-hs {
             display: flex;
@@ -875,7 +894,7 @@
             cursor: pointer;
             white-space: nowrap;
         }
-        .arcgis-basemap-hs input { margin: 0; accent-color: #b9ff14; }
+        .arcgis-basemap-hs input { margin: 0; accent-color: #9C7BF0; }
         .arcgis-basemap-ctrl.is-open {
             min-width: 164px;
             width: auto;
@@ -6000,7 +6019,7 @@
          update per layer per gesture and a page-wide budget on live tiles.
          Must load right after Leaflet and before map-app.js. -->
     <script src="js/tile-perf.js?v=20260918-tile-seamless"></script>
-    <script src="js/map-rotate.js?v=20261016-rotated-vector-clip"></script>
+    <script src="js/map-rotate.js?v=20261025-earth-compass"></script>
     <script src="js/L.Control.Layers.Tree.min.js"></script>
     <script src="js/L.Control.Locate.min.js"></script>
     <script src="js/leaflet-hash.js"></script>
@@ -6169,7 +6188,7 @@
     <script src="js/pdf-writer.js?v=20260827-arch-report"></script>
     <script src="js/archeo-report-pdf.js?v=20260928-eu-domain"></script>
     <script src="js/archeo-report.js?v=20261020-3d-analysis-points"></script>
-    <script src="js/tutorial.js?v=20260923-pwa-br-stack-account"></script>
+    <script src="js/tutorial.js?v=20261025-glass-controls"></script>
 
     <!-- AUTH MODAL -->
     <style>

@@ -165,10 +165,11 @@ body.is-pwa.is-3d #map3d-surface {
 /* Installed PWA: the switch heads the bottom-left control column, directly
  * above the base-layer button (#arcgisBasemapCtrl). The offset is measured
  * and published by js/map3d-terrain.js (--m3d-anchor-*); the fallback is the
- * documented PWA column (192px + home-indicator inset). */
+ * documented PWA column (146px + home-indicator inset: compass + Detect, the
+ * base-layer button and Leaflet's own corner margins). */
 body.is-pwa .m3d-toggle-group {
     position: absolute;
-    bottom: var(--m3d-anchor-bottom, calc(192px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px))));
+    bottom: var(--m3d-anchor-bottom, calc(146px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px))));
     left: var(--m3d-anchor-left, 10px);
 }
 
@@ -181,6 +182,9 @@ body:not(.is-pwa) .m3d-toggle-group {
     transform: translateX(-50%);
 }
 
+/* The 2D/3D switch rides the same glass material as the map icons
+   (tokens in css/styles.css :root), so the bottom-centre pill never reads as
+   a second, warmer design language. */
 #map3d-toggle,
 #map3d-refresh {
     display: inline-flex;
@@ -188,32 +192,38 @@ body:not(.is-pwa) .m3d-toggle-group {
     justify-content: center;
     gap: 6px;
     min-height: 36px;
-    padding: 6px 10px;
-    border-radius: 8px;
-    border: 1px solid rgba(184, 216, 240, 0.28);
-    background: rgba(6, 14, 30, 0.78);
-    color: rgba(245, 240, 235, 0.92);
+    padding: 6px 11px;
+    border-radius: var(--ctl-radius, 12px);
+    border: 1px solid var(--ctl-border, rgba(198, 180, 255, 0.20));
+    background: var(--ctl-bg, rgba(24, 19, 40, 0.45));
+    color: var(--ctl-icon, #BBA9F2);
     font-family: 'Outfit', sans-serif;
     font-size: 0.74rem;
     font-weight: 600;
     letter-spacing: 0.03em;
     cursor: pointer;
     pointer-events: auto;
-    backdrop-filter: blur(4px);
-    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    -webkit-backdrop-filter: var(--ctl-blur, blur(18px) saturate(150%));
+    backdrop-filter: var(--ctl-blur, blur(18px) saturate(150%));
+    box-shadow: var(--ctl-shadow, 0 6px 18px rgba(4, 6, 18, 0.32));
+    transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
 }
 
 #map3d-toggle:hover,
-#map3d-refresh:hover { background: rgba(12, 26, 48, 0.9); border-color: rgba(200, 169, 110, 0.6); }
-#map3d-toggle:focus-visible,
-#map3d-refresh:focus-visible { outline: 2px solid #c8a96e; outline-offset: 2px; }
-#map3d-toggle .m3d-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: rgba(184, 216, 240, 0.5);
+#map3d-refresh:hover {
+    background: var(--ctl-bg-hover, rgba(45, 33, 74, 0.60));
+    border-color: var(--ctl-border-hover, rgba(198, 180, 255, 0.38));
+    color: var(--ctl-icon-hover, #DCD2FB);
 }
-body.is-3d #map3d-toggle .m3d-dot { background: #c8a96e; box-shadow: 0 0 8px rgba(200, 169, 110, 0.8); }
+#map3d-toggle:focus-visible,
+#map3d-refresh:focus-visible { outline: 2px solid var(--ctl-border-engaged, rgba(206, 190, 255, 0.55)); outline-offset: 2px; }
+#map3d-toggle .m3d-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(198, 180, 255, 0.45);
+}
+body.is-3d #map3d-toggle .m3d-dot { background: #C6B4FA; box-shadow: 0 0 6px rgba(198, 180, 255, 0.65); }
 #map3d-toggle[disabled] { opacity: 0.6; cursor: progress; }
 #map3d-refresh { display: none; min-width: 44px; }
 body.is-3d #map3d-refresh { display: inline-flex; }
@@ -272,10 +282,10 @@ body.is-pwa.is-3d #map3d-bar {
     right: auto;
     left: 50%;
     transform: translateX(-50%);
-    bottom: calc(var(--m3d-stack-top, calc(236px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)))) + 8px);
+    bottom: calc(var(--m3d-stack-top, calc(190px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)))) + 8px);
     width: 280px;
     max-width: calc(100% - 100px);
-    max-height: calc(100% - var(--m3d-stack-top, calc(236px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)))) - 72px);
+    max-height: calc(100% - var(--m3d-stack-top, calc(190px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)))) - 72px);
     overflow-y: auto;
     scrollbar-width: thin;
 }
@@ -413,7 +423,7 @@ body.is-3d #map3d-bar { display: flex; }
         top: 56px;
         left: 8px;
         bottom: auto;
-        max-height: calc(100% - 64px - var(--m3d-stack-top, 190px));
+        max-height: calc(100% - 64px - var(--m3d-stack-top, 144px));
     }
     body:not(.is-pwa) .m3d-toggle-group {
         bottom: 58px;
@@ -444,7 +454,7 @@ body.is-3d #map3d-bar { display: flex; }
 body.is-pwa { --map3d-safe-area-bottom: env(safe-area-inset-bottom, 0px); }
 
 @media (max-height: 420px) {
-    #map3d-bar { max-height: calc(100% - var(--m3d-stack-top, 190px) - 72px); }
+    #map3d-bar { max-height: calc(100% - var(--m3d-stack-top, 144px) - 72px); }
 }
 
 /* ── popups opened from a 3D feature (same HTML the 2D popup shows) ────── */

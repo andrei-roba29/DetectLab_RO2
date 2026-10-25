@@ -7,9 +7,9 @@
     background: none !important;
 }
 
-/* Identic cu celelalte iconițe de pe hartă (zoom / locație / măsură):
-   fond bleumarin, glif #B8D8F0, hover mov. Nuanța cyan anterioară
-   (#8fe3ff + hover turcoaz) ieșea din paleta comună. */
+/* Same glass pane as every other map icon (tokens live in
+   css/styles.css :root): translucent, blurred, violet glyph. The old cyan
+   tint and the solid purple hover both broke the shared material. */
 .btn-offline-maps {
     width: 38px;
     height: 38px;
@@ -17,28 +17,30 @@
     align-items: center;
     justify-content: center;
     padding: 0;
-    border: 1px solid rgba(184,216,240,0.18) !important;
-    border-radius: 10px !important;
-    background: rgba(10,25,48,0.88) !important;
-    color: #B8D8F0;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.35);
-    backdrop-filter: blur(6px);
+    border: 1px solid var(--ctl-border, rgba(198, 180, 255, 0.20)) !important;
+    border-radius: var(--ctl-radius, 12px) !important;
+    background: var(--ctl-bg, rgba(24, 19, 40, 0.45)) !important;
+    color: var(--ctl-icon, #BBA9F2);
+    box-shadow: var(--ctl-shadow, 0 6px 18px rgba(4, 6, 18, 0.32));
+    -webkit-backdrop-filter: var(--ctl-blur, blur(18px) saturate(150%));
+    backdrop-filter: var(--ctl-blur, blur(18px) saturate(150%));
     cursor: pointer;
-    transition: background .2s, border-color .2s, color .2s, box-shadow .2s;
+    transition: background-color .18s ease, border-color .18s ease,
+                color .18s ease, box-shadow .18s ease;
 }
 
 .btn-offline-maps:hover {
-    color: #fff;
-    background: rgba(107,63,160,0.82) !important;
-    border-color: rgba(107,63,160,0.6) !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+    color: var(--ctl-icon-hover, #DCD2FB);
+    background: var(--ctl-bg-hover, rgba(45, 33, 74, 0.60)) !important;
+    border-color: var(--ctl-border-hover, rgba(198, 180, 255, 0.38)) !important;
+    box-shadow: var(--ctl-shadow-hover, 0 8px 22px rgba(4, 6, 18, 0.40));
 }
 
 .btn-offline-maps.active {
-    color: #fff;
-    background: rgba(107,63,160,0.82) !important;
-    border-color: rgba(107,63,160,0.6) !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+    color: var(--ctl-icon-engaged, #F0EBFF);
+    background: var(--ctl-bg-engaged, rgba(126, 94, 214, 0.26)) !important;
+    border-color: var(--ctl-border-engaged, rgba(206, 190, 255, 0.55)) !important;
+    box-shadow: var(--ctl-shadow, 0 6px 18px rgba(4, 6, 18, 0.32));
 }
 
 .btn-offline-maps:focus-visible,

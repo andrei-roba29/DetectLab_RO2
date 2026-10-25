@@ -19,32 +19,40 @@
     /* Below .transp-panel (1001) on purpose: the open layers panel simply
        covers the button instead of floating on top of it. */
     z-index: 1000;
-    width: 36px;
-    height: 36px;
+    width: 38px;
+    height: 38px;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 0;
-    border-radius: 50%;
-    background: rgba(107, 63, 160, 0.55);
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(201, 166, 255, 0.55);
-    color: #efe4ff;
+    /* Same glass pane as every other map control (css/styles.css :root). */
+    border-radius: var(--ctl-radius, 12px);
+    background: var(--ctl-bg, rgba(24, 19, 40, 0.45));
+    -webkit-backdrop-filter: var(--ctl-blur, blur(18px) saturate(150%));
+    backdrop-filter: var(--ctl-blur, blur(18px) saturate(150%));
+    border: 1px solid var(--ctl-border, rgba(198, 180, 255, 0.20));
+    color: var(--ctl-icon, #BBA9F2);
     cursor: pointer;
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45), 0 0 14px rgba(160, 112, 232, 0.35);
-    transition: background 0.2s, border-color 0.2s, transform 0.15s, box-shadow 0.2s;
+    box-shadow: var(--ctl-shadow, 0 6px 18px rgba(4, 6, 18, 0.32));
+    transition: background-color 0.18s ease, border-color 0.18s ease,
+                color 0.18s ease, box-shadow 0.18s ease, transform 0.15s ease;
     -webkit-tap-highlight-color: transparent;
 }
 
 .map-help-btn:hover {
-    background: rgba(140, 88, 205, 0.75);
-    border-color: rgba(201, 166, 255, 0.9);
-    box-shadow: 0 4px 22px rgba(0, 0, 0, 0.5), 0 0 22px rgba(160, 112, 232, 0.6);
+    background: var(--ctl-bg-hover, rgba(45, 33, 74, 0.60));
+    border-color: var(--ctl-border-hover, rgba(198, 180, 255, 0.38));
+    color: var(--ctl-icon-hover, #DCD2FB);
+    box-shadow: var(--ctl-shadow-hover, 0 8px 22px rgba(4, 6, 18, 0.40));
 }
 
 .map-help-btn:active {
-    transform: scale(0.94);
+    transform: scale(0.96);
+}
+
+.map-help-btn:focus-visible {
+    outline: 2px solid var(--ctl-border-engaged, rgba(206, 190, 255, 0.55));
+    outline-offset: 2px;
 }
 
 .map-help-btn svg {

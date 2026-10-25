@@ -108,10 +108,10 @@
                 },
                 {
                     sel: '#detectlab-map .detectlab-compass',
-                    title: { ro: 'Busolă & blocare rotire', en: 'Compass & rotation lock' },
+                    title: { ro: 'Busolă', en: 'Compass' },
                     desc: {
-                        ro: 'Arată nordul — atinge busola ca să readuci harta la 0°. Butonul cu lacăt de dedesubt blochează sau deblochează rotirea hărții. În aplicația instalată, tot sub busolă găsești și comutatorul Detectare.',
-                        en: 'Shows north — tap the compass to reset the map to 0°. The lock button underneath locks or unlocks map rotation. In the installed app, the Detect switch sits under the compass too.'
+                        ro: 'Arată nordul și urmărește rotirea hărții. Atinge busola ca să readuci harta la nord (0°), sau trage de ea la stânga/dreapta ca s-o rotești — exact ca în Google Earth. Nu există blocare a rotirii. În aplicația instalată, sub busolă găsești și comutatorul Detectare.',
+                        en: 'Shows north and follows the map as it turns. Tap the compass to bring the map back to north (0°), or drag it left/right to rotate the view — just like Google Earth. There is no rotation lock. In the installed app, the Detect switch sits under the compass too.'
                     }
                 }
             ],
