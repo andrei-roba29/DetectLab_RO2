@@ -3258,16 +3258,38 @@
                 if (!ARCGIS_BASEMAPS[key]) return _arcgisCurrentBasemap;
                 Object.keys(ARCGIS_BASEMAPS).forEach(function (k) {
                     ARCGIS_BASEMAPS[k].layers.forEach(function (layer) {
-                        if (k === key && !map.hasLayer(layer)) layer.addTo(map);
-                        else if (k !== key && map.hasLayer(layer)) map.removeLayer(layer);
+                        /* One sheet failing to move must not abort the swap:
+                         * the 3D picker routes every choice through here, and a
+                         * throw mid-loop used to leave half a basemap behind —
+                         * the 3D handler's catch then snapped the select back
+                         * to the previous key. */
+                        try {
+                            if (k === key && !map.hasLayer(layer)) layer.addTo(map);
+                            else if (k !== key && map.hasLayer(layer)) map.removeLayer(layer);
+                        } catch (e) {
+                            console.warn('[ArcGIS] basemap layer "' + k + '" could not be applied:', e);
+                        }
                     });
                 });
                 _arcgisCurrentBasemap = key;
                 try { window.localStorage.setItem(ARCGIS_BASEMAP_STORAGE_KEY, key); } catch (e) {}
-                _syncArcgisBasemapControl(key);
+                try { _syncArcgisBasemapControl(key); } catch (e) {
+                    console.warn('[ArcGIS] basemap control sync failed:', e);
+                }
                 return key;
             };
             window.getArcgisBasemap = function () { return _arcgisCurrentBasemap; };
+
+            /* The stored choice IS the map's choice after a reload. The stack
+             * above always boots on satellite imagery, so without this apply
+             * the layers, the control caption and the 3D picker all reported a
+             * basemap the map was not showing: the user's stored "terrain"
+             * made the selector claim terrain while imagery was on, and
+             * picking "Imagery" (already the visible sheet) was a layer no-op
+             * that read as "changing the basemap does nothing". */
+            if (_arcgisCurrentBasemap && _arcgisCurrentBasemap !== 'imagery') {
+                try { window.setArcgisBasemap(_arcgisCurrentBasemap); } catch (e) {}
+            }
 
             // ── ArcGIS basemap switcher (bottom-left glass control) ──
             // The three base maps (Imagery / Topographic / Terrain) live in a

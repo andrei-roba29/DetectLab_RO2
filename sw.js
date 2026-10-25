@@ -772,7 +772,13 @@
 //   .m3d-focus-mini) already provides the same functionality without
 //   overlapping the 2D and refresh buttons. Re-tags css/map3d-terrain.css and
 //   js/map3d-terrain.js.
-const CACHE_NAME = 'detectlab-v266-no-bar-lidar-row';
+// v267: the ArcGIS basemap picker in 3D actually changes the deck again:
+//   the stored basemap is re-applied to the Leaflet stack at boot (layers,
+//   control caption and the 3D select finally agree after a reload), the
+//   2D setter can no longer throw mid-swap, and a failed 3D sync pass is
+//   reported and retried instead of freezing the deck on the old plan.
+//   Re-tags js/map-app.js and js/map3d-terrain.js.
+const CACHE_NAME = 'detectlab-v267-basemap-picker-sync';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -825,6 +831,7 @@ const PRECACHE_URLS = [
   // v265: premium UK historical maps (Ordnance Survey / Bartholomew, MapTiler).
   'js/layer-registry.js?v=20261024-uk-historical-maps',
   'js/map-app.js?v=20261024-uk-historical-maps',
+  'js/map-app.js?v=20261025-basemap-picker-sync',
   'js/translations.js?v=20261024-uk-historical-maps',
   'js/subscriptions.js?v=20261024-uk-historical-maps',
   'js/offline-maps.js?v=20261024-uk-historical-maps',
@@ -885,6 +892,7 @@ const PRECACHE_URLS = [
   'js/map3d-mirror.js?v=20261013-3d-mirror',
   'js/map3d-mirror.js',
   'js/map3d-terrain.js?v=20261024-no-bar-lidar-row',
+  'js/map3d-terrain.js?v=20261025-basemap-picker-sync',
   'js/map3d-terrain.js?v=20261024-gesture-only-camera',
   'js/map3d-terrain.js?v=20261023-pwa-only-3d-column',
   'js/map3d-terrain.js?v=20261020-outline-camera-handoff',

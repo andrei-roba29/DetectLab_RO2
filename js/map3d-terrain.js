@@ -1644,6 +1644,10 @@
                 try {
                     syncBasemapSelect(root.setArcgisBasemap(basemapSelect.value));
                 } catch (e) { syncBasemapSelect(); }
+                /* Sync the deck from this very event, unconditionally: a pick
+                 * that changes nothing on the 2D map fires no layer events, and
+                 * a missed event used to leave the 3D plan untouched. */
+                scheduleSync();
             });
         }
         bar.syncBasemap = function () { syncBasemapSelect(); };
@@ -3669,12 +3673,42 @@
         state.mirror = result;
     }
 
-    function syncLayers() {
-        if (!map || !state.open) return;
-        collectMirror();
-        ensureBaseFallback();
+    /**
+     * One guarded sync pass.
+     *
+     * Returns true only when the whole pass really ran. The 1.5 s signature
+     * poll commits the signature only on a successful pass: a throw used to
+     * mark the deck “up to date” and froze it on the previous plan until some
+     * unrelated map change — the picker kept swapping the 2D layers while the
+     * 3D view never moved (“changing the basemap does nothing”).
+     */
+    function runSync(reason) {
+        if (!map || !state.open) return false;
+        try {
+            return syncLayers() !== false;
+        } catch (e) {
+            var msg = String((e && e.message) || e);
+            pushError('sync' + (reason ? ' [' + reason + ']' : '') + ': ' + msg);
+            console.warn('[Map3D] sync pass failed' + (reason ? ' (' + reason + ')' : '') + ':', e);
+            return false;
+        }
+    }
 
-        var p = plan();
+    function syncLayers() {
+        if (!map || !state.open) return false;
+        var ok = true;
+        /* Each phase is guarded on purpose: a throw in one phase must not
+         * abort the pass, or the deck stays frozen on the last good plan while
+         * the 2D map keeps changing — which is exactly the reported “the
+         * basemap picker does nothing in 3D”. The mirror and the fallback are
+         * non-fatal (a stale mirror still renders); a plan failure aborts this
+         * pass and is reported as a failed sync so the poll retries it. */
+        try { collectMirror(); } catch (e) { ok = false; pushError('mirror: ' + String((e && e.message) || e)); }
+        try { ensureBaseFallback(); } catch (e) { ok = false; pushError('base fallback: ' + String((e && e.message) || e)); }
+
+        var p = null;
+        try { p = plan(); } catch (e) { ok = false; pushError('plan: ' + String((e && e.message) || e)); }
+        if (!p) return ok;
         var wanted = {};
         p.entries.forEach(function (entry) { wanted[entry.id] = entry; });
 
@@ -3738,11 +3772,14 @@
             }
         }
 
-        applyDeck(p);
-        watchSourceHealth();
-        syncAttribution();
-        refreshFocusRow();
+        try { applyDeck(p); } catch (e) { ok = false; pushError('deck order: ' + String((e && e.message) || e)); }
+        try {
+            watchSourceHealth();
+            syncAttribution();
+            refreshFocusRow();
+        } catch (e) { ok = false; pushError('sync finish: ' + String((e && e.message) || e)); }
         state.lastSync = Date.now();
+        return ok;
     }
 
     /**
@@ -4352,7 +4389,7 @@
         if (state.syncTimer) root.clearTimeout(state.syncTimer);
         state.syncTimer = root.setTimeout(function () {
             state.syncTimer = null;
-            syncLayers();
+            runSync('scheduled');
         }, 120);
     }
 
@@ -4387,8 +4424,10 @@
             var result = MIRROR.collect(leafletMap() || {});
             var signature = result.signature;
             if (signature !== state.signature) {
-                state.signature = signature;
-                syncLayers();
+                /* Commit the signature only after a pass that really ran: a
+                 * failed pass must stay “pending” so the next tick retries,
+                 * instead of freezing the deck on the old plan forever. */
+                if (runSync('poll')) state.signature = signature;
             }
         }, 1500);
     }
