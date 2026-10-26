@@ -1,11 +1,20 @@
 /* =====================================================================
  * other-maps.js — “Alte hărți / Other maps” (sub-layer of Hărți istorice)
  * ---------------------------------------------------------------------
- * The portal maps.hungaricana.hu publishes tens of thousands of historical
- * sheets; only a small part of them is georeferenced (the “Geocoded data”
- * vector layer).  The rest — cadastral plans, county maps, road surveys —
- * carries a place name but no footprint, so on the portal itself it is
- * invisible on the map.
+ * Two portals feed this sub-layer, both full of historical sheets that are
+ * not aligned to the ground: maps.hungaricana.hu (ECW pyramid, see
+ * other-maps-tiles.js) and the National Library of Scotland Map Finder
+ * (IIIF scans + live GeoServer WFS discovery, see other-maps-nls.js).  Each
+ * catalogue row carries a `source` field the tile dispatcher routes on; a
+ * row without one stays Hungaricana, so the original data is untouched.
+ *
+ * The Hungaricana portal publishes tens of thousands of historical sheets;
+ * only a small part of them is georeferenced (the “Geocoded data” vector
+ * layer).  The rest — cadastral plans, county maps, road surveys — carries
+ * a place name but no footprint, so on the portal itself it is invisible on
+ * the map.  The NLS finder adds roughly 200k scanned sheets over Great
+ * Britain and Ireland, queried live for the current viewport while the
+ * sub-layer is on.
  *
  * This module brings those sheets onto the DetectLab map as a sub-layer of
  * the premium “Hărți istorice / Historical Maps” group:
@@ -33,7 +42,16 @@
     var Tiles = root.DetectLabOtherMapsTiles;
     var Overlays = root.DetectLabOtherMapsOverlay;
 
+    /* Two offline-built catalogues feed the same sub-layer: Hungaricana
+     * (ECW pyramid, js/other-maps-tiles.js) and the National Library of
+     * Scotland Map Finder (IIIF, js/other-maps-nls.js).  On top of its static
+     * catalogue, the NLS source is also queried live for the current
+     * viewport while the layer is on. */
     var CATALOG_URL = 'data/other-maps-catalog.json?v=20261026-cluj-alba';
+    var NLS_CATALOG_URL = 'data/other-maps-nls-catalog.json?v=20261026-nls-find';
+    var NLS_LIVE_MIN_ZOOM = 9;          // city scale: below this a finder query would return too many sheets
+    var NLS_LIVE_DEBOUNCE_MS = 700;     // one finder query per settled view
+    var NLS_LIVE_MAX_KEYS = 20;         // remembered viewport cells, so panning back does not refetch
     var POINTS_PANE = 'pane_other_maps_points';
     var OVERLAY_PANE = 'pane_other_maps_overlay';
     var STORE_KEY = 'dlOtherMaps.v1';
@@ -60,6 +78,8 @@
             om_add: 'Adaugă pe hartă',
             om_added: 'Pe hartă',
             om_source: 'Deschide pe Hungaricana',
+            om_source_nls: 'Deschide pe NLS Map Finder',
+            om_source_nls_name: 'National Library of Scotland · Map Finder',
             om_none: 'Nicio hartă înregistrată pentru acest loc.',
             om_loading: 'Se încarcă harta…',
             om_align: 'Mod aliniere',
@@ -90,6 +110,8 @@
             om_add: 'Add to map',
             om_added: 'On map',
             om_source: 'Open on Hungaricana',
+            om_source_nls: 'Open on NLS Map Finder',
+            om_source_nls_name: 'National Library of Scotland · Map Finder',
             om_none: 'No map recorded for this place.',
             om_loading: 'Loading the sheet…',
             om_align: 'Align mode',
@@ -120,6 +142,8 @@
             om_add: 'Hozzáadás a térképhez',
             om_added: 'A térképen',
             om_source: 'Megnyitás a Hungaricanán',
+            om_source_nls: 'Megnyitás az NLS térképkeresőben',
+            om_source_nls_name: 'National Library of Scotland · Map Finder',
             om_none: 'Ehhez a helyhez nincs térkép.',
             om_loading: 'A térkép betöltése…',
             om_align: 'Illesztés mód',
@@ -148,6 +172,10 @@
         enabled: false,
         opacity: 0.8,
         catalog: null,
+        catalogs: [],
+        staticRecords: [],
+        liveRecords: [],
+        nlsLive: { gen: 0, timer: null, keys: Object.create(null), keyOrder: [], inflight: false },
         records: [],
         locations: [],
         index: null,
@@ -213,27 +241,68 @@
     }
 
     /* ── catalogue ────────────────────────────────────────────────────── */
+    /* The two static catalogues (Hungaricana + NLS) flattened into one
+     * record stream.  Every record remembers which source owns it — the tile
+     * dispatcher (js/other-maps-tiles.js) routes by that field.  A record
+     * without one stays Hungaricana, so the old catalogue is untouched. */
+    function combineCatalogMaps(hungaricana, nls) {
+        var entries = [];
+        (hungaricana && Array.isArray(hungaricana.maps) ? hungaricana.maps : []).forEach(function (entry) {
+            entries.push(Object.assign({ source: 'hungaricana' }, entry));
+        });
+        var nlsSource = nls && (nls.sourceId || 'nls');
+        (nls && Array.isArray(nls.maps) ? nls.maps : []).forEach(function (entry) {
+            entries.push(Object.assign({ source: nlsSource }, entry));
+        });
+        return entries;
+    }
+
+    /* Friendly source label for the card badge / window footer. */
+    function sourceLabel(record) {
+        var sourceId = (record && record.source) || 'hungaricana';
+        for (var i = 0; i < state.catalogs.length; i++) {
+            var catalog = state.catalogs[i];
+            var catalogSource = catalog.sourceId || (catalog === state.catalog ? 'hungaricana' : null);
+            if (catalogSource === sourceId && catalog.source && catalog.source.name) {
+                return catalog.source.name;
+            }
+        }
+        if (sourceId === 'nls') return t('om_source_nls_name');
+        return 'Hungaricana · Maps';
+    }
+
     function loadCatalog() {
         if (state.catalog) return Promise.resolve(state.catalog);
         if (state.loading) return state.loading;
-        state.loading = fetch(CATALOG_URL, { cache: 'force-cache' })
-            .then(function (response) {
-                if (!response.ok) throw new Error('HTTP ' + response.status);
-                return response.json();
-            })
-            .then(function (json) {
-                state.catalog = json;
-                if (Tiles && json) {
-                    Tiles.configure({
-                        tile: json.tileBase,
-                        thumb: json.thumbBase,
-                        size: json.sizeBase,
-                        record: json.recordBase
-                    });
-                }
-                buildIndex(json);
-                return json;
-            })
+        state.loading = Promise.all([
+            fetch(CATALOG_URL, { cache: 'force-cache' })
+                .then(function (response) {
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    return response.json();
+                }),
+            /* NLS is a second source: a missing catalogue must never take
+             * the whole sub-layer down, so its failure resolves to null. */
+            fetch(NLS_CATALOG_URL, { cache: 'force-cache' })
+                .then(function (response) { return response.ok ? response.json() : null; })
+                .catch(function () { return null; })
+        ]).then(function (pair) {
+            var json = pair[0];
+            var nls = pair[1];
+            state.catalog = json;
+            state.catalogs = nls ? [json, nls] : [json];
+            if (Tiles && json) {
+                Tiles.configure({
+                    tile: json.tileBase,
+                    thumb: json.thumbBase,
+                    size: json.sizeBase,
+                    record: json.recordBase
+                });
+            }
+            state.staticRecords = combineCatalogMaps(json, nls);
+            state.liveRecords = [];
+            rebuildRecords();
+            return json;
+        })
             .catch(function (err) {
                 console.error('[OtherMaps] catalog failed to load', err);
                 state.loading = null;
@@ -242,11 +311,29 @@
         return state.loading;
     }
 
-    function buildIndex(catalog) {
+    /* Static catalogue rows plus the live NLS finder rows, de-duplicated by
+     * record id (a sheet returned both ways is painted once). */
+    function allEntries() {
+        var seen = Object.create(null);
+        var merged = [];
+        state.staticRecords.concat(state.liveRecords).forEach(function (entry) {
+            var key = entry.id || (entry.path + '|' + entry.lat + '|' + entry.lng);
+            if (seen[key]) return;
+            seen[key] = true;
+            merged.push(entry);
+        });
+        return merged;
+    }
+
+    function rebuildRecords() {
+        return buildIndex(allEntries());
+    }
+
+    function buildIndex(entries) {
         var clusterer = root.DetectLabPatrimoniuClustering;
         var records = [];
         var seen = Object.create(null);
-        (catalog && catalog.maps ? catalog.maps : []).forEach(function (entry) {
+        (entries || []).forEach(function (entry) {
             var lat = Number(entry.lat);
             var lng = Number(entry.lng);
             if (!isFinite(lat) || !isFinite(lng) || !entry.path) return;
@@ -255,6 +342,8 @@
             seen[key] = true;
             records.push({
                 id: entry.id,
+                source: entry.source || 'hungaricana',
+                nlsId: entry.nlsId,
                 title: entry.title,
                 subject: entry.subject,
                 place: entry.place,
@@ -536,6 +625,7 @@
         if (!canvas) return;
         L.DomUtil.setPosition(canvas, state.map.containerPointToLayerPoint(L.point(0, 0)));
         redraw();
+        scheduleNlsLive();
     }
 
     /* ── clicking a dot ───────────────────────────────────────────────── */
@@ -667,18 +757,21 @@
         modal.querySelector('.om-modal-title').textContent = t('om_available');
         modal.querySelector('.om-modal-sub').textContent =
             (place ? place + ' · ' : '') + tCount('om_maps_count', members.length);
-        modal.querySelector('.om-modal-foot').textContent =
-            state.catalog && state.catalog.source ? state.catalog.source.attribution : '';
+        modal.querySelector('.om-modal-foot').textContent = state.catalogs
+            .map(function (catalog) { return catalog.source && catalog.source.attribution; })
+            .filter(Boolean).join(' · ');
 
         list.innerHTML = members.map(function (record) {
-            var thumb = Tiles ? Tiles.thumbUrl(record.path) : '';
-            var recordUrl = Tiles ? Tiles.recordUrl(record.id) : '#';
+            var thumb = Tiles ? Tiles.thumbUrl(record) : '';
+            var recordUrl = Tiles ? Tiles.recordUrl(record) : '#';
+            var sourceButton = record.source === 'nls' ? t('om_source_nls') : t('om_source');
             var meta = [record.year, record.collection, record.provider].filter(Boolean).join(' · ');
             return '<div class="om-card" data-om-id="' + escapeHtml(record.id) + '">' +
                 '<a class="om-thumb" href="' + escapeHtml(recordUrl) + '" target="_blank" rel="noopener">' +
                 (thumb ? '<img src="' + escapeHtml(thumb) + '" alt="" loading="lazy">' : '') +
                 '</a>' +
                 '<div class="om-card-body">' +
+                '<div class="om-card-source">' + escapeHtml(sourceLabel(record)) + '</div>' +
                 '<div class="om-card-title">' + escapeHtml(record.title) + '</div>' +
                 (record.subject ? '<div class="om-card-subject">' + escapeHtml(record.subject) + '</div>' : '') +
                 (meta ? '<div class="om-card-meta">' + escapeHtml(meta) + '</div>' : '') +
@@ -686,7 +779,7 @@
                 '<button type="button" class="om-btn om-btn-add" data-om-add="' + escapeHtml(record.id) + '">' +
                 escapeHtml(t('om_add')) + '</button>' +
                 '<a class="om-btn om-btn-ghost" href="' + escapeHtml(recordUrl) +
-                '" target="_blank" rel="noopener">' + escapeHtml(t('om_source')) + '</a>' +
+                '" target="_blank" rel="noopener">' + escapeHtml(sourceButton) + '</a>' +
                 '</div></div></div>';
         }).join('');
 
@@ -947,6 +1040,90 @@
         return value.toFixed(2) + ' m';
     }
 
+    /* ── live NLS Map Finder discovery ──────────────────────────────────
+     * The static NLS catalogue only seeds a handful of towns.  While the
+     * sub-layer is on, the finder's WFS is also queried for the current
+     * viewport (debounced, zoom- and coverage-gated, one fetch per viewport
+     * cell) and every returned sheet joins the same green-dot index as the
+     * offline catalogues.  Any failure is silent: Hungaricana dots and the
+     * static NLS seed keep working without a network. */
+    function nlsBBox() {
+        var bounds = state.map.getBounds();
+        return {
+            west: bounds.getWest(),
+            south: bounds.getSouth(),
+            east: bounds.getEast(),
+            north: bounds.getNorth()
+        };
+    }
+
+    function nlsCellKey(bbox) {
+        var zoom = state.map.getZoom();
+        /* Half-degree cells at the current zoom bucket: panning inside the
+         * same cell reuses the answer instead of querying again. */
+        var latCell = Math.floor((bbox.north + bbox.south) / 2 * 2);
+        var lngCell = Math.floor((bbox.east + bbox.west) / 2 * 2);
+        return zoom + '|' + latCell + '|' + lngCell;
+    }
+
+    function rememberNlsKey(key) {
+        var live = state.nlsLive;
+        if (live.keys[key]) return;
+        live.keys[key] = true;
+        live.keyOrder.push(key);
+        while (live.keyOrder.length > NLS_LIVE_MAX_KEYS) {
+            var oldest = live.keyOrder.shift();
+            delete live.keys[oldest];
+        }
+    }
+
+    function mergeLiveRecords(found) {
+        var known = Object.create(null);
+        state.liveRecords.forEach(function (record) { known[record.id] = true; });
+        var changed = false;
+        (found || []).forEach(function (record) {
+            if (!known[record.id]) {
+                known[record.id] = true;
+                state.liveRecords.push(record);
+                changed = true;
+            }
+        });
+        return changed;
+    }
+
+    function runNlsLive() {
+        var Nls = root.DetectLabOtherMapsNls;
+        var live = state.nlsLive;
+        live.timer = null;
+        if (!state.enabled || !Nls || !state.map) return;
+        if (state.map.getZoom() < NLS_LIVE_MIN_ZOOM) return;
+        var bbox = nlsBBox();
+        if (!Nls.intersectsCoverage(bbox)) return;
+        var key = nlsCellKey(bbox);
+        if (live.keys[key] || live.inflight) return;
+        var gen = ++live.gen;
+        live.inflight = true;
+        Nls.queryBBox(bbox).then(function (found) {
+            live.inflight = false;
+            if (gen !== live.gen || !state.enabled) return;
+            rememberNlsKey(key);
+            if (mergeLiveRecords(found)) {
+                rebuildRecords();
+                redraw();
+            }
+        }).catch(function () { live.inflight = false; });
+    }
+
+    function scheduleNlsLive() {
+        var Nls = root.DetectLabOtherMapsNls;
+        var live = state.nlsLive;
+        if (!Nls || !state.enabled || !state.map) return;
+        if (state.map.getZoom() < NLS_LIVE_MIN_ZOOM) return;
+        if (!Nls.intersectsCoverage(nlsBBox())) return;
+        if (live.timer) root.clearTimeout(live.timer);
+        live.timer = root.setTimeout(runNlsLive, NLS_LIVE_DEBOUNCE_MS);
+    }
+
     /* ── enable / disable ─────────────────────────────────────────────── */
     function setEnabled(on) {
         if (!state.map) return false;      // the live map is not built yet
@@ -971,11 +1148,14 @@
                 }
                 onMapMoved();
                 redraw();
+                scheduleNlsLive();
             }).catch(function () {
                 state.enabled = false;
                 if (toggle) toggle.checked = false;
             });
         } else {
+            if (state.nlsLive.timer) root.clearTimeout(state.nlsLive.timer);
+            state.nlsLive.timer = null;
             if (state.manager) {
                 state.manager.setAlignMode(false);
                 state.manager.setVisible(false);
@@ -1112,6 +1292,13 @@
         mergeTapSheets: mergeTapSheets,
         formatMeters: formatMeters,
         georefOptionsHtml: georefOptionsHtml,
+        combineCatalogMaps: combineCatalogMaps,
+        sourceLabel: sourceLabel,
+        mergeLiveRecords: mergeLiveRecords,
+        rebuildRecords: rebuildRecords,
+        nlsCellKey: nlsCellKey,
+        scheduleNlsLive: scheduleNlsLive,
+        runNlsLive: runNlsLive,
         sliderFromMppLimits: function (mpp, limits) {
             var ratio = (Math.max(limits.mppMin, Math.min(limits.mppMax, mpp)) - limits.mppMin) /
                 (limits.mppMax - limits.mppMin);

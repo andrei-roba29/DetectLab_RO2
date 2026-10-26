@@ -34,8 +34,8 @@
     <link rel="stylesheet" href="css/map3d-terrain.css?v=20261026-lidar-whole-or-disc">
     <link rel="stylesheet" href="css/hist-shift.css?v=20261014-hist-shift">
     <!-- „Alte hărți / Other maps” — punctele verzi + suprapunerea liberă a
-         hărților ne-georeferențiate (Hungaricana). -->
-    <link rel="stylesheet" href="css/other-maps.css?v=20261026-other-maps-georef">
+         hărților ne-georeferențiate (Hungaricana + NLS Map Finder). -->
+    <link rel="stylesheet" href="css/other-maps.css?v=20261026-nls-find">
     <link rel="stylesheet" href="css/globe-country-picker.css?v=20261021-gate-safe-area">
     <link rel="stylesheet" href="css/country-dock.css?v=20261021-country-exit-3d-stack">
     <link rel="stylesheet" href="css/library-of-babel.css?v=20260917-babel-epochs">
@@ -3763,7 +3763,9 @@
                                        oninput="setUkBaire1940MapOpacity(this.value)">
                             </div>
 
-                            <!-- Alte hărți / Other maps — hărți NE-georeferențiate (Hungaricana).
+                            <!-- Alte hărți / Other maps — hărți NE-georeferențiate din două surse:
+                                 Hungaricana (maps.hungaricana.hu) și National Library of Scotland
+                                 Map Finder (maps.nls.uk/geo/find/, inclusiv căutarea WFS live).
                                  Când stratul e pornit, locurile care au hărți apar ca puncte verzi
                                  semitransparente, grupate la fel ca siturile din „Patrimoniu”;
                                  un click deschide lista hărților disponibile, iar harta aleasă
@@ -3785,7 +3787,7 @@
                                         <span style="font-size:0.55rem;background:rgba(255,200,50,0.15);color:#ffc832;border:1px solid rgba(255,200,50,0.4);border-radius:3px;padding:1px 4px;flex-shrink:0">PREMIUM</span>
                                     </span>
                                     <span class="pct-wrap" style="display:flex;align-items:center;gap:5px">
-                                        <button type="button" class="layer-info-btn" onclick="event.stopPropagation();showLayerInfo('Alte hărți / Other maps','© Hungaricana – Kulturális Örökség Portál · conținutul aparține instituțiilor partenere (Magyar Nemzeti Levéltár, Hadtörténeti Intézet és Múzeum, arhivele județene)')" title="Layer info"><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="7.5" r="1.3" fill="currentColor" /><rect x="10.8" y="10.5" width="2.4" height="7" rx="1.2" fill="currentColor" /></svg></button>
+                                        <button type="button" class="layer-info-btn" onclick="event.stopPropagation();showLayerInfo('Alte hărți / Other maps','© Hungaricana – Kulturális Örökség Portál (instituții partenere: Magyar Nemzeti Levéltár, Hadtörténeti Intézet és Múzeum, arhive județene) · © National Library of Scotland – maps.nls.uk Map Finder')" title="Layer info"><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="7.5" r="1.3" fill="currentColor" /><rect x="10.8" y="10.5" width="2.4" height="7" rx="1.2" fill="currentColor" /></svg></button>
                                         <span class="pct" id="otherMapsPct">80%</span>
                                     </span>
                                 </div>
@@ -5334,15 +5336,18 @@
          long-press din nou + switch OFF = lock pe poziția curentă. -->
     <script src="js/hist-shift.js?v=20261020-hist-shift-docked-slider"></script>
     <!-- „Alte hărți / Other maps” — sub-strat premium cu hărți NE-georeferențiate
-         (maps.hungaricana.hu). other-maps-tiles.js citește piramida ECW a portalului,
-         other-maps-overlay.js o desenează ca suprapunere liberă (mutare / rotație /
-         scalare) confinată într-un pătrat georeferențieră de 5 km în jurul locului,
-         other-maps.js ține catalogul, punctele verzi și panoul de aliniere (cu
-         selectorul pentru dimensiunea pătratului). Se atașează singure la harta
-         Live (window._dlMap) după map-app.js. -->
-    <script src="js/other-maps-tiles.js?v=20261023-other-maps"></script>
-    <script src="js/other-maps-overlay.js?v=20261026-other-maps-georef"></script>
-    <script src="js/other-maps.js?v=20261026-other-maps-georef"></script>
+         din două surse: Hungaricana (piramidă ECW cu hash, other-maps-tiles.js)
+         și National Library of Scotland Map Finder (IIIF + WFS live,
+         other-maps-nls.js, înregistrat ca sursă „nls” în dispatcherul de tile-uri).
+         other-maps-overlay.js desenează foaia ca suprapunere liberă (mutare /
+         rotație / scalare) confinată într-un pătrat georeferențieră de 5 km în
+         jurul locului, other-maps.js ține cataloagele, punctele verzi și panoul
+         de aliniere (cu selectorul pentru dimensiunea pătratului). Se atașează
+         singure la harta Live (window._dlMap) după map-app.js. -->
+    <script src="js/other-maps-tiles.js?v=20261026-nls-find"></script>
+    <script src="js/other-maps-nls.js?v=20261026-nls-find"></script>
+    <script src="js/other-maps-overlay.js?v=20261026-nls-find"></script>
+    <script src="js/other-maps.js?v=20261026-nls-find"></script>
     <script src="js/offline-maps.js?v=20261024-uk-historical-maps"></script>
     <script src="js/battles-layer.js?v=20261020-3d-analysis-points"></script>
     <script src="js/vertical-opacity-control.js?v=20261026-flat-country-sections"></script>

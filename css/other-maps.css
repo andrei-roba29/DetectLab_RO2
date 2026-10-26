@@ -210,6 +210,21 @@
 
 .om-card-body { flex: 1 1 auto; min-width: 0; }
 
+/* Which portal the sheet comes from (Hungaricana / NLS Map Finder). */
+.om-card-source {
+    display: inline-block;
+    margin-bottom: 4px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: #c9b48d;
+    background: rgba(200, 169, 110, 0.14);
+    border: 1px solid rgba(200, 169, 110, 0.35);
+}
+
 .om-card-title {
     font-size: 0.8rem;
     font-weight: 600;

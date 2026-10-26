@@ -818,7 +818,15 @@
 //   can never rotate at all, and a pinch-zoom never turns the map: as soon as
 //   the finger spread changes, the gesture is a zoom and stays one. Re-tags
 //   js/map-rotate.js. See MAP_TOUCH_ROTATION.md.
-const CACHE_NAME = 'detectlab-v283-touch-rotate-deadband';
+// v284: “Alte hărți / Other maps” gains a second source — the National
+//   Library of Scotland Map Finder (https://maps.nls.uk/geo/find/). A new
+//   IIIF adapter (js/other-maps-nls.js) registers as the 'nls' source in the
+//   tile dispatcher (js/other-maps-tiles.js), a static seed catalogue
+//   (data/other-maps-nls-catalog.json, built by tools/build-nls-catalog.mjs)
+//   feeds the same green dots, and live GeoServer WFS bbox queries add
+//   finder sheets for the current viewport while the layer is on. Re-tags
+//   the other-maps assets. See OTHER_MAPS.md.
+const CACHE_NAME = 'detectlab-v284-nls-find';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -946,11 +954,13 @@ const PRECACHE_URLS = [
   'js/hist-shift.js?v=20261020-hist-shift-docked-slider',
   'js/hist-shift.js?v=20261014-hist-shift',
   'css/hist-shift.css?v=20261014-hist-shift',
-  'js/other-maps-tiles.js?v=20261023-other-maps',
-  'js/other-maps-overlay.js?v=20261026-other-maps-georef',
-  'js/other-maps.js?v=20261026-other-maps-georef',
-  'css/other-maps.css?v=20261026-other-maps-georef',
+  'js/other-maps-tiles.js?v=20261026-nls-find',
+  'js/other-maps-nls.js?v=20261026-nls-find',
+  'js/other-maps-overlay.js?v=20261026-nls-find',
+  'js/other-maps.js?v=20261026-nls-find',
+  'css/other-maps.css?v=20261026-nls-find',
   'data/other-maps-catalog.json?v=20261026-cluj-alba',
+  'data/other-maps-nls-catalog.json?v=20261026-nls-find',
   'js/translations.js?v=20261023-other-maps',
   'js/map3d-mirror.js?v=20261017-archeo-3d-projection',
   'js/map3d-mirror.js?v=20261021-lidar-canvas-tiles',
@@ -1719,7 +1729,8 @@ const PASSTHROUGH_HOSTS = [
   'imperium.ahlfeldt.se', // Digital Atlas of the Roman Empire (DARE) API
   'cast.uark.edu', // CORONA Atlas of the Near East / GeoServer (CAST UARK)
   'geoserve.cast.uark.edu', // CORONA GeoWebCache WMS-C tile server
-  'idee.es'         // IDEE/IGN tile services — "Mapa LiDAR" WMS (Spain LiDAR)
+  'idee.es',        // IDEE/IGN tile services — "Mapa LiDAR" WMS (Spain LiDAR)
+  'nls.uk'          // National Library of Scotland: map-view IIIF tiles, geoserver WFS, maps viewer
 ];
 
 // ── Install event: pre-cache essential static files ──

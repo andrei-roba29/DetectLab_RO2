@@ -20,6 +20,10 @@
  *      framed into the viewport, zooming in keeps the old tiles as a stand-in
  *      until the finer level loads (and the fallback retires it), zooming out
  *      refetches the coarser level, reset/ remove clean up.
+ *   7. js/other-maps-nls.js — NLS Map Finder IIIF region URLs, info.json
+ *      parsing, the WFS query/feature mapping, the committed NLS seed
+ *      catalogue, the multi-source dispatcher and an NLS sheet driven
+ *      through the same overlay manager (sections 10–14).
  */
 
 const assert = require('assert');
@@ -164,6 +168,9 @@ const sandbox = {
     isFinite,
     TextEncoder,
     Uint8Array,
+    URLSearchParams,
+    AbortController,
+    Date,
     setTimeout: (fn, ms) => { pendingTimers.set(nextTimerId, { fn, ms }); return nextTimerId++; },
     clearTimeout: (id) => { pendingTimers.delete(id); },
     clearInterval: () => {},
@@ -210,10 +217,23 @@ function pt(x, y) {
         _round() { this.x = Math.round(this.x); this.y = Math.round(this.y); return this; }
     };
 }
-/* loadCatalog() fetches the JSON catalogue; serve it from disk so the dots
- * test can run the real attach → enable → redraw path without a network. */
+/* loadCatalog() fetches the JSON catalogues; serve them from memory so the
+ * dots test can run the real attach → enable → redraw path without a
+ * network.  The stub routes by URL: the Hungaricana catalogue, the NLS
+ * seed catalogue, an IIIF info.json and a WFS response each get their own
+ * body, and an unset body answers non-OK (the NLS catalogue is optional). */
 let fakeCatalogJson = null;
-sandbox.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(fakeCatalogJson) });
+let fakeNlsCatalogJson = null;
+let fakeNlsInfoJson = null;
+let fakeWfsJson = null;
+sandbox.fetch = (url) => {
+    const u = String(url || '');
+    let body = fakeCatalogJson;
+    if (u.indexOf('other-maps-nls-catalog.json') !== -1) body = fakeNlsCatalogJson;
+    else if (u.indexOf('info.json') !== -1) body = fakeNlsInfoJson;
+    else if (u.indexOf('geoserver') !== -1 || u.indexOf('wfs') !== -1) body = fakeWfsJson;
+    return Promise.resolve({ ok: body != null, json: () => Promise.resolve(body) });
+};
 sandbox.window = sandbox;
 vm.createContext(sandbox);
 
@@ -223,11 +243,13 @@ function load(relative) {
 
 load('js/patrimoniu-clustering.js');
 load('js/other-maps-tiles.js');
+load('js/other-maps-nls.js');
 load('js/other-maps-overlay.js');
 load('js/other-maps.js');
 
 const Clustering = sandbox.DetectLabPatrimoniuClustering;
 const Tiles = sandbox.DetectLabOtherMapsTiles;
+const Nls = sandbox.DetectLabOtherMapsNls;
 const Overlay = sandbox.DetectLabOtherMapsOverlay;
 const OtherMaps = sandbox.DetectLabOtherMaps;
 
@@ -880,8 +902,215 @@ const OtherMaps = sandbox.DetectLabOtherMaps;
     ok(OtherMaps.strings.ro.om_georef_hint && OtherMaps.strings.en.om_georef_hint && OtherMaps.strings.hu.om_georef_hint,
         'the georeference hint exists in all three languages');
 
+    /* ══ 10. the NLS Map Finder adapter ════════════════════════════════
+     * js/other-maps-nls.js turns the NLS GeoServer WFS features into Other
+     * maps records and reads the scans through the IIIF Image API.  Nothing
+     * here touches the network: info.json and WFS bodies are served by the
+     * URL-aware fetch stub at the top of this file. */
+    ok(Nls && Nls.SOURCE === 'nls', 'the NLS adapter is loaded');
+    eq(Nls.TILE_SIZE, 512, 'the IIIF tile grid matches the overlay grid');
+    eq(Nls.FIND_LAYERS.length, 12, 'the finder query covers the twelve documented WFS layers');
+    ok(Nls.COVERAGE.south === 49.1 && Nls.COVERAGE.north === 61, 'the coverage box is Great Britain / Ireland');
+
+    eq(Nls.imageIdOf({ id: 'nls/228799835' }), '228799835', 'imageIdOf strips the nls/ prefix');
+    eq(Nls.imageIdOf('228799835'), '228799835', 'imageIdOf accepts a bare viewer id');
+    eq(Nls.iiifPath('102345214'), '10234/102345214', 'the IIIF path prefix is the first five digits');
+    eq(Nls.iiifBase({ path: '10234/102345214' }),
+        'https://map-view.nls.uk/iiif/2/10234%2F102345214', 'the IIIF base URL encodes the slash');
+    eq(Nls.thumbUrl({ id: 'nls/102345214', path: '10234/102345214' }),
+        'https://map-view.nls.uk/iiif/2/10234%2F102345214/full/256,/0/default.jpg',
+        'thumbnails are IIIF full-region requests');
+    eq(Nls.recordUrl({ id: 'nls/102345214', path: '10234/102345214' }),
+        'https://maps.nls.uk/view/102345214', 'the record URL points at the Map Images viewer');
+    ok(/point=55.95330,-3.18830/.test(Nls.findUrl(55.9533, -3.1883)), 'the finder deep link carries the marker point');
+    eq(Nls.maxZoomFor(13176, 10110), 5, 'a 13176 px sheet has a six-level pyramid');
+    eq(Nls.maxZoomFor(512, 512), 0, 'a 512 px sheet has a single pyramid level');
+
+    const v2 = Nls.parseInfo({
+        width: 2048, height: 1024,
+        tiles: [{ width: 512, height: 512, scaleFactors: [1, 2, 4, 8] }]
+    });
+    eq(v2.maxZoom, 3, 'IIIF v2 scale factors map onto pyramid levels');
+    const v11 = Nls.parseInfo({ width: 9392, height: 8770, tile_width: 9392, scale_factors: [1, 2, 4, 8, 16, 32, 64, 128] });
+    eq(v11.maxZoom, 7, 'IIIF v1.1 scale_factors are understood too');
+    eq(Nls.parseInfo({ width: 1000, height: 800 }).maxZoom, Nls.maxZoomFor(1000, 800),
+        'an info document without tiles falls back to the 512 px rule');
+
+    const nlsRec = { id: 'nls/142842536', nlsId: '142842536', source: 'nls', path: '14284/142842536', w: 13176, h: 10110 };
+    const nlsMeta = await Nls.resolve(nlsRec, { w: 13176, h: 10110 });
+    eq(nlsMeta.w, 13176, 'resolve honours the catalogue size hint without a request');
+    eq(nlsMeta.maxZoom, 5, 'the hinted pyramid depth is computed');
+    const nativeTile = await Nls.tileUrl(nlsRec, 0, 0, 5);
+    eq(nativeTile, 'https://map-view.nls.uk/iiif/2/14284%2F142842536/0,0,512,512/512,512/0/default.jpg',
+        'a native-level tile is a 512 px IIIF region request');
+    const rootTile = await Nls.tileUrl(nlsRec, 0, 0, 0);
+    eq(rootTile, 'https://map-view.nls.uk/iiif/2/14284%2F142842536/0,0,13176,10110/412,316/0/default.jpg',
+        'the pyramid root is one whole-image request at the smallest derivative');
+    const edgeTile = await Nls.tileUrl(nlsRec, 25, 0, 5);
+    ok(/\/12800,0,376,512\/376,512\/0\/default\.jpg$/.test(edgeTile), 'edge tiles are clamped to the image width');
+    eq(await Nls.tileUrl(nlsRec, 26, 0, 5), '', 'a tile outside the grid resolves to an empty URL');
+
+    fakeNlsInfoJson = {
+        width: 2048, height: 1024,
+        tiles: [{ width: 512, height: 512, scaleFactors: [1, 2, 4, 8] }]
+    };
+    const fetched = await Nls.resolve({ id: 'nls/910000001', source: 'nls', path: '91000/910000001' });
+    eq(fetched.maxZoom, 3, 'without a hint the pyramid comes from the fetched info.json');
+    const candidates = Nls.iiifBaseCandidates({ path: '91000/910000001' });
+    eq(candidates.length, 3, 'the info lookup has the current and two legacy service paths');
+    ok(candidates[0].indexOf('/iiif/2/') !== -1 && candidates[2].indexOf('/iiif/1/') !== -1,
+        'the current /iiif/2 service is tried before the legacy paths');
+    fakeNlsInfoJson = null;
+    let resolveFailed = false;
+    try {
+        await Nls.resolve({ id: 'nls/910000009', source: 'nls', path: '91000/910000009' });
+    } catch (e) { resolveFailed = true; }
+    ok(resolveFailed, 'an unreachable info.json rejects so the overlay can apply its fallback size');
+    fakeNlsInfoJson = { width: 2048, height: 1024, tiles: [{ scaleFactors: [1, 2, 4, 8] }] };
+
+    const wfsUrl = decodeURIComponent(Nls.wfsBBoxUrl({ west: -3.3, south: 55.9, east: -3.1, north: 56.0 }));
+    eq((wfsUrl.match(/nls:/g) || []).length, 12, 'the WFS query names every finder layer');
+    eq((wfsUrl.match(/INTERSECTS/g) || []).length, 12, 'each layer gets its own INTERSECTS filter');
+    ok(wfsUrl.indexOf('SRID=4326;POLYGON') !== -1 && wfsUrl.indexOf('maxFeatures=300') !== -1,
+        'the bbox query is an EPSG:4326 polygon capped at 300 features');
+    eq((wfsUrl.match(/the_geom/g) || []).length, 24,
+        'the footprint column is both returned (propertyName) and filtered (CQL_INTERSECTS)');
+
+    const sampleFeature = {
+        id: 'OS_Town_Plans_Eng_non500_WFS.60',
+        properties: { IMAGE: '228799835', SHEET: 'Accrington - Sheet 1, Surveyed: 1849,<br> Published: 1851', DATES: '', YEAR: '1851' },
+        geometry: { type: 'MultiPolygon', coordinates: [[[[-2.3695, 53.7511], [-2.3695, 53.7568], [-2.3549, 53.7568], [-2.3549, 53.7511], [-2.3695, 53.7511]]]] }
+    };
+    const sampleRecord = Nls.featureToRecord(sampleFeature);
+    eq(sampleRecord.id, 'nls/228799835', 'a WFS feature becomes an nls record');
+    eq(sampleRecord.path, '22879/228799835', 'the record carries the IIIF path');
+    eq(sampleRecord.place, 'Accrington', 'the place is the sheet-title prefix');
+    eq(sampleRecord.year, 1851, 'the YEAR property is parsed');
+    ok(Math.abs(sampleRecord.lat - 53.75395) < 1e-9 && Math.abs(sampleRecord.lng + 2.3622) < 1e-9,
+        'the point is the footprint bbox centroid');
+    const dated = Nls.featureToRecord({
+        id: 'towns.7',
+        properties: { IMAGE: '700000007', SHEET: 'Oldtown - Plan', DATES: 'Published 1872' },
+        geometry: { type: 'Polygon', coordinates: [[[-3, 54], [-3, 54.1], [-2.9, 54.1], [-2.9, 54], [-3, 54]]] }
+    });
+    eq(dated.year, 1872, 'a missing YEAR falls back to the DATES text');
+    eq(Nls.featureToRecord({ properties: { IMAGE: 'not-a-number' }, geometry: sampleFeature.geometry }), null,
+        'a feature without a numeric viewer id is rejected');
+    eq(Nls.stripHtml('a&nbsp;<br>b &amp; c'), 'a b & c', 'HTML in titles is flattened to text');
+    ok(Nls.inCoverage(55.95, -3.19) && !Nls.inCoverage(46.77, 23.6), 'coverage accepts Scotland and rejects Romania');
+    ok(Nls.intersectsCoverage({ west: -4, south: 55, east: -2, north: 56 }), 'an overlapping bbox is inside coverage');
+    ok(!Nls.intersectsCoverage({ west: 20, south: 45, east: 28, north: 48 }), 'a Romanian bbox is outside coverage');
+
+    fakeWfsJson = {
+        type: 'FeatureCollection',
+        features: [
+            sampleFeature,
+            Object.assign({}, sampleFeature, { properties: Object.assign({}, sampleFeature.properties, { IMAGE: '228799838' }) }),
+            sampleFeature,
+            { properties: { IMAGE: 'bad' }, geometry: sampleFeature.geometry }
+        ]
+    };
+    const found = await Nls.queryBBox({ west: -3.3, south: 55.9, east: -3.1, north: 56.0 });
+    eq(found.length, 2, 'queryBBox parses features, drops bad rows and de-duplicates viewer ids');
+    fakeWfsJson = null;
+    const realWarn = console.warn;
+    console.warn = () => {};   // the failure path warns by design; keep the test output clean
+    const failed = await Nls.queryBBox({ west: -3.3, south: 55.9, east: -3.1, north: 56.0 });
+    console.warn = realWarn;
+    eq(failed.length, 0, 'a failed finder query resolves to an empty list, never throws');
+
+    /* ══ 11. the multi-source dispatcher ═══════════════════════════════ */
+    eq(Tiles.source('nls'), Nls, 'the NLS adapter registered itself with the tile dispatcher');
+    eq(await Tiles.tileUrl(nlsRec, 0, 0, 5), nativeTile, 'record objects route to the NLS adapter');
+    eq(Tiles.thumbUrl(nlsRec), Nls.thumbUrl(nlsRec), 'thumbnails route to the NLS adapter');
+    eq(Tiles.recordUrl(nlsRec), Nls.recordUrl(nlsRec), 'record links route to the NLS adapter');
+    eq(Tiles.thumbUrl({ path: 'maps/mol/x/y.ecw' }),
+        'https://static-cdn.hungaricana.hu/tile/thumb/maps/mol/x/y.ecw',
+        'a sourceless record object stays on the Hungaricana path');
+    eq(Tiles.recordUrl('MOLTerkeptar/2146'),
+        'https://maps.hungaricana.hu/en/MOLTerkeptar/2146/view/', 'plain string ids stay on the Hungaricana path');
+
+    /* ══ 12. the committed NLS seed catalogue ══════════════════════════ */
+    const nlsCatalog = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/other-maps-nls-catalog.json'), 'utf8'));
+    ok(Array.isArray(nlsCatalog.maps) && nlsCatalog.maps.length > 50, 'the NLS seed holds a substantial set of sheets');
+    eq(nlsCatalog.sourceId, 'nls', 'the catalogue declares its source id');
+    ok(/^https:\/\/map-view\.nls\.uk\/iiif\/2\/$/.test(nlsCatalog.iiifBase), 'the catalogue names the IIIF service');
+    ok(/geoserver\.nls\.uk\/geoserver\/wfs$/.test(nlsCatalog.wfs), 'the catalogue names the finder WFS endpoint');
+    const nlsIds = new Set();
+    nlsCatalog.maps.forEach((entry) => {
+        ok(/^nls\/\d+$/.test(entry.id), entry.id + ' is an nls record id');
+        ok(!nlsIds.has(entry.id), entry.id + ' is unique');
+        nlsIds.add(entry.id);
+        ok(/^\d{5}\/\d+$/.test(entry.path), entry.id + ' carries a <prefix>/<id> IIIF path');
+        ok(entry.source === 'nls', entry.id + ' is tagged with the nls source');
+        ok(entry.lat >= Nls.COVERAGE.south && entry.lat <= Nls.COVERAGE.north, entry.id + ' sits inside the coverage latitude band');
+        ok(entry.lng >= Nls.COVERAGE.west && entry.lng <= Nls.COVERAGE.east, entry.id + ' sits inside the coverage longitude band');
+        ok(entry.place && entry.title, entry.id + ' carries a place and a title');
+        ok(!entry.w || (entry.w > 0 && entry.h > 0), entry.id + ' has no implausible size hint');
+    });
+
+    const combined = OtherMaps.combineCatalogMaps(
+        { maps: [{ id: 'H/1', path: 'maps/mol/h.ecw', lat: 47, lng: 23, place: 'Cluj-Napoca (RO)' }] },
+        { sourceId: 'nls', maps: [{ id: 'nls/1', path: '00001/1', lat: 54, lng: -3, place: 'Testtown' }] }
+    );
+    eq(combined.length, 2, 'combineCatalogMaps merges both catalogues');
+    eq(combined[0].source, 'hungaricana', 'Hungaricana rows are tagged by default');
+    eq(combined[1].source, 'nls', 'NLS rows keep their source id');
+
+    /* ══ 13. module integration: strings, live merge, labels ═══════════ */
+    ok(OtherMaps.strings.ro.om_source_nls && OtherMaps.strings.en.om_source_nls && OtherMaps.strings.hu.om_source_nls,
+        'the NLS source button is translated in all three languages');
+    ok(/National Library of Scotland/.test(OtherMaps.sourceLabel({ source: 'nls' })),
+        'the NLS badge label names the library');
+    const beforeCount = OtherMaps.records().length;
+    const liveRecord = {
+        id: 'nls/920000002', nlsId: '920000002', source: 'nls', path: '92000/920000002',
+        title: 'Liveworth - Sheet 1', place: 'Liveworth', lat: 53.8, lng: -2.4, year: 1899,
+        provider: 'National Library of Scotland', collection: 'towns', precision: 'settlement'
+    };
+    ok(OtherMaps.mergeLiveRecords([liveRecord, liveRecord]), 'a new live sheet is accepted');
+    ok(!OtherMaps.mergeLiveRecords([liveRecord]), 'a repeated live sheet is not added twice');
+    OtherMaps.rebuildRecords();
+    eq(OtherMaps.records().length, beforeCount + 1, 'the live sheet joined the shared record index');
+    ok(OtherMaps.records().some((r) => r.id === 'nls/920000002' && r.source === 'nls'),
+        'the merged record keeps its source tag');
+    const cellKey = OtherMaps.nlsCellKey({ west: -3.3, south: 55.9, east: -3.1, north: 56.0 });
+    ok(/^\d+\|-?\d+\|-?\d+$/.test(cellKey), 'the live-query cache key is zoom|latCell|lngCell');
+    OtherMaps.scheduleNlsLive();   // Romania viewport: must no-op without throwing
+
+    /* ══ 14. an NLS sheet through the overlay manager ══════════════════
+     * The free-transform machinery is source-agnostic: an NLS record goes
+     * through the same fit/frame path, and its <img> elements receive IIIF
+     * region URLs rather than ECW hashes. */
+    const nlsMap = fakeMap({ zoom: 12, size: { x: 400, y: 800 }, center: { lat: 53.754, lng: -2.362 } });
+    const nlsMgr = Overlay.createManager(nlsMap, { pane: 'om_nls_pane', opacity: 0.8 });
+    const nlsSheet = {
+        id: 'nls/930000003', nlsId: '930000003', source: 'nls', path: '93000/930000003',
+        lat: 53.754, lng: -2.362, w: 4096, h: 3072
+    };
+    const nlsOv = await nlsMgr.add(nlsSheet);
+    await new Promise((r) => setImmediate(r));
+    const nlsImgs = nlsOv.gridEl.children.filter((el) => el.tagName === 'IMG');
+    ok(nlsImgs.length >= 1, 'the NLS sheet paints tile images');
+    ok(nlsImgs.every((img) => /map-view\.nls\.uk\/iiif\/2\/93000%2F930000003\/.+\.jpg/.test(img.src || '')),
+        'every NLS tile src is an IIIF region URL');
+    const nlsFit = Overlay.fitScale(4096, 3072, Overlay.resolutionAt(53.754, 12), 400, 800);
+    ok(Math.abs(nlsOv.state.mpp - nlsFit) / nlsFit < 1e-9, 'a fresh NLS sheet is framed into the viewport like any other');
+    nlsMgr.remove('nls/930000003');
+
+    const hungMap = fakeMap({ zoom: 12, size: { x: 400, y: 800 }, center: { lat: 47.933, lng: 23.892 } });
+    const hungMgr = Overlay.createManager(hungMap, { pane: 'om_hung_pane', opacity: 0.8 });
+    const hungSheet = { id: 'TST/NLS', path: 'maps/mol/s011/s11_0647/s11_0647.ecw', lat: 47.933, lng: 23.892, w: 4096, h: 3072 };
+    const hungOv = await hungMgr.add(hungSheet);
+    await new Promise((r) => setImmediate(r));
+    const hungImgs = hungOv.gridEl.children.filter((el) => el.tagName === 'IMG');
+    ok(hungImgs.length >= 1 && hungImgs.every((img) => /static-cdn\.hungaricana\.hu/.test(img.src || '')),
+        'sourceless sheets still paint through the Hungaricana hash pyramid');
+    hungMgr.remove('TST/NLS');
+
     console.log('✓ other-maps: ' + checks + ' checks passed ' +
-        ('(' + catalog.maps.length + ' catalogue records, ' + locations.length + ' places)'));
+        ('(' + catalog.maps.length + ' Hungaricana + ' + nlsCatalog.maps.length + ' NLS catalogue records, ' +
+            locations.length + ' Hungaricana places)'));
 })().catch((err) => {
     console.error('✗ other-maps test failed:', err && err.message);
     process.exit(1);

@@ -458,16 +458,20 @@
             if (!Tiles || typeof Tiles.tileUrl !== 'function') return;
             function stale() { return ov.token !== token || !img.parentNode; }
             function fallback() {
-                // The two readings of the portal's hash scheme (see
+                // The two readings of the Hungaricana hash scheme (see
                 // js/other-maps-tiles.js) — one retry with the other order.
+                // Other sources (NLS IIIF) have no order ambiguity, so the
+                // dispatcher simply re-requests the same canonical URL.
                 if (stale() || typeof Tiles.tileUrlAlt !== 'function') return;
-                Tiles.tileUrlAlt(ov.record.path, x, y, level).then(function (altUrl) {
+                Tiles.tileUrlAlt(ov.record, x, y, level).then(function (altUrl) {
                     if (stale()) return;
-                    img.addEventListener('load', function () { Tiles.noteOrder(Tiles.alternateOrder()); });
+                    if (!ov.record.source) {
+                        img.addEventListener('load', function () { Tiles.noteOrder(Tiles.alternateOrder()); });
+                    }
                     img.src = altUrl;
                 }).catch(function () { /* a missing tile stays transparent */ });
             }
-            Tiles.tileUrl(ov.record.path, x, y, level).then(function (url) {
+            Tiles.tileUrl(ov.record, x, y, level).then(function (url) {
                 // The view may already have switched level while the hash was
                 // being computed — never paint a stale tile.
                 if (stale()) return;
@@ -658,7 +662,7 @@
             if (savedState) applyState(ov, savedState);
 
             var hint = { w: record.w, h: record.h };
-            return Tiles.resolve(record.path, hint).then(function (meta) {
+            return Tiles.resolve(record, hint).then(function (meta) {
                 ov.meta = meta;
                 if (ov.state.mpp == null || !isFinite(ov.state.mpp)) {
                     // Fresh sheet: frame it into the viewport (longest side ≈
