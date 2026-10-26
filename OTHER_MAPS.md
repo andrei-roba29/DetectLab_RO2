@@ -148,13 +148,38 @@ mouse-ului (Shift + roata = rotație) și pinch-ul pe telefon. În modul alinier
 dezactivate temporar dragging-ul, zoom-ul cu roata, pinch-ul și box-zoom-ul bazei —
 exact ca la „Mută harta istorică” — și se reactivează la **Blocare**.
 
+## 4.1 Pătratul georeferențieră (5 km, modificabil)
+
+O foaie ne-georeferențiată se potrivește manual peste baza curentă, dar nu
+poate fi plasată oriunde: **ancora ei (punctul central) rămîne într-un pătrat
+de 5 km în jurul locului din catalog**. Așadar, foaia se poate alinia
+(aducere la superpoziție, rotație, scalare) doar pe ground-ul care i se
+poartă — nu se poate traîn până la o altă lume.
+
+* pătratul e centrat pe **locul din catalog** (`record.lat/lng`), nu pe ancora
+  curentă — deci e o zonă fixă pe hartă, iar ancora e confinată într-ea;
+* laturile se măsoară **pe teren** (metri), nu în grade, deci un pătrat de
+  5 km e 5 km la orice latitudine;
+* rotația și scalarea rămîn libere (scară limitată doar de `mppMin`/`mppMax`);
+* în modul aliniere, pătratul se desenează ca contur punctat auriu în jurul
+  locului, iar panoul „Suprapune harta” are un **selector de dimensiune**:
+  2 / 5 / 10 / 20 / 50 / 100 km. Valorile mai mari sunt ieșirea pentru
+  cazurile excepționale (o hartă lată de județ, un nume de loc aproximativ) —
+  selectând una, ancora e repinsă în interiorul noului pătrat dacă trebuie;
+* dimensiunea e salvată per foaie în `localStorage` (`dlOtherMaps.v1`),
+  alături de ancora, rotația și opacitatea;
+* punctul de schimb e `clampToSquare()` / `setBoundsKm()` din
+  `js/other-maps-overlay.js` și selectorul `om-s-georef` din `js/other-maps.js`.
+
+---
+
 ## 5. Persistență
 
 Totul e local, per browser (`localStorage`), conform opțiunii alese:
 
 | Cheie | Conținut |
 | --- | --- |
-| `dlOtherMaps.v1` | stratul pornit/oprit, opacitatea, hărțile adăugate cu ancora, rotația, scara și opacitatea fiecăreia |
+| `dlOtherMaps.v1` | stratul pornit/oprit, opacitatea, hărțile adăugate cu ancora, rotația, scara, dimensiunea pătratului georeferențieră și opacitatea fiecăreia |
 | `dlOtherMaps.pyramid.v1` | dimensiunea naturală a fiecărei foi deja citite |
 | `dlOtherMaps.pyramid.v1.order` | ordinea hash-ului care a funcționat |
 
@@ -167,14 +192,14 @@ Alinierea supraviețuiește reîncărcării paginii și repornirii stratului. C�
 | Fișier | Rol |
 | --- | --- |
 | `js/other-maps-tiles.js` | piramida ECW a portalului: hash-ul AES, descoperirea dimensiunii, URL-urile |
-| `js/other-maps-overlay.js` | suprapunerea liberă: transformare, tile-uri vizibile, mînere, gesturi |
+| `js/other-maps-overlay.js` | suprapunerea liberă: transformare, tile-uri vizibile, mînere, gesturi, pătratul georeferențieră |
 | `js/other-maps.js` | catalogul, punctele verzi, gruparea, fereastra, panoul, persistența |
 | `css/other-maps.css` | stilurile pentru toate cele de mai sus |
 | `data/other-maps-catalog.json` | catalogul (131 de foi → 42 de locuri: seed + lotul Transilvania, oct. 2026) |
 | `tools/build-hungaricana-catalog.mjs` | re-generează/extinde catalogul de pe portal |
 | `test-other-maps.js` | regresia (rulează fără rețea) |
 | `index.html` | rîndul din panoul „Hărți istorice” + tagurile de asset |
-| `sw.js` | cache `detectlab-v261-other-maps-fit` |
+| `sw.js` | cache `detectlab-v282-other-maps-georef` |
 
 ## 7. Cum extinzi catalogul
 
@@ -221,7 +246,7 @@ S 118) sînt sărite — cardul fără `path` nu ajunge în catalog.
 node test-other-maps.js
 ```
 
-932 de verificări, fără rețea:
+959 de verificări, fără rețea:
 
 * hash-ul tile-ului reproduce vectorul publicat de dezoomify (ambele ordini);
 * matematica transformării: alegerea nivelului din piramidă, **scara de încadrare
@@ -239,6 +264,13 @@ node test-other-maps.js
   `fitScale(viewport, zoom)`, la zoom spre un nivel mai fin tile-urile vechi rămân ca
   fundal estompat (replasate cu 2^Δ, cu timer de rezervă) pînă se încarcă cele noi, la
   zoom spre un nivel mai gros se refac direct, iar reset/ștergere curăță totul;
+* **pătratul georeferențieră**: `clampToSquare` măsoară în metri pe teren
+  (punct în interior lăsat de-acum, punct în exterior repins pe margine la
+  ±2.5 km, colțul la ±2.5 km pe ambele axe, pătrat mai mare lăsă punctul să
+  treacă, pătrat de 0 nu clâmbică); managerul: o foie nouă are pătrat de 5 km,
+  `setState`/`setBoundsKm` țin ancora în interior, `publicState`/`snapshot`
+  cară dimensiunea, iar selectorul din panoul „Suprapune harta” oferă
+  preset-urile 2/5/10/20/50/100 km;
 * **blocarea la zoom animat** (mapă falsă cu convențiile de proiecție Web Mercator):
   un redraw stabilizat înregistrează ancora din spațiul de proiecție; `zoomanim`
   aplică `translate(scale·ancoră − nouaOrigine) scale(scale)` pe canvas și
@@ -247,6 +279,7 @@ node test-other-maps.js
   zoom-ul țintă; pinch-ul (zoom 13→14, `touchZoom._zooming`) rescalează cadrul
   stabilizat fără redraw, iar la stabilire transformarea se șterge.
 
-`js/other-maps.js` și catalogul (`data/other-maps-catalog.json`) sînt versionate
-`20261026-cluj-alba`, `css/other-maps.css` a rămas la `20261026-other-maps-compact`;
-cache-ul service-worker-ului e `detectlab-v281-cluj-alba`.
+`js/other-maps-overlay.js`, `js/other-maps.js` și `css/other-maps.css` sînt
+versionate `20261026-other-maps-georef`; catalogul
+(`data/other-maps-catalog.json`) rămîne la `20261026-cluj-alba`; cache-ul
+service-worker-ului e `detectlab-v282-other-maps-georef`.
