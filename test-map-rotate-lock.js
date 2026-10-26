@@ -226,18 +226,28 @@ function createLeafletMock() {
         TRANSFORM: 'transform'
     };
 
+    // Keep track of what was bound with which ctx so `off` can remove the
+    // exact handler `on` installed (browsers do this natively; without it
+    // repeated gestures in the tests would stack duplicate listeners).
+    const domEventBindings = [];
     const DomEvent = {
         on(el, types, fn, ctx) {
             for (let t of types.split(' ')) {
                 if (el.addEventListener) {
                     const handler = ctx ? fn.bind(ctx) : fn;
+                    domEventBindings.push({ el, type: t, fn, handler });
                     el.addEventListener(t, handler);
                 }
             }
         },
         off(el, types, fn) {
             for (let t of types.split(' ')) {
-                if (el.removeEventListener) el.removeEventListener(t, fn);
+                for (let i = domEventBindings.length - 1; i >= 0; i--) {
+                    const b = domEventBindings[i];
+                    if (b.el !== el || b.type !== t || b.fn !== fn) continue;
+                    if (el.removeEventListener) el.removeEventListener(t, b.handler);
+                    domEventBindings.splice(i, 1);
+                }
             }
         },
         stop(e) {
@@ -497,9 +507,138 @@ delete global.togglePwaDetection;
 console.log('  ✔ tap faces north, a horizontal drag turns the view, keys nudge, detect relays');
 
 // -------------------------------------------------------------
-// Test 6: CSS + docs coverage for the new material and behaviour
+// Test 6: Two-finger twist deadband & pinch arbitration (Google Earth feel)
 // -------------------------------------------------------------
-console.log('\n[6] CSS Stylesheet Coverage');
+console.log('\n[6] Two-finger twist deadband & pinch arbitration');
+
+function touchPt(x, y) { return { clientX: x, clientY: y }; }
+// Two fingers around (cx, cy) at `angleDeg`, `dist` px apart.
+function pairAt(cx, cy, angleDeg, dist) {
+    const rad = angleDeg * Math.PI / 180;
+    const dx = Math.cos(rad) * dist / 2;
+    const dy = Math.sin(rad) * dist / 2;
+    return [touchPt(cx + dx, cy + dy), touchPt(cx - dx, cy - dy)];
+}
+function fireMapEvent(type, evt) {
+    mapEl.dispatchEvent(Object.assign({ type, preventDefault() {} }, evt));
+}
+// Drive a whole two-finger gesture: touchstart on the map, touchmove on
+// document for every frame after the first, touchend at the end.
+function runTwoFinger(frames) {
+    fireMapEvent('touchstart', { touches: frames[0] });
+    for (let i = 1; i < frames.length; i++) {
+        fireDocument('touchmove', { type: 'touchmove', touches: frames[i], preventDefault() {} });
+    }
+    fireDocument('touchend', { type: 'touchend', touches: [], preventDefault() {} });
+}
+const twistFrames = (cx, cy, angles, dist) => angles.map((a) => pairAt(cx, cy, a, dist));
+
+map.touchRotate.enable();
+
+// 6.1 — a pinch-zoom must never turn the map, even with angle jitter.
+map.setBearing(0);
+runTwoFinger([
+    pairAt(400, 300, 0, 100),
+    pairAt(400, 300, 3, 112),
+    pairAt(400, 300, -4, 128),
+    pairAt(400, 300, 2, 150),
+    pairAt(400, 300, -3, 175),
+    pairAt(400, 300, 5, 210)
+]);
+assert.strictEqual(map.getBearing(), 0,
+    'a pinch-zoom with jitter must not rotate the map, got ' + map.getBearing());
+
+// A slow, gentle pinch (a few % of spread per frame) is still a pinch.
+map.setBearing(0);
+runTwoFinger([
+    pairAt(400, 300, 0, 100),
+    pairAt(400, 300, 4, 104),
+    pairAt(400, 300, -3, 108),
+    pairAt(400, 300, 4, 113),
+    pairAt(400, 300, -4, 120)
+]);
+assert.strictEqual(map.getBearing(), 0,
+    'a slow two-finger zoom must not rotate either, got ' + map.getBearing());
+console.log('  ✔ pinch-zoom never turns the map, jitter or not');
+
+// 6.2 — light touches: twists under the arc deadband do nothing.
+// At 120 px spacing the fingers must travel 34 px along the arc, i.e. ~16°.
+map.setBearing(0);
+runTwoFinger(twistFrames(400, 300, [0, 5, -7, 8, -10, 12], 120));
+assert.strictEqual(map.getBearing(), 0,
+    'a 12° twitch at 120 px is below the 16° arc deadband and must not rotate, got ' + map.getBearing());
+console.log('  ✔ light touches stay under the arc deadband');
+
+// 6.3 — a deliberate twist turns the map 1:1 past the deadband.
+// 150 px spacing → threshold = 34/150·57.3 ≈ 12.9°, engaged on the 20° frame.
+map.setBearing(0);
+runTwoFinger(twistFrames(400, 300, [0, 10, 20, 30, 40], 150));
+assert(Math.abs(map.getBearing() - 20) < 0.5,
+    'a 40° twist past a ~13° deadband must turn the map by ~27° from its engage point (20° applied from 0), got ' + map.getBearing());
+map.setBearing(0);
+runTwoFinger(twistFrames(400, 300, [0, 10, 20], 150));
+assert(Math.abs(map.getBearing() - 0) < 0.5,
+    'the turn starts from 0° at the engage frame (no jump), got ' + map.getBearing());
+console.log('  ✔ a deliberate twist turns 1:1 past the deadband, starting from 0°');
+
+// 6.4 — fingers too close together can never rotate (angle is noise there).
+map.setBearing(0);
+runTwoFinger(twistFrames(400, 300, [0, 30, 60, 90], 45));
+assert.strictEqual(map.getBearing(), 0,
+    'a twist with fingers 45 px apart must not rotate at all, got ' + map.getBearing());
+// …but a gesture that starts close and then spreads re-baselines once the
+// angle becomes readable, and twists normally from there.
+map.setBearing(0);
+runTwoFinger([
+    pairAt(400, 300, 0, 40),
+    pairAt(400, 300, 5, 80),
+    pairAt(400, 300, 25, 80),
+    pairAt(400, 300, 35, 80),   // twist 30° ≥ 24.3° → engages, turn starts at 0°
+    pairAt(400, 300, 45, 80)    // twist 40° → 10° of turn past the engage point
+]);
+assert(Math.abs(map.getBearing() - 10) < 0.5,
+    'a gesture re-baselines when the fingers spread past 64 px and turns 1:1 from there, got ' + map.getBearing());
+console.log('  ✔ close fingers never rotate; a spread re-baselines cleanly');
+
+// 6.5 — a pinch that grows out of a twist cancels the turn and locks it out.
+map.setBearing(0);
+runTwoFinger([
+    pairAt(400, 300, 0, 150),
+    pairAt(400, 300, 10, 150),
+    pairAt(400, 300, 20, 150),
+    pairAt(400, 300, 30, 150),
+    pairAt(400, 300, 36, 190),   // spread +27 % → the twist dies here
+    pairAt(400, 300, 55, 190),   // further twisting must stay ignored
+    pairAt(400, 300, 75, 190)
+]);
+assert(Math.abs(map.getBearing() - 10) < 0.5,
+    'the turn must freeze at the moment the gesture turns into a pinch (10°), got ' + map.getBearing());
+console.log('  ✔ a pinch cancels an engaged twist and never resumes');
+
+// 6.6 — iOS Safari gesture events: same deadband + pinch arbitration.
+map.setBearing(0);
+fireMapEvent('gesturestart', { rotation: 0, scale: 1 });
+fireMapEvent('gesturechange', { rotation: 5, scale: 1 });
+assert.strictEqual(map.getBearing(), 0, 'a 5° gesture-rotation is under the 12° deadband');
+fireMapEvent('gesturechange', { rotation: 14, scale: 1 });   // engage here
+fireMapEvent('gesturechange', { rotation: 20, scale: 1.02 }); // 2 % spread drift is still a twist
+fireMapEvent('gesturechange', { rotation: 30, scale: 1.04 });
+assert(Math.abs(map.getBearing() - 16) < 0.5,
+    'a 30° gesture-rotation past a 12° deadband turns by ~16°, got ' + map.getBearing());
+fireMapEvent('gestureend', {});
+assert.strictEqual(map.touchRotate._usingGesture, false, 'gestureend releases the gesture');
+
+fireMapEvent('gesturestart', { rotation: 0, scale: 1 });
+fireMapEvent('gesturechange', { rotation: 25, scale: 1.2 });  // a zoom: spread +20 %
+assert(Math.abs(map.getBearing() - 16) < 0.5,
+    'a gesture pinch must not rotate the map (bearing stays at 16°), got ' + map.getBearing());
+fireMapEvent('gestureend', {});
+console.log('  ✔ iOS gesture rotation obeys the same rules');
+
+// -------------------------------------------------------------
+// Test 7: CSS + docs coverage for the new material and behaviour
+// -------------------------------------------------------------
+console.log('\n[7] CSS Stylesheet Coverage');
 const cssContent = fs.readFileSync(path.join(__dirname, 'css/styles.css'), 'utf8');
 assert(cssContent.includes('.detectlab-compass-col'), 'css includes .detectlab-compass-col');
 assert(cssContent.includes('.detectlab-compass-btn'), 'css includes .detectlab-compass-btn');
