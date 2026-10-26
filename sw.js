@@ -804,7 +804,7 @@
 //   centred 3D bar, stepping above the country “Exit view” pill via the
 //   existing --country-exit-lift hook. Re-tags css/map3d-terrain.css.
 //   See PWA_3D_BUTTON_SIZE_CENTRE.md.
-const CACHE_NAME = 'detectlab-v286-pwa-fullscreen-fit';
+const CACHE_NAME = 'detectlab-v287-legend-strong-asig-tap-guard';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1672,7 +1672,13 @@ const PRECACHE_URLS = [
   // is gone. Only index.html + this file changed; the entry below is the live
   // mirror URL index.html requests, which the shell must pre-cache with it.
   'js/vertical-opacity-control.js?v=20261026-flat-country-sections',
-  'js/danish-layers.js?v=20261026-flat-country-sections'
+  'js/danish-layers.js?v=20261026-flat-country-sections',
+  // v287: the archaeological-potential legend's heat-bar label reads “Strong”
+  // (“Puternic” in Romanian) instead of “Weak”, in every language, and the ASIG
+  // map tap only queries inside Albania while a layer is really on the map.
+  // Both URLs below are the live ones index.html requests.
+  'js/translations.js?v=20261026-legend-strong',
+  'js/asig-albania-layers.js?v=20261026-asig-tap-guard'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──

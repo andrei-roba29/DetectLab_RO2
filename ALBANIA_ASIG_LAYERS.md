@@ -180,6 +180,22 @@ and the map's view size). The answer is rendered in a map popup, one
 blocked the iframe loads the request URL directly, so the service's own HTML is
 still shown. Tile-only layers have no feature info and are skipped.
 
+**A tap only queries inside Albania, and only while a layer is drawing.** The
+handler is registered once on the map, but `canQueryAt(latlng)` gates it on four
+conditions; without them the popup opened for a tap anywhere in Europe (the
+installed PWA included, because the on/off state is restored from
+`localStorage`):
+
+| gate | why |
+| --- | --- |
+| `!runtime.suppressed` | the group is parked (country switched away) |
+| `runtime.inCountry` | Albania is the selected country |
+| `insideFootprint(latlng)` | the tap is inside the catalogue's `countryBounds` (+0.02° margin for tile edges) |
+| `activeWmsLeaves().length > 0` | a WMS part is **on the map right now** — `map.hasLayer(part.layer)`, not merely remembered in storage |
+
+`API.canQueryAt` / `API.insideFootprint` are exposed for tests. Regression test:
+`node test-asig-click-guard.js`.
+
 ## Run-time name resolution (rows the export has not named yet)
 
 `asig-layers.json` (the prototype export) was **not available** when this

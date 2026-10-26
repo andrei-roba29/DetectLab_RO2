@@ -23,7 +23,7 @@ console.log('[Test] Lazy ArcGIS country gate...');
 const adapterUrl = 'js/globe-arcgis-gate.js?v=20261013-handoff-zoom';
 const pickerUrl = 'js/globe-country-picker.js?v=20261017-outline-zoom-settle';
 const cssUrl = 'css/globe-country-picker.css?v=20261021-gate-safe-area';
-const translationsUrl = 'js/translations.js?v=20261024-uk-historical-maps';
+const translationsUrl = 'js/translations.js?v=20261026-legend-strong';
 for (const asset of [adapterUrl, pickerUrl, cssUrl, translationsUrl]) {
     assert(html.includes(asset), 'index.html references ' + asset);
     assert(sw.includes("'" + asset + "'"), 'sw.js precaches ' + asset);

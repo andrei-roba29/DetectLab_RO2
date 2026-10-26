@@ -1392,7 +1392,13 @@
     /* ═══════════════════════════════════════════════════════════════════════
      * 7. FEATURE INFO — one query per endpoint, sandboxed iframe for the HTML
      * ═══════════════════════════════════════════════════════════════════════ */
+    /* The leaves that can answer a GetFeatureInfo *right now*: on, WMS, and
+     * actually drawing on this map. The last condition matters because the
+     * on/off state is restored from localStorage — a layer switched on in an
+     * earlier session (or parked by the country gate) is "active" without
+     * being on the map, and it must not answer taps or issue queries then. */
     function activeWmsLeaves() {
+        var map = mapInstance();
         var leaves = [];
         runtime.order.forEach(function (id) {
             var entry = runtime.entries[id];
@@ -1400,6 +1406,7 @@
             entry.parts.forEach(function (part) {
                 if (!part.layer || part.missingName) return;
                 if (part.leaf.kind === 'wmts' || part.leaf.kind === 'heritage-vector') return;
+                if (map && typeof map.hasLayer === 'function' && !map.hasLayer(part.layer)) return;
                 leaves.push({
                     name: part.leaf.name,
                     title: part.leaf.title || entry.def.title,
@@ -1464,6 +1471,34 @@
                 });
         });
         return Promise.all(requests).then(function () { return results; });
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
+     * 7b. WHAT A MAP TAP IS ALLOWED TO ASK
+     * ═══════════════════════════════════════════════════════════════════════
+     * The Albanian catalogue answers taps only inside its own footprint, and
+     * only while it is really on screen. Without these gates the map-wide
+     * click handler fired everywhere: a tap over Romania (or anywhere else)
+     * still opened the popup, showed “Querying the ASIG service…” and then
+     * loaded the Albanian archaeological/heritage HTML — in the installed PWA
+     * too, where the last session's on/off state is restored from storage. */
+    function insideFootprint(latlng) {
+        var bounds = CONFIG.countryBounds; /* [[south, west], [north, east]] */
+        if (!bounds || !bounds.length || !latlng) return false;
+        var lat = latlng.lat, lng = latlng.lng;
+        if (typeof lat !== 'number' || typeof lng !== 'number') return false;
+        /* A small margin: tiles and the service metadata may sit marginally
+         * outside the published outline. */
+        var pad = 0.02;
+        return lat >= bounds[0][0] - pad && lat <= bounds[1][0] + pad &&
+               lng >= bounds[0][1] - pad && lng <= bounds[1][1] + pad;
+    }
+
+    function canQueryAt(latlng) {
+        if (runtime.suppressed) return false;      /* country gate: parked */
+        if (!runtime.inCountry) return false;      /* only when Albania is selected */
+        if (!insideFootprint(latlng)) return false; /* and only on Albanian ground */
+        return activeWmsLeaves().length > 0;        /* with something actually drawing */
     }
 
     function openFeatureInfo(latlng) {
@@ -1613,8 +1648,7 @@
         syncUI();
         renderActive();
         map.on('click', function (event) {
-            if (!hasActive()) return;
-            if (!activeWmsLeaves().length) return;
+            if (!event || !canQueryAt(event.latlng)) return;
             openFeatureInfo(event.latlng);
         });
         resolveNames();
@@ -1670,6 +1704,8 @@
         activeLeaves: activeWmsLeaves,
         featureInfo: featureInfo,
         openFeatureInfo: openFeatureInfo,
+        canQueryAt: canQueryAt,
+        insideFootprint: insideFootprint,
         resolveNames: resolveNames,
         isActive: function (id) { return !!runtime.active[id]; },
         filterForCountry: filterForCountry,
