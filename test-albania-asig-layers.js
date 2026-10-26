@@ -591,7 +591,7 @@ document.createElement = originalCreateElement;
         'index.html loads the generated catalogue before the config');
     /* Each asset carries the tag of whatever last changed it: the data file and
      * the config by the “LiDAR” rename, the module by the catalogue itself. */
-    check(/js\/asig-albania-layers\.js\?v=20261026-viewport-heritage/.test(html) &&
+    check(/js\/asig-albania-layers\.js\?v=20261026-asig-tap-guard/.test(html) &&
         /js\/asig-albania-layers\.config\.js\?v=20261024-asig-lidar/.test(html),
         'index.html loads the re-tagged module and config');
     check(html.includes('id="albaniaSubLayers"'), 'the single Albania mount is still in the shell');
