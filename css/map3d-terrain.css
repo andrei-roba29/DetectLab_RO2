@@ -41,6 +41,26 @@ body.is-3d #detectlab-map .leaflet-pane { visibility: hidden; }
 body.is-3d #detectlab-map .leaflet-control-container,
 body.is-3d #pwa-br-stack .leaflet-control { visibility: hidden; }
 
+/* …with ONE exception: the base-layer button (#arcgisBasemapCtrl). Switching
+ * the base map must stay possible without leaving 3D — it is the same control
+ * the 2D view uses (and the 3D bar's basemap picker reads/writes the same
+ * state), so it keeps its bottom-left slot in the 3D view instead of leaving
+ * the user to find the picker in the bar. Everything else in that corner still
+ * drives the invisible 2D map and stays hidden; the compass is display:none so
+ * it does not reserve the switch's slot in the column either. */
+body.is-3d #detectlab-map .leaflet-bottom.leaflet-left > .leaflet-control:not(#arcgisBasemapCtrl) {
+    display: none !important;
+}
+body.is-3d #detectlab-map #arcgisBasemapCtrl {
+    visibility: visible;
+    /* MapLibre puts its own widgets in the same corner — the compact
+     * source-credit button (the ⓘ) and the scale bar. The base-layer button
+     * rides ABOVE them: the viewer measures that stack and publishes its height
+     * (+ the usual 8px gap) as --m3d-basemap-lift on .map-wrapper; the 58px
+     * fallback is the documented MapLibre stack (credit row + scale + margins). */
+    margin-bottom: var(--m3d-basemap-lift, 58px) !important;
+}
+
 body.is-3d #map3d-surface { display: block; }
 
 /* ── the “Cesium” alternative engine (js/map3d-terrain.js) ─────────────────

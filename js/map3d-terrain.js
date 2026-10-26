@@ -1527,7 +1527,78 @@
         host.style.setProperty('--m3d-anchor-bottom', bottom + 'px');
         host.style.setProperty('--m3d-anchor-left', left + 'px');
         host.style.setProperty('--m3d-stack-top', (bottom + height) + 'px');
+        /* The base-layer button is measured against the same corner: keep its
+         * lift over MapLibre's own bottom-left widgets in step with it. */
+        syncBasemapLift();
         return true;
+    }
+
+    /* ── the base-layer button's slot while 3D is on ────────────────────────
+     * css/map3d-terrain.css keeps ONE Leaflet control visible in the 3D view:
+     * the base-layer button (#arcgisBasemapCtrl). It keeps its bottom-left
+     * slot, but MapLibre parks its own widgets in the same corner — the compact
+     * source-credit button (the ⓘ) and the scale bar — so the button has to
+     * ride above them. MapLibre lays those out itself (10px margins, and the
+     * credit row grows when it is opened by the user), so the offset is
+     * measured, exactly like the switch's anchor above, and published on
+     * .map-wrapper as --m3d-basemap-lift:
+     *   --m3d-basemap-lift   wrapper bottom → top of MapLibre's bottom-left
+     *                        stack + the same 8px gap as the column
+     * The stylesheet keeps a constant fallback for the documented stack, so the
+     * button is placed correctly before the first measurement (and whenever the
+     * surface is not built yet). */
+    var BASEMAP_LIFT_ID = 'arcgisBasemapCtrl';
+    var liftCorner = null;
+    var liftObserved = false;
+
+    /* Returns true once MapLibre's corner has actually been measured. */
+    function syncBasemapLift() {
+        var host = wrapper();
+        if (!host || !host.style || typeof host.style.setProperty !== 'function' ||
+            typeof host.style.removeProperty !== 'function') return false;
+        var surf = surface;
+        var corner = (surf && typeof surf.querySelector === 'function')
+            ? surf.querySelector('.maplibregl-ctrl-bottom-left')
+            : null;
+        /* No MapLibre corner: the map is closed (the surface is display:none)
+         * or the SDK is still loading. Drop the property so the stylesheet's
+         * fallback places the button, and retry on the next anchor sync. */
+        if (!corner || typeof corner.getBoundingClientRect !== 'function' ||
+            typeof host.getBoundingClientRect !== 'function') {
+            host.style.removeProperty('--m3d-basemap-lift');
+            return false;
+        }
+        var hostBox = host.getBoundingClientRect();
+        var cornerBox = corner.getBoundingClientRect();
+        if (!hostBox.height || !cornerBox.height) return false;
+        /* Lift from the BOTTOM OF LEAFLET'S OWN CORNER, not from the wrapper
+         * edge: the installed PWA lifts that corner by the home-indicator inset
+         * (index.html), mobile-web fullscreen fixes it above the browser bar
+         * (css/styles.css) and MapLibre lifts its own corner by the same inset
+         * — so both are measured from where they actually are. Falling back to
+         * the wrapper edge when the corner is not measurable keeps a sensible
+         * value in the layout harnesses. */
+        var ctrl = document.getElementById(BASEMAP_LIFT_ID);
+        var leafletCorner = ctrl && ctrl.parentElement;
+        var base = (leafletCorner && typeof leafletCorner.getBoundingClientRect === 'function')
+            ? leafletCorner.getBoundingClientRect().bottom
+            : hostBox.bottom;
+        var lift = Math.round(base - cornerBox.top + ANCHOR_GAP);
+        if (lift < 0) lift = 0;
+        host.style.setProperty('--m3d-basemap-lift', lift + 'px');
+        watchBasemapLift(corner);
+        return true;
+    }
+
+    /* The credit row can grow (the ⓘ expands into full credits) and the whole
+     * corner moves when the surface is resized, neither of which is a window
+     * resize: follow the corner itself. */
+    function watchBasemapLift(corner) {
+        if (liftObserved || !corner) return;
+        if (typeof root.ResizeObserver !== 'function') return;
+        liftObserved = true;
+        liftCorner = corner;
+        try { new root.ResizeObserver(queueAnchorSync).observe(corner); } catch (e) { /* ignore */ }
     }
 
     function watchToggleAnchor() {
@@ -4253,6 +4324,11 @@
             if (maplibre.ScaleControl) {
                 map.addControl(new maplibre.ScaleControl({ maxWidth: 80, unit: 'metric' }), 'bottom-left');
             }
+            /* The base-layer button stays on screen in 3D and rides above those
+             * two bottom-left widgets (see syncBasemapLift): now that the corner
+             * exists, measure it and follow it. queueAnchorSync runs the
+             * measurement on the next frame, once the controls are laid out. */
+            queueAnchorSync();
             /* The pixel ratio is already IN the constructor above; this only
              * covers an SDK that ignores the option, and only when the ratio
              * actually differs — an unconditional setPixelRatio() forces a
@@ -4783,6 +4859,17 @@
          * read what was actually measured instead of guessing from the
          * stylesheet's fallbacks. */
         _syncToggleAnchor: syncToggleAnchor,
+        /* The base-layer button's measured lift over MapLibre's bottom-left
+         * widgets while 3D is on (--m3d-basemap-lift). Exposed for the same
+         * reason as the anchor above: a support session can read what the
+         * browser actually measured. */
+        _syncBasemapLift: syncBasemapLift,
+        _basemapLift: function () {
+            var host = wrapper();
+            if (!host || !host.style || typeof host.style.getPropertyValue !== 'function') return null;
+            var value = host.style.getPropertyValue('--m3d-basemap-lift');
+            return value ? parseFloat(value) : null;
+        },
         _toggleAnchor: function () {
             var host = wrapper();
             if (!host || !host.style || typeof host.style.getPropertyValue !== 'function') return null;

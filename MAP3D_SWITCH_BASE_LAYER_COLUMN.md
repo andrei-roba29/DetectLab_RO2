@@ -158,3 +158,65 @@ precache list, so an installed shell still finds the copy it references.
   (`test-map-control-spacing.js` also picks up the `css/styles.css` tag v253
   left behind). `test-map3d-startup.js` and `test-search-exit-3d.js` stub the
   new `queueAnchorSync()` in the closures they run.
+
+---
+
+# v276 — the base-layer button itself now stays on screen in 3D
+
+Date: 2026-10-26 · Files: `css/map3d-terrain.css`, `js/map3d-terrain.js`,
+`index.html`, `sw.js` · Test: `node test-3d-basemap-button.js`
+
+## The ask
+
+> The base map in 3D view should still appear as its side button on the bottom
+> left side of the screen, above the info button and the altitude distance.
+
+While 3D was on, `body.is-3d #detectlab-map .leaflet-control-container`
+hid **every** Leaflet control — the whole 2D stack drives a map the user cannot
+see — so the base-layer button (`#arcgisBasemapCtrl`, the round layers icon)
+vanished with it and the only way to change the base map was the picker inside
+the 3D bar.
+
+## After
+
+The base-layer button is the **one** exception: it keeps its bottom-left slot
+in the 3D view, in the same glass material as the rest of the map icons, and
+the 3D bar's picker stays as the second (identical, synced) way to do the same
+thing — both read and write the single ArcGIS basemap state.
+
+```
+┌──────────────────────────┐
+│                          │
+│   (3D canvas)            │
+│                          │
+│  [layers] ← base layer   │  above the MapLibre widgets
+│  (i)      ← source credits│  MapLibre AttributionControl (compact)
+│  ├── 500 m ┤ ← scale      │  MapLibre ScaleControl
+└──────────────────────────┘
+```
+
+- `css/map3d-terrain.css` — the corner still hides the container; a
+  `:not(#arcgisBasemapCtrl)` rule removes every **other** bottom-left control
+  (compass, attribution) with `display: none` so they no longer reserve space,
+  and `#arcgisBasemapCtrl` gets `visibility: visible` plus
+  `margin-bottom: var(--m3d-basemap-lift, 58px) !important`.
+- `js/map3d-terrain.js` — the lift is **measured**, not guessed, exactly like
+  the switch's own anchor: MapLibre lays its bottom-left widgets out itself
+  (10px margins, and the credit row grows when the ⓘ is opened), and every
+  environment moves the Leaflet corner (PWA home-indicator inset, mobile-web
+  fullscreen). `syncBasemapLift()` publishes
+
+  `--m3d-basemap-lift` = bottom of Leaflet's own corner → top of
+  `.maplibregl-ctrl-bottom-left` + the same `8px` gap the column uses.
+
+  It runs from `syncToggleAnchor()` (the single place every layout change
+  already passes through: open, close, window resize, orientation change,
+  fullscreen change, body-class mutation, control/​wrapper resize), is queued
+  right after MapLibre's ⓘ and scale are added, follows the credit row with a
+  `ResizeObserver`, clears the property when the surface is not built (so the
+  stylesheet fallback applies), and is exposed as `_syncBasemapLift()` /
+  `_basemapLift()` for diagnostics.
+
+Measuring from Leaflet's own corner bottom (not the wrapper edge) is what keeps
+a shared safe-area inset from being counted twice: the PWA lifts both corners by
+the same `env(safe-area-inset-bottom)`.

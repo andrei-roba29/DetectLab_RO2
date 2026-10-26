@@ -800,7 +800,7 @@
 //   view and there is no rotation lock any more. Re-tags css/styles.css,
 //   css/tutorial.css, css/offline-maps.css, css/map3d-terrain.css,
 //   js/map-rotate.js and js/tutorial.js.
-const CACHE_NAME = 'detectlab-v275-lidar-hillshade-zoom';
+const CACHE_NAME = 'detectlab-v276-basemap-in-3d';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -834,6 +834,11 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 //   identical tiles — and the layer now carries maxNativeZoom: 12 (the
 //   tileset's real maxzoom), so the relief no longer goes blank above zoom 12
 //   and leaves only the basemap. Re-tags js/map-app.js.
+// v276: the base-layer button (#arcgisBasemapCtrl) stays on screen in the 3D
+//   view — bottom-left, above MapLibre's compact source-credit button and its
+//   scale bar (measured as --m3d-basemap-lift) — instead of disappearing with
+//   the rest of the Leaflet control container. Re-tags css/map3d-terrain.css
+//   and js/map3d-terrain.js.
 // ── Static assets to pre-cache on install ──
 const PRECACHE_URLS = [
   // 3D terrain view (2D ⇄ 3D) — shared layer registry + MapLibre GL viewer.
@@ -950,6 +955,9 @@ const PRECACHE_URLS = [
   'js/map3d-mirror.js',
   'js/map3d-terrain.js?v=20261024-no-bar-lidar-row',
   'js/map3d-terrain.js?v=20261025-lidar-3d-tile-heal',
+  // v276: base-layer button visible in 3D, above the ⓘ and the scale.
+  'css/map3d-terrain.css?v=20261026-basemap-in-3d',
+  'js/map3d-terrain.js?v=20261026-basemap-in-3d',
   'js/map3d-terrain.js?v=20261024-gesture-only-camera',
   'js/map3d-terrain.js?v=20261023-pwa-only-3d-column',
   'js/map3d-terrain.js?v=20261020-outline-camera-handoff',
