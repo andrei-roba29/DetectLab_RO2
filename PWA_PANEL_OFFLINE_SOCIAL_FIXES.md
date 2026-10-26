@@ -61,14 +61,15 @@ ajungea pe telefon.
 ```css
 .transp-panel { top: 0; bottom: 0; height: auto; max-height: none; }
 body.is-pwa .transp-panel {
-  bottom: 0;
-  min-height: max(100vh, var(--dl-vvh, 100vh));
+  height: var(--pwa-viewport-h, 100%);
   padding-bottom: var(--pwa-panel-bottom-clearance);
 }
 ```
 
 Ultima regulă include rezerva transparentă introdusă în v263 (detaliată mai sus), nu mai
-oprește panoul la `env(safe-area-inset-bottom)`. Măsurat în Chromium la 412×915:
+oprește panoul la `env(safe-area-inset-bottom)`. Înălțimea `--pwa-viewport-h` este singura
+măsurătoare în pixeli a ecranului (publicată de scriptul PWA din `index.html`), folosită de
+toate cutiile full-screen — vezi `PWA_NO_BOTTOM_BAR.md`. Măsurat în Chromium la 412×915:
 `top = 0`, `bottom = 915`, `padding: 22px 16px 0`. În
 plus, cât timp fereastra e deschisă, stiva flotantă din dreapta-jos (locație live + cont) se
 mută pe marginea stângă

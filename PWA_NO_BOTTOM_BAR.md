@@ -1,73 +1,95 @@
-# PWA: stivă dreapta-jos restaurată — 🎯 deasupra, cont dedesubt (v136)
+# PWA instalat: fără bară / fâșie jos, ecran plin (v286)
 
-## Starea curentă (v136)
+Documentul acesta înlocuiește toată seria anterioară de „reparații” pentru banda
+de jos a PWA-ului instalat (`PWA_BOTTOM_BAND.md` a fost șters). Nu mai există
+niciun mecanism separat pentru bandă: ecranul este dimensionat o singură dată,
+în pixeli, iar harta acoperă toată suprafața fizică.
 
-În PWA instalată, stiva din dreapta-jos `#pwa-br-stack` este din nou vizibilă:
-conține butonul de locație live 🎯 deasupra și triggerul de cont („AN” / inițiale
-sau „Log In” + dropdown Manage Account / Events / Friends / Language / Storage /
-Log Out) dedesubt. Pe site containerul rămâne `display:none` — contul e în nav.
+## Ce se vede în aplicația instalată
 
-- **PWA instalată:** `#pwa-br-stack` este `position:fixed`,
-  `right: max(10px, env(safe-area-inset-right))`,
-  `bottom: calc(env(safe-area-inset-bottom)+28px)`, `z-index:2000`,
-  `flex-direction:column`, `gap:8px`. În interior,
-  `.pwa-live-location-control` este `position:relative !important` (stack-ul
-  însuși e fix). Fallback-ul `html.is-pwa .pwa-live-location-control` rămâne
-  fixed pentru shell-uri vechi fără stack. Când `transp-panel-open`, întreaga
-  stivă e `visibility:hidden` / `opacity:0` / `pointer-events:none`.
-- **Site:** `#pwa-br-stack` rămâne `display:none`; butonul 🎯 rămâne sub zoom,
-  în coloana stânga.
-- **Cont:** triggerul și dropdown-ul sunt din nou în DOM în PWA; inițialele se
-  actualizează din `updatePwaUserStack`, overlay-ul contului (`pwaAccountOverlay`)
-  funcționează.
+- Harta, panoul de transparență, stiva flotantă din dreapta-jos (`#pwa-br-stack`:
+  🎯 locație live deasupra, trigger de cont dedesubt), coloana busolei și
+  eticheta „© Leafleet”.
+- **Nicio bară și nicio fâșie de fundal** la marginea de jos: nici goală, nici cu
+  butoane. `#pwa-install-banner` (bara fixă de instalare a site-ului) este
+  dezactivată explicit în aplicația instalată, indiferent ce raportează browserul
+  despre `display-mode`.
 
-## Implementare
+## Cum e dimensionat ecranul (singura sursă de adevăr)
 
-`js/map-app.js` detectează modul PWA prin clasa `is-pwa` pe `<html>`. Butonul
-`#btnLiveLocation` este montat în PWA ca prim copil al stivei:
+`index.html`, scriptul PWA de la finalul documentului:
 
 ```js
-if (isPwaMode) {
-    btn.classList.add('pwa-live-location-control');
-    var pwaStack = document.getElementById('pwa-br-stack');
-    if (pwaStack) {
-        if (pwaStack.firstChild) pwaStack.insertBefore(btn, pwaStack.firstChild);
-        else pwaStack.appendChild(btn);
-    } else {
-        document.body.appendChild(btn); // fallback
-    }
-} else {
-    zoomCtrl.appendChild(btn);
+function measurePwaScreen() {
+    var pageH = Math.max(window.innerHeight,
+        (window.visualViewport && window.visualViewport.height) || 0);
+    var screenH = (window.screen && window.screen.height) || 0;
+    var installed = matchMedia('(display-mode: standalone)').matches
+        || matchMedia('(display-mode: fullscreen)').matches
+        || navigator.standalone === true;
+    var target = Math.round(pageH);
+    if (installed && screenH > target) target = Math.round(screenH);
+    return { pageH: pageH, height: target, bleed: Math.max(0, target - pageH) };
 }
 ```
 
-CSS din `index.html`:
+Două variabile CSS publice, ambele în pixeli:
 
-- `#pwa-br-stack` — base `display:none; position:fixed; right:max(...); bottom:calc(...)+28px; flex column`
-- `body.is-pwa #pwa-br-stack` — `display:flex !important; visibility:visible !important; pointer-events:auto !important`
-- `#pwa-br-stack .leaflet-control` — reset margin/border/shadow
-- `#pwa-br-stack .pwa-live-location-control` — `position:relative !important; right:auto !important; bottom:auto !important`
+| variabilă | valoare | cine o folosește |
+| --- | --- | --- |
+| `--pwa-viewport-h` | înălțimea reală a ecranului | `#map-section`, `.container`, `.map-frame`, `.map-wrapper`, `#detectlab-map`, `.transp-panel` |
+| `--pwa-bleed` | partea din ecran pe care viewport-ul paginii nu o acoperă | ridică la loc `.leaflet-bottom` (busola), eticheta `© Leafleet`, colțul de jos al hărții și tot ce e ancorat pe marginea de jos a hărții |
 
-Scriptul PWA din `index.html` NU mai face `removeChild(pwaBottomBar)`; doar
-`setAttribute('aria-hidden','false')`. Handlerul GPS rămâne neschimbat; API-urile
-`window._startLiveLocation` etc. rămân expuse.
+Valoarea este scrisă de asemenea **inline, cu `!important`**, direct pe fiecare
+element din lanț (`height`, `min-height:0`, `max-height:none`), nu doar prin
+variabilă: așa nici un `height:100%` intermediar nu mai poate moșteni un strămoș
+scurt.
 
-## Cache PWA
+Harta are voie să depășească marginea de jos cu `--pwa-bleed` pixeli (ca să nu
+poată apărea fundalul paginii), iar controalele ancorate pe aceeași margine
+primesc aceeași ridicare: `--pwa-bottom-controls-clearance` devine
+`calc(44px + var(--pwa-bleed, 0px))` (toast-uri, hint-uri de zoom, butoanele
+APM 2.0 / Iosefină, panoul de setări), `.layer-action-dock` primește
+`+ var(--pwa-bleed)`, iar `.leaflet-bottom` și `© Leafleet` sunt ridicate
+explicit. Când cele două înălțimi coincid, `--pwa-bleed` este `0px` și nimic nu
+se mișcă.
 
-Livrat prin **Service Worker v136** `detectlab-v136-pwa-br-stack-account`.
-URL-uri versionate:
+Re-măsurarea rulează la `DOMContentLoaded`/`load`/`pageshow`, la `resize` și
+`orientationchange` (cu o a doua trecere la 300 ms, fiindcă iOS raportează o
+singură rotație cu întârziere), la `visualViewport.resize`, la 300/800/1600 ms
+după pornire și dintr-un `ResizeObserver` pe `#map-section`, `.map-frame` și
+`#detectlab-map`. Fiecare trecere se încheie cu `map.invalidateSize()`, ca
+Leaflet să redeseneze pe suprafața nouă.
 
-- `css/styles.css?v=20260923-pwa-br-stack-account`
-- `js/map-app.js?v=20260923-pwa-br-stack-account`
-- `js/tutorial.js?v=20260923-pwa-br-stack-account`
+## De ce nu se mai folosesc unități de viewport
 
-Toate trei sunt în `PRECACHE_URLS`.
+`bottom:0`, `100vh`, `100dvh` și `100svh` se rezolvă toate față de *initial
+containing block*. Cu `viewport-fit=cover` + `black-translucent`, WebKit poate
+da paginii un ICB mai scurt decât ecranul fizic; orice cutie dimensionată din
+acele valori se oprește deasupra marginii, iar ce rămâne nepictat arată ca o
+fâșie de fundal sub hartă. `window.innerHeight` / `visualViewport.height` nu
+suferă de această particularitate, de aceea înălțimea se scrie în pixeli.
+`height: var(--pwa-viewport-h, 100%)` din CSS este doar forma declarativă a
+aceleiași reguli (primul cadru, înainte ca scriptul să ruleze).
 
-## Teste
+## Fișiere
 
-- `node test-pwa-no-bottom-bar.js` — stiva e ascunsă pe site, flex vizibilă în PWA cu safe-area; 🎯 e relative în stivă, fallback fixed; map-app.js inserează ca firstChild; transp-panel-open ascunde stiva; cont + dropdown prezente; SW v136 pre-cache.
-- `node test-pwa-bottom-bar-removal.js` — cu jsdom, scriptul standalone păstrează stiva în DOM (aria-hidden=false), nu șterge GPS; site neatins.
-- `node test-pwa-bottom-band.js` — harta, safe-area, offset-uri jos, 100vh floor, fără regresie; assert nou pentru stivă restaurată.
-- `node test-pwa-shell-refresh.js` — SW v136, re-check la load/pageshow/visibility/interval, controllerchange → reload unic.
-- `node test-mobile-fullscreen-controls.js` — compass fix deasupra browser bar, ? rămâne top-right.
+- `index.html` — stilurile PWA (`#map-section`, `.container`, `.map-frame`,
+  `.map-wrapper`, `#detectlab-map`, `.transp-panel`, `.leaflet-bottom`,
+  `.leaflet-container::after`, `#pwa-install-banner`) și scriptul PWA
+  (`measurePwaScreen`, `fitPwaViewport`, `updatePwaMapLayout`).
+- `sw.js` — `detectlab-v286-pwa-fullscreen-fit`.
+- Teste: `node test-pwa-viewport-fit.js` (matematica măsurătorii, pe stub-uri:
+  standalone cu viewport scurt → ecran fizic + bleed, browser → viewport propriu,
+  landscape, WebView-uri vechi), `node test-pwa-no-bottom-strip.js` (dimensiunea
+  în pixeli în CSS, lanțul complet, bleeds, bara de instalare dezactivată,
+  absența vechilor mecanisme), `node test-pwa-no-bottom-bar.js` (stiva
+  dreapta-jos), `node test-pwa-shell-refresh.js` (versiunea SW).
 
+## Istoric scurt
+
+- v112–v119: încercări cu `min-height:100vh`, apoi cu un „floor” JS (`--dl-vvh`)
+  aplicat tot ca `min-height`. Ambele au fost eliminate în v286, împreună cu
+  sonda de diagnostic `js/pwa-debug.js`.
+- v123 / v136: stiva din dreapta-jos a fost scoasă, apoi restaurată. Starea
+  actuală este cea din secțiunea „Ce se vede”.

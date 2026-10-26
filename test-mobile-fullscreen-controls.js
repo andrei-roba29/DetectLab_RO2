@@ -94,8 +94,11 @@ assert(/margin:\s*0 0 10px 10px !important/.test(compassBase),
     'the compass keeps its base bottom-left margin (the lift may not move the base rule)');
 const indexStyle = (html.match(/<style>[\s\S]*?<\/style>/) || [''])[0];
 const pwaBottom = ruleOf(indexStyle, 'body.is-pwa .leaflet-bottom');
-assert(/bottom:\s*env\(safe-area-inset-bottom, 0px\) !important/.test(pwaBottom),
-    'the installed PWA keeps its own safe-area bottom clearance');
+// The compass corner keeps the safe-area clearance and additionally gives back
+// --pwa-bleed (the part of the physical screen outside the page viewport, which
+// the map is allowed to overrun); the bleed is 0px whenever they agree.
+assert(/bottom:\s*calc\(env\(safe-area-inset-bottom, 0px\) \+ var\(--pwa-bleed, 0px\)\) !important/.test(pwaBottom),
+    'the installed PWA keeps its own safe-area bottom clearance (plus the bleed offset)');
 // Comments name both worlds on purpose ("Scoped to body:not(.is-pwa): …
 // body.is-pwa .leaflet-bottom …"), so only real rule text may count here.
 const stylesNoComments = styles.replace(/\/\*[\s\S]*?\*\//g, '');

@@ -420,7 +420,10 @@ console.log('[Test] the 2D/3D switch sits right above the base-layer button…')
         'the country “Exit view” pill keeps its bottom-centre anchor');
     assert(/--layer-dock-clearance:\s*62px/.test(styles),
         'the analysis action dock still publishes its clearance for the centred stack');
-    assert(/body\.is-pwa \.leaflet-bottom \{[^}]*bottom: env\(safe-area-inset-bottom, 0px\) !important/.test(flatten(html)),
+    // The PWA corner keeps its safe-area clearance and adds --pwa-bleed, the
+    // part of the physical screen the page viewport does not cover (0px when
+    // they agree) — the map overruns the bottom edge by that much.
+    assert(/body\.is-pwa \.leaflet-bottom \{[^}]*bottom: calc\(env\(safe-area-inset-bottom, 0px\) \+ var\(--pwa-bleed, 0px\)\) !important/.test(flatten(html)),
         'the PWA still lifts the Leaflet corner the switch is measured against');
     assert(/#detectlab-map \.leaflet-bottom\.leaflet-left \{\s*position: fixed;/.test(styles.replace(/\s+/g, ' ').replace(/ \{/g, ' {')) ||
            /body:not\(\.is-pwa\) \.map-frame\.is-fullscreen #detectlab-map \.leaflet-bottom\.leaflet-left/.test(styles),
