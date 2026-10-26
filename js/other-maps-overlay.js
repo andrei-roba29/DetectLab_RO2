@@ -51,6 +51,20 @@
     var STALE_FALLBACK_MS = 6000;        // stand-in tiles are dropped after this even if no tile settles
     var SNAP_DEG = 1.5;                  // rotation snaps near 0/90/180/270
 
+    /* ── the georeference square ───────────────────────────────────────
+     * A Hungaricana sheet carries a place name but no footprint, so the
+     * user aligns it by hand.  To keep that alignment sane, each sheet is
+     * confined to a square around the place it was added for: the sheet's
+     * anchor may be dragged, rotated and scaled, but it may never leave
+     * that square — so the sheet can only be georeferenced over the ground
+     * it actually belongs to.  5 km is the default; an exceptional sheet
+     * (a wide county map, an approximate place name) can be given a bigger
+     * square from the “Overlay the map” panel. */
+    var DEFAULT_GEOREF_KM = 5;           // default square side, in kilometres
+    var GEOREF_MIN_KM = 1;               // smallest square the panel allows
+    var GEOREF_MAX_KM = 200;             // largest square the panel allows
+    var GEOREF_EARTH_R = 6378137;        // WGS84 semi-major axis (resolutionAt)
+
     var UI_SELECTOR = 'button, a, input, select, textarea, label, .leaflet-control, ' +
         '.leaflet-popup, .om-panel, .om-modal, .om-handle, .leaflet-marker-icon';
 
@@ -66,6 +80,35 @@
     function snapDegrees(deg) {
         var nearest = Math.round(deg / 90) * 90;
         return Math.abs(deg - nearest) <= SNAP_DEG ? normalizeDegrees(nearest) : deg;
+    }
+
+    /**
+     * Clamp a LatLng into the axis-aligned square of side `sideKm` centred
+     * on (centerLat, centerLng).  The offset is measured in ground metres
+     * (equirectangular around the centre), so the square really is a 5 km
+     * square on the ground at any latitude — not a 5 km box in degrees.
+     * Returns the input unchanged when there is nothing to clamp (a zero
+     * square, or non-finite coordinates).
+     */
+    function clampToSquare(lat, lng, centerLat, centerLng, sideKm) {
+        var half = Math.max(0, Number(sideKm) || 0) * 1000 / 2;
+        var dLat = Number(lat), dLng = Number(lng);
+        var cLat = Number(centerLat), cLng = Number(centerLng);
+        if (!isFinite(dLat) || !isFinite(dLng) || !isFinite(cLat) || !isFinite(cLng)) {
+            return { lat: dLat, lng: dLng };
+        }
+        if (half <= 0) return { lat: dLat, lng: dLng };
+        var mPerLat = Math.PI * GEOREF_EARTH_R / 180;              // ≈ 111 320 m/°
+        var mPerLng = mPerLat * Math.cos(cLat * Math.PI / 180);    // shrinks with latitude
+        var safeLng = Math.abs(mPerLng) < 1e-6 ? 1e-6 : mPerLng;
+        var dx = (dLng - cLng) * safeLng;
+        var dy = (dLat - cLat) * mPerLat;
+        var cdx = clamp(dx, -half, half);
+        var cdy = clamp(dy, -half, half);
+        return {
+            lat: cLat + cdy / mPerLat,
+            lng: cLng + cdx / safeLng
+        };
     }
 
     /* Metres covered by one CSS pixel at `lat` for the given zoom. */
@@ -276,6 +319,35 @@
             line.className = 'om-rot-line';
             boxEl.appendChild(line);
 
+            /* The georeference square is a geographic region, so it lives OUTSIDE
+             * the sheet's transform (the root is translated/rotated/scaled by
+             * the sheet).  It is painted in layer space around the place and,
+             * like the sheet root, is a 0×0 anchor that carries
+             * leaflet-zoom-animated so it glides with the tiles during a zoom
+             * animation; the visible square is an inner box centred on that
+             * anchor (translate(-50%,-50%)), exactly how the sheet's grid is
+             * centred on the sheet root.  Appended to the pane before the
+             * sheet root, so the sheet paints on top of it. */
+            var georefEl = document.createElement('div');
+            georefEl.className = 'om-georef leaflet-zoom-animated';
+            georefEl.style.position = 'absolute';
+            georefEl.style.left = '0';
+            georefEl.style.top = '0';
+            georefEl.style.width = '0';
+            georefEl.style.height = '0';
+            georefEl.style.transformOrigin = '0 0';
+            georefEl.style.pointerEvents = 'none';
+            georefEl.style.display = 'none';
+            var georefInner = document.createElement('div');
+            georefInner.className = 'om-georef-inner';
+            georefInner.style.position = 'absolute';
+            georefInner.style.left = '0';
+            georefInner.style.top = '0';
+            georefInner.style.transform = 'translate(-50%, -50%)';
+            georefInner.style.pointerEvents = 'none';
+            georefEl.appendChild(georefInner);
+            pane.appendChild(georefEl);
+
             var ov = {
                 id: record.id,
                 record: record,
@@ -285,19 +357,25 @@
                 frameEl: frameEl,
                 boxEl: boxEl,
                 handles: handles,
+                georefEl: georefEl,
+                georefInner: georefInner,
                 tiles: Object.create(null),
                 stale: null,           // previous-level stand-in while a finer level loads
                 meta: null,
                 geom: null,
                 anchor: null,          // anchor LatLng in layer pixels (last paint)
                 projectAnchor: null,   // anchor in project space (last paint)
+                georefAnchor: null,    // georeference square centre in layer pixels
+                georefProject: null,   // …in project space
                 token: 0,
+                center: { lat: Number(record.lat), lng: Number(record.lng) },
                 state: {
                     lat: Number(record.lat),
                     lng: Number(record.lng),
                     mpp: null,          // set once the pyramid size is known
                     rotation: 0,
-                    opacity: options.opacity == null ? 0.8 : Number(options.opacity)
+                    opacity: options.opacity == null ? 0.8 : Number(options.opacity),
+                    boundsKm: DEFAULT_GEOREF_KM   // georeference square side
                 }
             };
             return ov;
@@ -452,6 +530,27 @@
         }
 
         /* ── painting ─────────────────────────────────────────────────── */
+        /* Paint the georeference square in layer space: its centre is the
+         * place the sheet belongs to, its side is `boundsKm` km on the ground
+         * (metres / resolution).  The element's local origin is its centre
+         * (negative half-size margins), the same contract the sheet root uses,
+         * so applyZoomTransform can scale it around the centre. */
+        function renderGeoref(ov) {
+            var el = ov && ov.georefEl;
+            var inner = ov && ov.georefInner;
+            if (!el || !inner) return;
+            var halfM = Math.max(0, Number(ov.state.boundsKm) || 0) * 1000 / 2;
+            var home = map.latLngToLayerPoint(L.latLng(ov.center.lat, ov.center.lng));
+            var halfPx = halfM / resolution(map, ov.center.lat);
+            inner.style.width = (halfPx * 2) + 'px';
+            inner.style.height = (halfPx * 2) + 'px';
+            ov.georefAnchor = home;
+            if (typeof map.project === 'function') {
+                ov.georefProject = map.project(L.latLng(ov.center.lat, ov.center.lng), map.getZoom());
+            }
+            el.style.transform = 'translate3d(' + home.x + 'px,' + home.y + 'px,0)';
+        }
+
         function render(ov) {
             if (!ov || !ov.meta || !ov.root.parentNode) return;
             var view = viewportRect();
@@ -469,6 +568,8 @@
                 ov.projectAnchor = map.project(L.latLng(ov.state.lat, ov.state.lng), map.getZoom());
             }
             lastZoom = map.getZoom();
+
+            renderGeoref(ov);
 
             ov.root.style.transform = 'translate3d(' + a.x + 'px,' + a.y + 'px,0)';
             ov.root.style.opacity = String(ov.state.opacity);
@@ -520,6 +621,15 @@
                 var offset = local.multiplyBy(scale).subtract(newOrigin)._round();
                 ov.root.style.transform = 'translate3d(' + offset.x + 'px,' + offset.y + 'px,0) ' +
                     'scale(' + scale + ') translate3d(' + ov.anchor.x + 'px,' + ov.anchor.y + 'px,0)';
+                /* The georeference square is geographic too: scale it around
+                 * its own centre (the place) with the same transform. */
+                if (ov.georefEl && ov.georefAnchor && ov.georefProject) {
+                    var gLocal = ov.georefProject.subtract(ov.georefAnchor);
+                    var gOffset = gLocal.multiplyBy(scale).subtract(newOrigin)._round();
+                    ov.georefEl.style.transform = 'translate3d(' + gOffset.x + 'px,' + gOffset.y + 'px,0) ' +
+                        'scale(' + scale + ') translate3d(' + ov.georefAnchor.x + 'px,' +
+                        ov.georefAnchor.y + 'px,0)';
+                }
             });
         }
 
@@ -584,6 +694,7 @@
             if (!ov) return;
             clearTiles(ov);
             if (ov.root.parentNode) ov.root.parentNode.removeChild(ov.root);
+            if (ov.georefEl && ov.georefEl.parentNode) ov.georefEl.parentNode.removeChild(ov.georefEl);
             delete overlays[id];
             order = order.filter(function (item) { return item !== id; });
             if (activeId === id) {
@@ -600,8 +711,20 @@
 
         function applyState(ov, patch) {
             if (!ov || !patch) return;
-            if (isFinite(patch.lat)) ov.state.lat = Number(patch.lat);
-            if (isFinite(patch.lng)) ov.state.lng = Number(patch.lng);
+            if (patch.boundsKm != null && isFinite(patch.boundsKm)) {
+                ov.state.boundsKm = clamp(Number(patch.boundsKm), GEOREF_MIN_KM, GEOREF_MAX_KM);
+            }
+            /* The anchor never leaves the georeference square — enforced on
+             * every path that writes lat/lng (a drag, a restore, a bounds
+             * change), so the sheet is always georeferenceable inside it. */
+            if (isFinite(patch.lat) || isFinite(patch.lng)) {
+                var c = clampToSquare(
+                    isFinite(patch.lat) ? Number(patch.lat) : ov.state.lat,
+                    isFinite(patch.lng) ? Number(patch.lng) : ov.state.lng,
+                    ov.center.lat, ov.center.lng, ov.state.boundsKm);
+                ov.state.lat = c.lat;
+                ov.state.lng = c.lng;
+            }
             if (isFinite(patch.mpp)) ov.state.mpp = clamp(Number(patch.mpp), MPP_MIN, MPP_MAX);
             if (isFinite(patch.rotation)) ov.state.rotation = normalizeDegrees(Number(patch.rotation));
             if (isFinite(patch.opacity)) ov.state.opacity = clamp(Number(patch.opacity), 0, 1);
@@ -620,6 +743,28 @@
             return setState(id, { opacity: value });
         }
 
+        /* Change the georeference square side for one sheet and keep the
+         * anchor inside it: enlarging leaves the anchor where it is, shrinking
+         * pulls it back to the nearest edge of the new square. */
+        function setBoundsKm(id, km) {
+            var ov = overlays[id];
+            if (!ov) return null;
+            var value = clamp(Number(km) || DEFAULT_GEOREF_KM, GEOREF_MIN_KM, GEOREF_MAX_KM);
+            ov.state.boundsKm = value;
+            var c = clampToSquare(ov.state.lat, ov.state.lng, ov.center.lat, ov.center.lng, value);
+            ov.state.lat = c.lat;
+            ov.state.lng = c.lng;
+            renderGeoref(ov);
+            render(ov);
+            emitChange(ov);
+            return value;
+        }
+
+        function getBoundsKm(id) {
+            var ov = overlays[id];
+            return ov ? ov.state.boundsKm : null;
+        }
+
         function setActive(id) {
             if (activeId === id) { paintFrames(); return; }
             activeId = overlays[id] ? id : null;
@@ -635,6 +780,7 @@
                 var show = alignMode && id === activeId;
                 ov.frameEl.style.display = show ? '' : 'none';
                 ov.root.classList.toggle('om-active', show);
+                if (ov.georefEl) ov.georefEl.style.display = show ? '' : 'none';
             });
         }
 
@@ -737,7 +883,8 @@
                 lng: ov.state.lng,
                 mpp: ov.state.mpp,
                 rotation: ov.state.rotation,
-                opacity: ov.state.opacity
+                opacity: ov.state.opacity,
+                boundsKm: ov.state.boundsKm
             };
         }
 
@@ -820,8 +967,9 @@
 
         function applyMove(ov, delta) {
             var target = map.containerPointToLatLng(L.point(gesture.origin.x + delta.x, gesture.origin.y + delta.y));
-            ov.state.lat = target.lat;
-            ov.state.lng = target.lng;
+            var c = clampToSquare(target.lat, target.lng, ov.center.lat, ov.center.lng, ov.state.boundsKm);
+            ov.state.lat = c.lat;
+            ov.state.lng = c.lng;
         }
 
         function onPointerDown(event) {
@@ -989,6 +1137,8 @@
             isAlignMode: function () { return alignMode; },
             setOpacity: setOpacity,
             setState: setState,
+            setBoundsKm: setBoundsKm,
+            getBoundsKm: getBoundsKm,
             setVisible: setVisible,
             centerOn: centerOn,
             fitToView: fitToView,
@@ -1002,7 +1152,13 @@
             snapshot: snapshot,
             renderAll: renderAll,
             destroy: destroy,
-            limits: { mppMin: MPP_MIN, mppMax: MPP_MAX }
+            limits: {
+                mppMin: MPP_MIN,
+                mppMax: MPP_MAX,
+                georefMinKm: GEOREF_MIN_KM,
+                georefMaxKm: GEOREF_MAX_KM,
+                georefDefaultKm: DEFAULT_GEOREF_KM
+            }
         };
     }
 
@@ -1015,9 +1171,19 @@
         fitScale: fitScale,
         normalizeDegrees: normalizeDegrees,
         snapDegrees: snapDegrees,
+        clampToSquare: clampToSquare,
         tileSize: TILE,
         fitFraction: FIT_FRACTION,
         maxSharpTiles: MAX_SHARP_TILES,
-        limits: { mppMin: MPP_MIN, mppMax: MPP_MAX }
+        georefDefaultKm: DEFAULT_GEOREF_KM,
+        georefMinKm: GEOREF_MIN_KM,
+        georefMaxKm: GEOREF_MAX_KM,
+        limits: {
+            mppMin: MPP_MIN,
+            mppMax: MPP_MAX,
+            georefMinKm: GEOREF_MIN_KM,
+            georefMaxKm: GEOREF_MAX_KM,
+            georefDefaultKm: DEFAULT_GEOREF_KM
+        }
     };
 }(typeof window !== 'undefined' ? window : this));

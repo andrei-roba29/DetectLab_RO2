@@ -461,6 +461,42 @@
     justify-content: center;
 }
 
+/* ── 5. Pătratul georeferențieră ────────────────────────────────────────
+   Regiunea de la pământ în care sheet-ul poate fi potrivit: un pătrat
+   centrat pe locul lui, de laturile `boundsKm` km. Se desenează în
+   coordonate de layer (nu rotește și nu se scală cu sheet-ul — e o zonă
+   geografică, nu parte a transformării). Vizibil doar pentru sheet-ul
+   activ, în modul aliniere. */
+.om-georef {
+    pointer-events: none;
+}
+
+/* The visible square is an inner box centred on the 0×0 anchor (translate
+   (-50%,-50%)), so the anchor — like the sheet root's — sits at the local
+   origin and the zoom-animation transform scales around the place. */
+.om-georef-inner {
+    pointer-events: none;
+    border: 1.5px dashed rgba(200, 169, 110, 0.8);
+    background: rgba(200, 169, 110, 0.05);
+    box-sizing: border-box;
+}
+
+/* Rândul cu selectorul de dimensiune a pătratului. */
+.om-georef-row { margin-top: 5px; }
+.om-georef-row .om-panel-label { font-size: 0.6rem; }
+.om-georef-row .om-panel-select {
+    width: 80px;
+    flex: 0 0 auto;
+    margin-bottom: 0;
+    padding: 2px 4px;
+}
+.om-georef-hint {
+    margin-top: 3px;
+    font-size: 0.56rem;
+    line-height: 1.25;
+    color: rgba(245, 240, 235, 0.55);
+}
+
 /* Pe telefoane panoul stă deasupra benzii de jos, fără să acopere harta. */
 @media (max-width: 520px) {
     .om-panel { width: min(224px, calc(100vw - 20px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 74px); }

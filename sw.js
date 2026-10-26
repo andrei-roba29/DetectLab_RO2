@@ -806,7 +806,13 @@
 // v281: Other maps catalogue grows to the Cluj/Alba Transylvania batch and
 // overlapping dots merge into one sheet window. Re-tags js/other-maps.js and
 // the catalogue URL.
-const CACHE_NAME = 'detectlab-v281-cluj-alba';
+// v282: every Hungaricana sheet is confined to a georeference square around
+//   its place (5 km by default) — the anchor may be dragged/rotated/scaled
+//   but never leaves it, so a sheet can only be aligned over the ground it
+//   belongs to. The “Overlay the map” panel exposes the square size as an
+//   option for the exceptional case. Re-tags js/other-maps-overlay.js,
+//   js/other-maps.js and css/other-maps.css. See OTHER_MAPS.md.
+const CACHE_NAME = 'detectlab-v282-other-maps-georef';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -932,9 +938,9 @@ const PRECACHE_URLS = [
   'js/hist-shift.js?v=20261014-hist-shift',
   'css/hist-shift.css?v=20261014-hist-shift',
   'js/other-maps-tiles.js?v=20261023-other-maps',
-  'js/other-maps-overlay.js?v=20261024-other-maps-zoomlock',
-  'js/other-maps.js?v=20261026-cluj-alba',
-  'css/other-maps.css?v=20261026-other-maps-compact',
+  'js/other-maps-overlay.js?v=20261026-other-maps-georef',
+  'js/other-maps.js?v=20261026-other-maps-georef',
+  'css/other-maps.css?v=20261026-other-maps-georef',
   'data/other-maps-catalog.json?v=20261026-cluj-alba',
   'js/translations.js?v=20261023-other-maps',
   'js/map3d-mirror.js?v=20261017-archeo-3d-projection',

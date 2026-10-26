@@ -38,6 +38,12 @@
     var OVERLAY_PANE = 'pane_other_maps_overlay';
     var STORE_KEY = 'dlOtherMaps.v1';
 
+    /* Georeference square sizes offered in the “Overlay the map” panel.
+     * The sheet's anchor is confined to a square of this side around the
+     * place; 5 km is the default and the larger values are the “exceptional
+     * case” escape hatch (a wide county sheet, an approximate place name). */
+    var GEOREF_OPTIONS = [2, 5, 10, 20, 50, 100];
+
     var DOT_FILL = 'rgba(46, 204, 113, 0.35)';
     var DOT_STROKE = 'rgba(46, 204, 113, 0.9)';
     var CLUSTER_FILL = 'rgba(14, 64, 38, 0.88)';
@@ -59,6 +65,8 @@
             om_align: 'Mod aliniere',
             om_align_hint: 'Trage harta ca s-o muți · roata = scală · Shift + roata = rotație · mânerele de colț = mărire',
             om_locked_hint: 'Alinierea e blocată. Pornește „Mod aliniere” ca să muți harta.',
+            om_georef: 'Arie georeferențiere',
+            om_georef_hint: 'Harta se potrivește într-un pătrat în jurul locului; mărește-l dacă trebuie.',
             om_opacity: 'Opacitate',
             om_rotation: 'Rotație',
             om_scale: 'Scară',
@@ -87,6 +95,8 @@
             om_align: 'Align mode',
             om_align_hint: 'Drag the sheet to move it · wheel = scale · Shift + wheel = rotate · corner handles = resize',
             om_locked_hint: 'Alignment is locked. Turn “Align mode” on to move the sheet.',
+            om_georef: 'Georeference area',
+            om_georef_hint: 'The sheet fits inside a square around the place — enlarge it if needed.',
             om_opacity: 'Opacity',
             om_rotation: 'Rotation',
             om_scale: 'Scale',
@@ -115,6 +125,8 @@
             om_align: 'Illesztés mód',
             om_align_hint: 'Húzd a mozgatáshoz · görgő = méret · Shift + görgő = forgatás · sarokpontok = átméretezés',
             om_locked_hint: 'Az illesztés zárolva van. Kapcsold be az „Illesztés mód”-ot.',
+            om_georef: 'Illesztési terület',
+            om_georef_hint: 'A térkép a hely körüli négyzetbe ül ki — növeld, ha kell.',
             om_opacity: 'Átlátszóság',
             om_rotation: 'Forgatás',
             om_scale: 'Méretarány',
@@ -754,6 +766,11 @@
             '<input type="checkbox" class="om-panel-align"><span class="apm-toggle-track"></span>' +
             '</label></div>' +
             '<div class="om-panel-hint"></div>' +
+            '<div class="om-panel-row om-georef-row">' +
+            '<span class="om-panel-label om-t-georef"></span>' +
+            '<select class="om-panel-select om-s-georef" aria-label="Georeference area"></select>' +
+            '</div>' +
+            '<div class="om-panel-hint om-georef-hint"></div>' +
             '<label class="om-slider"><span class="om-slider-name om-t-opacity"></span>' +
             '<span class="om-slider-value om-v-opacity"></span>' +
             '<input type="range" class="om-range om-r-opacity" min="0" max="100" step="1"></label>' +
@@ -776,6 +793,12 @@
         });
         panel.querySelector('.om-panel-align').addEventListener('change', function (event) {
             state.manager.setAlignMode(event.target.checked);
+            paintPanel();
+        });
+        panel.querySelector('.om-s-georef').addEventListener('change', function (event) {
+            var id = state.manager.getActiveId();
+            if (!id) return;
+            state.manager.setBoundsKm(id, Number(event.target.value));
             paintPanel();
         });
         panel.querySelector('.om-r-opacity').addEventListener('input', function (event) {
@@ -825,6 +848,18 @@
         return clampMpp(limits.mppMin + ratio * (limits.mppMax - limits.mppMin));
     }
 
+    /* The <option> list for the georeference square selector: the presets,
+     * plus the sheet's current value when it is not one of them. */
+    function georefOptionsHtml(currentKm) {
+        var opts = GEOREF_OPTIONS.slice();
+        var val = Number(currentKm);
+        if (isFinite(val) && opts.indexOf(val) < 0) opts.push(val);
+        opts.sort(function (a, b) { return a - b; });
+        return opts.map(function (km) {
+            return '<option value="' + km + '">' + km + ' km</option>';
+        }).join('');
+    }
+
     function showPanel() {
         var panel = ensurePanel();
         paintPanel();
@@ -843,6 +878,10 @@
         if (opacityLabel) opacityLabel.textContent = t('om_opacity');
         var alignLabel = panel.querySelector('.om-panel-label');
         if (alignLabel) alignLabel.textContent = t('om_align');
+        var georefLabel = panel.querySelector('.om-t-georef');
+        if (georefLabel) georefLabel.textContent = t('om_georef');
+        var georefHint = panel.querySelector('.om-georef-hint');
+        if (georefHint) georefHint.textContent = t('om_georef_hint');
         panel.querySelector('.om-a-center').textContent = t('om_center');
         panel.querySelector('.om-a-fit').textContent = t('om_fit');
         panel.querySelector('.om-a-reset').textContent = t('om_reset');
@@ -862,6 +901,24 @@
         panel.querySelector('.om-panel-empty').textContent = empty ? t('om_empty') : '';
         panel.querySelector('.om-panel-empty').style.display = empty ? '' : 'none';
         if (!empty && activeId) select.value = activeId;
+
+        /* The georeference square selector: one option per preset size, plus
+         * the active sheet's own value if it is not one of the presets (a
+         * square restored from an older save). */
+        var georefSelect = panel.querySelector('.om-s-georef');
+        if (georefSelect) {
+            var georefValue = Overlays.georefDefaultKm;
+            if (activeId) {
+                var georefState = state.manager.state(activeId);
+                if (georefState && isFinite(georefState.boundsKm)) georefValue = georefState.boundsKm;
+            }
+            georefSelect.innerHTML = georefOptionsHtml(georefValue);
+            georefSelect.value = String(georefValue);
+            georefSelect.disabled = empty;
+            georefSelect.style.display = empty ? 'none' : '';
+        }
+        var georefRow = panel.querySelector('.om-georef-row');
+        if (georefRow) georefRow.style.display = empty ? 'none' : '';
 
         var align = state.manager.isAlignMode();
         panel.querySelector('.om-panel-align').checked = align;
@@ -1054,6 +1111,7 @@
         groupByPlace: groupByPlace,
         mergeTapSheets: mergeTapSheets,
         formatMeters: formatMeters,
+        georefOptionsHtml: georefOptionsHtml,
         sliderFromMppLimits: function (mpp, limits) {
             var ratio = (Math.max(limits.mppMin, Math.min(limits.mppMax, mpp)) - limits.mppMin) /
                 (limits.mppMax - limits.mppMin);

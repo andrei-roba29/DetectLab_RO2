@@ -761,6 +761,125 @@ const OtherMaps = sandbox.DetectLabOtherMaps;
         'translate3d(' + ov7.anchor.x + 'px,' + ov7.anchor.y + 'px,0)',
         '…and the plain placement is restored');
 
+    // The georeference square is geographic too: a zoom animation scales it
+    // around the place (its own centre) with the same transform the sheet
+    // root gets, so the square stays locked to the ground through the glide.
+    const homeLL = { lat: rec7.lat, lng: rec7.lng };
+    const homeLayer = projMap.latLngToLayerPoint(homeLL);
+    const homeProject = projMap.project(homeLL, 15);
+    projMap.fire('zoomanim', { center: projMap.getCenter(), zoom: 16 });
+    const gOff = homeProject.subtract(homeLayer).multiplyBy(2).subtract(originAt(16))._round();
+    eq(ov7.georefEl.style.transform,
+        'translate3d(' + gOff.x + 'px,' + gOff.y + 'px,0) scale(2) translate3d(' +
+        homeLayer.x + 'px,' + homeLayer.y + 'px,0)',
+        'the georeference square scales around the place through the animation');
+
+    /* ══ 8. the georeference square ═════════════════════════════════════
+     * Every Hungaricana sheet is confined to a square around the place it
+     * was added for: the anchor may be dragged/rotated/scaled, but it may
+     * never leave the square.  5 km is the default; the panel can enlarge it
+     * for an exceptional sheet. */
+    const G_R = 6378137;
+    const G_MPP_LAT = Math.PI * G_R / 180;
+    function groundMeters(lat, lng, cLat, cLng) {
+        return {
+            x: (lng - cLng) * G_MPP_LAT * Math.cos(cLat * Math.PI / 180),
+            y: (lat - cLat) * G_MPP_LAT
+        };
+    }
+    const G_LAT = 47.0, G_LNG = 23.0;
+    const insidePt = Overlay.clampToSquare(47.01, 23.01, G_LAT, G_LNG, 5);
+    ok(Math.abs(insidePt.lat - 47.01) < 1e-9 && Math.abs(insidePt.lng - 23.01) < 1e-9,
+        'a point inside the square is unchanged');
+    const northPt = Overlay.clampToSquare(48.0, 23.0, G_LAT, G_LNG, 5);
+    let northM = groundMeters(northPt.lat, northPt.lng, G_LAT, G_LNG);
+    ok(Math.abs(northM.y - 2500) < 1 && Math.abs(northM.x) < 1,
+        'a point far north clamps to the north edge (+2.5 km on the ground)');
+    const eastPt = Overlay.clampToSquare(47.0, 24.0, G_LAT, G_LNG, 5);
+    let eastM = groundMeters(eastPt.lat, eastPt.lng, G_LAT, G_LNG);
+    ok(Math.abs(eastM.x - 2500) < 1 && Math.abs(eastM.y) < 1,
+        'a point far east clamps to the east edge (+2.5 km on the ground)');
+    const cornerPt = Overlay.clampToSquare(48.0, 24.0, G_LAT, G_LNG, 5);
+    let cornerM = groundMeters(cornerPt.lat, cornerPt.lng, G_LAT, G_LNG);
+    ok(Math.abs(cornerM.x - 2500) < 1 && Math.abs(cornerM.y - 2500) < 1,
+        'a point past the corner clamps to the corner');
+    const bigPt = Overlay.clampToSquare(47.2, 23.0, G_LAT, G_LNG, 100);
+    ok(Math.abs(bigPt.lat - 47.2) < 1e-9, 'a bigger square lets the point through');
+    const zeroPt = Overlay.clampToSquare(48.0, 23.0, G_LAT, G_LNG, 0);
+    ok(Math.abs(zeroPt.lat - 48.0) < 1e-9, 'a zero square does not clamp');
+    ok(isNaN(Overlay.clampToSquare(NaN, 23.0, G_LAT, G_LNG, 5).lat),
+        'a non-finite latitude is returned unchanged');
+
+    /* The manager: a fresh sheet owns a 5 km square, setState clamps the
+     * anchor into it, setBoundsKm resizes it (enlarging lets the anchor
+     * travel, shrinking pulls it back), the square is painted in layer space
+     * and the state/snapshot carry the size. */
+    const geoMap = fakeMap({ zoom: 12, size: { x: 400, y: 800 }, center: { lat: 47.933, lng: 23.892 } });
+    const geoMgr = Overlay.createManager(geoMap, { pane: 'om_georef_pane', opacity: 0.8 });
+    const geoRec = {
+        id: 'TST/8',
+        path: 'maps/mol/s011/s11_0647/s11_0647.ecw',
+        lat: 47.933,
+        lng: 23.892,
+        w: 8000,
+        h: 6000
+    };
+    const geoOv = await geoMgr.add(geoRec);
+    await new Promise((r) => setImmediate(r));
+    eq(geoOv.state.boundsKm, 5, 'a fresh sheet starts with the default 5 km square');
+    eq(geoMgr.getBoundsKm('TST/8'), 5, 'getBoundsKm reports the default');
+    ok(geoOv.georefEl && /om-georef/.test(geoOv.georefEl.className),
+        'the sheet owns a georeference square element');
+    ok(geoOv.georefEl.parentNode === geoMap.getPane('om_georef_pane'),
+        'the square lives in the overlay pane');
+
+    // A position far outside the square is clamped back to the edge.
+    const farState = geoMgr.setState('TST/8', { lat: 48.5, lng: 23.892 });
+    let farM = (farState.lat - geoRec.lat) * G_MPP_LAT;
+    ok(farM > 2499 && farM <= 2500 + 1e-6,
+        'setState clamps the anchor into the 5 km square, onto the edge');
+
+    // Enlarging the square lets the anchor travel further.
+    geoMgr.setBoundsKm('TST/8', 50);
+    eq(geoMgr.getBoundsKm('TST/8'), 50, 'setBoundsKm stores the new square');
+    const farState2 = geoMgr.setState('TST/8', { lat: 48.5, lng: 23.892 });
+    let farM2 = (farState2.lat - geoRec.lat) * G_MPP_LAT;
+    ok(farM2 > 2500, 'a bigger square lets the anchor move further');
+
+    // Shrinking pulls the anchor back inside the smaller square.
+    geoMgr.setState('TST/8', { lat: 48.5, lng: 23.892 });
+    geoMgr.setBoundsKm('TST/8', 5);
+    const shrunkM = (geoMgr.state('TST/8').lat - geoRec.lat) * G_MPP_LAT;
+    ok(shrunkM <= 2500 + 1e-6, 'shrinking the square pulls the anchor back inside');
+
+    // The square is drawn at the place, at the square side on the ground.
+    geoMgr.setAlignMode(true);
+    geoMgr.setActive('TST/8');
+    const geoHalfPx = (5 * 1000 / 2) / Overlay.resolutionAt(geoRec.lat, 12);
+    ok(Math.abs(parseFloat(geoOv.georefInner.style.width) - geoHalfPx * 2) < 1e-6,
+        'the square is drawn at the square side on the ground');
+    ok(geoOv.georefEl.style.display !== 'none', 'the square is visible in align mode');
+    ok(geoMgr.state('TST/8').boundsKm === 5, 'publicState carries boundsKm');
+    ok(geoMgr.snapshot().overlays[0].boundsKm === 5, 'the snapshot carries boundsKm');
+    geoMgr.remove('TST/8');
+    ok(!geoOv.georefEl.parentNode, 'remove detaches the square');
+
+    /* ══ 9. the panel selector ═════════════════════════════════════════
+     * The “Overlay the map” panel exposes the square size as an option. The
+     * helper that builds the <option> list is exercised here (the mini DOM in
+     * this file cannot parse the panel's innerHTML); the manager side of the
+     * change is covered by the setBoundsKm checks above. */
+    const georefOptions = OtherMaps.georefOptionsHtml(5);
+    ok(/value="5"/.test(georefOptions), 'the selector offers the 5 km preset');
+    ok(/value="100"/.test(georefOptions), 'the selector offers the 100 km preset');
+    ok(/value="5">5 km<\/option>/.test(georefOptions), 'each preset is labelled with its size');
+    const georefCustom = OtherMaps.georefOptionsHtml(7);
+    ok(/value="7"/.test(georefCustom), 'a non-preset square is offered as its own option');
+    ok(OtherMaps.strings.ro.om_georef && OtherMaps.strings.en.om_georef && OtherMaps.strings.hu.om_georef,
+        'the georeference label exists in all three languages');
+    ok(OtherMaps.strings.ro.om_georef_hint && OtherMaps.strings.en.om_georef_hint && OtherMaps.strings.hu.om_georef_hint,
+        'the georeference hint exists in all three languages');
+
     console.log('✓ other-maps: ' + checks + ' checks passed ' +
         ('(' + catalog.maps.length + ' catalogue records, ' + locations.length + ' places)'));
 })().catch((err) => {
