@@ -58,7 +58,7 @@ const swJs = read('sw.js');
 const mapApp = read('js/map-app.js');
 const viewerSource = read('js/map3d-terrain.js');
 
-const TAG = '20261025-lidar-3d-tile-heal';
+const TAG = '20261026-lidar-whole-or-disc';
 
 let passed = 0;
 function ok(label) { passed += 1; console.log('  ✓ ' + label); }

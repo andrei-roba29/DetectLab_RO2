@@ -36,7 +36,7 @@ const html = read('index.html');
 const sw = read('sw.js');
 
 const MAPTILER_HILLSHADE = 'api.maptiler.com/tiles/hillshade';
-const NEW_TAG = 'js/map-app.js?v=20261026-lidar-hillshade-zoom';
+const NEW_TAG = 'js/map-app.js?v=20261026-lidar-whole-or-disc';
 
 /* ══════════════════════════════════════════════════════════════
    1. Panel markup: exactly ONE Hillshade LiDAR derivate row

@@ -7563,13 +7563,26 @@
                             }
                         } catch (e2) { active = null; }
                         if (active && active.length > 0) {
+                            /* A 3D entry can now be prepared for SEVERAL LiDAR
+                             * layers at once (all of them entirely, or all of
+                             * them over the 1 km disc). Turning one of them off
+                             * must not throw the whole decision away — the view
+                             * keeps the others — so the question is “is any
+                             * chosen layer still on?”, which the viewer answers
+                             * from its own focus (it knows every spelling of
+                             * every key). The loop below is the fallback for a
+                             * viewer that predates it. */
                             var found = false;
-                            for (var i = 0; i < active.length; i++) {
-                                var entry = active[i];
-                                if (focus.key && (entry.key === focus.key || entry.lidarKey === focus.key)) found = true;
-                                if (focus.lidarKey && (entry.lidarKey === focus.lidarKey || entry.key === focus.lidarKey)) found = true;
-                                if (focus.defId && (entry.defId === focus.defId || entry.lidarKey === 'def:' + focus.defId)) found = true;
-                                if (focus.lidarKey && focus.lidarKey === 'def:' + entry.defId) found = true;
+                            if (typeof window[_map3DKey].lidarFocusCovers === 'function') {
+                                found = window[_map3DKey].lidarFocusCovers(active);
+                            } else {
+                                for (var i = 0; i < active.length; i++) {
+                                    var entry = active[i];
+                                    if (focus.key && (entry.key === focus.key || entry.lidarKey === focus.key)) found = true;
+                                    if (focus.lidarKey && (entry.lidarKey === focus.lidarKey || entry.key === focus.lidarKey)) found = true;
+                                    if (focus.defId && (entry.defId === focus.defId || entry.lidarKey === 'def:' + focus.defId)) found = true;
+                                    if (focus.lidarKey && focus.lidarKey === 'def:' + entry.defId) found = true;
+                                }
                             }
                             if (!found) shouldClear = true;
                         } else if (!active || active.length === 0) {

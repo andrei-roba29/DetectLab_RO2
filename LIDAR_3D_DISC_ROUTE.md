@@ -105,6 +105,26 @@ is not blanked by the change.
 | `map3dTiles()` | a `dynamic` definition whose browser module was not loaded fell back to `def.url` — the **service endpoint**, not a template — so MapLibre asked for that one un-substituted URL once per tile and failed every one of them under a silent blank | returns `[]`; the mirror falls back to the live layer's `dl2d://` route, the registry caller reports `unsupported: no tile template (module not loaded?)` |
 | `syncLayers()` | a focus that never reached the deck left only an empty 3D view and no explanation | `status().errors` gets one line per distinct reason: `LiDAR focus “…” is not on the 3D deck (missing: …)` |
 
+## 3b. The same rule in the whole-layer scope (2026-10-26)
+
+The rule above is about **which route** a focused layer takes, not about the disc: a
+layer chosen on the entry dialog is drawn through `dl2d://` so that the prefetch and the
+render make the same CORS/proxy decision. Since the 2026-10-26 change the dialog can also
+be answered with `scope: 'full'` — every chosen layer drawn entirely, no disc, no
+prefetch (`MAP_3D_TERRAIN.md` §6.4.3). The route rule is unchanged there:
+
+* `renderRaster()` still chooses `rasterTilesFor(item, focused)` **before** building the
+  spec, so a whole-layer focus never falls back to a registry template;
+* `maskOf()` returns null for `scope: 'full'` — nothing is clipped, and
+  `focusExcludesTile()` therefore never blanks a tile;
+* what a full-scope view *loses* is the prepared cache (`state.primed` is empty, by
+  definition), so the `dl2d://` handler makes a live request per tile — the same
+  `fetchTile()` path, the same `preferProxy`/healed-host decision, just not pre-warmed.
+
+In other words: `scope: 'disc'` is “this route, pre-downloaded and clipped”;
+`scope: 'full'` is “this route, on demand, uncut”. Neither one hands the layer to the
+registry renderer behind the prefetch's back.
+
 ## 4. The PWA half: a resume redraws the deck
 
 `js/map3d-terrain.js` had a context-loss watch but **no resume hook at all**. A phone
@@ -134,7 +154,8 @@ not re-downloaded by a resume.
 ## 6. Verify
 
 ```bash
-node test-lidar-3d-focus.js     # the def-backed route, the disc, the handoff
+node test-lidar-3d-focus.js     # the def-backed route, the disc, the whole-layer
+                                # deck (no bounds/cap/clip), the handoff
 node test-map3d-terrain.js      # deck order, proxy, blends, chrome
 node test-map3d-mobile.js       # PWA budget + cache tags
 node test-map3d-slider-layout.js

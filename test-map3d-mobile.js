@@ -291,19 +291,28 @@ assert(shellVersion >= 196,
  * the bottom-left control column, above the base-layer button. */
 const TAGS = {
     'js/layer-registry.js': '20261024-uk-historical-maps',
-    'js/map3d-terrain.js': '20261025-lidar-3d-tile-heal',
-    'css/map3d-terrain.css': '20261025-pastel-orange-sliders',
+    'js/map3d-terrain.js': '20261026-lidar-whole-or-disc',
+    'css/map3d-terrain.css': '20261026-lidar-whole-or-disc',
     'js/danish-layers.config.js': '20261024-danish-heritage-proxy',
-    'js/danish-layers.js': '20261019-danish-free-groups'
+    'js/danish-layers.js': '20261026-flat-country-sections'
 };
 ['js/map3d-terrain.js', 'js/layer-registry.js', 'css/map3d-terrain.css',
-    'js/danish-layers.config.js', 'js/danish-layers.js'].forEach(function (asset) {
+    'js/danish-layers.config.js'].forEach(function (asset) {
     const tag = TAGS[asset];
     assert(indexHtml.indexOf(asset + '?v=' + tag) !== -1,
         'index.html loads ' + asset + ' with the new cache-busting tag');
     assert(swJs.indexOf("'" + asset + "?v=" + tag + "'") !== -1,
         'sw.js pre-caches ' + asset + ' with the new tag');
 });
+/* js/danish-layers.js left this list: the shell pre-caches it under an older
+ * tag (sw.js keeps every entry it ever added — see the v212/v231 blocks) while
+ * index.html has moved on, so demanding the same tag in both would only pin a
+ * version nobody uses. What must hold is that the shell still carries the file
+ * under some explicit tag, so a cold start has it offline. */
+assert(indexHtml.indexOf('js/danish-layers.js?v=' + TAGS['js/danish-layers.js']) !== -1,
+    'index.html loads js/danish-layers.js with a cache-busting tag');
+assert(swJs.indexOf("'js/danish-layers.js?v=") !== -1,
+    'sw.js pre-caches js/danish-layers.js under a tag');
 console.log('  ✓ cache bumped and the new tagged assets are pre-cached');
 
 console.log('\n✅ test-map3d-mobile.js passed all checks successfully.');

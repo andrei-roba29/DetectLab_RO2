@@ -125,11 +125,13 @@
         cappedSeen: {},                  /* deck-budget lines already reported     */
         retintedTiles: 0,                /* tiles repainted for a CSS blend mode   */
         /* ── LiDAR focus (js/lidar-3d-focus.js) ──────────────────────────────
-         * ONE LiDAR layer may be draped in 3D, and only inside the disc the user
-         * picked and prefetched. state.focus is that decision, state.lidarOff
-         * means “the user removed LiDAR from 3D”, and state.primed is the tile
-         * cache the prefetch filled (see prefetchTiles below). */
-        focus: null,                     /* { key, defId, label, lat, lng, radiusKm, bounds, mask, tiles } */
+         * The LiDAR layers the user chose may be draped in 3D — every one of
+         * them, either entirely (scope 'full') or only inside the 1 km disc
+         * that was picked and prefetched for them (scope 'disc').
+         * state.focus is that decision, state.lidarOff means “the user removed
+         * LiDAR from 3D”, and state.primed is the tile cache the prefetch
+         * filled (see prefetchTiles below). */
+        focus: null,                     /* { scope, layers[], mask?, bounds?, plan? } */
         lidarOff: false,                 /* LiDAR deliberately not drawn in 3D     */
         lidarNotes: [],                  /* what had to be left out, and why       */
         focusWarned: null,                /* the focus-not-drawn reason already reported */
@@ -851,10 +853,11 @@
     }
 
     /* ═══════════════════════════════════════════════════════════════════════
-     *  THE LIDAR FOCUS DISC — one layer, one area, already in memory
+     *  THE LIDAR FOCUS — the chosen layers, whole or over one prepared disc
      * -----------------------------------------------------------------------
-     *  js/lidar-3d-focus.js decides WHICH LiDAR layer may be draped and over
-     *  WHICH disc; everything else here is the enforcement:
+     *  js/lidar-3d-focus.js decides WHICH LiDAR layers may be draped, and
+     *  whether they are drawn entirely (scope 'full') or over one prepared
+     *  disc (scope 'disc'); everything else here is the enforcement:
      *
      *    • plan()        drops every other LiDAR layer, so 3D can never try to
      *                    drape two national pyramids at once (the report that
@@ -870,23 +873,83 @@
      *                    path the 3D view uses, stored in state.primed.
      * ═══════════════════════════════════════════════════════════════════════ */
 
-    /** Does this deck item / registry definition belong to the focused LiDAR layer? */
+    /* ── one decision, two scopes, one or more layers ─────────────────────
+     * A focus is
+     *
+     *   { scope: 'disc' | 'full',
+     *     layers: [ { key, lidarKey, defId, label, plan? } ],
+     *     mask?, bounds?, plan? }
+     *
+     * `disc` prepares (and clips to) the 1 km circle the user picked; `full`
+     * drapes the chosen layers entirely, with no prepared area and no clip.
+     * A single-layer focus written the old way ({ key, lidarKey, defId, lat,
+     * lng, radiusKm, plan }) is normalised into the same shape on the way in
+     * (setLidarFocus below), so every reader here has one form to deal with. */
+    function focusLayers(focus) {
+        var f = focus || state.focus;
+        if (!f) return [];
+        if (Array.isArray(f.layers) && f.layers.length) return f.layers;
+        if (f.key || f.lidarKey || f.defId) {
+            return [{
+                key: f.key || null,
+                lidarKey: f.lidarKey || null,
+                defId: f.defId || null,
+                label: f.label || '',
+                plan: f.plan || null
+            }];
+        }
+        return [];
+    }
+
+    /** 'disc', 'full', or null when there is no focus at all. */
+    function focusScope(focus) {
+        var f = focus || state.focus;
+        if (!f) return null;
+        if (f.scope === 'disc' || f.scope === 'full') return f.scope;
+        /* Written before scopes existed: a focus that carries a disc is a disc. */
+        return (f.mask && Number(f.mask.radiusKm) > 0) || Number(f.radiusKm) > 0 ? 'disc' : 'full';
+    }
+
+    /**
+     * Does this key (deck key, family key, registry id or `def:` id) name one
+     * of the focused layers?
+     *
+     * Four spellings of the same layer meet here: the deck key of the live 2D
+     * layer (`2d.<stamp>`), the family key (`lidar.ro1m`), the registry id as
+     * a focus stores it (`lidar.fr-mnh`) and the registry id as the deck
+     * addresses it (`def:lidar.fr-mnh`). A disc belongs to the layer,
+     * whichever of them names it — the def: form used to fall through, so a
+     * registry-drawn LiDAR layer was bounded to the disc but never clipped to
+     * it.
+     */
+    function keyNamesFocusLayer(key, layer) {
+        if (!key || !layer) return false;
+        if (key === layer.key || key === layer.lidarKey) return true;
+        if (layer.defId && (key === layer.defId || key === 'def:' + layer.defId)) return true;
+        return false;
+    }
+
+    /** Does this deck item / registry definition belong to a focused LiDAR layer? */
     function focusMatches(item) {
-        var f = state.focus;
-        if (!f || !item) return false;
-        /* Two key spaces meet here. The deck key of a mirrored layer
-         * (`2d.<stamp>`) is what dl2d:// and the disc clip are addressed by; the
-         * LiDAR family key the tag carries (`lidar.ro1m`, `def:lidar.fr-mnh`) is
-         * what the dialog, the mirror item and the registry agree on. A focus
-         * carries both, and either may be the one that names this item. */
-        if (item.lidarKey && (item.lidarKey === f.key || item.lidarKey === f.lidarKey)) return true;
-        /* The deck key itself: a focus is built FROM the live layer of that key
-         * (js/lidar-3d-focus.js → activeLayers()), so a layer that lost its
-         * family tag — a `window._lidarGroup` member rebuilt by a country
-         * module, a layer added after the dialog was opened — still matches the
-         * disc the user prepared instead of being dropped as "missing". */
-        if (item.key && f.key && item.key === f.key) return true;
-        if (item.defId && f.defId && item.defId === f.defId) return true;
+        if (!state.focus || !item) return false;
+        var layers = focusLayers();
+        for (var i = 0; i < layers.length; i += 1) {
+            /* Two key spaces meet here. The deck key of a mirrored layer
+             * (`2d.<stamp>`) is what dl2d:// and the disc clip are addressed by;
+             * the LiDAR family key the tag carries (`lidar.ro1m`,
+             * `def:lidar.fr-mnh`) is what the dialog, the mirror item and the
+             * registry agree on. A focus carries both, and either may be the
+             * one that names this item. */
+            if (keyNamesFocusLayer(item.lidarKey, layers[i])) return true;
+            /* The deck key itself: a focus is built FROM the live layer of that
+             * key (js/lidar-3d-focus.js → activeLayers()), so a layer that lost
+             * its family tag — a `window._lidarGroup` member rebuilt by a
+             * country module, a layer added after the dialog was opened — still
+             * matches the decision the user made instead of being dropped as
+             * "missing". */
+            if (item.key && layers[i].key && item.key === layers[i].key) return true;
+            if (item.defId && layers[i].defId && item.defId === layers[i].defId) return true;
+        }
         return false;
     }
 
@@ -899,23 +962,31 @@
     function maskOf(key) {
         var f = state.focus;
         if (!f || !key) return null;
-        /* Four spellings of the same layer meet here: the deck key of the live
-         * 2D layer (`2d.<stamp>`), the family key (`lidar.ro1m`), the registry
-         * id as a focus stores it (`lidar.fr-mnh`) and the registry id as the
-         * deck addresses it (`def:lidar.fr-mnh`). A disc belongs to the layer,
-         * whichever of them names it — the def: form used to fall through, so
-         * a registry-drawn LiDAR layer was bounded to the disc but never
-         * clipped to it. */
-        if (key === f.key || key === f.lidarKey) return f.mask || f;
-        if (f.defId && (key === f.defId || key === 'def:' + f.defId)) return f.mask || f;
+        /* A whole-layer focus has no disc: nothing is bounded, nothing clipped. */
+        if (focusScope(f) === 'full') return null;
+        var layers = focusLayers(f);
+        for (var i = 0; i < layers.length; i += 1) {
+            if (keyNamesFocusLayer(key, layers[i])) return f.mask || f;
+        }
         return null;
     }
     function focusMaskFor(key) { return maskOf(key); }
 
-    /** The disc's identity, for a given layer ('' when that layer is not focused). */
+    /** The prepared plan of one focused layer (its zoom ceiling), or null. */
+    function planForLayer(key) {
+        var f = state.focus;
+        if (!f || !key) return null;
+        var layers = focusLayers(f);
+        for (var i = 0; i < layers.length; i += 1) {
+            if (keyNamesFocusLayer(key, layers[i])) return layers[i].plan || f.plan || null;
+        }
+        return f.plan || null;
+    }
+
+    /** The disc's identity, for a given layer ('' when that layer has no disc). */
     function focusSigFor(key) {
         var mask = maskOf(key);
-        if (!mask) return '';
+        if (!mask) return focusScope() === 'full' ? 'full' : '';
         return 'disc@' + mask.lat + ',' + mask.lng + ',' + mask.radiusKm;
     }
 
@@ -1186,13 +1257,16 @@
     }
 
     /* ═══════════════════════════════════════════════════════════════════════
-     *  THE FOCUS ITSELF — one LiDAR layer, one disc
+     *  THE FOCUS ITSELF — the chosen layers, whole or over one disc
      * ═══════════════════════════════════════════════════════════════════════ */
 
     /**
      * Decide what the 3D view may drape.
      *
-     * focus = { key, lidarKey?, defId?, label, lat, lng, radiusKm, bounds?, mask? }
+     * focus = { scope: 'full' | 'disc',
+     *           layers: [ { key, lidarKey?, defId?, label, plan? } ],
+     *           key, lidarKey?, defId?, label,        // the first layer
+     *           lat, lng, radiusKm, bounds?, mask? }  // disc only
      *   key      the dl2d key of the live 2D layer (what the mirror named it) —
      *            what dl2d://, the clip and the prepared tiles are addressed by
      *   lidarKey the LiDAR family key the mirror put on the item (`lidar.ro1m`)
@@ -1203,12 +1277,37 @@
      *   bounds   [w, s, e, n] the raster source may load (computed here if absent)
      */
     function setLidarFocus(focus) {
-        var next = focus && (focus.key || focus.lidarKey || focus.defId) ? focus : null;
+        var next = focus && (focus.key || focus.lidarKey || focus.defId ||
+            (Array.isArray(focus.layers) && focus.layers.length)) ? focus : null;
         if (next) {
-            if (!next.mask && next.lat != null && next.lng != null && next.radiusKm) {
-                next.mask = { lat: Number(next.lat), lng: Number(next.lng), radiusKm: Number(next.radiusKm) };
+            /* One decision, one shape: whatever the caller wrote (a single
+             * layer, a list of them, with or without a disc) is normalised
+             * here so the rest of the viewer reads `scope` + `layers`. */
+            if (!Array.isArray(next.layers) || !next.layers.length) {
+                next.layers = [{
+                    key: next.key || null,
+                    lidarKey: next.lidarKey || null,
+                    defId: next.defId || null,
+                    label: next.label || '',
+                    plan: next.plan || null
+                }];
             }
-            if (!next.bounds && next.mask && MIRROR.disc) next.bounds = MIRROR.disc.bounds(next.mask);
+            /* The primary layer's ceiling travels on the focus too (the dialog
+             * and the 3D bar read it there); keep the two ends of the same
+             * number in step whichever one the caller wrote last. */
+            if (next.plan && next.layers[0]) next.layers[0].plan = next.plan;
+            next.scope = focusScope(next);
+            if (next.scope === 'disc') {
+                if (!next.mask && next.lat != null && next.lng != null && next.radiusKm) {
+                    next.mask = { lat: Number(next.lat), lng: Number(next.lng), radiusKm: Number(next.radiusKm) };
+                }
+                if (!next.bounds && next.mask && MIRROR.disc) next.bounds = MIRROR.disc.bounds(next.mask);
+            } else {
+                /* Whole layer: no disc, so no bounds and no clipped rim — the
+                 * layer is drawn exactly where the 2D map would draw it. */
+                delete next.mask;
+                delete next.bounds;
+            }
             next.at = Date.now();
         }
         var changed = !sameFocus(state.focus, next);
@@ -1227,16 +1326,20 @@
 
     function sameFocus(a, b) {
         if (!a || !b) return !a && !b;
-        function disc(f) {
-            var m = f.mask || f;
-            /* The prepared ceiling is part of the identity: a source created
-             * for a z16 plan must be rebuilt (not silently kept) when the plan
-             * reaches z18, or the cap would still be the old one. */
+        function signature(f) {
+            /* Every chosen layer, and the prepared ceiling of each: a source
+             * created for a z16 plan must be rebuilt (not silently kept) when
+             * the plan reaches z18, or the cap would still be the old one. */
+            var layers = focusLayers(f).map(function (layer) {
+                var plan = layer.plan || {};
+                return [layer.key || '', layer.lidarKey || '', layer.defId || '',
+                    plan.zoomTo == null ? '' : plan.zoomTo].join('~');
+            }).join('|');
+            var m = f.mask || {};
             var ceiling = f.plan && f.plan.zoomTo != null ? f.plan.zoomTo : '';
-            return [f.key || '', f.lidarKey || '', f.defId || '',
-                Number(m.lat), Number(m.lng), Number(m.radiusKm), ceiling].join('|');
+            return [focusScope(f), layers, Number(m.lat), Number(m.lng), Number(m.radiusKm), ceiling].join('|');
         }
-        return disc(a) === disc(b);
+        return signature(a) === signature(b);
     }
 
     /** Do not drape any LiDAR layer in 3D (the user removed it from the bar). */
@@ -1348,11 +1451,14 @@
              * which is what `_dlDefId` carries) or as the registry key the deck
              * uses (`def:lidar.fr-mnh`, which is what `_dlLidar` carries for a
              * module-built layer) — either way it is the same layer, and its
-             * prepared disc is under the deck key. */
-            var focusDef = focus && (focus.defId === defId || focus.lidarKey === 'def:' + defId);
-            if (focus && focus.key && focusDef) {
-                var deckUrl = 'dl2d://' + focus.key + '/' + z + '/' + x + '/' + y;
-                var fromDisc = primedOutput(deckUrl, pipelineSigFor(focus.key, deckUrl));
+             * prepared disc is under the deck key. A disc can hold several
+             * layers, so the matching one is looked up, not assumed first. */
+            var focusLayer = focusLayers(focus).filter(function (layer) {
+                return layer.defId === defId || layer.lidarKey === 'def:' + defId;
+            })[0];
+            if (focusLayer && focusLayer.key) {
+                var deckUrl = 'dl2d://' + focusLayer.key + '/' + z + '/' + x + '/' + y;
+                var fromDisc = primedOutput(deckUrl, pipelineSigFor(focusLayer.key, deckUrl));
                 if (fromDisc) return Promise.resolve({ data: fromDisc });
             }
             if (focusExcludesTile('def:' + defId, z, x, y)) return Promise.resolve({ data: MIRROR.disc.blankTile() });
@@ -1938,8 +2044,11 @@
         /* Ground metres per pixel of a 256 px Web-Mercator tile at zoom 0. */
         var atZoomZero = 156543.03392804097 * Math.cos(Number(disc.lat) * Math.PI / 180);
         var zoom = Math.log2(atZoomZero / metresPerPixel);
-        var layer = state.focus && state.focus.key ? MIRROR.layerByKey(state.focus.key) : null;
-        if (!layer && state.focus && state.focus.lidarKey) layer = MIRROR.layerByKey(state.focus.lidarKey);
+        /* The disc frames the layer that owns it; with several layers on one
+         * disc the first is the one the camera fits to. */
+        var fitLayer = focusLayers(focus)[0] || {};
+        var layer = fitLayer.key ? MIRROR.layerByKey(fitLayer.key) : null;
+        if (!layer && fitLayer.lidarKey) layer = MIRROR.layerByKey(fitLayer.lidarKey);
         var ceiling = 20;
         try {
             if (layer && layer.options) {
@@ -1951,23 +2060,24 @@
 
     function focusCamera(cam) {
         var focus = state.focus;
-        if (!focus || !focus.mask) return cam;
+        if (!focus || !focus.mask) return cam;      /* a whole-layer focus never moves the camera */
         if (state.lidarOff) return cam;
-        // If the LiDAR layer the focus was prepared for is no longer active in 2D,
-        // do not teleport to the stale disc — the user disabled that LiDAR layer
+        // If none of the LiDAR layers the focus was prepared for is still active in
+        // 2D, do not teleport to the stale disc — the user disabled those layers
         // (or the whole LiDAR group) and is now trying to view a different location.
         if (root.DetectLabLidar3D && typeof root.DetectLabLidar3D.activeLayers === 'function') {
             try {
                 var activeForFocus = root.DetectLabLidar3D.activeLayers();
                 if (!activeForFocus || activeForFocus.length === 0) return cam;
-                var stillThere = false;
-                for (var fi = 0; fi < activeForFocus.length; fi++) {
-                    var ent = activeForFocus[fi];
-                    if (focus.key && (ent.key === focus.key || ent.lidarKey === focus.key)) stillThere = true;
-                    if (focus.lidarKey && (ent.lidarKey === focus.lidarKey || ent.key === focus.lidarKey)) stillThere = true;
-                    if (focus.defId && (ent.defId === focus.defId || ent.lidarKey === 'def:' + focus.defId)) stillThere = true;
-                    if (focus.lidarKey && focus.lidarKey === 'def:' + ent.defId) stillThere = true;
-                }
+                var stillThere = focusLayers(focus).some(function (layer) {
+                    return activeForFocus.some(function (ent) {
+                        if (layer.key && (ent.key === layer.key || ent.lidarKey === layer.key)) return true;
+                        if (layer.lidarKey && (ent.lidarKey === layer.lidarKey || ent.key === layer.lidarKey)) return true;
+                        if (layer.defId && (ent.defId === layer.defId || ent.lidarKey === 'def:' + layer.defId)) return true;
+                        if (layer.lidarKey && ent.defId && layer.lidarKey === 'def:' + ent.defId) return true;
+                        return false;
+                    });
+                });
                 if (!stillThere) return cam;
             } catch (e8) {}
         }
@@ -2443,15 +2553,16 @@
     }
 
     /**
-     * ONE LiDAR layer at a time.
+     * Only the LiDAR layers the user chose in the entry dialog.
      *
      * National LiDAR pyramids are the heaviest thing on this map: a single 1 m
-     * hillshade covers a country, and two of them at once (which the 2D panel
-     * happily allows, since stacking is how you compare them on flat imagery)
-     * is a deck MapLibre cannot finish opening. The 3D view therefore draws the
-     * layer the user chose in the focus dialog, and only inside the disc that
-     * was prefetched for it. Anything else LiDAR is left out BY DECISION — and
-     * says so in status().lidar, never silently.
+     * hillshade covers a country, and every one of them at once (which the 2D
+     * panel happily allows, since stacking is how you compare them on flat
+     * imagery) is a deck MapLibre cannot finish opening. The 3D view therefore
+     * draws exactly the layers the user ticked in the focus dialog — every one
+     * of them either entirely (scope: 'full') or inside the disc that was
+     * prefetched for it (scope: 'disc'). Anything else LiDAR is left out BY
+     * DECISION — and says so in status().lidar, never silently.
      */
     function lidarItems() {
         return state.mirror.items.filter(function (item) { return !!item.lidarKey; });
@@ -2466,15 +2577,17 @@
             return function (item) { return !item.lidarKey; };
         }
         if (state.focus) {
-            var found = null;
-            items.forEach(function (item) { if (focusMatches(item)) found = item; });
-            notes.push(found
-                ? { reason: 'focused', count: items.length, kept: found.lidarLabel || found.lidarKey }
-                : { reason: 'missing', count: items.length, kept: state.focus.label || state.focus.key });
+            var found = items.filter(focusMatches);
+            notes.push(found.length
+                ? { reason: 'focused', count: items.length, scope: focusScope(),
+                    keptCount: found.length,
+                    kept: found.map(function (item) { return item.lidarLabel || item.lidarKey; }).join(', ') }
+                : { reason: 'missing', count: items.length,
+                    kept: state.focus.label || (focusLayers()[0] && focusLayers()[0].label) || state.focus.key });
             state.lidarNotes = notes;
             return function (item) {
                 if (!item.lidarKey) return true;
-                return !!(found && item.key === found.key);
+                return !!focusMatches(item);
             };
         }
         /* No focus, but LiDAR is on the 2D map: 3D is being asked for a LiDAR
@@ -2488,15 +2601,17 @@
         return function (item) { return !item.lidarKey; };
     }
 
-    /** Is this registry definition the LiDAR layer the 3D view is allowed to drape? */
+    /** Is this registry definition one of the LiDAR layers the 3D view may drape? */
     function registryLidarAllowed(def) {
         if (!def || def.group !== 'lidar') return true;
         var key = 'def:' + def.id;
         if (state.lidarOff) return false;
         if (state.focus) {
-            return state.focus.defId === def.id || state.focus.key === key || state.focus.lidarKey === key;
+            return focusLayers().some(function (layer) {
+                return layer.defId === def.id || layer.key === key || layer.lidarKey === key;
+            });
         }
-        return false;   /* without a focus the mirror's own single layer is kept */
+        return false;   /* without a focus none of the registry's own is kept */
     }
 
     function plan() {
@@ -2604,6 +2719,11 @@
          * is a different tile source with a different CORS/proxy policy and no
          * knowledge of the disc the user prepared. */
         var focused = !!(state.focus && focusMatches(item));
+        /* Only a DISC focus bounds the source and caps its zoom. A whole-layer
+         * focus draws the layer the way the 2D map does: everywhere, at every
+         * zoom the layer has. */
+        var discFocus = focused && focusScope(state.focus) === 'disc';
+        var plan = discFocus ? planForLayer(item.lidarKey || item.key) : null;
         var tiles = rasterTilesFor(item, focused);
         var spec = {
             type: 'raster',
@@ -2620,22 +2740,25 @@
          * the difference between a few hundred prepared tiles and a national
          * pyramid nobody asked for. The tiles that only graze the disc's
          * rectangle are clipped pixel by pixel in the protocol handler. */
-        if (focused && state.focus.bounds) spec.bounds = state.focus.bounds;
-        /* …and it stops at the deepest zoom the prefetch actually prepared.
-         * Without this the source kept the layer's native maximum, so pinching
-         * past the prepared ceiling made MapLibre request tiles that were
-         * never downloaded: each one went through dl2d:// into a live fetch
-         * that raced MapLibre's cancel-while-zooming, and a phone spent the
-         * pinch showing the base map. Capped here, the same pinch OVERZOOMS
-         * the prepared tiles (sharp down to ~0.5 m/px at z18): LiDAR stays on
-         * screen, no request is made, and the only thing lost is detail the
-         * prefetch never bought. */
-        if (focused && state.focus.plan && state.focus.plan.zoomTo != null) {
+        if (discFocus && state.focus.bounds) spec.bounds = state.focus.bounds;
+        /* …and it stops at the deepest zoom the prefetch actually prepared
+         * for THIS layer (a disc can hold several layers, each with its own
+         * native maximum and its own plan). Without this the source kept the
+         * layer's native maximum, so pinching past the prepared ceiling made
+         * MapLibre request tiles that were never downloaded: each one went
+         * through dl2d:// into a live fetch that raced MapLibre's
+         * cancel-while-zooming, and a phone spent the pinch showing the base
+         * map. Capped here, the same pinch OVERZOOMS the prepared tiles
+         * (sharp down to ~0.5 m/px at z18): LiDAR stays on screen, no request
+         * is made, and the only thing lost is detail the prefetch never
+         * bought. A whole-layer focus has no plan at all, so nothing is
+         * capped: the layer loads entirely, exactly as asked. */
+        if (discFocus && plan && plan.zoomTo != null) {
             /* Never below the source's own floor: a maxzoom under minzoom is a
              * source MapLibre can only draw nothing for, which is one more way
              * a "prepared" disc ends up as the base map alone. */
             spec.maxzoom = Math.max(Number(spec.minzoom) || 0,
-                Math.min(Number(spec.maxzoom), Number(state.focus.plan.zoomTo)));
+                Math.min(Number(spec.maxzoom), Number(plan.zoomTo)));
         }
         if (!map.getSource(sourceId)) {
             map.addSource(sourceId, spec);
@@ -3307,13 +3430,16 @@
             mode: def.modes || (def.kind === 'dynamic' && typeof def.resolve === 'function') ? REGISTRY.modeOf(def, {}) : ''
         });
         var focused = !!(state.focus && focusMatches({ defId: def.id, lidarKey: 'def:' + def.id }));
-        if (focused && state.focus.bounds) spec.bounds = state.focus.bounds;
+        var discFocus = focused && focusScope(state.focus) === 'disc';
+        var plan = discFocus ? planForLayer('def:' + def.id) : null;
+        if (discFocus && state.focus.bounds) spec.bounds = state.focus.bounds;
         /* Same ceiling as the mirrored path: prepared up to plan.zoomTo, then
-         * overzoomed — never a zoom the prefetch did not buy. */
-        if (focused && state.focus.plan && state.focus.plan.zoomTo != null) {
+         * overzoomed — never a zoom the prefetch did not buy. A whole-layer
+         * focus has no plan, so the registry's own zoom window stands. */
+        if (discFocus && plan && plan.zoomTo != null) {
             /* Floored at the source's own minzoom — see renderRaster(). */
             spec.maxzoom = Math.max(Number(spec.minzoom) || 0,
-                Math.min(Number(spec.maxzoom == null ? 22 : spec.maxzoom), Number(state.focus.plan.zoomTo)));
+                Math.min(Number(spec.maxzoom == null ? 22 : spec.maxzoom), Number(plan.zoomTo)));
         }
         if (!spec.tiles || !spec.tiles.length) {
             state.status[entry.id] = { state: 'unsupported', reason: 'no tile template (module not loaded?)' };
@@ -3897,10 +4023,13 @@
             if (!drawnFocus) {
                 var note = (state.lidarNotes || [])[0];
                 var why = (note && note.reason) || 'no matching 2D layer';
-                var detail = (state.status['m3d-2d-' + state.focus.key] || {}).reason || '';
+                var firstFocusLayer = focusLayers()[0] || {};
+                var detail = (state.status['m3d-2d-' + (firstFocusLayer.key || '')] || {}).reason || '';
+                var focusName = state.focus.label || firstFocusLayer.label ||
+                    state.focus.key || firstFocusLayer.key || state.focus.defId;
                 if (state.focusWarned !== why) {
                     state.focusWarned = why;
-                    pushError('LiDAR focus “' + (state.focus.label || state.focus.key || state.focus.defId) +
+                    pushError('LiDAR focus “' + focusName +
                         '” is not on the 3D deck (' + why + (detail ? ': ' + detail : '') + ')');
                 }
             } else {
@@ -3978,8 +4107,11 @@
     function refreshFocusOutline() {
         if (!map) return;
         var focus = state.focus;
-        var wanted = !!(focus && focus.lidarOff !== true && !state.lidarOff && MIRROR.disc && MIRROR.disc.geojson);
-        var data = wanted ? MIRROR.disc.geojson(focus.mask || focus, 96) : null;
+        /* The outline stands for the disc that was prepared — a whole-layer
+         * focus has no edge to draw, so it draws none. */
+        var wanted = !!(focus && focus.lidarOff !== true && !state.lidarOff &&
+            focusScope(focus) === 'disc' && focus.mask && MIRROR.disc && MIRROR.disc.geojson);
+        var data = wanted ? MIRROR.disc.geojson(focus.mask, 96) : null;
         if (!wanted || !data) {
             try { if (map.getLayer(FOCUS_LINE)) map.removeLayer(FOCUS_LINE); } catch (e) { /* ignore */ }
             try { if (map.getSource(FOCUS_SOURCE)) map.removeSource(FOCUS_SOURCE); } catch (e) { /* ignore */ }
@@ -4692,6 +4824,18 @@
                     lidarKey: state.focus.lidarKey || null,
                     defId: state.focus.defId || null,
                     label: state.focus.label || '',
+                    /* 'disc' (1 km prepared area) or 'full' (the layer loads
+                     * entirely, every zoom, no prepared area). */
+                    scope: focusScope() || null,
+                    layers: focusLayers().map(function (layer) {
+                        return {
+                            key: layer.key || null,
+                            lidarKey: layer.lidarKey || null,
+                            defId: layer.defId || null,
+                            label: layer.label || '',
+                            zoomTo: layer.plan && layer.plan.zoomTo != null ? layer.plan.zoomTo : null
+                        };
+                    }),
                     lat: state.focus.mask ? state.focus.mask.lat : state.focus.lat,
                     lng: state.focus.mask ? state.focus.mask.lng : state.focus.lng,
                     radiusKm: state.focus.mask ? state.focus.mask.radiusKm : state.focus.radiusKm,
@@ -4844,6 +4988,32 @@
             return state.primedOut[url].data || null;
         },
         _focusSig: function (key) { return focusSigFor(key); },
+        _focusLayers: focusLayers,
+        _focusScope: focusScope,
+        _planForLayer: planForLayer,
+        /**
+         * Are any of the focus's layers still switched on on the 2D map?
+         *
+         * js/map-app.js consults this when a LiDAR layer is toggled, so that
+         * turning off ONE of the layers a 3D view was prepared for does not
+         * throw the whole decision away — the 3D view simply stops drawing
+         * that one. A focus whose every layer is gone is stale and cleared.
+         */
+        lidarFocusCovers: function (entries) {
+            if (!state.focus) return false;
+            var list = entries || [];
+            if (!list.length) return false;
+            return focusLayers().some(function (layer) {
+                return list.some(function (ent) {
+                    if (!ent) return false;
+                    if (layer.key && (ent.key === layer.key || ent.lidarKey === layer.key)) return true;
+                    if (layer.lidarKey && (ent.lidarKey === layer.lidarKey || ent.key === layer.lidarKey)) return true;
+                    if (layer.defId && (ent.defId === layer.defId || ent.lidarKey === 'def:' + layer.defId)) return true;
+                    if (layer.lidarKey && ent.defId && layer.lidarKey === 'def:' + ent.defId) return true;
+                    return false;
+                });
+            });
+        },
         /* The dl2d:// / dl3d:// protocol handlers, registered without a map:
          * the suite drives them exactly as MapLibre would, so “prepared in
          * the dialog” and “served in 3D” cannot drift apart unnoticed. */

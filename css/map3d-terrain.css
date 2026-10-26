@@ -658,6 +658,50 @@ body.is-pwa.is-3d #map3d-bar.collapsed .m3d-actions { display: flex; }
 
 #map3d-focus .m3d-focus-layer input { accent-color: #c8a96e; margin: 0; }
 
+/* The scope switch: whole layers, or only the 1 km disc. Two buttons side by
+ * side — the first thing the window asks, so it reads as a choice, not as a
+ * setting buried further down. */
+#map3d-focus .m3d-focus-scope {
+    display: flex;
+    gap: 6px;
+}
+
+#map3d-focus .m3d-focus-scope-opt {
+    flex: 1 1 0;
+    min-height: 36px;
+    padding: 6px 8px;
+    border: 1px solid rgba(184, 216, 240, 0.24);
+    border-radius: 8px;
+    background: rgba(184, 216, 240, 0.06);
+    color: inherit;
+    font: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+#map3d-focus .m3d-focus-scope-opt:hover { background: rgba(184, 216, 240, 0.14); }
+
+#map3d-focus .m3d-focus-scope-opt.is-on {
+    border-color: rgba(200, 169, 110, 0.8);
+    background: rgba(200, 169, 110, 0.18);
+    color: rgba(255, 240, 214, 0.98);
+}
+
+#map3d-focus .m3d-focus-scope-note {
+    margin: 6px 0 0;
+    font-size: 0.7rem;
+    line-height: 1.35;
+    opacity: 0.72;
+}
+
+/* A block the current scope does not need (the area/point controls in the
+ * whole-layer mode) is hidden outright — the author display above must not
+ * beat the attribute. */
+#map3d-focus .m3d-focus-block[hidden] { display: none; }
+
 #map3d-focus .m3d-focus-hintline,
 #map3d-focus .m3d-focus-empty {
     margin: 8px 0 0;
@@ -928,6 +972,8 @@ body:not(.is-3d) #map3d-focus.is-minimized { display: none; }
 
 @media (max-width: 720px) {
     #map3d-focus { padding: 10px 10px calc(10px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px))); }
+    #map3d-focus .m3d-focus-scope-opt { min-height: 34px; font-size: 0.72rem; }
+
     #map3d-focus .m3d-focus-card {
         width: min(360px, calc(100% - 16px));
         max-height: min(76vh, 560px);
