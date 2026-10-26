@@ -58,7 +58,9 @@ const DEFAULT_QUERIES = [
     'Máramaros', 'Szatmár', 'Bihar', 'Szilágy', 'Kolozs', 'Maros-Torda',
     'Csík', 'Háromszék', 'Brassó', 'Fogaras', 'Szeben', 'Hunyad',
     'Krassó-Szörény', 'Temes', 'Torontál', 'Arad', 'Békés', 'Ugocsa',
-    'Erdély', 'Bánság', 'Bukovina'
+    'Erdély', 'Bánság', 'Bukovina', 'Alsó-Fehér', 'Felső-Fehér',
+    'Torda-Aranyos', 'Szolnok-Doboka', 'Beszterce-Naszód', 'Udvarhely',
+    'Nagy-Küküllő', 'Kis-Küküllő'
 ];
 
 const USER_AGENT = 'DetectLab-catalog-builder/1.0 (https://detectlab.ro; maps catalogue sync)';
@@ -146,11 +148,11 @@ async function getText(url, retries = 2) {
 /* ── parsing one result card ─────────────────────────────────────────── */
 /* A card links to its record more than once (heading + thumbnail), so the
  * chunks are grouped by record id and read as one block. */
-const RECORD_RE = /<a[^>]+href="\/[a-z]{2}\/([A-Za-z0-9]+)\/(\d+)\/\?/g;
-const RECORD_ANY_RE = /<a[^>]+href="\/[a-z]{2}\/[A-Za-z0-9]+\/\d+\/\?/g;
+const RECORD_RE = /<a[^>]+href="\/[a-z]{2}\/([A-Za-z0-9]+)\/(\d+)\/?\??/g;
+const RECORD_ANY_RE = /<a[^>]+href="\/[a-z]{2}\/[A-Za-z0-9]+\/\d+\/?\??/g;
 const THUMB_RE = /tile\/thumb\/([^"'<>\s]+?\.ecw)/i;
 const FIELD_RE = /<t[dh][^>]*>\s*([^<]{1,40}?)\s*<\/t[dh]>\s*<td[^>]*>([\s\S]*?)<\/td>/gi;
-const ANCHOR_RE = /<a[^>]+href="\/[a-z]{2}\/[A-Za-z0-9]+\/\d+\/\?[^"]*"[^>]*>([\s\S]*?)<\/a>/i;
+const ANCHOR_RE = /<a[^>]+href="\/[a-z]{2}\/[A-Za-z0-9]+\/\d+\/?\??[^"]*"[^>]*>([\s\S]*?)<\/a>/i;
 
 function parseResults(html) {
     const stops = [];
@@ -232,21 +234,41 @@ function readCrumbs(chunk, titleMatch) {
 
 /* ── the place the portal itself names ───────────────────────────────── */
 /* “No. 647. Máramarossziget (Máramaros m., ma Sighetu Marmaţiei, RO)”  →
- * “Sighetu Marmaţiei”; without a “ma …” (today …) hint we fall back to the
- * first name in the Subject, which is the settlement the sheet depicts. */
+ * “Sighetu Marmaţiei”. Inside one parenthesis the last concrete “ma …”
+ * (today …) hint wins — earlier ones are often the county (“ma Kolozs m.,
+ * ma Cluj-Napoca, RO”) — while across several parentheses the first-named
+ * sheet wins, matching the hand curation. Without any “ma” hint we fall
+ * back to the middle of a county parenthesis (“Miriszlo (Alsó-Fehér m.,
+ * Mirăslău, RO)”), then to the first name in the Subject. */
 function extractPlace(record) {
-    const subject = record.subject || '';
-    const modern = subject.match(/\bma\s+([^,()]+)/i);
-    if (modern) return modern[1].trim();
+    const subject = String(record.subject || '').replace(/\bma\s+ma\b/gi, 'ma');
+    const hinted = subject.match(/\([^()]*\bma\s+[^()]*\)/gi) || [];
+    if (hinted.length) {
+        const hints = [];
+        const re = /\bma\s+([^,()]+)/gi;
+        let m;
+        while ((m = re.exec(hinted[0]))) hints.push(m[1].trim());
+        const concrete = hints.filter((h) => h.length > 2 && !/(\bm\.?$|megye|vármegye|része)/i.test(h));
+        if (concrete.length) return concrete[concrete.length - 1];
+        if (hints.length) return hints[hints.length - 1];
+    }
+    const bare = subject.match(/\bma\s+([^,()]{3,})/i);
+    if (bare) return bare[1].trim();
+    const paren = subject.match(/\(([^,()]+),\s*([^,()]+),\s*(RO|HU|UA|SK|RS|HR|AT|SI|PL)\)/i);
+    if (paren && paren[2].trim().length > 2) return paren[2].trim();
     const lead = subject.replace(/^(?:[A-Za-z]+\.?\s*)?(?:Div\.[^.]*\.)?\s*(?:No\.\s*)?[\w:/.\-–]*\s*/, '');
-    const name = lead.split(/[,()]/)[0].trim();
+    const name = lead.split(/[,().?!:;]/)[0].trim();
     if (name && name.length > 2 && name.length < 60) return name;
-    return (record.mainTitle || record.title || '').split(/[([,]/)[0].trim();
+    const tail = (record.mainTitle || record.title || '').split(/[([,]/)[0].trim();
+    if (!tail || tail.length <= 2 || /^(RO|HU|UA|SK|RS|HR|AT|SI|PL)$/i.test(tail)) return '';
+    return tail;
 }
 
 function placeQuery(place) {
     return place
-        .replace(/\b(megye|vármegye|város|község|puszta|megyei|comitatus|county)\b/ig, ' ')
+        .replace(/\b(megye|vármegye|város|község|puszta|megyei|comitatus|county|szabad|szab\.?|sz\.?|kir\.?|királyi|th?j\.?|része)\b/ig, ' ')
+        .replace(/(?:^|\s)[A-Za-z]\.(?=\s|$)/g, ' ')
+        .replace(/[().]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
 }
@@ -262,6 +284,21 @@ function gazetteerHit(place) {
     if (gazetteer[key]) return gazetteer[key];
     const loose = Object.keys(gazetteer).find((k) => k.toLowerCase() === key);
     return loose ? gazetteer[loose] : null;
+}
+
+/* Only a settlement-level answer counts: without this filter a river or a
+ * whole country (“Geoagiu” the waterway, “RO” the country) would plant a
+ * dot kilometres from the sheet. Pure so the self-test can drive it. */
+function acceptGeocodeHit(json) {
+    if (!Array.isArray(json) || !json.length) return null;
+    const first = json[0];
+    const cls = String(first.class || '');
+    if (cls !== 'place' && cls !== 'boundary') return null;
+    if (String(first.addresstype || '') === 'country' || String(first.type || '') === 'country') return null;
+    const lat = Number(first.lat);
+    const lng = Number(first.lon);
+    if (!isFinite(lat) || !isFinite(lng)) return null;
+    return { lat, lng, from: 'nominatim' };
 }
 
 async function geocode(place) {
@@ -284,10 +321,7 @@ async function geocode(place) {
     const body = await getText(url);
     let hit = null;
     try {
-        const json = JSON.parse(body);
-        if (Array.isArray(json) && json.length) {
-            hit = { lat: Number(json[0].lat), lng: Number(json[0].lon), from: 'nominatim' };
-        }
+        hit = acceptGeocodeHit(JSON.parse(body));
     } catch (e) {
         hit = null;
     }
@@ -333,6 +367,44 @@ if (flag('self-test')) {
     const titleOk = /^Planum remonstrans/.test(card.title);
     console.log((titleOk ? '  ✓ ' : '  ✗ ') + 'title: ' + JSON.stringify(card.title));
     if (!titleOk) failed++;
+    const check = (label, actual, expected) => {
+        const good = actual === expected;
+        if (!good) failed++;
+        console.log((good ? '  ✓ ' : '  ✗ ') + label + ': ' + JSON.stringify(actual) +
+            (good ? '' : ' (expected ' + JSON.stringify(expected) + ')'));
+    };
+    /* Place extraction shapes seen on the live portal (October 2026). */
+    check('place / ma-ma typo',
+        extractPlace({ subject: 'No. 16. A Külső-Szamos Kolozsvár (Kolozs m., ma ma Cluj-Napoca, RO) mellett' }),
+        'Cluj-Napoca');
+    check('place / county-then-city hints',
+        extractPlace({ subject: 'No. 325. Kolozsvár (ma Kolozs m., ma Cluj-Napoca, RO) belterülete' }),
+        'Cluj-Napoca');
+    check('place / first sheet wins',
+        extractPlace({ subject: 'No. 245/2. Felek (Szeben m., ma Avrig, RO), Nagyenyed (Alsó-Fehér m., ma Aiud, RO) között' }),
+        'Avrig');
+    check('place / county-paren fallback',
+        extractPlace({ subject: 'No. 7:1. A Maros Miriszlo (Alsó-Fehér m., Mirăslău, RO) mellett' }),
+        'Mirăslău');
+    check('place / plan subject',
+        extractPlace({ subject: 'No 44/3 Kolozsvár. Nyári színház' }),
+        'Kolozsvár');
+    check('place / bare code rejected',
+        extractPlace({ subject: '', title: 'RO' }),
+        '');
+    check('query / noble predicates stripped', placeQuery('Kolozsvár szab. kir. város'), 'Kolozsvár');
+    check('query / része stripped', placeQuery('Kolozsvár része'), 'Kolozsvár');
+    check('query / county stripped', placeQuery('Kolozs vármegye'), 'Kolozs');
+    check('query / initials stripped', placeQuery('B. Hunyad'), 'Hunyad');
+    check('query / town predicates stripped', placeQuery('Kolozsvár t. j. sz. kir. város'), 'Kolozsvár');
+    check('geocode / village accepted',
+        !!acceptGeocodeHit([{ class: 'place', type: 'village', lat: '46.0', lon: '23.0' }]), true);
+    check('geocode / city accepted',
+        !!acceptGeocodeHit([{ class: 'place', type: 'city', lat: '46.7', lon: '23.5' }]), true);
+    check('geocode / river rejected',
+        acceptGeocodeHit([{ class: 'waterway', type: 'river', lat: '45.9', lon: '23.1' }]), null);
+    check('geocode / country rejected',
+        acceptGeocodeHit([{ class: 'boundary', type: 'country', addresstype: 'country', lat: '45.9', lon: '25.0' }]), null);
     process.exit(failed ? 1 : 0);
 }
 
@@ -410,19 +482,33 @@ for (const card of collected.values()) {
     }
     if (!isFinite(lat) || !isFinite(lng)) { unplaced++; continue; }
     placed++;
+    /* A kept position keeps its name: re-harvesting must not rename a
+     * hand-placed dot (e.g. a district sheet pinned on Turda) while its
+     * coordinates stay put. */
+    const keepPrev = previousEntry && isFinite(previousEntry.lat) && isFinite(previousEntry.lng);
     maps.push({
         id: card.id,
         title: card.title,
         subject: card.subject,
-        place: place || previousEntry && previousEntry.place || '',
+        place: (keepPrev && previousEntry.place) || place || (previousEntry && previousEntry.place) || '',
         lat: Number(Number(lat).toFixed(5)),
         lng: Number(Number(lng).toFixed(5)),
         year: year ? Number(year) : (previousEntry ? previousEntry.year : null),
         provider: card.provider || (previousEntry && previousEntry.provider) || '',
         collection: card.collection || (previousEntry && previousEntry.collection) || '',
         path: card.path,
-        precision: /,?\s*(RO|UA|SK|RS|HR|AT)\b/.test(card.subject || '') ? 'settlement' : 'county'
+        precision: (keepPrev && previousEntry.precision) ||
+            (/,?\s*(RO|HU|UA|SK|RS|HR|AT|SI|PL)\b/.test(card.subject || '') ? 'settlement' : 'county')
     });
+}
+
+/* Entries the query pass did not see (hand curation, other queries) survive
+ * the run; pass --prune for a from-scratch rebuild instead. */
+if (!flag('prune')) {
+    const seenIds = new Set(maps.map((m) => m.id));
+    for (const entry of previous.values()) {
+        if (!seenIds.has(entry.id)) maps.push(entry);
+    }
 }
 
 maps.sort((a, b) => (a.place || '').localeCompare(b.place || '') || a.id.localeCompare(b.id));
