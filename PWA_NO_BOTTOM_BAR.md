@@ -38,12 +38,21 @@ Două variabile CSS publice, ambele în pixeli:
 | variabilă | valoare | cine o folosește |
 | --- | --- | --- |
 | `--pwa-viewport-h` | înălțimea reală a ecranului | `#map-section`, `.container`, `.map-frame`, `.map-wrapper`, `#detectlab-map`, `.transp-panel` |
-| `--pwa-bleed` | partea din ecran pe care viewport-ul paginii nu o acoperă | ridică la loc `.leaflet-bottom` (busola) și eticheta `© Leafleet` |
+| `--pwa-bleed` | partea din ecran pe care viewport-ul paginii nu o acoperă | ridică la loc `.leaflet-bottom` (busola), eticheta `© Leafleet`, colțul de jos al hărții și tot ce e ancorat pe marginea de jos a hărții |
 
 Valoarea este scrisă de asemenea **inline, cu `!important`**, direct pe fiecare
 element din lanț (`height`, `min-height:0`, `max-height:none`), nu doar prin
 variabilă: așa nici un `height:100%` intermediar nu mai poate moșteni un strămoș
 scurt.
+
+Harta are voie să depășească marginea de jos cu `--pwa-bleed` pixeli (ca să nu
+poată apărea fundalul paginii), iar controalele ancorate pe aceeași margine
+primesc aceeași ridicare: `--pwa-bottom-controls-clearance` devine
+`calc(44px + var(--pwa-bleed, 0px))` (toast-uri, hint-uri de zoom, butoanele
+APM 2.0 / Iosefină, panoul de setări), `.layer-action-dock` primește
+`+ var(--pwa-bleed)`, iar `.leaflet-bottom` și `© Leafleet` sunt ridicate
+explicit. Când cele două înălțimi coincid, `--pwa-bleed` este `0px` și nimic nu
+se mișcă.
 
 Re-măsurarea rulează la `DOMContentLoaded`/`load`/`pageshow`, la `resize` și
 `orientationchange` (cu o a doua trecere la 300 ms, fiindcă iOS raportează o

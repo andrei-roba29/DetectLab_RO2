@@ -364,12 +364,23 @@
             pointer-events: auto !important;
         }
         body.is-pwa {
-            /* Bottom-anchored overlays (toasts, zoom hints, panels) still lift
-               44px to stay clear of the home indicator. Vertically-centred
-               controls (transparency tab, vertical opacity mirror) stay at
-               true centre. */
-            --pwa-bottom-controls-clearance: 44px;
+            /* Bottom-anchored overlays (toasts, zoom hints, panels) lift 44px to
+               stay clear of the home indicator, PLUS --pwa-bleed: the map is
+               allowed to overrun the bottom edge by the part of the physical
+               screen the page viewport does not cover, so every control
+               anchored to the map's bottom edge carries the same lift and keeps
+               the position it has always had. --pwa-bleed is 0px whenever the
+               two heights agree. Vertically-centred controls (transparency tab,
+               vertical opacity mirror) stay at true centre. */
+            --pwa-bottom-controls-clearance: calc(44px + var(--pwa-bleed, 0px));
             --pwa-bottom-controls-half-clearance: 0px;
+        }
+        /* The analysis action dock (Scan / Detectează / Generează raport, moved
+           out of the layer panel to a bottom-centre pill) is anchored to the
+           same map edge, so it takes the bleed lift too. Overrides
+           css/styles.css (same specificity, this sheet loads later). */
+        body.is-pwa .layer-action-dock {
+            bottom: calc(20px + env(safe-area-inset-bottom, 0px) + var(--pwa-bleed, 0px)) !important;
         }
         body.is-pwa #mapAuthGate {
             display: none !important;

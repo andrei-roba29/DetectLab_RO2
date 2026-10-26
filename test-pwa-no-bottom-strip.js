@@ -145,9 +145,16 @@ assertDecl(html, 'html.is-pwa .pwa-live-location-control', /position:\s*fixed\s*
 assertDecl(html, 'html.is-pwa .pwa-live-location-control',
     /bottom:\s*calc\(env\(safe-area-inset-bottom, 0px\) \+ 28px\)\s*!important/,
     'the live-location button must keep its bottom offset');
-const pwaVars = (html.match(/(?:^|\})\s*body\.is-pwa\s*\{[^}]*\}/) || [])[0] || '';
-assert(/--pwa-bottom-controls-clearance:\s*44px/.test(pwaVars),
-    'the published bottom clearance must stay untouched for the overlays');
+/* Everything anchored to the map's bottom edge (toasts, zoom hints, layer
+   action buttons, the layers panel clearance) already lifts by
+   --pwa-bottom-controls-clearance, so the bleed is folded into that variable
+   once instead of being re-applied control by control. */
+assertDecl(html, 'body.is-pwa',
+    /--pwa-bottom-controls-clearance:\s*calc\(44px \+ var\(--pwa-bleed, 0px\)\)/,
+    'the bottom clearance must keep its 44px and add the bleed');
+assertDecl(html, 'body.is-pwa .layer-action-dock',
+    /bottom:\s*calc\(20px \+ env\(safe-area-inset-bottom, 0px\) \+ var\(--pwa-bleed, 0px\)\)\s*!important/,
+    'the bottom-centre action dock must take the bleed lift too');
 
 /* 9. Installed PWAs actually receive it. */
 const cacheName = (sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1];
