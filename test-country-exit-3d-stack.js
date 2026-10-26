@@ -26,14 +26,17 @@
  *       together instead of the switch sliding under the bar.
  *
  * In the installed PWA (body.is-pwa) the switch left this bottom-centre
- * column: it heads the map's bottom-left control column, directly above the
- * base-layer button (#arcgisBasemapCtrl), placed by the custom properties
- * js/map3d-terrain.js measures — see MAP3D_SWITCH_BASE_LAYER_COLUMN.md and
- * test-3d-switch-base-layer-column.js. On the website (body:not(.is-pwa)) the
- * switch stays bottom-centre and the pill keeps its 18px slot, so nothing in
- * the pill's column needs the lift any more and the pill can never be covered
- * or out-tapped again; the hook itself stays (the country dock still publishes
- * it and the bottom-centre 3D bar can still read it).
+ * column in the 2D view: it heads the map's bottom-left control column,
+ * directly above the base-layer button (#arcgisBasemapCtrl), placed by the
+ * custom properties js/map3d-terrain.js measures — see
+ * MAP3D_SWITCH_BASE_LAYER_COLUMN.md and test-3d-switch-base-layer-column.js.
+ * While 3D is on, however, the group (now the 2D switch + refresh) returns to
+ * bottom-centre, under the centred 3D bar — see PWA_3D_BUTTON_SIZE_CENTRE.md
+ * — and re-reads --country-exit-lift so the pill stays tappable there too.
+ * On the website (body:not(.is-pwa)) the switch stays bottom-centre and the
+ * pill keeps its 18px slot, so nothing in the pill's column needs the lift
+ * and the pill can never be covered or out-tapped again; the hook itself
+ * stays (the country dock still publishes it and the PWA 3D group reads it).
  *
  * Run:  node test-country-exit-3d-stack.js
  * Optional real-DOM geometry checks:
@@ -104,17 +107,30 @@ console.log('[Test] “Exit view” and the 2D/3D switch share the bottom-centre
  * 3. The switch left this column, so the pill cannot be covered again
  * ══════════════════════════════════════════════════════════════════════════ */
 {
-    /* PWA-only: the switch sits above the base-layer button in the installed
-       PWA (measured anchor); the website keeps its bottom-centre switch, and
-       neither environment reads the pill's lift or the dock's clearance. */
-    const switchRules = skinFlat.match(/\.m3d-toggle-group\s*\{[^}]*\}/g) || [];
+    /* PWA-only: in 2D the switch sits above the base-layer button (measured
+       anchor); the website keeps its bottom-centre switch, and neither the
+       column rule nor the website rule reads the pill's lift or the dock's
+       clearance. The ONE exception is the PWA 3D view: the group returns to
+       bottom-centre while 3D is on (it now holds the 2D switch AND the
+       refresh action), so that rule reuses --country-exit-lift to step above
+       this very pill. */
+    /* Full rule text (selector + body), so the is-3d selector can be told
+     * apart from the column/website rules. */
+    const switchRules = skinFlat.match(/[^{}]*\.m3d-toggle-group\s*\{[^}]*\}/g) || [];
     assert(switchRules.length >= 1, 'the skin still places .m3d-toggle-group');
     switchRules.forEach(function (rule) {
-        assert(!/--country-exit-lift/.test(rule),
-            'no switch rule reads --country-exit-lift any more: ' + rule.trim());
         assert(!/--layer-dock-clearance/.test(rule),
             'no switch rule reads --layer-dock-clearance any more: ' + rule.trim());
+        if (/is-3d\s+\.m3d-toggle-group/.test(rule)) return;   /* the centred 3D group is the lift's only reader */
+        assert(!/--country-exit-lift/.test(rule),
+            'only the centred 3D rule may read --country-exit-lift: ' + rule.trim());
     });
+    const centred3d = ruleOf(skinCss, 'body.is-pwa.is-3d .m3d-toggle-group');
+    assert(/left:\s*50%/.test(centred3d) && /translateX\(-50%\)/.test(centred3d),
+        'in PWA 3D the switch + refresh group centres on the lower edge');
+    assert(/--country-exit-lift/.test(centred3d) &&
+           /64px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\)/.test(centred3d),
+        'the centred 3D group keeps the 64px + inset slot and steps above the Exit-view pill');
     const website = ruleOf(skinCss, 'body:not(.is-pwa) .m3d-toggle-group');
     assert(/position:\s*absolute/.test(website) && /bottom:\s*66px/.test(website) &&
            /left:\s*50%/.test(website) && /translateX\(-50%\)/.test(website),
@@ -138,15 +154,18 @@ console.log('[Test] “Exit view” and the 2D/3D switch share the bottom-centre
 
     /* The arithmetic that keeps the pill tappable: the bar's fallback bottom
        (190px + inset + 8px) is far above the lifted pill's top edge
-       (60px + 35px), and the switch's own column starts 10px in from the left
-       edge, i.e. outside a centred pill's box on a 390px phone. */
+       (60px + 35px). In 2D the switch's own column is a single 38px square,
+       10px in from the left edge — outside a centred pill's box on a 390px
+       phone; in 3D the group centres but lifts by 46px while the pill shows. */
     const PILL_TOP_PWA = 60 + 35;
     assert.strictEqual(190 + 8 > PILL_TOP_PWA, true,
         'the PWA 3D bar starts above the pill’s top edge even before the lift');
-    const SWITCH_COLUMN_RIGHT = 11 + 44 + 6 + 44;   /* left edge + switch + gap + refresh */
+    const SWITCH_COLUMN_RIGHT = 11 + 38;   /* 2D state: left edge + the 38px switch square */
     assert.strictEqual(SWITCH_COLUMN_RIGHT < (390 - 130) / 2, true,
-        'on a 390px phone the switch column ends before a centred 130px pill begins');
-    console.log('  ✓ the switch lives in the bottom-left column now; the pill’s slot is free');
+        'on a 390px phone the 2D switch column ends before a centred 130px pill begins');
+    assert.strictEqual(64 + 46 > PILL_TOP_PWA, true,
+        'in 3D the lifted centred group (64 + 46px) clears the pill’s 95px top edge');
+    console.log('  ✓ the 2D switch keeps the bottom-left column; the centred 3D group lifts above the pill');
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -167,7 +186,7 @@ console.log('[Test] “Exit view” and the 2D/3D switch share the bottom-centre
      * the precache so an installed shell still finds the copy it references. */
     assert(sw.indexOf("'" + 'css/map3d-terrain.css?v=' + TAG + "'") !== -1,
         'sw.js still precaches the v248 skin an installed shell may ask for');
-    const SKIN_TAG = '20261026-lidar-whole-or-disc';
+    const SKIN_TAG = '20261026-pwa-3d-button-size';
     assert(html.indexOf('css/map3d-terrain.css?v=' + SKIN_TAG) !== -1 &&
         sw.indexOf("'" + 'css/map3d-terrain.css?v=' + SKIN_TAG + "'") !== -1,
         'index.html loads and sw.js precaches the re-tagged 3D skin');

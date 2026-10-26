@@ -202,6 +202,22 @@ body:not(.is-pwa) .m3d-toggle-group {
     transform: translateX(-50%);
 }
 
+/* Installed PWA, 3D on: the 2D switch and the tile-refresh action leave the
+ * bottom-left control column and centre on the lower edge, directly under the
+ * centred 3D bar — the website keeps this group centred all the time, and the
+ * PWA now matches it once the second button (refresh) joins the group. The
+ * offset is the historical PWA 3D slot (64px + the home-indicator inset).
+ * While the country “Exit view” pill is showing, js/country-dock.js publishes
+ * --country-exit-lift (46px, PWA only) and the group steps above that pill,
+ * exactly as the centred switch did before it moved into the column. In 2D
+ * the group stays in the column: the base body.is-pwa rule below keeps the
+ * measured anchor because this selector only matches with .is-3d. */
+body.is-pwa.is-3d .m3d-toggle-group {
+    bottom: calc(64px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)) + var(--country-exit-lift, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+}
+
 /* The 2D/3D switch rides the same glass material as the map icons
    (tokens in css/styles.css :root), so the bottom-centre pill never reads as
    a second, warmer design language. */
@@ -253,6 +269,27 @@ body.is-3d #map3d-refresh { display: inline-flex; }
 #map3d-refresh.is-stopping .m3d-refresh-icon { animation: none; }
 #map3d-refresh.is-error { border-color: rgba(255, 125, 125, 0.6); }
 #map3d-refresh:disabled { opacity: 0.65; cursor: progress; }
+
+/* Installed PWA only: the switch and the refresh action are 38×38 icon-sized
+   squares, exactly like the compass, Detect and base-layer buttons they share
+   the bottom-left control column with (css/styles.css, index.html). The
+   website keeps the roomier text pill above — it has the whole bottom-centre
+   slot. The id + body-class specificity here (1,1,1) beats both the shared
+   pill rule and the 720px phone media query's 44px touch bump, so the column
+   stays uniformly 38px on every PWA screen instead of growing on phones. */
+body.is-pwa #map3d-toggle,
+body.is-pwa #map3d-refresh {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    min-height: 38px;
+    padding: 0;
+    gap: 3px;
+}
+/* A 38px square has no room for the “done/total” count beside the glyph. The
+   count is aria-hidden anyway: the role=status .m3d-refresh-status span and
+   the button's title carry the same progress for assistive technology. */
+body.is-pwa #map3d-refresh .m3d-refresh-count { display: none; }
 .m3d-refresh-status {
     position: absolute;
     width: 1px;

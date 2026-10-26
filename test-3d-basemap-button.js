@@ -41,7 +41,10 @@ const viewer = read('js/map3d-terrain.js');
 const html = read('index.html');
 const sw = read('sw.js');
 
-const TAG = '20261026-lidar-whole-or-disc';
+/* index.html serves the viewer at the desktop-basemap tag; only the skin was
+ * re-tagged for the PWA 38×38 button sizing / 3D centre change. */
+const TAG = '20261026-desktop-basemap';
+const TAG_CSS = '20261026-pwa-3d-button-size';
 const flatten = s => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ');
 
 /* ══════════════════════════════════════════════════════════════
@@ -194,9 +197,9 @@ function section(start, end) {
    4. Assets: re-tagged and precached
    ══════════════════════════════════════════════════════════════ */
 {
-    assert(html.includes('css/map3d-terrain.css?v=' + TAG), 'index.html loads the re-tagged 3D skin');
+    assert(html.includes('css/map3d-terrain.css?v=' + TAG_CSS), 'index.html loads the re-tagged 3D skin');
     assert(html.includes('js/map3d-terrain.js?v=' + TAG), 'index.html loads the re-tagged viewer');
-    assert(sw.includes("'css/map3d-terrain.css?v=" + TAG + "'"), 'sw.js precaches the re-tagged skin');
+    assert(sw.includes("'css/map3d-terrain.css?v=" + TAG_CSS + "'"), 'sw.js precaches the re-tagged skin');
     assert(sw.includes("'js/map3d-terrain.js?v=" + TAG + "'"), 'sw.js precaches the re-tagged viewer');
     const shellVersion = Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
     assert(shellVersion >= 276, 'sw.js cache is v276 or newer (got v' + shellVersion + ')');

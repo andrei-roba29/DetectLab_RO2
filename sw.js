@@ -826,7 +826,15 @@
 //   feeds the same green dots, and live GeoServer WFS bbox queries add
 //   finder sheets for the current viewport while the layer is on. Re-tags
 //   the other-maps assets. See OTHER_MAPS.md.
-const CACHE_NAME = 'detectlab-v284-nls-find';
+// v285: in the installed PWA the 2D/3D switch and its 1 km tile-refresh
+//   action become 38×38 icon-sized squares, matching the compass, Detect and
+//   base-layer buttons of their bottom-left control column (the website
+//   keeps its text pill). While 3D is on, the 2D switch + refresh group
+//   leaves the column and centres on the lower edge, directly under the
+//   centred 3D bar, stepping above the country “Exit view” pill via the
+//   existing --country-exit-lift hook. Re-tags css/map3d-terrain.css.
+//   See PWA_3D_BUTTON_SIZE_CENTRE.md.
+const CACHE_NAME = 'detectlab-v285-pwa-3d-button-size';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -999,6 +1007,8 @@ const PRECACHE_URLS = [
   //   js/lidar-3d-focus.js.
   'css/map3d-terrain.css?v=20261026-lidar-whole-or-disc',
   'js/map3d-terrain.js?v=20261026-lidar-whole-or-disc',
+  // v285: PWA 38×38 switch/refresh squares; the group centres in 3D.
+  'css/map3d-terrain.css?v=20261026-pwa-3d-button-size',
   'js/map3d-terrain.js?v=20261026-desktop-basemap',
   'js/map-app.js?v=20261026-lidar-whole-or-disc',
   'js/lidar-3d-focus.js?v=20261026-lidar-whole-or-disc',

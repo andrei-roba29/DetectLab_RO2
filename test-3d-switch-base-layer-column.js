@@ -17,6 +17,13 @@
  *   bottom: 2D/3D switch → base layer → compass (+ Detect in the installed
  *   PWA). The rotation lock was removed — the compass is Google-Earth-like.
  *
+ *   PWA refinements (PWA_3D_BUTTON_SIZE_CENTRE.md): the switch and the
+ *   refresh action are 38×38 icon squares, matching every other button in
+ *   that column, and while 3D is on the whole group (2D switch + refresh)
+ *   leaves the column for the bottom-centre slot under the centred 3D bar,
+ *   lifting above the country “Exit view” pill via --country-exit-lift. The
+ *   website keeps its roomier, always-centred text pill.
+ *
  * WHY THE OFFSET IS MEASURED, NOT A CONSTANT
  *   Leaflet stacks that corner in flow, and every environment moves it:
  *     • the installed PWA puts a third button (Detect) in the compass column
@@ -64,8 +71,9 @@ function ruleOf(source, selector) {
 /* The column, in the numbers both the CSS fallbacks and the measurement use.
  * Leaflet's own corner margins are 10px (css/leaflet.css); the compass column
  * is 38px buttons with an 8px gap (css/styles.css); the base-layer control is
- * a 34px icon row (index.html); the switch is 36px on desktop and 44px where
- * a finger taps it. */
+ * a 34px icon row (index.html); the website switch is 36px on desktop and
+ * 44px where a finger taps it, while the installed PWA skins the very same
+ * switch as a 38px column square (the 44px media bump is website-only). */
 const GAP = 8;
 const COMPASS_WEB = 38;                      // compass (no rotation lock)
 const COMPASS_PWA = 38 + 8 + 38;             // compass + Detect
@@ -122,6 +130,51 @@ console.log('[Test] the 2D/3D switch sits right above the base-layer button…')
         assert(!/body\.is-pwa\s*\.m3d-toggle-group\s*\{[^}]*bottom:\s*(58|64|66)px/.test(skinFlat),
             'no hard-coded phone bottom survives in the PWA rule');
         console.log('  ✓ .m3d-toggle-group: PWA column above the base layer; website bottom-centre untouched');
+    }
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * 1b. PWA-only: 38×38 icon squares, and a centred group while 3D is on
+ * ══════════════════════════════════════════════════════════════════════════ */
+    {
+        /* The column's other buttons are 38×38 icon squares
+         * (.detectlab-compass-btn / .compass-detect-btn in css/styles.css,
+         * #arcgisBasemapCtrl in index.html). The switch and refresh match
+         * them in the installed PWA instead of showing a wider text pill. */
+        const square = (skinFlat.match(/body\.is-pwa #map3d-toggle,\s*body\.is-pwa #map3d-refresh\s*\{([^}]*)\}/) || [])[1];
+        assert(square, 'a PWA-only rule skins both buttons together');
+        assert(/width:\s*38px/.test(square) && /height:\s*38px/.test(square) &&
+               /min-width:\s*38px/.test(square) && /min-height:\s*38px/.test(square) &&
+               /padding:\s*0/.test(square),
+            'the PWA switch/refresh are fixed 38×38 squares with no pill padding');
+
+        /* That rule must out-specify the 720px phone media query, which keeps
+         * the 44px touch bump for the website's bottom-centre pill. */
+        const media = skin.slice(skin.indexOf('@media (max-width: 720px)'));
+        assert(/#map3d-toggle,\s*#map3d-refresh\s*\{[^}]*min-height:\s*44px/.test(media),
+            'the phone media query still bumps the website pill to 44px');
+        assert(/body\.is-pwa #map3d-refresh \.m3d-refresh-count\s*\{\s*display:\s*none/.test(skinFlat),
+            'the in-button tile count is hidden in the PWA square (the role=status span keeps it accessible)');
+
+        /* While 3D is on, the group leaves the column and centres under the
+         * centred 3D bar — a higher-specificity rule than the base PWA one. */
+        const pwa3d = ruleOf(skinFlat, 'body.is-pwa.is-3d .m3d-toggle-group');
+        assert(/left:\s*50%/.test(pwa3d) && /translateX\(-50%\)/.test(pwa3d),
+            'in PWA 3D the group centres horizontally');
+        assert(/bottom:\s*calc\(64px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\) \+ var\(--country-exit-lift, 0px\)\)/.test(pwa3d),
+            'at the historical 64px + inset slot, lifted above the Exit-view pill when it shows');
+        assert(!/--m3d-anchor/.test(pwa3d),
+            'the centred 3D group no longer consumes the left-column anchor');
+
+        /* The 2D (non-3D) PWA rule is untouched and still column-anchored. */
+        const pwa2d = ruleOf(skinFlat, 'body.is-pwa .m3d-toggle-group');
+        assert(/--m3d-anchor-bottom/.test(pwa2d) && !/left:\s*50%/.test(pwa2d),
+            'in 2D the PWA group stays in the measured bottom-left column');
+
+        /* The website keeps its text pill: none of the PWA sizing leaks. */
+        const web = ruleOf(skinFlat, 'body:not(.is-pwa) .m3d-toggle-group');
+        assert(/bottom:\s*66px/.test(web) && !/38px/.test(web),
+            'the website switch keeps its 66px bottom-centre pill');
+        console.log('  ✓ PWA: 38×38 switch/refresh squares; the group centres in 3D and keeps the column in 2D');
     }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -253,6 +306,9 @@ console.log('[Test] the 2D/3D switch sits right above the base-layer button…')
         const context = {
             wrapper: function () { return wrapper; },
             leafletMap: function () { return null; },
+            /* syncBasemapLift() reads the module-level surface; without a
+             * MapLibre surface it takes its documented “no corner” branch. */
+            surface: null,
             toggleGroup: group,
             document: {
                 getElementById: function (id) { return id === 'arcgisBasemapCtrl' ? control : null; },
@@ -383,8 +439,10 @@ console.log('[Test] the 2D/3D switch sits right above the base-layer button…')
     /* Each asset carries the tag of whatever last changed it: the skin by the
      * 2D/3D switch moving into the bottom-left control column, the viewer by
      * the basemap-picker sync fix. */
-    const TAG_CSS = '20261026-lidar-whole-or-disc';
-    const TAG_VIEWER = '20261026-lidar-whole-or-disc';
+    const TAG_CSS = '20261026-pwa-3d-button-size';
+    /* index.html serves the viewer at the desktop-basemap tag; only the skin
+     * was re-tagged by this change. */
+    const TAG_VIEWER = '20261026-desktop-basemap';
     for (const asset of ['css/map3d-terrain.css', 'js/map3d-terrain.js']) {
         const tag = asset === 'css/map3d-terrain.css' ? TAG_CSS : TAG_VIEWER;
         const url = asset + '?v=' + tag;
@@ -471,7 +529,10 @@ async function browserChecks() {
                 const group = box(document.getElementById('map3d-toggle-group'));
                 return { offset: Math.round(wrapper.bottom - group.bottom), height: Math.round(group.height) };
             });
-            const expectedFallback = pwa ? 146 : 66;
+            /* PWA 2D: the measured column (146px fallback). PWA 3D: the group
+             * centres at the historical 64px slot (no inset in headless).
+             * Website: bottom-centre at 66px. */
+            const expectedFallback = pwa ? (threeD ? 64 : 146) : 66;
             assert(Math.abs(fallback.offset - expectedFallback) < 1.5,
                 label + ': the CSS fallback puts the switch ' + expectedFallback + 'px up (found ' + fallback.offset + ')');
 
@@ -494,16 +555,20 @@ async function browserChecks() {
                 const bar = document.getElementById('map3d-bar');
                 const wrapper = box(document.querySelector('.map-wrapper'));
                 const toggleRect = toggle.getBoundingClientRect();
+                const refresh = document.getElementById('map3d-refresh');
+                const refreshRect = refresh.getBoundingClientRect();
                 const hit = document.elementFromPoint(toggleRect.left + toggleRect.width / 2,
                     toggleRect.top + toggleRect.height / 2);
                 return {
                     control: box(control), group: box(group), wrapper: wrapper,
                     bar: bar ? box(bar) : null,
+                    toggle: { width: Math.round(toggleRect.width), height: Math.round(toggleRect.height) },
+                    refresh: { width: Math.round(refreshRect.width), height: Math.round(refreshRect.height) },
                     toggleHit: !!(hit && (hit === toggle || (hit.closest && hit.closest('#map3d-toggle') !== null)))
                 };
             });
 
-            if (pwa) {
+            if (pwa && !threeD) {
                 assert(Math.abs((geometry.control.top - 8) - geometry.group.bottom) < 1.5,
                     label + ': the switch sits 8px above the base-layer button (gap '
                     + (geometry.control.top - geometry.group.bottom).toFixed(1) + 'px)');
@@ -511,6 +576,14 @@ async function browserChecks() {
                     label + ': the switch is left-aligned with the base-layer button');
                 assert(geometry.group.bottom < geometry.control.top && geometry.group.top > geometry.wrapper.top,
                     label + ': the switch is inside the map, above the control');
+            } else if (pwa) {
+                /* PWA 3D: the 2D switch + refresh group centres under the bar. */
+                assert(Math.abs(geometry.group.left + geometry.group.width / 2
+                    - (geometry.wrapper.left + geometry.wrapper.width / 2)) < 1.5,
+                    label + ': the 2D + refresh group is horizontally centred in 3D');
+                assert(Math.abs((geometry.wrapper.bottom - 64) - geometry.group.bottom) < 1.5,
+                    label + ': the centred group keeps the 64px PWA 3D slot (bottom '
+                    + Math.round(geometry.group.bottom) + ')');
             } else {
                 /* Website: the switch stays bottom-centre (66 px) — the
                  * measurement is published but the website never consumes it. */
@@ -520,6 +593,21 @@ async function browserChecks() {
                     label + ': the website switch stays centred');
                 assert(geometry.group.top > geometry.wrapper.top && geometry.group.bottom < geometry.wrapper.bottom,
                     label + ': the switch stays inside the map');
+            }
+            /* The PWA buttons are 38×38 squares like the rest of the column,
+             * on every viewport the harness tries (phones included). The
+             * refresh button has layout only while 3D is on. */
+            if (pwa) {
+                assert(Math.abs(geometry.toggle.width - 38) < 1.5 &&
+                       Math.abs(geometry.toggle.height - 38) < 1.5,
+                    label + ': the PWA switch is a 38×38 square (got '
+                    + geometry.toggle.width + '×' + geometry.toggle.height + ')');
+                if (threeD) {
+                    assert(Math.abs(geometry.refresh.width - 38) < 1.5 &&
+                           Math.abs(geometry.refresh.height - 38) < 1.5,
+                        label + ': the PWA refresh is a 38×38 square (got '
+                        + geometry.refresh.width + '×' + geometry.refresh.height + ')');
+                }
             }
             if (!threeD) {
                 assert(geometry.toggleHit, label + ': the switch takes its own tap');
