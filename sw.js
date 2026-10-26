@@ -801,7 +801,12 @@
 //   css/tutorial.css, css/offline-maps.css, css/map3d-terrain.css,
 //   js/map-rotate.js and js/tutorial.js.
 // v278: desktop 3D uses the selected ArcGIS basemap explicitly.
-const CACHE_NAME = 'detectlab-v279-historical-previews';
+// v280: compact “Overlay the map” panel (Other maps/Hungaricana) without the
+// rotation and scale sliders. Re-tags css/other-maps.css, js/other-maps.js.
+// v281: Other maps catalogue grows to the Cluj/Alba Transylvania batch and
+// overlapping dots merge into one sheet window. Re-tags js/other-maps.js and
+// the catalogue URL.
+const CACHE_NAME = 'detectlab-v281-cluj-alba';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -928,9 +933,9 @@ const PRECACHE_URLS = [
   'css/hist-shift.css?v=20261014-hist-shift',
   'js/other-maps-tiles.js?v=20261023-other-maps',
   'js/other-maps-overlay.js?v=20261024-other-maps-zoomlock',
-  'js/other-maps.js?v=20261024-other-maps-zoomlock',
-  'css/other-maps.css?v=20261024-other-maps-fit',
-  'data/other-maps-catalog.json',
+  'js/other-maps.js?v=20261026-cluj-alba',
+  'css/other-maps.css?v=20261026-other-maps-compact',
+  'data/other-maps-catalog.json?v=20261026-cluj-alba',
   'js/translations.js?v=20261023-other-maps',
   'js/map3d-mirror.js?v=20261017-archeo-3d-projection',
   'js/map3d-mirror.js?v=20261021-lidar-canvas-tiles',

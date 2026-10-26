@@ -82,6 +82,9 @@ sus. Rezultatul se păstrează în `localStorage` (`dlOtherMaps.pyramid.v1`).
   hărți, cu numărul lor pe el). Un grup geographic = o bulă cu numărul total de hărți.
 * Click pe o **locație** → se deschide lista hărților. Click pe un **grup** → se dă
   zoom pînă cînd grupul se rupe (același gest ca la Patrimoniu).
+* Două puncte vecine care se suprapun pe ecran (ex. Sighetu Marmației și comitatul,
+  la ~350 m unul de altul) se deschid **împreună**: o singură fereastră listează
+  foile amîndurora, ca să nu rămînă nicio hartă ascunsă în spatele altui punct.
 * Hit-testul rulează pe evenimentul de click al hărții, nu pe canvas: pane-ul e
   `pointer-events: none`, ca să nu fure clickurile markerelor de dedesubt (aceeași
   soluție ca la stratul Patrimoniu).
@@ -100,7 +103,9 @@ sus. Rezultatul se păstrează în `localStorage` (`dlOtherMaps.pyramid.v1`).
 ## 4. Fereastra „Hărți disponibile” și suprapunerea
 
 Fereastra listează hărțile locului (miniatură, titlu, subiect, colecție, an, autor) cu
-două acțiuni: **„Adaugă pe hartă”** și **„Deschide pe Hungaricana”**.
+două acțiuni: **„Adaugă pe hartă”** și **„Deschide pe Hungaricana”**. Subtitlul arată
+locul și numărul de hărți — „Cluj-Napoca (RO) · 49 hărți” — sau, cînd o atingere adună
+puncte vecine, „2 locuri · 9 hărți”.
 
 După adăugare, harta devine o suprapunere liberă (`js/other-maps-overlay.js`) și se
 deschide panoul de aliniere. Din prima încărcare foia apare **stabili și lizibilă, cu
@@ -132,15 +137,16 @@ proporțiile ei naturale** — nu ca un punct difuz care „schimbă formatul”
 | Roata mouse-ului | scalare |
 | Shift + roata | rotație fină |
 | Două degete (telefon) | scalare + rotație + deplasare într-un singur gest |
-| Sliderele din panou | opacitate, rotație (−180…180°), scară |
+| Sliderul din panou | doar opacitatea — rotația și scara se fac din gesturi/mînere |
 
-Panoul mai are **Centrează** (mută ancora în centrul hărții), **Încadrează** (scalează
-ca harta să ocupe ~70 % din fereastră), **Resetează** și **Șterge**. În modul aliniere
-sînt dezactivate temporar dragging-ul, zoom-ul cu roata, pinch-ul și box-zoom-ul
-bazei — exact ca la „Mută harta istorică” — și se reactivează la **Blocare**.
-
-Scala e arătată și ca **lățime pe teren** („2.50 km × 1.87 km”), ca s-o poți potrivi
-după o distanță cunoscută, nu după „metri per pixel”.
+Panoul („Suprapune harta” / „Overlay the map”) e **compact**: titlu, harta activă,
+comutatorul „Mod aliniere”, un singur slider de opacitate și butoanele **Centrează**
+(mută ancora în centrul hărții), **Încadrează** (scalează ca harta să ocupe ~70 % din
+fereastră), **Resetează** și **Șterge**. Nu mai are slidere de rotație și scară —
+potrivirea fină rămîne pe gesturi: mînerele de colț, mînerul de rotație, roata
+mouse-ului (Shift + roata = rotație) și pinch-ul pe telefon. În modul aliniere sînt
+dezactivate temporar dragging-ul, zoom-ul cu roata, pinch-ul și box-zoom-ul bazei —
+exact ca la „Mută harta istorică” — și se reactivează la **Blocare**.
 
 ## 5. Persistență
 
@@ -164,7 +170,7 @@ Alinierea supraviețuiește reîncărcării paginii și repornirii stratului. C�
 | `js/other-maps-overlay.js` | suprapunerea liberă: transformare, tile-uri vizibile, mînere, gesturi |
 | `js/other-maps.js` | catalogul, punctele verzi, gruparea, fereastra, panoul, persistența |
 | `css/other-maps.css` | stilurile pentru toate cele de mai sus |
-| `data/other-maps-catalog.json` | catalogul (seed real, 26 de foi → 17 locuri) |
+| `data/other-maps-catalog.json` | catalogul (131 de foi → 42 de locuri: seed + lotul Transilvania, oct. 2026) |
 | `tools/build-hungaricana-catalog.mjs` | re-generează/extinde catalogul de pe portal |
 | `test-other-maps.js` | regresia (rulează fără rețea) |
 | `index.html` | rîndul din panoul „Hărți istorice” + tagurile de asset |
@@ -180,7 +186,7 @@ catalogul se construiește offline:
 node tools/build-hungaricana-catalog.mjs
 
 # o căutare anume, toate paginile
-node tools/build-hungaricana-catalog.mjs --query Maramaros --pages 0
+node tools/build-hungaricana-catalog.mjs --query Maramureș --pages 0
 
 # tot portalul (78 000 de foi, foarte lent)
 node tools/build-hungaricana-catalog.mjs --all --pages 0
@@ -194,15 +200,20 @@ node tools/build-hungaricana-catalog.mjs --self-test
 
 Geocodarea folosește întîi un gazetar local (`--gazetteer fișier.json`, format
 `{"Sighetu Marmației": [47.933, 23.892]}`), apoi Nominatim cu 1 cerere/secundă;
-răspunsurile se pun în cache în `data/other-maps/geocode-cache.json`. Înregistrările deja
-existente își păstrează coordonatele, deci o aliniere făcută de cineva nu e mutată
-niciodată de o re-rulare.
+răspunsurile se pun în cache în `data/other-maps/geocode-cache.json`. Se acceptă doar
+răspunsuri la nivel de așezare (`place`/`boundary`, fără țări sau rîuri), ca punctul
+să nu ajungă la kilometri de foaie. Înregistrările deja existente își păstrează
+coordonatele **și** numele de loc, iar cele pe care căutarea nu le-a revăzut sînt
+păstrate (doar `--prune` reconstruiește de la zero) — deci o curatare făcută de mînă,
+cum e lotul Transilvania, nu e mutată niciodată de o re-rulare.
 
 Numele locului e cel scris de portal însuși în Subject — de regulă
 „… (Máramaros m., **ma Sighetu Marmaţiei, RO**)” — adică numele modern, cu
 `precision: "settlement"`; cînd portalul numește doar un comitat, înregistrarea primește
-`precision: "county"` și punctul stă pe centrul comitatului (în seed-ul de față
-coordonatele de comitat sînt aproximative).
+`precision: "county"` și punctul stă pe centrul comitatului (în lotul de față
+coordonatele de comitat sînt aproximative). La foile cu mai multe locuri cîștigă
+primul numit, traseele A–B primesc puncte la mijloc, iar foile fără scanare (multe
+S 118) sînt sărite — cardul fără `path` nu ajunge în catalog.
 
 ## 8. Regresie
 
@@ -210,7 +221,7 @@ coordonatele de comitat sînt aproximative).
 node test-other-maps.js
 ```
 
-274 de verificări, fără rețea:
+932 de verificări, fără rețea:
 
 * hash-ul tile-ului reproduce vectorul publicat de dezoomify (ambele ordini);
 * matematica transformării: alegerea nivelului din piramidă, **scara de încadrare
@@ -218,6 +229,10 @@ node test-other-maps.js
   păstrarea proporțiilor, limitele de scală, inversa transformării (fereastra de
   tile-uri acoperă viewportul la 0°, 90°, 37° și −128°);
 * fiecare înregistrare din catalog are id, cale ECW și coordonate plauzibile;
+* foile unui loc au id-uri distincte (fiecare card „Adaugă” e independent), iar
+  punctul Cluj-Napoca ține zecile de foi ale orașului;
+* atingerea contopește punctele vecine suprapuse: `mergeTapSheets` adună foile fără
+  duplicate, iar șirurile `om_places_count`/`om_place_count` există în ro/en/hu;
 * gruparea: hărțile unui loc rămîn un singur punct, două locuri la 1,4 km sînt un punct
   la z6 și două puncte la z11 — cu aceeași configurție ca Patrimoniu;
 * **managerul de suprapunere** (mapă falsă + mini-DOM): o foie nouă e încadrată la
@@ -232,5 +247,6 @@ node test-other-maps.js
   zoom-ul țintă; pinch-ul (zoom 13→14, `touchZoom._zooming`) rescalează cadrul
   stabilizat fără redraw, iar la stabilire transformarea se șterge.
 
-Asset-urile modificate sînt versionate `20261024-other-maps-zoomlock`; cache-ul
-service-worker-ului e `detectlab-v262-other-maps-zoomlock`.
+`js/other-maps.js` și catalogul (`data/other-maps-catalog.json`) sînt versionate
+`20261026-cluj-alba`, `css/other-maps.css` a rămas la `20261026-other-maps-compact`;
+cache-ul service-worker-ului e `detectlab-v281-cluj-alba`.

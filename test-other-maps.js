@@ -406,10 +406,20 @@ const OtherMaps = sandbox.DetectLabOtherMaps;
         ok(entry.id, 'record has an id');
         ok(!ids.has(entry.id), 'id ' + entry.id + ' is unique');
         ids.add(entry.id);
-        ok(/^[a-z0-9/._-]+\.ecw$/i.test(entry.path), entry.id + ' carries an ECW path');
+        ok(/^[a-z0-9/._\-()]+\.ecw$/i.test(entry.path), entry.id + ' carries an ECW path');
         ok(entry.lat > 40 && entry.lat < 52, entry.id + ' sits at a plausible central-European latitude');
         ok(entry.lng > 12 && entry.lng < 30, entry.id + ' sits at a plausible central-European longitude');
         ok(entry.place, entry.id + ' names a place');
+    });
+
+    // Same-place sheets stay individually addressable: every card in the
+    // window Adds its own record id.
+    const byPlace = OtherMaps.groupByPlace(catalog.maps);
+    const multi = byPlace.filter((loc) => loc.count > 1);
+    ok(multi.length >= 1, 'at least one place holds several sheets');
+    multi.forEach((loc) => {
+        const sheetIds = loc.sheets.map((sheet) => sheet.id);
+        ok(new Set(sheetIds).size === sheetIds.length, loc.place + ' lists distinct sheet ids');
     });
 
     /* ══ 4. clustering — identical to Patrimoniu ══════════════════════ */
@@ -439,6 +449,8 @@ const OtherMaps = sandbox.DetectLabOtherMaps;
 
     const maramures = locations.filter((l) => /Maramure/i.test(l.place || ''));
     ok(maramures.length >= 1 && maramures[0].count > 3, 'the Maramureș sheets share one dot');
+    const cluj = locations.filter((l) => l.place === 'Cluj-Napoca (RO)');
+    ok(cluj.length === 1 && cluj[0].count > 40, 'the Cluj-Napoca sheets share one dot');
     const grouped = Clustering.clusterRecords(maramures, 11, index, config);
     eq(grouped.length, 1, 'one place is one dot even with clustering disabled');
 
@@ -464,8 +476,29 @@ const OtherMaps = sandbox.DetectLabOtherMaps;
     ok(OtherMaps.isLocationCluster(splitNear[0]),
         'a single place is a location, so a tap opens the sheet list');
 
+    // Overlapping neighbour dots merge into one window: the Maramureș
+    // town and county sheets sit ~350 m apart and share taps at low zoom.
+    const locTown = { place: 'Sighetu Marmației (RO)', sheets: [{ id: 'a/1', title: 't1' }, { id: 'a/2', title: 't2' }] };
+    const locCounty = { place: 'Comitatul Maramureș (azi Maramureș, RO)', sheets: [{ id: 'b/1', title: 't3' }] };
+    const tapTown = { cluster: { members: [locTown] } };
+    const tapCounty = { cluster: { members: [locCounty] } };
+    const merged = OtherMaps.mergeTapSheets([tapTown, tapCounty]);
+    eq(merged.sheets.length, 3, 'tapping two overlapping dots lists every sheet');
+    eq(merged.places.length, 2, 'tapping two overlapping dots names both places');
+    eq(OtherMaps.mergeTapSheets([tapTown, tapTown, tapCounty]).sheets.length, 3,
+        'a sheet reached twice is listed once');
+    eq(OtherMaps.mergeTapSheets([{ cluster: { members: [locTown, locCounty] } }]).sheets.length, 0,
+        'a geographic group contributes no sheets to the merge');
+    const lone = OtherMaps.mergeTapSheets([tapCounty]);
+    eq(lone.sheets.length, 1, 'a lone dot still opens its own sheet');
+    eq(lone.places[0], locCounty.place, 'a lone dot keeps its place name');
+
     /* ══ 5. labels ════════════════════════════════════════════════════ */
     ok(OtherMaps.t('om_add').length > 0, 'the Romanian table is used when the page is Romanian');
+    ['ro', 'en', 'hu'].forEach((lang) => {
+        ok(OtherMaps.strings[lang].om_places_count.indexOf('{n}') >= 0, lang + ' counts merged places');
+        ok(OtherMaps.strings[lang].om_place_count.length > 0, lang + ' names one merged place');
+    });
     eq(OtherMaps.formatMeters(0.42), '0.42 m', 'sub-metre widths read in metres');
     eq(OtherMaps.formatMeters(2500), '2.50 km', 'kilometre widths read in km');
     const limits = Overlay.limits;

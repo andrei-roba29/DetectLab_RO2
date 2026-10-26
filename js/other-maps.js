@@ -33,7 +33,7 @@
     var Tiles = root.DetectLabOtherMapsTiles;
     var Overlays = root.DetectLabOtherMapsOverlay;
 
-    var CATALOG_URL = 'data/other-maps-catalog.json';
+    var CATALOG_URL = 'data/other-maps-catalog.json?v=20261026-cluj-alba';
     var POINTS_PANE = 'pane_other_maps_points';
     var OVERLAY_PANE = 'pane_other_maps_overlay';
     var STORE_KEY = 'dlOtherMaps.v1';
@@ -49,6 +49,8 @@
             om_available: 'Hărți disponibile',
             om_maps_count: '{n} hărți',
             om_map_count: '1 hartă',
+            om_places_count: '{n} locuri',
+            om_place_count: '1 loc',
             om_add: 'Adaugă pe hartă',
             om_added: 'Pe hartă',
             om_source: 'Deschide pe Hungaricana',
@@ -75,6 +77,8 @@
             om_available: 'Available maps',
             om_maps_count: '{n} maps',
             om_map_count: '1 map',
+            om_places_count: '{n} places',
+            om_place_count: '1 place',
             om_add: 'Add to map',
             om_added: 'On map',
             om_source: 'Open on Hungaricana',
@@ -101,6 +105,8 @@
             om_available: 'Elérhető térképek',
             om_maps_count: '{n} térkép',
             om_map_count: '1 térkép',
+            om_places_count: '{n} hely',
+            om_place_count: '1 hely',
             om_add: 'Hozzáadás a térképhez',
             om_added: 'A térképen',
             om_source: 'Megnyitás a Hungaricanán',
@@ -166,7 +172,9 @@
     }
 
     function tCount(key, n) {
-        var value = n === 1 ? t(key === 'om_maps_count' ? 'om_map_count' : key) : t(key);
+        var singular = key === 'om_maps_count' ? 'om_map_count' :
+            (key === 'om_places_count' ? 'om_place_count' : key);
+        var value = n === 1 ? t(singular) : t(key);
         return String(value).replace('{n}', n);
     }
 
@@ -533,30 +541,77 @@
         return cluster.members.length <= 1;
     }
 
-    function onMapClick(e) {
-        if (!state.enabled || !e.latlng || !e.containerPoint) return;
-        if (typeof state.map._draggableMoved === 'function' && state.map._draggableMoved(state.map)) return;
-        var point = e.layerPoint || state.map.containerPointToLayerPoint(e.containerPoint);
-        for (var i = state.hits.length - 1; i >= 0; i--) {
+    /* Every hit whose radius contains the tap point, nearest first. Dots
+     * for neighbouring places can overlap on screen — the Maramureș town
+     * and county sheets sit ~350 m apart, the Oarda and Alba Iulia dots a
+     * few taps apart — so the tap resolves against all of them, not just
+     * the last one painted. */
+    function hitsAt(point) {
+        var found = [];
+        for (var i = 0; i < state.hits.length; i++) {
             var hit = state.hits[i];
             var dx = point.x - hit.point.x;
             var dy = point.y - hit.point.y;
             if (dx * dx + dy * dy > hit.radius * hit.radius) continue;
-            var cluster = hit.cluster;
-            // One place → its sheets. Several places grouped by distance →
-            // zoom in until they split apart, the same gesture the Patrimoniu
-            // layer uses.
-            if (!isLocationCluster(cluster)) {
-                var bounds = L.latLngBounds(cluster.members.map(function (member) { return member.latlng; }));
-                if (bounds.isValid()) {
-                    state.map.fitBounds(bounds, { padding: [40, 40], maxZoom: Math.min(14, state.map.getMaxZoom()) });
-                }
-                return;
+            found.push({ hit: hit, dist: dx * dx + dy * dy });
+        }
+        found.sort(function (a, b) { return a.dist - b.dist; });
+        return found.map(function (entry) { return entry.hit; });
+    }
+
+    /* Flatten tapped location hits into one sheet list, de-duplicated by
+     * record id, with the distinct place names alongside. Pure over its
+     * input so the regression tests can drive it without a map. */
+    function mergeTapSheets(hits) {
+        var sheets = [];
+        var places = [];
+        var seenSheets = {};
+        var seenPlaces = {};
+        (hits || []).forEach(function (hit) {
+            var cluster = hit && hit.cluster;
+            if (!cluster || !isLocationCluster(cluster)) return;
+            var location = cluster.members && cluster.members[0];
+            var list = (location && location.sheets) || [];
+            if (!list.length) return;
+            list.forEach(function (sheet) {
+                var id = sheet && (sheet.id || sheet.title);
+                if (!id || seenSheets[id]) return;
+                seenSheets[id] = true;
+                sheets.push(sheet);
+            });
+            if (location.place && !seenPlaces[location.place]) {
+                seenPlaces[location.place] = true;
+                places.push(location.place);
             }
-            var location = cluster.members[0];
-            openModal(location.sheets || [location], hit.latlng, location.place);
+        });
+        return { sheets: sheets, places: places };
+    }
+
+    function onMapClick(e) {
+        if (!state.enabled || !e.latlng || !e.containerPoint) return;
+        if (typeof state.map._draggableMoved === 'function' && state.map._draggableMoved(state.map)) return;
+        var point = e.layerPoint || state.map.containerPointToLayerPoint(e.containerPoint);
+        var matched = hitsAt(point);
+        if (!matched.length) return;
+        var first = matched[0];
+        var cluster = first.cluster;
+        // One place → its sheets. Several places grouped by distance →
+        // zoom in until they split apart, the same gesture the Patrimoniu
+        // layer uses. When the nearest tap target is a single place but a
+        // neighbour dot overlaps it, one window lists every sheet so no
+        // map is stranded behind another dot.
+        if (!isLocationCluster(cluster)) {
+            var bounds = L.latLngBounds(cluster.members.map(function (member) { return member.latlng; }));
+            if (bounds.isValid()) {
+                state.map.fitBounds(bounds, { padding: [40, 40], maxZoom: Math.min(14, state.map.getMaxZoom()) });
+            }
             return;
         }
+        var merged = mergeTapSheets(matched);
+        if (!merged.sheets.length) return;
+        var label = merged.places.length > 1 ?
+            tCount('om_places_count', merged.places.length) : merged.places[0];
+        openModal(merged.sheets, first.latlng, label);
     }
 
     /* ── the “available maps” window ──────────────────────────────────── */
@@ -702,19 +757,13 @@
             '<label class="om-slider"><span class="om-slider-name om-t-opacity"></span>' +
             '<span class="om-slider-value om-v-opacity"></span>' +
             '<input type="range" class="om-range om-r-opacity" min="0" max="100" step="1"></label>' +
-            '<label class="om-slider"><span class="om-slider-name om-t-rotation"></span>' +
-            '<span class="om-slider-value om-v-rotation"></span>' +
-            '<input type="range" class="om-range om-r-rotation" min="-180" max="180" step="0.5"></label>' +
-            '<label class="om-slider"><span class="om-slider-name om-t-scale"></span>' +
-            '<span class="om-slider-value om-v-scale"></span>' +
-            '<input type="range" class="om-range om-r-scale" min="0" max="1000" step="1"></label>' +
             '<div class="om-panel-actions">' +
             '<button type="button" class="om-btn om-btn-ghost om-a-center"></button>' +
             '<button type="button" class="om-btn om-btn-ghost om-a-fit"></button>' +
             '<button type="button" class="om-btn om-btn-ghost om-a-reset"></button>' +
             '<button type="button" class="om-btn om-btn-danger om-a-delete"></button>' +
             '</div>';
-        var container = (state.map && state.map.getContainer()) || document.body;
+           var container = (state.map && state.map.getContainer()) || document.body;
         container.appendChild(panel);
 
         panel.querySelector('.om-panel-close').addEventListener('click', function () {
@@ -733,18 +782,6 @@
             var id = state.manager.getActiveId();
             if (!id) return;
             state.manager.setOpacity(id, Number(event.target.value) / 100);
-            paintValues();
-        });
-        panel.querySelector('.om-r-rotation').addEventListener('input', function (event) {
-            var id = state.manager.getActiveId();
-            if (!id) return;
-            state.manager.setState(id, { rotation: Number(event.target.value) });
-            paintValues();
-        });
-        panel.querySelector('.om-r-scale').addEventListener('input', function (event) {
-            var id = state.manager.getActiveId();
-            if (!id) return;
-            state.manager.setState(id, { mpp: mppFromSlider(Number(event.target.value)) });
             paintValues();
         });
         panel.querySelector('.om-a-center').addEventListener('click', function () {
@@ -802,9 +839,10 @@
         var panel = state.panel;
         if (!panel || !state.manager) return;
         panel.querySelector('.om-panel-title').textContent = t('om_panel_title');
-        panel.querySelector('.om-t-opacity').textContent = t('om_opacity');
-        panel.querySelector('.om-t-rotation').textContent = t('om_rotation');
-        panel.querySelector('.om-t-scale').textContent = t('om_scale');
+        var opacityLabel = panel.querySelector('.om-t-opacity');
+        if (opacityLabel) opacityLabel.textContent = t('om_opacity');
+        var alignLabel = panel.querySelector('.om-panel-label');
+        if (alignLabel) alignLabel.textContent = t('om_align');
         panel.querySelector('.om-a-center').textContent = t('om_center');
         panel.querySelector('.om-a-fit').textContent = t('om_fit');
         panel.querySelector('.om-a-reset').textContent = t('om_reset');
@@ -839,14 +877,10 @@
         var id = state.manager.getActiveId();
         var current = id ? state.manager.state(id) : null;
         if (!current) return;
-        panel.querySelector('.om-v-opacity').textContent = Math.round(current.opacity * 100) + '%';
-        panel.querySelector('.om-v-rotation').textContent = Math.round(current.rotation) + '°';
-        panel.querySelector('.om-r-opacity').value = String(Math.round(current.opacity * 100));
-        panel.querySelector('.om-r-rotation').value = String(current.rotation);
-        panel.querySelector('.om-r-scale').value = String(sliderFromMpp(current.mpp));
-        var width = state.manager.groundWidth(id);
-        var height = state.manager.groundHeight(id);
-        panel.querySelector('.om-v-scale').textContent = formatMeters(width) + ' × ' + formatMeters(height);
+        var opacityValue = panel.querySelector('.om-v-opacity');
+        if (opacityValue) opacityValue.textContent = Math.round(current.opacity * 100) + '%';
+        var opacityRange = panel.querySelector('.om-r-opacity');
+        if (opacityRange) opacityRange.value = String(Math.round(current.opacity * 100));
     }
 
     function formatMeters(meters) {
@@ -1018,6 +1052,7 @@
         isLocationCluster: isLocationCluster,
         clusterSpreadMeters: clusterSpreadMeters,
         groupByPlace: groupByPlace,
+        mergeTapSheets: mergeTapSheets,
         formatMeters: formatMeters,
         sliderFromMppLimits: function (mpp, limits) {
             var ratio = (Math.max(limits.mppMin, Math.min(limits.mppMax, mpp)) - limits.mppMin) /
