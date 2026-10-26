@@ -56,9 +56,14 @@ const flatHtml = html.replace(/\n\s*/g, ' ');
 const pwa = ruleOf(flatHtml, 'body.is-pwa .transp-panel');
 assert(/position:\s*fixed\s*!important/.test(pwa),
     'the PWA panel is fixed to the viewport so a 560px map-frame cannot crop it');
-assert(/bottom:\s*0\s*!important/.test(pwa),
-    'the panel shell still reaches the true viewport bottom');
-assert(/height:\s*auto\s*!important/.test(pwa) && /max-height:\s*none\s*!important/.test(pwa),
+// The shell is sized from the SAME measured pixel height as the rest of the
+// PWA (--pwa-viewport-h) — never from bottom:0 or a viewport unit, both of
+// which resolve against an initial containing block that can be short.
+assert(/height:\s*var\(--pwa-viewport-h, 100%\)\s*!important/.test(pwa),
+    'the panel shell reaches the true viewport bottom through the measured px height');
+assert(!/bottom:\s*0\s*!important/.test(pwa),
+    'bottom:0 must not size the panel — it can land above the screen bottom');
+assert(/max-height:\s*none\s*!important/.test(pwa),
     'the PWA rule keeps the anchor-driven height instead of a computed one');
 assert(/--pwa-panel-bottom-clearance:\s*max\(var\(--pwa-bottom-controls-clearance,\s*44px\),\s*env\(safe-area-inset-bottom,\s*0px\)\)/.test(pwa),
     'the bottom clearance is at least 44px and grows to the device safe-area when needed');

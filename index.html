@@ -123,78 +123,37 @@
 
         /* Nav is hidden entirely in PWA mode — see rule below with display:none */
 
-        /* Fullscreen map.
-           The map paints across the entire edge-to-edge viewport, including
-           both iOS safe areas. Controls are still kept clear of the notch and
-           home indicator below, but the safe-area space itself now shows the
-           map instead of a solid blue strip.
-           The section is STRETCHED between the viewport edges (top:0 +
-           bottom:0) instead of being given a computed height, and never
-           carries a vh / svh / dvh ladder: iOS standalone settles those one
-           frame late, so a computed height could end up shorter than the real
-           screen. width:100% (not 100vw) avoids a horizontal blank gutter.
+        /* ── Full-screen map in the installed app ─────────────────────────
+           The map owns the whole physical screen, edge to edge, both safe
+           areas included. Its size is a JS-measured PIXEL height
+           (--pwa-viewport-h, published by the PWA script at the end of this
+           document), never `bottom:0` and never a viewport unit: those
+           resolve against an initial containing block that standalone iOS
+           can hand the page shorter than the screen, and a box sized from a
+           short value is exactly what used to leave the page background
+           visible as a strip under the map.
 
-           ── min-height:100vh — the strip under the map (installed iPhone) ──
-           Stretching alone is NOT enough on iOS, because top:0 / bottom:0 on a
-           position:fixed box resolve against the initial containing block, and
-           this page asks iOS for the one viewport that is documented to come
-           up short there:
+           The script writes the same px height, with !important, onto the
+           section AND onto every box of the percentage chain
+           (.container → .map-frame → .map-wrapper → #detectlab-map), so no
+           intermediate `height:100%` can inherit a short ancestor. The CSS
+           rules below are the same thing in declarative form: they apply
+           before the first script pass and wherever the script is absent.
 
-               viewport-fit=cover                     (the meta viewport tag)
-             + apple-mobile-web-app-status-bar-style: black-translucent
-             + a document sized in % / dvh / svh
-
-           In that combination WebKit hands the page an ICB that is
-           `safe-area-inset-top` (~59px on a Face-ID iPhone) SHORTER than the
-           physical screen — the content is laid out from y=0, behind the
-           translucent status bar, but the box height is not compensated. So
-           `bottom:0` lands ~59px above the bottom edge, the map container
-           stops there, the "© Leafleet" tag (anchored 4px above that
-           container's bottom edge) sits on top of the gap, and the empty
-           #060E1E page background shows through underneath it as the
-           "bottom padding / bottom bar" the installed app was showing.
-           Every value that reads the ICB is short by the same amount — `%`,
-           `svh`, `dvh` and `bottom:0` alike — which is why replacing the
-           ladder with a stretch did not remove the band.
-
-           The large-viewport unit `vh` is the one reading that WebKit resolves
-           to the FULL physical screen in this mode, so `min-height:100vh`
-           clamps the stretched box back up to the real screen height: the map
-           and its tag reach the bottom edge and nothing is left for the page
-           background to show through. It is a floor, never a size — where the
-           ICB already equals the screen (Android standalone, desktop ?pwa=1,
-           and any iOS version without the short-ICB behaviour) 100vh is
-           exactly the top:0→bottom:0 stretch and this declaration changes
-           nothing at all.
-
-           The same floor must also be applied to the percentage chain inside
-           it: `.container → .map-frame → .map-wrapper → #detectlab-map` were
-           `height:100% / min-height:100%`, so they inherited the short ICB
-           even after #map-section got the floor — #detectlab-map stayed at
-           785px on an 844px screen, the © Leafleet tag (4px above its bottom)
-           sat on top of the gap, and the #060E1E section background showed
-           underneath as \"padding\". Giving those inner boxes `min-height:100vh`
-           as well forces the whole chain to the real screen height.
-
-           Not one control offset is touched: the floating live-location
-           button, the compass column, the action dock and the tag all keep
-           their published values.
-           (The one path where 100vh exceeds the visible area is ?pwa=1 opened
-           in a mobile BROWSER TAB, where 100vh is the large viewport and the
-           preview map slides under the browser toolbar. ?pwa=1 is a desktop
-           preview aid — in a real installed app there are no dynamic toolbars,
-           so 100vh is the screen. Production is unaffected.) */
+           No control offset is touched here. The only geometry the bottom
+           edge needs is --pwa-bleed (see below), which is 0px whenever the
+           measured screen height and the page's own viewport agree. */
         body.is-pwa #map-section {
             padding: 0 !important;
             margin: 0 !important;
             position: fixed;
             top: 0;
-            right: 0;
-            bottom: 0;
             left: 0;
-            height: auto !important;
-            min-height: 100vh;
-            min-height: max(100vh, var(--dl-vvh, 100vh));
+            right: 0;
+            bottom: auto;
+            height: var(--pwa-viewport-h, 100%) !important;
+            min-height: 0 !important;
+            max-height: none !important;
             width: 100% !important;
             max-width: 100% !important;
             z-index: 10;
@@ -220,12 +179,35 @@
         body.is-pwa .map-frame,
         body.is-pwa .map-wrapper,
         body.is-pwa #detectlab-map {
-            height: 100% !important;
-            min-height: 100vh !important;
-            min-height: max(100vh, var(--dl-vvh, 100vh)) !important;
+            height: var(--pwa-viewport-h, 100%) !important;
+            min-height: 0 !important;
+            max-height: none !important;
             border: none !important;
             border-radius: 0 !important;
             box-shadow: none !important;
+        }
+
+        /* ── --pwa-bleed: what the OS keeps outside the page ──
+           When the measured screen is taller than the page's own viewport
+           (Android with a gesture bar, iOS with a settled home-indicator
+           band), the map is allowed to overrun the bottom edge by that many
+           pixels so the strip can never show the page background. The two
+           controls that Leaflet anchors to the bottom edge of the map
+           container — the compass column (.leaflet-bottom) and the
+           "© Leafleet" tag — are lifted back by the same amount, so they
+           stay on screen instead of travelling with the overrun.
+           The script publishes --pwa-bleed; the fallback is 0px. */
+
+        /* ── No install banner inside the installed app ──
+           #pwa-install-banner is a fixed bottom bar (rgba(6,14,30,.97)) used
+           by the website's "Open in Chrome" landing page (?pwa=install). The
+           JS already refuses to show it in standalone, but the shell must not
+           depend on that one check: in the installed app it is disabled
+           outright, so no bottom bar can paint there even if a browser
+           misreports its display mode. */
+        html.is-pwa #pwa-install-banner,
+        body.is-pwa #pwa-install-banner {
+            display: none !important;
         }
 
         /* ── Transparency panel: full-height shell + transparent bottom inset ──
@@ -242,10 +224,9 @@
             position: fixed !important;
             top: 0 !important;
             right: 0 !important;
-            bottom: 0 !important;
-            height: auto !important;
-            min-height: 100vh !important;
-            min-height: max(100vh, var(--dl-vvh, 100vh)) !important;
+            bottom: auto !important;
+            height: var(--pwa-viewport-h, 100%) !important;
+            min-height: 0 !important;
             max-height: none !important;
             padding-bottom: var(--pwa-panel-bottom-clearance) !important;
             /* Same violet glass as the website panel, one notch denser: the
@@ -301,9 +282,9 @@
             padding: 0 !important;
             max-width: 100% !important;
             width: 100% !important;
-            height: 100% !important;
-            min-height: 100vh !important;
-            min-height: max(100vh, var(--dl-vvh, 100vh)) !important;
+            height: var(--pwa-viewport-h, 100%) !important;
+            min-height: 0 !important;
+            max-height: none !important;
             margin: 0 !important;
             overflow: hidden !important;
         }
@@ -668,9 +649,17 @@
         }
         /* The account bar is gone; the separate live-location button keeps
            its own 28px + safe-area offset above the © Leafleet tag. The Leaflet
-           bottom corners (compass / attribution) only clear the home indicator. */
+           bottom corners (compass / attribution) only clear the home indicator
+           — plus --pwa-bleed, the part of the physical screen that sits outside
+           the page's own viewport: the map overruns the bottom edge by that
+           many pixels (so no background strip can show), and the corner and the
+           "© Leafleet" tag are lifted back by the same amount so they stay on
+           screen. --pwa-bleed is 0px whenever the two heights agree. */
         body.is-pwa .leaflet-bottom {
-            bottom: env(safe-area-inset-bottom, 0px) !important;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + var(--pwa-bleed, 0px)) !important;
+        }
+        body.is-pwa .leaflet-container::after {
+            bottom: calc(4px + var(--pwa-bleed, 0px)) !important;
         }
 
         /* ── PWA LAUNCH SCREEN OVERLAY — pure CSS/SVG sonar (no animated image = no glitches) ── */
@@ -921,43 +910,17 @@
             document.documentElement.classList.add('is-pwa');
         }
 
-        // ── --dl-vvh: a JS-measured floor for the PWA full-screen boxes ──
-        // 100vh is documented to come up short on iOS standalone under
-        // viewport-fit=cover + black-translucent (see PWA_BOTTOM_BAND.md), but
-        // that shortfall is a CSS-unit quirk, not a JS one: window.innerHeight
-        // (and visualViewport.height) already report the true, full physical
-        // screen height in that same mode. Publishing it as a pixel custom
-        // property gives #map-section / .transp-panel / .container a floor
-        // that cannot itself be short, instead of trusting a single CSS unit
-        // to always resolve correctly on every iOS/Android build. It is only
-        // ever used as a min-height fallback (`min-height: var(--dl-vvh, 100vh)`
-        // declared right after the plain 100vh rule), so nothing regresses if
-        // the property is ever unset: the 100vh line still wins as intended.
-        (function () {
-            function setDlVvh() {
-                var h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
-                if (h) {
-                    document.documentElement.style.setProperty('--dl-vvh', h + 'px');
-                }
-            }
-            setDlVvh();
-            document.addEventListener('DOMContentLoaded', setDlVvh);
-            window.addEventListener('resize', setDlVvh);
-            window.addEventListener('orientationchange', function () {
-                setDlVvh();
-                setTimeout(setDlVvh, 300);
-            });
-            if (window.visualViewport) {
-                window.visualViewport.addEventListener('resize', setDlVvh);
-            }
-            window.addEventListener('load', setDlVvh);
-            window.addEventListener('pageshow', setDlVvh);
-            // iOS settles the standalone viewport one frame after first paint —
-            // mirror the same delayed passes used by updatePwaMapLayout() below.
-            setTimeout(setDlVvh, 300);
-            setTimeout(setDlVvh, 800);
-            setTimeout(setDlVvh, 1600);
-        })();
+        // ── --pwa-viewport-h: the exact screen height, in pixels ──
+        // Every full-screen box in the installed app (#map-section,
+        // .container, .map-frame, .map-wrapper, #detectlab-map,
+        // .transp-panel) is sized from this one number by the PWA script at
+        // the end of the document, which re-measures it on every layout
+        // change. Nothing is left to a CSS viewport unit: `bottom:0`, `100vh`,
+        // `100dvh` and `100svh` all resolve against an initial containing
+        // block that standalone iOS can report shorter than the physical
+        // screen, and a box sized from a short unit is what leaves the page
+        // background visible as a strip under the map. `height:100%` is only
+        // the pre-script fallback for the very first paint.
     </script>
 </head>
 <body>
@@ -5959,15 +5922,6 @@
 
 <script src="js/auth-forms.js"></script>
 
-    <!-- PWA bottom-band probe (temporary diagnostic, OFF by default).
-         Switch it on with ?pwaDebug=1 (numbers) or ?pwaDebug=colors (numbers +
-         colour bands), or with FIVE TAPS on the "© Leafleet" tag from inside
-         the installed app — iOS gives an Add-to-Home-Screen web app its own
-         storage container, so a flag set in Safari never reaches it. It adds no
-         element and no listener that can move a control while it is off.
-         See js/pwa-debug.js and PWA_BOTTOM_BAND.md. -->
-    <script src="js/pwa-debug.js?v=20260918-pwa-bottom-probe"></script>
-
     <script>
         (function() {
             const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone
@@ -6017,24 +5971,70 @@
                     document.addEventListener(type, blockNonMapPinch, { passive: false, capture: true });
                 });
 
-                // ── Keep the standalone viewport in sync ──
-                // Older WebViews use --vh instead of dvh/svh. visualViewport
-                // tracks the actually visible area when mobile UI changes size.
-                // The account stack is gone; the separate live-location
-                // button keeps its own safe-area offset. This only publishes
-                // the measured height; bottom-anchored overlays use the fixed
-                // --pwa-bottom-controls-clearance for the home indicator.
-                function setVH() {
-                    var visibleHeight = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
-                    var vh = visibleHeight * 0.01;
-                    document.documentElement.style.setProperty('--vh', vh + 'px');
-                    // Keep the JS-measured full-screen floor (see the early
-                    // <head> script) in sync with the same passes that already
-                    // re-check the viewport for Leaflet, instead of running a
-                    // second independent measurement loop.
-                    if (visibleHeight) {
-                        document.documentElement.style.setProperty('--dl-vvh', visibleHeight + 'px');
-                    }
+                // ── Fit the PWA shell to the real screen, in pixels ──
+                // The installed app has no browser chrome: the map must cover
+                // the whole physical screen. CSS cannot be trusted with that
+                // here — `bottom:0`, `100vh`, `100dvh` and `100svh` all resolve
+                // against an initial containing block that standalone iOS can
+                // report shorter than the screen, and whatever a box leaves
+                // unpainted shows the page background as a strip under the map.
+                // window.innerHeight / visualViewport.height are NOT affected by
+                // that quirk, so the measured number is written out as a pixel
+                // height (--pwa-viewport-h) and applied, with !important, to the
+                // section and to every box of the percentage chain.
+                //
+                // --pwa-bleed is the part of the physical screen the page's own
+                // viewport does not cover (Android gesture bar, an iOS band that
+                // settles late). The map is allowed to overrun the bottom edge by
+                // that much so the strip can never show the page background; the
+                // compass column and the "© Leafleet" tag are lifted back by the
+                // same amount in CSS, so they stay on screen.
+                var PWA_FIT_SELECTORS = [
+                    '#map-section',
+                    '#map-section > .container',
+                    '#map-section .map-frame',
+                    '#map-section .map-wrapper',
+                    '#detectlab-map',
+                    '.transp-panel'
+                ];
+                var pwaFitApplied = '';
+
+                function measurePwaScreen() {
+                    var pageH = Math.max(
+                        window.innerHeight || 0,
+                        (window.visualViewport && window.visualViewport.height) || 0
+                    );
+                    var screenH = (window.screen && window.screen.height) || 0;
+                    // Only a genuinely installed app may overrun the page viewport,
+                    // and only up to the physical screen (never beyond it).
+                    var installed = false;
+                    try {
+                        installed = window.matchMedia('(display-mode: standalone)').matches ||
+                            window.matchMedia('(display-mode: fullscreen)').matches ||
+                            window.navigator.standalone === true;
+                    } catch (e) { installed = window.navigator.standalone === true; }
+                    var target = Math.round(pageH);
+                    if (installed && screenH > target) target = Math.round(screenH);
+                    return { pageH: Math.round(pageH), height: target, bleed: Math.max(0, target - Math.round(pageH)) };
+                }
+
+                function fitPwaViewport() {
+                    var m = measurePwaScreen();
+                    if (!m.height) return;
+                    var key = m.height + '/' + m.bleed;
+                    if (key === pwaFitApplied) return; // nothing moved — keep Leaflet calm
+                    pwaFitApplied = key;
+                    var root = document.documentElement;
+                    root.style.setProperty('--pwa-viewport-h', m.height + 'px');
+                    root.style.setProperty('--pwa-bleed', m.bleed + 'px');
+                    var h = m.height + 'px';
+                    PWA_FIT_SELECTORS.forEach(function (sel) {
+                        var el = document.querySelector(sel);
+                        if (!el) return;
+                        el.style.setProperty('height', h, 'important');
+                        el.style.setProperty('min-height', '0', 'important');
+                        el.style.setProperty('max-height', 'none', 'important');
+                    });
                 }
 
                 function resizeMap() {
@@ -6059,12 +6059,12 @@
                         setTimeout(updatePwaMapLayout, 300);
                         return;
                     }
-                    setVH();
-                    // The bottom clearance is a fixed CSS variable now (the
-                    // account stack is gone; the separate GPS button has its
-                    // own safe-area offset). Wait for CSS to reposition overlays before
-                    // Leaflet recalculates its edge-to-edge viewport. This keeps
-                    // circles and vector layers visible under either orientation.
+                    // Size the shell first, then let Leaflet re-measure the
+                    // container we just sized. Wait for CSS to reposition
+                    // overlays before Leaflet recalculates its edge-to-edge
+                    // viewport so circles and vector layers stay visible under
+                    // either orientation.
+                    fitPwaViewport();
                     window.requestAnimationFrame(resizeMap);
                 }
 
@@ -6083,16 +6083,14 @@
                 window.addEventListener('load', updatePwaMapLayout);
                 window.addEventListener('pageshow', updatePwaMapLayout);
 
-                // ── Kill the dark strip under the map (installed PWA) ──
-                // iOS standalone finalises the viewport height only AFTER the
-                // first paint (status bar / home-indicator band settle late),
-                // so the map container can reach its true, full-screen height
-                // without any resize event ever firing — Leaflet then keeps
-                // the shorter size and the page background shows as a blank
-                // navy band below the tiles. The delayed passes cover the
-                // settle window; the ResizeObserver catches the exact frame
-                // the container grows, on any engine. Neither moves a single
-                // control: only the map canvas is re-measured.
+                // ── Re-fit after the OS settles the standalone viewport ──
+                // iOS finalises the screen height only AFTER the first paint
+                // (status bar / home-indicator band settle late), so the first
+                // measurement can be a few pixels short and no resize event
+                // ever fires afterwards. The delayed passes cover that window;
+                // the ResizeObserver catches the frame the shell grows, on any
+                // engine. Both only re-measure the shell and the map canvas —
+                // no control offset is touched.
                 setTimeout(updatePwaMapLayout, 800);
                 setTimeout(updatePwaMapLayout, 1600);
                 if (typeof window.ResizeObserver === 'function') {

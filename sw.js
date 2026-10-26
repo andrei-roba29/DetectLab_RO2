@@ -112,31 +112,16 @@
 //   one document and replayed as name labels). sw.js now treats every
 //   request tagged with __dl_offline_map= as an offline-cache lookup so WMS
 //   tiles and the cached GeoJSON also work with no connection.
-// v112: the dark band under the map in the installed iPhone PWA — root cause
-//   found. `#map-section` is position:fixed, so top:0 / bottom:0 resolve
-//   against the initial containing block, and this page asks iOS for the one
-//   viewport documented to come up short there: viewport-fit=cover +
-//   apple-mobile-web-app-status-bar-style:black-translucent + a document sized
-//   in % / svh / dvh. WebKit then hands the page an ICB that is
-//   safe-area-inset-top (~59px) shorter than the physical screen — content is
-//   laid out from y=0 behind the translucent status bar but the box height is
-//   never compensated — so bottom:0 stops ~59px above the bottom edge, the map
-//   container ends there, the "© Leafleet" tag sits on top of the gap and the
-//   empty #060E1E page background shows through under it as the "bottom
-//   padding / bottom bar". Every reading of the ICB is short by the same
-//   amount (%, svh, dvh and bottom:0 alike), which is why v109's ladder →
-//   stretch rewrite did not remove it. 100vh is the one unit WebKit resolves to
-//   the FULL screen in this mode, so #map-section and .transp-panel now carry
-//   min-height:100vh as a floor: where the ICB already equals the screen
-//   (Android, desktop ?pwa=1, iOS without the short-ICB behaviour) it is
-//   exactly the top:0→bottom:0 stretch and changes nothing; where the ICB is
-//   short it clamps the box back to the real screen height. No control offset
-//   is touched. Also ships js/pwa-debug.js — a gated on-device probe
-//   (?pwaDebug=1 / ?pwaDebug=colors, or five taps on the © Leafleet tag) that
-//   prints the ICB / 100vh / dvh / svh / env() / element rects and can copy the
-//   whole readout, plus paints each candidate layer a different colour so the
-//   band's own colour names its painter in one round trip. See
-//   PWA_BOTTOM_BAND.md.
+// v112–v119: the strip under the map in the installed PWA. Those releases
+//   tried to close it with CSS viewport units (min-height:100vh / dvh / svh)
+//   and a JS --dl-vvh pixel floor. Both are gone in v286: the strip was the
+//   page background showing where the map stopped short, and every viewport
+//   unit (and bottom:0) resolves against an initial containing block that
+//   standalone iOS can hand the page shorter than the screen. The shell is now
+//   sized from ONE measured pixel height (--pwa-viewport-h) applied to
+//   #map-section, .container, .map-frame, .map-wrapper, #detectlab-map and
+//   .transp-panel, with --pwa-bleed covering anything the OS keeps outside the
+//   page; see the PWA styles + script in index.html.
 // v113: keep event creation below the phone status bar and within the viewport.
 // v115: move the Battles epoch-colour legend from the layers panel into the
 // Battles info tab, directly below its attribution.
@@ -149,22 +134,7 @@
 //   is published: the search waits for the answer, the search dialog steps
 //   aside for the question and returns with it, and the answer is applied
 //   through _presenceVisible() („Nu” still searches — you just stay invisible).
-// v118: PWA bottom band — the inner percentage chain (.container → .map-frame →
-//   .map-wrapper → #detectlab-map) was still min-height:100% so it inherited the
-//   short ICB (785px on an 844px screen) even after #map-section got the 100vh
-//   floor; the © Leafleet tag sat on top of the gap and #060E1E showed through.
-//   All four inner boxes now carry min-height:100vh as well, closing the band
-//   without moving any control offset. See PWA_BOTTOM_BAND.md.
-// v119: PWA bottom band, take two — 100vh itself is still a CSS-unit reading of
-//   the same short ICB on some iOS/Android builds, so v118's floor could still
-//   come up short there. #map-section / .map-frame / .map-wrapper /
-//   #detectlab-map / .transp-panel / .container now also take a JS-measured
-//   `--dl-vvh` pixel floor (window.innerHeight / visualViewport.height, which
-//   already reports the true physical screen height in that mode) as a second
-//   `min-height` line after the plain 100vh one — CSS keeps the last
-//   `min-height` that resolves to a real length, so this only raises the floor
-//   when 100vh itself was short, and changes nothing where it already matched
-//   the screen. No control offset moved. See PWA_BOTTOM_BAND.md.
+// v118–v119: (superseded by v286 — see the v112–v119 note above.)
 // v121: the standalone PWA gives the map-side layer title an explicit column
 //   and a concrete rotated label box, avoiding the mobile WebView auto-grid
 //   collapse that could leave the initials outside the visible card.
@@ -834,7 +804,7 @@
 //   centred 3D bar, stepping above the country “Exit view” pill via the
 //   existing --country-exit-lift hook. Re-tags css/map3d-terrain.css.
 //   See PWA_3D_BUTTON_SIZE_CENTRE.md.
-const CACHE_NAME = 'detectlab-v285-pwa-3d-button-size';
+const CACHE_NAME = 'detectlab-v286-pwa-fullscreen-fit';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1531,13 +1501,6 @@ const PRECACHE_URLS = [
   // prin window.DetectLabNotify.
   'js/events.js?v=20260918-social-notify',
   'js/friends.js?v=20260918-social-notify',
-  // Banda închisă la culoare de sub hartă în PWA-ul instalat (iPhone): cauza e
-  // ICB-ul scurt cu safe-area-inset-top dat de viewport-fit=cover +
-  // black-translucent, iar #map-section / .transp-panel primesc podeaua
-  // min-height:100vh. js/pwa-debug.js e sonda opțională de pe dispozitiv
-  // (?pwaDebug=1 / ?pwaDebug=colors, sau 5 tap-uri pe eticheta „© Leafleet”).
-  // Vezi PWA_BOTTOM_BAND.md.
-  'js/pwa-debug.js?v=20260918-pwa-bottom-probe',
   // „Vezi alți detectoriști în zonă” întreabă și el „Vrei să fii vizibil și
   // pentru alți utilizatori?” (Da/Nu), exact ca switchul de detecție: căutarea
   // așteaptă răspunsul înainte să publice prezența sau să pornească locația
@@ -1703,7 +1666,13 @@ const PRECACHE_URLS = [
   // focusul; v149 elimină dependența de aliasul temporar al sliderului activ.
   'js/vertical-opacity-control.js?v=20261001-persistent-layer-actions',
   'js/vertical-opacity-control.js?v=20261002-persistent-layer-actions-v2',
-  'js/supabase.js?v=20260811-event-sync'
+  'js/supabase.js?v=20260811-event-sync',
+  // v286: the shell is sized from a measured pixel height (--pwa-viewport-h)
+  // instead of any CSS viewport unit, and the temporary on-device band probe
+  // is gone. Only index.html + this file changed; the entry below is the live
+  // mirror URL index.html requests, which the shell must pre-cache with it.
+  'js/vertical-opacity-control.js?v=20261026-flat-country-sections',
+  'js/danish-layers.js?v=20261026-flat-country-sections'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──
