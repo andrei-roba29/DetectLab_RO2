@@ -6,14 +6,16 @@
 // there in 3D”):
 //
 //   1. pressing 3D with a LiDAR layer switched on does NOT open 3D: it asks
-//      (viewer.setEntryGate → this suite's dialog), and only a prepared disc
-//      lets open() continue;
-//   2. one LiDAR layer at a time. A second one on the 2D map is left out of the
-//      deck by decision, named in status().lidar — never silently dropped and
-//      never both draped;
+//      (viewer.setEntryGate → this suite's dialog), and only a fulfilled
+//      decision lets open() continue — a prepared disc, or a whole-layer choice;
+//   2. every LiDAR layer switched on is offered, and only the ticked ones are
+//      drawn. The WHOLE-LAYER scope loads them entirely (no bounds, no clip, no
+//      zoom ceiling); the 1 km scope prepares and clips the disc for exactly the
+//      ticked layers. What is left out is named in status().lidar — never
+//      silently dropped;
 //   3. the disc is bounded and honest: one fixed 1 km radius, a few hundred
-//      tiles, every tile really intersecting the circle, the zoom window taken
-//      from the layer's own limits and reported;
+//      tiles per layer, every tile really intersecting the circle, the zoom
+//      window taken from the layer's own limits and reported;
 //   4. the tiles are prefetched through the SAME path 3D draws with (fetchTile →
 //      CSS-blend repaint → disc clip), they are kept in memory, and a second
 //      run over the same disc makes no request at all;
@@ -33,7 +35,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-console.log('[Test] LiDAR in the 3D view — one layer, one prepared 1 km disc...');
+console.log('[Test] LiDAR in the 3D view — whole layers, or a prepared 1 km disc...');
 
 const read = function (p) { return fs.readFileSync(path.join(__dirname, p), 'utf8'); };
 
@@ -48,10 +50,10 @@ const viewerSource = read('js/map3d-terrain.js');
 const focusSource = read('js/lidar-3d-focus.js');
 
 /* Every build that changes the LiDAR 3D focus path bumps its own tag. */
-const TAG = '20261020-lidar-disc-route';
+const TAG = '20261026-lidar-whole-or-disc';
 const TAG_MIRROR = '20261021-lidar-canvas-tiles';
-const TAG_VIEWER = '20261025-lidar-3d-tile-heal';
-const TAG_CSS = '20261025-pastel-orange-sliders';
+const TAG_VIEWER = '20261026-lidar-whole-or-disc';
+const TAG_CSS = '20261026-lidar-whole-or-disc';
 
 /* One real event-loop turn: the viewer runs its entry gate through a promise,
  * so the dialog is not in the DOM in the same tick as open(). */
@@ -592,9 +594,20 @@ let FocusApi = null;
         'so 1 km is the only radius the entry can prepare (got ' +
         FocusApi.MIN_RADIUS_KM + '–' + FocusApi.MAX_RADIUS_KM + ', default ' + FocusApi.DEFAULT_RADIUS_KM + ')');
     assert(FocusApi._copy.ro.lead.indexOf('1 km') !== -1 && FocusApi._copy.en.lead.indexOf('1 km') !== -1,
-        'both copies state the 1 km radius');
-    assert(/one LiDAR layer at a time/i.test(FocusApi._copy.en.layerHint),
-        'and the layer list says 3D enters with one LiDAR layer at a time');
+        'both copies state the 1 km radius the disc option uses');
+    /* The two scopes the window offers. Whole layers is the default (the
+     * request: “all LiDAR layers should be able to load in 3D entirely, not
+     * only 1 km”), the disc is the option kept for the heavy pyramids. */
+    assert(FocusApi.DEFAULT_SCOPE === 'full' && FocusApi.SCOPES.join(',') === 'full,disc',
+        'whole layers is the default scope and the 1 km disc is the other one (' + FocusApi.SCOPES.join(',') + ')');
+    assert(/whole layers/i.test(FocusApi._copy.en.scopeFull) &&
+           /entirely/i.test(FocusApi._copy.en.scopeNoteFull),
+        'the first option says the layers load entirely');
+    assert(/\{km\}/.test(FocusApi._copy.en.scopeDisc) && /\{km\}/.test(FocusApi._copy.ro.scopeDisc),
+        'the disc option names its radius from the same constant');
+    assert(/every LiDAR layer switched on/i.test(FocusApi._copy.en.layerHint) &&
+           /every LiDAR layer switched on/i.test(FocusApi._copy.en.layerHintFull),
+        'both scopes list every LiDAR layer switched on at that moment');
     const plan5 = FocusApi.plan(
         { lat: 45.5, lng: 25.0, radiusKm: 5 },
         { minZoom: 0, maxZoom: 16, tileSize: 256, budget: 900, viewport: { width: 1280, height: 800 } }
@@ -1148,6 +1161,14 @@ function runViewerSuite() {
             assert(gateNode && gateNode.hidden === false,
                 'entering 3D asks first — the gate dialog is up before any map exists');
             assert(!fakeMap, 'and no 3D map has been created yet');
+            /* The window opens on the scope the applied focus describes — the
+             * entry does not silently change the user's last decision. */
+            assert(focus.status().dialog.scope === 'disc',
+                'the dialog opens on the 1 km disc the current focus was prepared for');
+            assert(focus.status().dialog.picks.join(',') === '2d.R1',
+                'with that disc’s layer ticked');
+            assert(focus.status().dialog.offered.length === 2,
+                'and every LiDAR layer on the 2D map still listed to choose from');
             gateNode.querySelector('.m3d-focus-go').click();
             const opened = await opening;
             assert(opened === true && viewer.isOpen() === true,
@@ -1263,6 +1284,49 @@ function runViewerSuite() {
                 map.removeLayer(defLayer);
                 viewer.syncLayers();
                 delete windowStub.AhnLidar;
+            }
+
+            /* ── 4d-quater-bis. WHOLE LAYERS: no disc, no clip, no ceiling ──
+             * The other half of the entry rule, and the whole point of this
+             * change: every LiDAR layer can be drawn ENTIRELY in 3D. A
+             * whole-layer focus must reach the deck the way an ordinary layer
+             * does — no `bounds` (MapLibre may ask for any tile), no maxzoom
+             * cap (the layer's own native maximum stands), no per-tile disc
+             * clip — while still being the only LiDAR the deck draws. */
+            {
+                viewer.setLidarFocus({
+                    scope: 'full',
+                    layers: [
+                        { key: '2d.R1', lidarKey: 'lidar.ro1m', label: 'Romania 1m/pixel agregare' },
+                        { key: '2d.A1', lidarKey: 'lidar.ab', label: 'AB' }
+                    ],
+                    key: '2d.R1', lidarKey: 'lidar.ro1m', label: 'Romania 1m/pixel agregare'
+                });
+                const wholeA = fakeSources['m3d-2d-2d.R1-src'];
+                const wholeB = fakeSources['m3d-2d-2d.A1-src'];
+                assert(wholeA && wholeB,
+                    'a whole-layer focus draws every chosen layer on the 3D map');
+                assert(!wholeA.bounds && !wholeB.bounds,
+                    'neither source is bounded to a disc — the layers load entirely');
+                assert(wholeA.maxzoom === 13 && wholeB.maxzoom === 13,
+                    'and their own native maximum stands uncapped (z' + wholeA.maxzoom + ' / z' + wholeB.maxzoom + ')');
+                assert(wholeA.tiles[0] === 'dl2d://2d.R1/{z}/{x}/{y}',
+                    'still through the live 2D layer, so the blend and the proxy decisions are the 2D ones');
+                assert(viewer.status().lidar.drawn.length === 2,
+                    'status() reports both as drawn (' + viewer.status().lidar.drawn.length + ')');
+                fetchCount = 0;
+                const farTile = await protocols.dl2d({ url: 'dl2d://2d.R1/10/0/0' }, null);
+                assert(farTile && farTile.data && farTile.data.byteLength > servedPlaceholder.byteLength,
+                    'a tile on the other side of the world is drawn as the service sent it — nothing clips it');
+                assert(fetchCount === 1, 'and it is fetched live, once, because nothing was prepared for it');
+                /* Back to the disc the rest of this block shares. */
+                viewer.setLidarFocus(focusNow);
+                const backSource = fakeSources['m3d-2d-2d.R1-src'];
+                assert(backSource && backSource.bounds && backSource.maxzoom === 13,
+                    'pointing it back at the disc restores the bounds and the ceiling');
+                assert(!fakeSources['m3d-2d-2d.A1-src'],
+                    'and the second layer leaves the deck again — it was not chosen for this disc');
+                console.log('  ✓ whole layers: no disc, no clip, no zoom ceiling — every chosen layer loads entirely');
             }
 
             viewer.close();
@@ -1627,6 +1691,13 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
     assert(viewer.getLidarFocus() && viewer.getLidarFocus().key === '2d.R1',
         'the suite starts from the focus the prefetch prepared');
 
+    /* ── 5a. The window: TWO scopes, and every LiDAR layer on the 2D map ──
+     * The request behind this section: “all LiDAR layers should be able to load
+     * in 3D entirely, not only 1 km, but there should be the option of loading
+     * them only for that 1 km radius, and in that option there should be
+     * included all the layers that are turned on at that moment for the user to
+     * choose from”. So: both scopes are offered, and the layer list is the
+     * whole set of LiDAR layers switched on — a tick box each, never a subset. */
     const promise = focus.openDialog({ mode: 'gate' });
     const node = doc.body.querySelector('#map3d-focus');
     assert(node && node.hidden === false, 'openDialog() builds and shows the dialog');
@@ -1634,25 +1705,38 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
     const status = focus.status();
     assert(status.dialog.open === true && status.dialog.mode === 'gate', 'status() reports it open');
     assert(status.layers.length === 2, 'both LiDAR layers on the 2D map are offered');
+    assert(status.scopes.join(',') === 'full,disc', 'two scopes are offered: whole layers, or 1 km');
+    assert(status.defaultScope === 'full', 'and the shipped default is the whole layer');
 
     const title = node.querySelector('#m3d-focus-title').textContent;
     assert(/LiDAR/.test(title), 'the dialog is titled (' + title + ')');
     const lead = node.querySelector('.m3d-focus-lead').textContent;
-    assert(/1 km/.test(lead), 'the lead states the fixed 1 km radius (' + lead.slice(0, 70) + '…)');
-    assert(/(punct|point)/i.test(lead), 'and asks for the point');
-    assert(!/(distan|distance)/i.test(node.querySelector('.m3d-focus-distance-label').textContent) ||
-           /(zon|area)/i.test(node.querySelector('.m3d-focus-distance-label').textContent),
-        'there is no fetching distance to choose any more');
+    assert(/1 km/.test(lead), 'the lead names the 1 km disc the option uses (' + lead.slice(0, 70) + '…)');
 
+    const scopeButtons = node.querySelectorAll('.m3d-focus-scope-opt');
+    assert(scopeButtons.length === 2, 'two scope buttons, side by side');
+    assert(/whole|întreg/i.test(scopeButtons[0].textContent),
+        'the first is the whole layer (' + scopeButtons[0].textContent + ')');
+    assert(/1\s*km/i.test(scopeButtons[1].textContent),
+        'the second is the 1 km disc (' + scopeButtons[1].textContent + ')');
+    assert(focus.status().dialog.scope === 'disc',
+        'opening on an applied disc focus starts on the disc scope it describes');
+
+    /* Every LiDAR layer switched on is listed, with a checkbox each: the disc
+     * may hold several, and the whole-layer scope may take several too. */
     const rows = node.querySelectorAll('.m3d-focus-layer');
     assert(rows.length === 2, 'one row per LiDAR layer on the 2D map (' + rows.length + ')');
-    const radios = node.querySelectorAll('.m3d-focus-layer input[type="radio"]');
-    assert(radios.length === 2, 'they are a radio group — 3D drapes exactly one of them');
-    assert(radios.filter(function (input) { return input.checked; }).length === 1,
-        'and exactly one is preselected');
+    const boxes = node.querySelectorAll('.m3d-focus-layer input[type="checkbox"]');
+    assert(boxes.length === 2, 'they are checkboxes — the choice is not “exactly one” any more');
+    assert(boxes.filter(function (input) { return input.checked; }).length === 1,
+        'the layer the applied disc already holds is the ticked one');
+    assert(focus.status().dialog.offered.join(',') === '2d.R1,2d.A1',
+        'status() lists every layer offered (' + focus.status().dialog.offered.join(',') + ')');
+    assert(focus.status().dialog.picks.join(',') === '2d.R1',
+        'and which of them are ticked (' + focus.status().dialog.picks.join(',') + ')');
 
     assert(node.querySelector('#m3d-focus-radius') === null,
-        'no distance slider: the entry always prepares the same disc');
+        'no distance slider: the disc is always the same 1 km');
     assert(node.querySelectorAll('.m3d-focus-chips button').length === 0,
         'and no quick distances to pick from');
     assert(/1\s*km/.test(node.querySelector('.m3d-focus-radius-val').textContent),
@@ -1661,9 +1745,9 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
     assert(/1\s*km/.test(fixed) && /2\s*km/.test(fixed),
         'the area block states the fixed 1 km radius, 2 km across (' + fixed.slice(0, 60) + '…)');
     assert(focus.status().dialog.radiusKm === 1, 'the dialog state is that one radius');
-    assert(/one LiDAR layer at a time|un singur strat LiDAR/i.test(
+    assert(/every LiDAR layer switched on|toate straturile LiDAR aprinse/i.test(
         node.querySelector('.m3d-focus-hintline').textContent),
-        'the layer block carries the one-layer-at-a-time message (' +
+        'the layer block says every LiDAR layer switched on is listed (' +
         node.querySelector('.m3d-focus-hintline').textContent + ')');
     assert(node.querySelector('.m3d-focus-point-val').textContent.match(/[\d.]+/),
         'a default centre is offered, so the button is never dead');
@@ -1671,50 +1755,135 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
     assert(/tile/i.test(estimate), 'the estimate says how many tiles the disc is (' + estimate + ')');
     assert(/z\d/.test(estimate), 'and the zoom window it will take');
     assert(status.plan.route === 'url', 'the plan knows this layer is fetched by URL (not drawn by a canvas layer)');
+    assert(status.plans.length === 1 && status.plans[0].key === '2d.R1',
+        'one plan per ticked layer — one, here');
 
     /* Already-prepared tiles are counted before promising anything. */
     assert(status.plan.prepared === status.plan.count && status.plan.pending === 0,
         'the tiles prepared in §4d are counted as already prepared (' + status.plan.prepared + '/' + status.plan.count + ')');
 
-    /* The two things the window still asks: WHICH layer, and WHERE. Choosing a
-     * layer re-plans the same 1 km disc; there is no distance to get wrong. */
+    /* Ticking the second layer adds its disc to the same download. */
     const before = focus.status().plan.count;
-    const radios2 = node.querySelectorAll('.m3d-focus-layer input[type="radio"]');
-    const other = radios2.filter(function (input) { return !input.checked; })[0];
-    other.checked = true;
-    other.dispatch('change');
-    assert(focus.status().dialog.radiusKm === 1,
-        'choosing another layer keeps the 1 km radius');
-    assert(focus.status().plan && focus.status().plan.count > 0,
-        'and re-plans the disc for it (' + before + ' → ' + focus.status().plan.count + ' tiles)');
-    const mine = radios2.filter(function (input) { return input.value === '2d.R1'; })[0];
-    mine.checked = true;
-    mine.dispatch('change');
-    assert(focus.status().dialog.chosen === '2d.R1', 'and the chosen layer is still exactly one');
+    const second = boxes.filter(function (input) { return input.value === '2d.A1'; })[0];
+    second.checked = true;
+    second.dispatch('change');
+    assert(focus.status().dialog.picks.length === 2,
+        'ticking another layer adds it to the disc (' + focus.status().dialog.picks.join(',') + ')');
+    assert(focus.status().plans.length === 2,
+        'and re-plans: one plan per ticked layer');
+    assert(focus.status().plan.count > before,
+        'the disc is the sum of both layers (' + before + ' → ' + focus.status().plan.count + ' tiles)');
+    assert(focus.status().dialog.radiusKm === 1, '— and it is still 1 km');
+
+    /* ── 5b. WHOLE LAYERS: no disc, no download, the layers load entirely ── */
+    node.querySelectorAll('.m3d-focus-scope-opt')[0].click();
+    assert(focus.status().dialog.scope === 'full', 'the first scope button asks for whole layers');
+    const fullNode = doc.body.querySelector('#map3d-focus');
+    assert(fullNode.querySelector('.m3d-focus-area-block').hidden === true,
+        'the area controls are gone: there is no disc to choose');
+    assert(fullNode.querySelector('.m3d-focus-point-block').hidden === true,
+        'and no centre to pick');
+    assert(focus.status().plan === null, 'nothing is planned — there is nothing to download in advance');
+    const wholeEstimate = fullNode.querySelector('.m3d-focus-estimate').textContent;
+    assert(/entire|întreg/i.test(wholeEstimate),
+        'the estimate says the layers load entirely (' + wholeEstimate.slice(0, 70) + '…)');
+    assert(/open 3d|deschide 3d/i.test(fullNode.querySelector('.m3d-focus-go').textContent),
+        'and the button opens the view rather than downloading (' +
+        fullNode.querySelector('.m3d-focus-go').textContent + ')');
+    assert(focus.status().dialog.picks.length === 2,
+        'both layers stay ticked across the scope switch');
+
+    const fetchedBeforeWhole = fetched.length;
+    const wholePromise = promise;                 /* the openDialog() promise */
+    fullNode.querySelector('.m3d-focus-go').click();
+    const wholeResult = await wholePromise;
+    assert(wholeResult && wholeResult.cancelled === false, 'confirming the whole-layer scope answers the gate');
+    assert(wholeResult.focus.scope === 'full', 'with a whole-layer focus');
+    assert(wholeResult.focus.layers.length === 2,
+        'naming both layers the user ticked (' + wholeResult.focus.layers.map(function (l) { return l.label; }).join(', ') + ')');
+    assert(!wholeResult.focus.mask && !wholeResult.focus.bounds,
+        'no disc and no bounds: the layers are not clipped anywhere');
+    assert(!wholeResult.focus.plan && !wholeResult.focus.layers[0].plan,
+        'and no prepared zoom ceiling — the whole layer loads at its native maximum');
+    assert(fetched.length === fetchedBeforeWhole,
+        'the whole-layer scope downloads nothing in advance (' + (fetched.length - fetchedBeforeWhole) + ' requests)');
+    const wholeFocus = viewer.getLidarFocus();
+    assert(wholeFocus && wholeFocus.scope === 'full' && wholeFocus.layers.length === 2,
+        'the viewer holds the whole-layer decision');
+    assert(viewer._focusScope() === 'full' && viewer._focusSig('2d.R1') === 'full',
+        'the viewer’s own signature says “whole layer”');
+    assert(viewer._focusExcludesTile('2d.R1', 10, 0, 0) === false,
+        'a tile on the other side of the world is NOT excluded any more — that is what “entirely” means');
+    const wholeKeep = viewer._lidarFilter();
+    const wholeItems = viewer._mirror().items;
+    assert(wholeItems.filter(function (item) { return wholeKeep(item) && item.lidarKey; }).length === 2,
+        'both chosen layers reach the deck; nothing else LiDAR would');
+    assert(viewer.status().lidar.focus.scope === 'full' &&
+           viewer.status().lidar.focus.layers.length === 2,
+        'status().lidar reports the scope and every layer');
+    assert(viewer.status().lidar.notes.some(function (note) {
+        return note.reason === 'focused' && note.scope === 'full' && note.keptCount === 2;
+    }), 'and the note says how many layers the decision kept, and in which scope');
+    const wholePill = doc.body.querySelector('#map3d-focus');
+    assert(wholePill.classList.contains('is-minimized') && wholePill.querySelector('.m3d-focus-mini').hidden === false,
+        'a whole-layer decision still folds into its pill');
+    assert(/whole|întreg/i.test(wholePill.querySelector('.m3d-focus-mini-text').textContent),
+        'and the pill says the layers are drawn entire (' +
+        wholePill.querySelector('.m3d-focus-mini-text').textContent + ')');
+
+    /* ── 5c. Back to the 1 km disc, with both layers, a picked point ────── */
+    const discPromise = focus.openDialog({ mode: 'gate' });
+    const back = doc.body.querySelector('#map3d-focus');
+    assert(back.hidden === false && back.classList.contains('is-minimized') === false,
+        'reopening unfolds the pill back into the card');
+    assert(focus.status().dialog.scope === 'full',
+        'and it opens on the scope that is currently applied');
+    back.querySelectorAll('.m3d-focus-scope-opt')[1].click();
+    assert(focus.status().dialog.scope === 'disc', 'the second scope button asks for the 1 km disc');
+    const discNode = doc.body.querySelector('#map3d-focus');
+    assert(discNode.querySelector('.m3d-focus-area-block').hidden === false,
+        'the area block comes back');
+    assert(discNode.querySelector('.m3d-focus-point-block').hidden === false,
+        'with the centre to pick');
+    assert(discNode.querySelectorAll('.m3d-focus-layer input[type="checkbox"]')
+        .filter(function (input) { return input.checked; }).length === 2,
+        'both layers the whole-layer view was using are still ticked');
+
+    /* Unticking one narrows the disc to the other, and re-ticking brings it
+     * back — the disc follows the list, not a single hidden choice. */
+    const abBox = discNode.querySelectorAll('.m3d-focus-layer input[type="checkbox"]')
+        .filter(function (input) { return input.value === '2d.A1'; })[0];
+    abBox.checked = false;
+    abBox.dispatch('change');
+    assert(focus.status().plans.length === 1 && focus.status().dialog.picks.join(',') === '2d.R1',
+        'unticking a layer takes it off the disc');
+    abBox.checked = true;
+    abBox.dispatch('change');
+    assert(focus.status().plans.length === 2, 'and ticking it again puts it back');
 
     /* Picking: the card steps aside and the crosshair takes over. There is no
      * banner to ask for the tap — one used to sit over the card and swallow the
      * taps meant for its close button. */
-    node.querySelector('.m3d-focus-pick').click();
+    discNode.querySelector('.m3d-focus-pick').click();
     assert(focus.status().picking === true, 'the map is armed for a pick');
     assert(windowStub._dlLidarFocusPicking === true,
         'and the LiDAR Scanner is told to stand down (the tap belongs to the dialog)');
-    assert(node.querySelector('.m3d-focus-card').hidden === true,
+    assert(discNode.querySelector('.m3d-focus-card').hidden === true,
         'the card steps aside so the whole map is clickable');
     assert(doc.getElementById('detectlab-map').classList.contains('m3d-picking'),
         'and the map shows the crosshair that says what the next tap does');
-    assert(node.querySelectorAll('.m3d-focus-hint').length === 0,
+    assert(discNode.querySelectorAll('.m3d-focus-hint').length === 0,
         'no banner is left over the card to intercept a tap');
     map._click(45.12, 24.34);
     assert(focus.status().picking === false, 'the tap ends the pick');
     assert(focus.status().dialog.point.lat === 45.12 && focus.status().dialog.pointPicked === true,
         'the tapped point is the new centre of the disc');
-    assert(node.querySelector('.m3d-focus-card').hidden === false, 'and the card comes back');
-    assert(/45\.12/.test(node.querySelector('.m3d-focus-point-val').textContent),
+    assert(discNode.querySelector('.m3d-focus-card').hidden === false, 'and the card comes back');
+    assert(/45\.12/.test(discNode.querySelector('.m3d-focus-point-val').textContent),
         'with the centre shown to the user before anything is downloaded');
 
     /* Escape during a pick must not leave a handler behind. */
-    node.querySelector('.m3d-focus-pick').click();
+    discNode.querySelector('.m3d-focus-pick').click();
     doc.dispatch('keydown', { key: 'Escape' });
     assert(focus.status().picking === false && windowStub._dlLidarFocusPicking === false,
         'Escape cancels the pick and releases the map');
@@ -1722,14 +1891,16 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
 
     /* Confirm: progress while it downloads, then the focus is applied. */
     const ready = focus.status().plan;
+    assert(ready && ready.count > 0 && focus.status().plans.length === 2,
+        'the disc is planned for both ticked layers (' + (ready && ready.count) + ' tiles)');
     fetched.length = 0;
-    node.querySelector('.m3d-focus-go').click();
-    assert(node.querySelector('.m3d-focus-progress').hidden === false,
+    discNode.querySelector('.m3d-focus-go').click();
+    assert(discNode.querySelector('.m3d-focus-progress').hidden === false,
         'the progress block takes over the dialog');
-    assert(node.querySelector('.m3d-focus-go').hidden === true &&
-           node.querySelector('.m3d-focus-cancel').hidden === true,
+    assert(discNode.querySelector('.m3d-focus-go').hidden === true &&
+           discNode.querySelector('.m3d-focus-cancel').hidden === true,
         'and the two buttons give way to it');
-    const progressText = node.querySelector('.m3d-focus-progress-text').textContent;
+    const progressText = discNode.querySelector('.m3d-focus-progress-text').textContent;
     assert(progressText.length > 0, 'the progress line says what is happening (' + progressText + ')');
     assert(focus.status().dialog.preparing === true, 'the dialog is in its preparing state');
 
@@ -1743,28 +1914,42 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
     assert(drawn.some(function (layer) { return layer._kind === 'circleMarker'; }),
         'with a dot at the centre');
 
-    const result = await promise;
-    assert(result && result.cancelled === false, 'the dialog resolves with the prepared focus');
-    assert(result.focus && result.focus.key === '2d.R1', 'carrying the chosen layer and disc');
+    const result = await discPromise;
+    assert(result && result.cancelled === false, 'the dialog resolves with the prepared disc');
+    assert(result.focus.scope === 'disc', 'a disc focus');
+    assert(result.focus.layers.length === 2, 'carrying both chosen layers');
+    assert(result.focus.layers[0].key === '2d.R1' && result.focus.layers[1].key === '2d.A1',
+        'named by the deck keys the 3D view draws them with');
     assert(result.focus.plan && result.focus.plan.zoomTo === ready.zoomTo,
         'and the prepared ceiling (z' + (result.focus.plan && result.focus.plan.zoomTo) +
         ') the 3D source must not ask past');
+    assert(result.focus.layers.every(function (layer) { return layer.plan && layer.plan.zoomTo; }),
+        'each layer carries its own ceiling, so neither source asks past its own plan');
     assert(result.focus.preparedTiles === ready.count && result.focus.failedTiles === 0,
         'the focus remembers how many tiles it prepared and how many failed');
     assert(result.report && result.report.prepared === result.report.total && result.report.failed === 0,
         'and the report of exactly that (' + result.report.prepared + '/' + result.report.total + ')');
     assert(fetched.length === ready.count,
-        'the confirmed disc was fetched once per tile (' + fetched.length + '/' + ready.count + ')');
+        'the confirmed disc was fetched once per tile across both layers (' + fetched.length + '/' + ready.count + ')');
+    assert(fetched.some(function (url) { return /\/ro1m\//.test(url); }) &&
+           fetched.some(function (url) { return /\/ab\//.test(url); }),
+        'both layers really were downloaded');
     assert(viewer.status().lidar.primed.entries >= ready.count,
         'and every tile of it is kept in memory for the 3D view');
     assert(viewer.getLidarFocus() && viewer.getLidarFocus().key === result.focus.key,
         'the viewer is now focused on that layer and disc');
     assert(result.focus.radiusKm === 1 && viewer.getLidarFocus().mask.radiusKm === 1,
         'on the fixed 1 km disc (' + result.focus.radiusKm + ' km)');
+    assert(viewer.getLidarFocus().layers.length === 2 &&
+           viewer.status().lidar.focus.layers.length === 2,
+        'and the viewer knows both layers belong to it');
+    assert(viewer._focusExcludesTile('2d.R1', 10, 0, 0) === true &&
+           viewer._focusExcludesTile('2d.A1', 10, 0, 0) === true,
+        'from here on every one of them is clipped to the disc again');
     assert(doc.body.classList.contains('m3d-focus-open') === false,
         'the body marker goes with the card once the disc is ready');
     /* …and the window itself does not vanish: fetched and on its way into
-     * the 3D view, it folds into its pill (layer · radius · tiles ready,
+     * the 3D view, it folds into its pill (layers · radius · tiles ready,
      * expand arrow) so it stays reachable once 3D is up. */
     assert(node.hidden === false && node.classList.contains('is-minimized') &&
            node.querySelector('.m3d-focus-card').hidden === true &&
@@ -1775,6 +1960,8 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
     const miniText = node.querySelector('.m3d-focus-mini-text').textContent;
     assert(/km/.test(miniText) && /tile/i.test(miniText),
         'the pill stands for the disc that was just fetched (' + miniText + ')');
+    assert(/Romania/.test(miniText) && /AB/.test(miniText),
+        'naming both layers it holds (' + miniText + ')');
     assert(node.querySelector('.m3d-focus-mini-title').textContent.length > 0 &&
            node.querySelector('.m3d-focus-mini-arrow').textContent.trim().length > 0,
         'and it carries the window title plus an expand arrow');

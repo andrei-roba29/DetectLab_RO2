@@ -1,5 +1,5 @@
 /* ============================================================================
- * lidar-3d-focus.js — LiDAR in the 3D view: one layer, one prepared disc
+ * lidar-3d-focus.js — LiDAR in the 3D view: whole layers, or a 1 km disc
  * ----------------------------------------------------------------------------
  * THE PROBLEM
  *   The 3D view drapes whatever the 2D map is showing (js/map3d-mirror.js →
@@ -13,54 +13,60 @@
  *   bad, or don't load at all in 3D — e.g. Romania 1m/pixel agregare, AB”.
  *
  * WHAT THIS DOES
- *   Pressing 3D with a LiDAR layer on no longer opens 3D straight away. The
- *   viewer's entry gate (DetectLabMap3D.setEntryGate) calls the dialog below:
+ *   Pressing 3D with LiDAR on no longer opens 3D straight away: the viewer's
+ *   entry gate (DetectLabMap3D.setEntryGate) calls the dialog below, which
+ *   asks ONE question first — how much of the LiDAR to load:
  *
- *     1. it explains that LiDAR in 3D is loaded over a fixed 1 km radius,
- *     2. it asks for ONE LiDAR layer (“You can enter the 3D view with only one
- *        LiDAR layer at a time.” — the others stay on the 2D map),
- *     3. it asks for a point on the map (the centre of that 1 km disc),
- *     4. it plans the tiles of that disc — from two levels below the zoom at
- *        which the disc fits the screen ALL THE WAY to the layer's native
- *        maximum (see planDisc below), so a pinch into the disc never leaves
- *        the prefetch —
- *     5. it prefetches them through the very path the 3D view uses (same proxy
- *        decision, same CSS-blend repaint, same disc clip; the viewer keeps
- *        them in memory in `state.primed`),
- *     6. it shows the progress of exactly that, and only then lets the 3D view
- *        open — framed on the disc, on tiles that are already there.
+ *   ▸ WHOLE LAYERS (scope 'full', the default). Every LiDAR layer switched on
+ *     on the 2D map is listed, ticked, and drawn ENTIRELY in 3D: no prepared
+ *     area, no disc clip, no zoom ceiling — the layer loads the way it loads on
+ *     the 2D map, wherever the camera looks and at whatever zoom the layer has.
+ *     Nothing is downloaded in advance; the tiles are requested as the user
+ *     looks around. This is what “all LiDAR layers should be able to load in 3D
+ *     entirely, not only 1 km” asks for.
  *
- *   The same dialog is reachable from the 3D bar (“Change the area”), where it
+ *   ▸ ONLY 1 KM (scope 'disc'). The same list of layers, with a tick box each,
+ *     so the user chooses WHICH of the layers switched on at that moment are
+ *     prepared over the 1 km disc. For every ticked layer the dialog plans the
+ *     tiles of that disc — from two levels below the zoom at which the disc
+ *     fits the screen ALL THE WAY to the layer's own native maximum (see
+ *     planDisc below) — prefetches them through the very path the 3D view
+ *     draws with (same proxy decision, same CSS-blend repaint, same disc clip;
+ *     the viewer keeps them in memory in `state.primed`), shows the progress of
+ *     exactly that, and only then lets 3D open — framed on the disc, on tiles
+ *     that are already there.
+ *
+ *   The same dialog is reachable from the 3D pill (“expand”), where it
  *   re-prepares and re-applies the focus to the running 3D view.
  *
  *   Once the tiles are fetched and the 3D view is entered, the window does
- *   not vanish: it MINIMIZES to a slim pill at the bottom of the map (layer,
- *   fetching distance and prepared-tile count, plus an expand arrow). The
- *   pill is only painted while 3D is up (`body.is-3d`); tapping the arrow
- *   expands the full window again over the 3D view — in live mode, so it
- *   re-points the running view — and cancelling an expanded window returns
- *   it to the pill instead of dismissing it. Removing LiDAR from the 3D view
- *   (the bar's “remove”) takes the pill away with the focus.
+ *   not vanish: it MINIMIZES to a slim pill at the bottom of the map (layers,
+ *   scope — whole layer or 1 km — and prepared-tile count, plus an expand
+ *   arrow). The pill is only painted while 3D is up (`body.is-3d`); tapping the
+ *   arrow expands the full window again over the 3D view — in live mode, so it
+ *   re-points the running view — and cancelling an expanded window returns it
+ *   to the pill instead of dismissing it. Removing LiDAR from the 3D view
+ *   takes the pill away with the focus.
  *
  * RULES THAT HOLD EVERYWHERE
- *   • ONE LiDAR layer at a time in 3D. The 2D map may stack as many as it likes
- *     (that is how you compare them); the deck draws only the chosen one, and
- *     the 3D bar names both the chosen layer and what it left out.
- *   • ONE fixed radius: 1 km (≈2 km across). WHY the distance choice went away
- *     — the plan's zoom window is anchored on `round(fitZoom(disc))`, i.e. the
- *     zoom at which the whole disc fills the screen, and that zoom falls by one
- *     level for every doubling of the radius. A 5 km disc was therefore
- *     prepared from zoom levels two steps coarser than a 1 km disc (z14 vs
- *     z16 on a phone), so the bigger the disc the softer the very same view
- *     looked, and the tile count jumped around with the rounding. At a fixed
- *     1 km the opening view is always prepared at the layer's native detail.
- *     `window.DETECTLAB_LIDAR_3D.maxRadiusKm` still raises the cap (= re-enables
- *     the distance slider) for someone who really wants a bigger disc.
- *   • The LiDAR of that layer is drawn ONLY inside the disc. Every tile is
- *     clipped to the circle in the protocol handler (js/map3d-mirror.js →
- *     disc.maskTile) and the raster source is bounded to the disc's rectangle,
- *     so no request ever leaves the prepared area. The disc is outlined on both
- *     maps, so the edge of the LiDAR is visibly a decision, not a failure.
+ *   • Only the layers the user ticked are drawn in 3D. The 2D map may stack as
+ *     many as it likes (that is how you compare them); the deck draws the
+ *     chosen ones and nothing else, and says so in status().lidar.
+ *   • A disc is 1 km (≈2 km across) and it is an OPTION, not the rule. WHY the
+ *     distance choice is still fixed at 1 km — the plan's zoom window is
+ *     anchored on `round(fitZoom(disc))`, i.e. the zoom at which the whole disc
+ *     fills the screen, and that zoom falls by one level for every doubling of
+ *     the radius: a 5 km disc was prepared from levels two steps coarser than a
+ *     1 km disc, so the bigger the disc the softer the very same view looked.
+ *     At a fixed 1 km the opening view is always prepared at the layer's native
+ *     detail. `window.DETECTLAB_LIDAR_3D.maxRadiusKm` still raises the cap
+ *     (= re-enables the distance slider) for someone who wants a bigger disc.
+ *   • In the disc scope every chosen layer is drawn ONLY inside the disc: every
+ *     tile is clipped to the circle in the protocol handler (js/map3d-mirror.js
+ *     → disc.maskTile) and the raster source is bounded to the disc's
+ *     rectangle, so no request ever leaves the prepared area. The disc is
+ *     outlined on both maps, so the edge of the LiDAR is visibly a decision,
+ *     not a failure. The whole-layer scope has no edge at all.
  *   • Nothing here re-implements a tile URL: the plan asks the 2D layer itself
  *     (DetectLabMirror.tileUrlFor / renderTile), exactly like the 3D view does.
  *
@@ -68,14 +74,15 @@
  *   window.DETECTLAB_LIDAR_3D = {
  *     maxRadiusKm: 1,         // the hard ceiling; >1 brings the slider back
  *     defaultRadiusKm: 1,
+ *     scope: 'full',          // 'full' (whole layers) or 'disc' (1 km)
  *     budget: { url: 700, canvas: 260 },   // tiles per prefetch
  *     concurrency: 0          // 0 = the viewer's own (6 desktop / 4 phone)
  *   };
  *
  * Exposes window.DetectLabLidar3D:
- *   .VERSION .MAX_RADIUS_KM .MIN_RADIUS_KM .DEFAULT_RADIUS_KM .BUDGET
+ *   .VERSION .MAX_RADIUS_KM .MIN_RADIUS_KM .DEFAULT_RADIUS_KM .SCOPES .BUDGET
  *   .activeLayers() .status() .isReady() .install()
- *   .plan(focus, opts) .planEntries(plan) .prepare(plan, opts)
+ *   .plan(focus, opts) .planEntries(plan) .prepare(plan|plans, opts)
  *   .applyFocus(focus) .drawDisc(focus) .clearDisc()
  *   .beginPick(opts) .endPick(opts) .openDialog(opts) .closeDialog()
  *   .minimizeDialog() .expandDialog()
@@ -87,7 +94,7 @@
 
     if (!root || !document) return;
 
-    var VERSION = '2026-10-19-lidar-3d-focus-depth';
+    var VERSION = '2026-10-26-lidar-3d-focus-whole-or-disc';
     var LIMITS = root.DETECTLAB_LIDAR_3D || {};
     /* One fixed disc, 1 km (§“RULES THAT HOLD EVERYWHERE”): every 3D entry is
      * prepared at the same ground resolution, so a smaller disc can no longer
@@ -97,6 +104,18 @@
     var MIN_RADIUS_KM = 1;
     var DEFAULT_RADIUS_KM = Math.max(MIN_RADIUS_KM, Math.min(MAX_RADIUS_KM, Number(LIMITS.defaultRadiusKm) || 1));
     var RADIUS_CHOICE = MAX_RADIUS_KM > MIN_RADIUS_KM;
+    /* THE TWO SCOPES. 'full' draws the chosen LiDAR layers entirely (the way
+     * the 2D map draws them); 'disc' prepares — and clips to — a 1 km circle.
+     * Full is the default because a LiDAR layer should reach 3D the way every
+     * other layer does; the disc stays one tap away as the answer to a heavy
+     * national pyramid. `window.DETECTLAB_LIDAR_3D.scope` sets the first one. */
+    var SCOPE_FULL = 'full';
+    var SCOPE_DISC = 'disc';
+    var SCOPES = [SCOPE_FULL, SCOPE_DISC];
+    function normalScope(value) {
+        return String(value || '').toLowerCase() === SCOPE_DISC ? SCOPE_DISC : (String(value || '').toLowerCase() === SCOPE_FULL ? SCOPE_FULL : null);
+    }
+    var DEFAULT_SCOPE = normalScope(LIMITS.scope) || SCOPE_FULL;
     /* The prefetch budget is now a DEPTH budget: the plan adds whole zoom
      * levels from zFit-1 upwards and stops before the first one that would not
      * fit, so this number decides how deep a 1 km disc is prepared.
@@ -126,15 +145,22 @@
     var COPY = {
         ro: {
             title: 'LiDAR în 3D',
-            lead: RADIUS_CHOICE
-                ? 'În vederea 3D poți intra cu un singur strat LiDAR o dată, pe o rază de maximum ' +
-                  MAX_RADIUS_KM + ' km în jurul unui punct ales pe hartă. Tile-urile zonei sunt ' +
-                  'descărcate și modelate pe relief înainte de a intra în 3D.'
-                : 'În vederea 3D poți intra cu un singur strat LiDAR o dată, pe o rază fixă de ' +
-                  MAX_RADIUS_KM + ' km în jurul unui punct ales pe hartă. Tile-urile zonei sunt ' +
-                  'descărcate și modelate pe relief înainte de a intra în 3D.',
-            layer: 'Strat LiDAR pentru 3D',
-            layerHint: 'În vederea 3D poți intra cu un singur strat LiDAR o dată. Celelalte rămân aprinse pe harta 2D.',
+            lead: 'Alege ce se încarcă în 3D: straturile LiDAR întregi, ori numai pe o rază de ' +
+                MAX_RADIUS_KM + ' km în jurul unui punct ales pe hartă.',
+            scope: 'Ce se încarcă',
+            scopeFull: 'Straturile întregi',
+            scopeDisc: 'Doar {km} km',
+            scopeNoteFull: 'Straturile alese se încarcă întregi și se desenează în 3D pe toată suprafața ' +
+                'lor, la orice zoom. Tile-urile se cer pe măsură ce te uiți — un strat național poate dura până apare.',
+            scopeNoteDisc: 'Se descarcă în avans doar tile-urile din discul de {km} km, pentru straturile ' +
+                'alese, înainte de a intra în 3D. În afara discului rămâne harta 2D.',
+            layer: 'Straturi LiDAR de încărcat',
+            layerFull: 'Straturi LiDAR de încărcat în 3D',
+            layerDisc: 'Straturi LiDAR de descărcat pe discul de {km} km',
+            layerHint: 'Sunt listate toate straturile LiDAR aprinse acum pe harta 2D — bifează ce vrei ' +
+                'descărcat pe discul de {km} km. Celelalte rămân doar pe harta 2D.',
+            layerHintFull: 'Sunt listate toate straturile LiDAR aprinse acum pe harta 2D. Fiecare strat ' +
+                'bifat se încarcă întreg în 3D.',
             distance: RADIUS_CHOICE ? 'Distanță de descărcare (rază)' : 'Zonă descărcată',
             fixedRadius: 'Rază fixă: {km} km ({diameter} km diametru)',
             fixedNote: 'Centrul se alege pe hartă; tot ce e în afara discului rămâne harta de bază.',
@@ -160,20 +186,36 @@
             close: 'Închide',
             expand: 'Extinde fereastra LiDAR în 3D',
             miniTiles: '{tiles} tile-uri pregătite',
+            miniFull: 'straturile întregi',
             minimize: 'Minimizează',
+            goFull: 'Deschide 3D',
+            goLiveFull: 'Aplică în 3D',
+            estimateWhole: '{layers} strat(u-uri) · se încarcă întregi în 3D · fără descărcare în avans',
+            estimateWholeNote: 'Se cer tile-uri la fiecare zoom și la fiecare deplasare. Pentru un strat greu, alege „Doar {km} km”.',
+            estimateMulti: '≈ {tiles} tile-uri în total · ~{size} MB',
+            pickNone: 'Bifează cel puțin un strat LiDAR.',
+            noLayersPicked: 'Niciun strat LiDAR bifat.',
             cap: RADIUS_CHOICE ? 'maximum ' + MAX_RADIUS_KM + ' km' : ''
         },
         en: {
             title: 'LiDAR in 3D',
-            lead: RADIUS_CHOICE
-                ? 'You can enter the 3D view with only one LiDAR layer at a time, over a radius of at ' +
-                  'most ' + MAX_RADIUS_KM + ' km around a point you choose on the map. The tiles of that ' +
-                  'area are downloaded and moulded onto the relief before 3D opens.'
-                : 'You can enter the 3D view with only one LiDAR layer at a time, over a fixed ' +
-                  MAX_RADIUS_KM + ' km radius around a point you choose on the map. The tiles of that ' +
-                  'area are downloaded and moulded onto the relief before 3D opens.',
-            layer: 'LiDAR layer for 3D',
-            layerHint: 'You can enter the 3D view with only one LiDAR layer at a time. The others stay on the 2D map.',
+            lead: 'Choose how much of the LiDAR goes into 3D: the whole layers, or only a ' +
+                MAX_RADIUS_KM + ' km radius around a point you pick on the map.',
+            scope: 'What is loaded',
+            scopeFull: 'Whole layers',
+            scopeDisc: 'Only {km} km',
+            scopeNoteFull: 'The chosen layers are loaded entirely and drawn in 3D over their whole ' +
+                'extent, at every zoom. Tiles are requested as you look around — a national layer can ' +
+                'take a while to appear.',
+            scopeNoteDisc: 'Only the tiles inside the {km} km disc are downloaded in advance, for the ' +
+                'layers you tick, before 3D opens. Everything outside the disc stays the 2D map.',
+            layer: 'LiDAR layers to load',
+            layerFull: 'LiDAR layers to load in 3D',
+            layerDisc: 'LiDAR layers to fetch over the {km} km disc',
+            layerHint: 'Every LiDAR layer switched on on the 2D map is listed — tick the ones you want ' +
+                'downloaded over the {km} km disc. The others stay on the 2D map only.',
+            layerHintFull: 'Every LiDAR layer switched on on the 2D map is listed. Each ticked layer ' +
+                'loads entirely in 3D.',
             distance: RADIUS_CHOICE ? 'Fetching distance (radius)' : 'Area downloaded',
             fixedRadius: 'Fixed radius: {km} km ({diameter} km across)',
             fixedNote: 'Pick the centre on the map; everything outside the disc stays the base map.',
@@ -199,7 +241,15 @@
             close: 'Close',
             expand: 'Expand the LiDAR in 3D window',
             miniTiles: '{tiles} tiles ready',
+            miniFull: 'whole layers',
             minimize: 'Minimize',
+            goFull: 'Open 3D',
+            goLiveFull: 'Apply in 3D',
+            estimateWhole: '{layers} layer(s) · loaded entirely in 3D · no download in advance',
+            estimateWholeNote: 'Tiles are requested at every zoom and every pan. For a heavy layer, choose “Only {km} km”.',
+            estimateMulti: '≈ {tiles} tiles in total · ~{size} MB',
+            pickNone: 'Tick at least one LiDAR layer.',
+            noLayersPicked: 'No LiDAR layer ticked.',
             cap: RADIUS_CHOICE ? 'maximum ' + MAX_RADIUS_KM + ' km' : ''
         }
     };
@@ -333,6 +383,27 @@
             if (list[i].key === key) return list[i];
         }
         return null;
+    }
+
+    /** Does this dialog entry answer to that key (any of its four spellings)? */
+    function entryAnswersKey(entry, key) {
+        if (!entry || !key) return false;
+        if (entry.key === key || entry.lidarKey === key || entry.tagKey === key) return true;
+        if (entry.defId && (key === entry.defId || key === 'def:' + entry.defId)) return true;
+        if (entry.lidarKey && entry.defId && entry.lidarKey === 'def:' + entry.defId) return true;
+        return false;
+    }
+
+    /** Every spelling a focus names its layers by (for the “starts ticked” set). */
+    function focusKeysOf(focus) {
+        if (!focus) return [];
+        var layers = Array.isArray(focus.layers) && focus.layers.length ? focus.layers : [focus];
+        var out = [];
+        layers.forEach(function (layer) {
+            [layer.key, layer.lidarKey, layer.defId, layer.defId ? 'def:' + layer.defId : null]
+                .forEach(function (key) { if (key && out.indexOf(key) === -1) out.push(key); });
+        });
+        return out;
     }
 
     /* ═══════════════════════════════════════════════════════════════════════
@@ -597,14 +668,13 @@
         var relevant = focus || discFocus;
         if (!relevant) return;
 
+        /* The decision can name several layers now: it is stale only when NONE
+         * of them is still on the 2D map. One layer switched off must not take
+         * the whole 3D view's LiDAR away. */
         var found = false;
-        for (var i = 0; i < layers.length; i++) {
-            var entry = layers[i];
-            if (relevant.key && (entry.key === relevant.key || entry.lidarKey === relevant.key)) found = true;
-            if (relevant.lidarKey && (entry.lidarKey === relevant.lidarKey || entry.key === relevant.lidarKey)) found = true;
-            if (relevant.defId && (entry.defId === relevant.defId || entry.lidarKey === 'def:' + relevant.defId)) found = true;
-            if (relevant.lidarKey && relevant.lidarKey === 'def:' + entry.defId) found = true;
-        }
+        focusKeysOf(relevant).forEach(function (key) {
+            layers.forEach(function (entry) { if (entryAnswersKey(entry, key)) found = true; });
+        });
         if (!found) {
             clearDisc();
             if (api && api.clearLidarFocus) {
@@ -719,20 +789,27 @@
         hint: null,
         deferred: null,
         mode: 'gate',
-        layers: [],
-        chosen: null,
+        scope: DEFAULT_SCOPE,   /* 'full' (whole layers) or 'disc' (1 km)      */
+        layers: [],             /* every LiDAR layer on the 2D map, topmost last */
+        picks: {},              /* key → the entry the user ticked             */
+        chosen: null,           /* the first ticked entry (kept for the pill,
+                                 * status() and anything that wants ONE name)  */
         point: null,
         radiusKm: DEFAULT_RADIUS_KM,
-        plan: null,
+        plans: [],              /* one plan per ticked layer (disc scope)       */
+        plan: null,             /* their aggregate — what the estimate/status quote */
         report: null,
         preparing: false,
         stop: false,
         open: false,
         minimized: false,       /* the card is folded into the pill (3D is up) */
         expandedFromMini: false,/* this showing was expanded from the pill */
-        miniSummary: null,      /* { label, radiusKm, tiles } for the pill */
+        miniSummary: null,      /* { labels, scope, radiusKm, tiles } for the pill */
         el: {}
     };
+    /* The scope the user settled on last (in this session): opening the
+     * dialog again offers the same answer instead of re-deciding for them. */
+    var lastScope = DEFAULT_SCOPE;
 
     function wrapper() {
         var el = document.getElementById('detectlab-map');
@@ -754,10 +831,20 @@
             '<button type="button" class="m3d-focus-x" aria-label="' + t('close') + '">×</button>',
             '</header>',
             '<p class="m3d-focus-lead" id="m3d-focus-lead"></p>',
+            /* HOW MUCH: the whole layers, or a 1 km disc around a chosen point.
+             * Two options, always visible — this is the decision the window
+             * exists for. */
+            '<div class="m3d-focus-block m3d-focus-scope-block">',
+            '<div class="m3d-focus-label"><span class="m3d-focus-scope-label"></span></div>',
+            '<div class="m3d-focus-scope" role="group"></div>',
+            '<p class="m3d-focus-scope-note"></p>',
+            '</div>',
             '<div class="m3d-focus-block">',
             '<div class="m3d-focus-label"><span class="m3d-focus-layer-label"></span>',
             '<em class="m3d-focus-cap"></em></div>',
-            '<div class="m3d-focus-layers" role="radiogroup"></div>',
+            /* A checkbox list, not a radio group: the 1 km cut is per chosen
+             * layer, and the whole-layer scope may take several at once. */
+            '<div class="m3d-focus-layers" role="group"></div>',
             '<p class="m3d-focus-hintline"></p>',
             '</div>',
             '<div class="m3d-focus-block m3d-focus-area-block">',
@@ -806,6 +893,11 @@
         var el = dialog.el;
         el.title = node.querySelector('#m3d-focus-title');
         el.lead = node.querySelector('.m3d-focus-lead');
+        el.scopeLabel = node.querySelector('.m3d-focus-scope-label');
+        el.scopeGroup = node.querySelector('.m3d-focus-scope');
+        el.scopeNote = node.querySelector('.m3d-focus-scope-note');
+        el.areaBlock = node.querySelector('.m3d-focus-area-block');
+        el.pointBlock = node.querySelector('.m3d-focus-point-block');
         el.layerLabel = node.querySelector('.m3d-focus-layer-label');
         el.cap = node.querySelector('.m3d-focus-cap');
         el.layers = node.querySelector('.m3d-focus-layers');
@@ -830,6 +922,15 @@
         el.miniText = node.querySelector('.m3d-focus-mini-text');
         el.miniArrow = node.querySelector('.m3d-focus-mini-arrow');
 
+        if (el.scopeGroup) {
+            /* The two scopes are buttons, not radios: each is a 44px touch
+             * target that also carries its own explanation below. */
+            el.scopeGroup.addEventListener('click', function (event) {
+                var button = event.target && event.target.closest ? event.target.closest('button[data-scope]') : null;
+                if (!button) return;
+                setScope(button.getAttribute('data-scope'));
+            });
+        }
         if (el.radius) el.radius.addEventListener('input', function () {
             var value = Math.max(MIN_RADIUS_KM, Math.min(MAX_RADIUS_KM, Number(el.radius.value) || DEFAULT_RADIUS_KM));
             dialog.radiusKm = value;
@@ -864,6 +965,26 @@
         return node;
     }
 
+    /* ── the scope: how much of the LiDAR goes into 3D ──────────────────── */
+    function setScope(scope) {
+        var next = normalScope(scope) || DEFAULT_SCOPE;
+        if (dialog.scope === next) { paintDialog(); return; }
+        dialog.scope = next;
+        lastScope = next;
+        /* Leaving the disc behind: nothing is being prepared over an area any
+         * more, so the yellow outline on the 2D map goes with it. */
+        if (next !== SCOPE_DISC && !picking.active) clearDisc();
+        refreshPlan({ restart: true });
+        paintDialog();
+    }
+
+    /** The layers the user ticked, in the order the 2D map lists them. */
+    function pickedEntries() {
+        return dialog.layers.filter(function (entry) {
+            return !!(entry && dialog.picks[entry.key]);
+        });
+    }
+
     /** Text, chips, estimate and buttons — everything that depends on state. */
     function paintDialog() {
         if (!dialog.host) return;
@@ -872,7 +993,13 @@
         el.lead.textContent = t('lead');
         el.layerLabel.textContent = t('layer');
         el.cap.textContent = t('cap');
-        el.hintline.textContent = t('layerHint');
+        var disc = dialog.scope === SCOPE_DISC;
+        el.scopeLabel.textContent = t('scope');
+        el.layerLabel.textContent = disc ? t('layerDisc', { km: dialog.radiusKm }) : t('layerFull');
+        el.hintline.textContent = disc ? t('layerHint', { km: dialog.radiusKm }) : t('layerHintFull');
+        el.scopeNote.textContent = disc ? t('scopeNoteDisc', { km: dialog.radiusKm }) : t('scopeNoteFull');
+        if (el.areaBlock) el.areaBlock.hidden = !disc;
+        if (el.pointBlock) el.pointBlock.hidden = !disc;
         el.distanceLabel.textContent = t('distance');
         el.pointLabel.textContent = t('point');
         el.cancel.textContent = t('cancel');
@@ -887,8 +1014,11 @@
         el.pointValue.textContent = dialog.point
             ? formatPoint(dialog.point.lat, dialog.point.lng)
             : '—';
-        el.go.textContent = dialog.mode === 'gate' ? t('go') : t('goLive');
-        el.go.disabled = !dialog.chosen;
+        /* Whole layers: nothing is downloaded in advance, so the button
+         * promises the view, not a download. */
+        if (dialog.mode === 'gate') el.go.textContent = disc ? t('go') : t('goFull');
+        else el.go.textContent = disc ? t('goLive') : t('goLiveFull');
+        el.go.disabled = !pickedEntries().length;
         el.go.hidden = dialog.preparing;
         el.cancel.hidden = dialog.preparing;
         /* Folded out of the pill, the × folds it back; otherwise it closes. */
@@ -915,7 +1045,27 @@
             button.setAttribute('aria-pressed', on ? 'true' : 'false');
         });
 
-        /* The layer list: a radio group, because 3D draws exactly one. */
+        /* The scope switch: whole layers, or only the 1 km disc. */
+        if (el.scopeGroup) {
+            el.scopeGroup.innerHTML = '';
+            SCOPES.forEach(function (scope) {
+                var button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'm3d-focus-scope-opt';
+                button.setAttribute('data-scope', scope);
+                button.textContent = scope === SCOPE_DISC
+                    ? t('scopeDisc', { km: dialog.radiusKm })
+                    : t('scopeFull');
+                var on = dialog.scope === scope;
+                button.classList.toggle('is-on', on);
+                button.setAttribute('aria-pressed', on ? 'true' : 'false');
+                el.scopeGroup.appendChild(button);
+            });
+        }
+
+        /* The layer list: checkboxes — every LiDAR layer switched on on the 2D
+         * map right now, so the user can choose which ones go into 3D (whole
+         * layer) or into the 1 km disc. */
         el.layers.innerHTML = '';
         if (!dialog.layers.length) {
             var empty = document.createElement('p');
@@ -924,15 +1074,17 @@
             el.layers.appendChild(empty);
         }
         dialog.layers.forEach(function (entry) {
+            var on = !!dialog.picks[entry.key];
             var label = document.createElement('label');
-            label.className = 'm3d-focus-layer' + (dialog.chosen && entry.key === dialog.chosen.key ? ' is-on' : '');
+            label.className = 'm3d-focus-layer' + (on ? ' is-on' : '');
             var input = document.createElement('input');
-            input.type = 'radio';
+            input.type = 'checkbox';
             input.name = 'm3d-focus-layer';
             input.value = entry.key;
-            input.checked = !!(dialog.chosen && entry.key === dialog.chosen.key);
+            input.checked = on;
             input.addEventListener('change', function () {
-                dialog.chosen = entry;
+                if (input.checked) dialog.picks[entry.key] = entry;
+                else delete dialog.picks[entry.key];
                 refreshPlan({ restart: true });
                 paintDialog();
             });
@@ -947,11 +1099,29 @@
 
     function paintEstimate() {
         var el = dialog.el;
-        if (!dialog.plan) { el.estimate.textContent = ''; return; }
+        if (!dialog.layers.length) { el.estimate.textContent = ''; return; }
+        var picks = pickedEntries();
+        if (!picks.length) { el.estimate.textContent = t('pickNone'); return; }
+        if (dialog.scope !== SCOPE_DISC) {
+            /* No download, no zoom window: the promise is the layer itself. */
+            el.estimate.textContent = [
+                t('estimateWhole', { layers: picks.length }),
+                t('estimateWholeNote', { km: dialog.radiusKm })
+            ].join(' · ');
+            return;
+        }
         var plan = dialog.plan;
+        if (!plan) { el.estimate.textContent = ''; return; }
         var lines = [];
         if (plan.route === 'canvas') {
             lines.push(t('estimateCanvas', { tiles: plan.count }));
+        } else if (plan.plans.length > 1) {
+            /* Several layers on one disc: the sum is what is downloaded, the
+             * per-layer line below says how it splits. */
+            lines.push(t('estimateMulti', { tiles: plan.count, size: humanSize(plan.bytes) }));
+            lines.push(plan.plans.map(function (one) {
+                return (one.layer && one.layer.label ? one.layer.label : one.focus.key) + ' ' + one.count;
+            }).join(' · '));
         } else {
             lines.push(t('estimate', { tiles: plan.count, size: humanSize(plan.bytes) }));
         }
@@ -965,12 +1135,31 @@
         var node = buildDialog();
         if (!node) return Promise.resolve({ cancelled: true, reason: 'no-map' });
         dialog.mode = options.mode === 'live' ? 'live' : 'gate';
+        /* EVERY LiDAR layer that is switched on at this moment, so the list is
+         * the whole choice the user has — not a subset of it. */
         dialog.layers = activeLayers();
         var previous = viewer() && viewer().getLidarFocus ? viewer().getLidarFocus() : null;
-        var wanted = options.key || (previous && (previous.key || previous.defId));
-        dialog.chosen = entryFor(dialog.layers, wanted) || defaultLayer(dialog.layers);
+        /* What starts ticked: an explicit request, else the layers the previous
+         * 3D entry was prepared for, else all of them. The unticked ones stay
+         * in the list — the user can always add them back. */
+        var wanted = [];
+        if (Array.isArray(options.keys)) wanted = options.keys.slice();
+        else if (options.key) wanted = [options.key];
+        else if (previous) wanted = focusKeysOf(previous);
+        dialog.picks = {};
+        dialog.layers.forEach(function (entry) {
+            var on = !wanted.length || wanted.some(function (key) { return entryAnswersKey(entry, key); });
+            if (on) dialog.picks[entry.key] = entry;
+        });
+        if (!pickedEntries().length) {
+            dialog.layers.forEach(function (entry) { dialog.picks[entry.key] = entry; });
+        }
+        dialog.chosen = pickedEntries()[0] || defaultLayer(dialog.layers);
+        dialog.scope = normalScope(options.scope) || (previous && normalScope(previous.scope)) || lastScope;
+        lastScope = dialog.scope;
+        var previousRadius = previous ? (previous.mask ? previous.mask.radiusKm : previous.radiusKm) : null;
         dialog.radiusKm = Math.max(MIN_RADIUS_KM, Math.min(MAX_RADIUS_KM,
-            Number(options.radiusKm) || (previous && previous.radiusKm) || DEFAULT_RADIUS_KM));
+            Number(options.radiusKm) || Number(previousRadius) || DEFAULT_RADIUS_KM));
         var center = null;
         try {
             var map = leafletMap();
@@ -1034,10 +1223,16 @@
         if (el.miniTitle) el.miniTitle.textContent = t('title');
         var summary = dialog.miniSummary;
         if (el.miniText) {
+            var labels = summary ? (summary.labels || [summary.label]).filter(Boolean) : [];
+            var scopeText = '';
+            if (summary) {
+                scopeText = summary.scope === SCOPE_DISC
+                    ? [summary.radiusKm + ' ' + t('km'),
+                       summary.tiles != null ? t('miniTiles', { tiles: summary.tiles }) : ''].filter(Boolean).join(' · ')
+                    : t('miniFull');
+            }
             el.miniText.textContent = summary
-                ? [summary.label,
-                   summary.radiusKm + ' ' + t('km'),
-                   t('miniTiles', { tiles: summary.tiles })].filter(Boolean).join(' · ')
+                ? [labels.join(', '), scopeText].filter(Boolean).join(' · ')
                 : '';
         }
     }
@@ -1122,46 +1317,104 @@
     }
 
     /* ── the plan behind the dialog ─────────────────────────────────────── */
+    /**
+     * Re-plan the disc for every ticked layer.
+     *
+     * The whole-layer scope prepares nothing, so it has no plan at all: the
+     * decision it returns is the list of layers, and 3D asks them for tiles
+     * exactly where the 2D map would. The disc scope produces one plan per
+     * ticked layer — each layer has its own zoom window, native maximum, tile
+     * route and budget — and they are aggregated into `dialog.plan` for the
+     * estimate, the progress bar and status().
+     */
     function refreshPlan(options) {
         options = options || {};
-        var entry = dialog.chosen;
-        if (!entry || !dialog.point) { dialog.plan = null; return null; }
-        var focus = {
-            key: entry.key,
-            lidarKey: entry.lidarKey,
-            defId: entry.defId,
-            label: entry.label,
-            lat: dialog.point.lat,
-            lng: dialog.point.lng,
-            radiusKm: dialog.radiusKm
-        };
-        var route = detectRoute(entry);
-        var plan = planDisc(focus, {
-            minZoom: entry.minzoom,
-            maxZoom: entry.maxzoom,
-            tileSize: entry.tileSize,
-            budget: route === 'canvas' ? BUDGET.canvas : BUDGET.url
-        });
-        if (!plan) { dialog.plan = null; return null; }
-        plan.route = route;
-        plan.layer = entry;
-        plan.focus = focus;
-        /* The prepared ceiling goes WITH the focus: the viewer caps the raster
-         * source at it, so MapLibre can never ask for a zoom the prefetch did
-         * not buy — it overzooms the prepared tiles instead of showing the
-         * base map while the live fetch races the pinch. */
-        focus.plan = { zoomFrom: plan.zoomFrom, zoomTo: plan.zoomTo, count: plan.count, route: route };
-        dialog.plan = plan;
-        var prepared = countPrepared(plan);
-        plan.prepared = prepared;
-        plan.pending = Math.max(0, plan.count - prepared);
+        dialog.chosen = pickedEntries()[0] || null;
+        dialog.plans = [];
         if (options.restart) {
             /* The user changed something: whatever was decided before is void,
              * but the tiles already in memory stay (they are still correct). */
             dialog.report = null;
-            dialog.el.progress.setAttribute('hidden', 'hidden');
+            if (dialog.el.progress) dialog.el.progress.setAttribute('hidden', 'hidden');
         }
-        return plan;
+        if (!dialog.chosen || !dialog.point || dialog.scope !== SCOPE_DISC) {
+            dialog.plan = null;
+            return null;
+        }
+        dialog.plans = pickedEntries().map(function (entry) {
+            var focus = {
+                key: entry.key,
+                lidarKey: entry.lidarKey,
+                defId: entry.defId,
+                label: entry.label,
+                lat: dialog.point.lat,
+                lng: dialog.point.lng,
+                radiusKm: dialog.radiusKm
+            };
+            var route = detectRoute(entry);
+            var plan = planDisc(focus, {
+                minZoom: entry.minzoom,
+                maxZoom: entry.maxzoom,
+                tileSize: entry.tileSize,
+                budget: route === 'canvas' ? BUDGET.canvas : BUDGET.url
+            });
+            if (!plan) return null;
+            plan.route = route;
+            plan.layer = entry;
+            plan.focus = focus;
+            /* The prepared ceiling goes WITH the focus: the viewer caps the
+             * raster source at it, so MapLibre can never ask for a zoom the
+             * prefetch did not buy — it overzooms the prepared tiles instead of
+             * showing the base map while the live fetch races the pinch. */
+            focus.plan = { zoomFrom: plan.zoomFrom, zoomTo: plan.zoomTo, count: plan.count, route: route };
+            var prepared = countPrepared(plan);
+            plan.prepared = prepared;
+            plan.pending = Math.max(0, plan.count - prepared);
+            return plan;
+        }).filter(Boolean);
+        dialog.plan = aggregatePlans(dialog.plans);
+        return dialog.plan;
+    }
+
+    /**
+     * Several discs, one download: the sum of the per-layer plans, with the
+     * fields the estimate, the progress bar and status() quote.
+     */
+    function aggregatePlans(plans) {
+        plans = (plans || []).filter(Boolean);
+        if (!plans.length) return null;
+        var first = plans[0];
+        var out = {
+            plans: plans,
+            route: plans.every(function (p) { return p.route === first.route; }) ? first.route : 'mixed',
+            layer: first.layer,
+            focus: first.focus,
+            disc: first.disc,
+            count: 0,
+            bytes: 0,
+            prepared: 0,
+            pending: 0,
+            trimmed: 0,
+            budget: 0,
+            zoomFrom: Infinity,
+            zoomTo: 0,
+            levels: [],
+            tiles: []
+        };
+        plans.forEach(function (plan) {
+            out.count += plan.count;
+            out.bytes += plan.bytes;
+            out.prepared += plan.prepared || 0;
+            out.pending += plan.pending || 0;
+            out.trimmed += plan.trimmed || 0;
+            out.budget += plan.budget || 0;
+            out.zoomFrom = Math.min(out.zoomFrom, plan.zoomFrom);
+            out.zoomTo = Math.max(out.zoomTo, plan.zoomTo);
+            out.levels = out.levels.concat(plan.levels || []);
+            out.tiles = out.tiles.concat(plan.tiles || []);
+        });
+        if (!isFinite(out.zoomFrom)) out.zoomFrom = 0;
+        return out;
     }
 
     /** Is this layer drawn from a URL, or does it draw its own tiles? */
@@ -1259,17 +1512,27 @@
     /* ── prefetching ────────────────────────────────────────────────────── */
     var lastPrep = { plan: null, report: null, startedAt: 0 };
 
-    function prepare(plan, options) {
+    /**
+     * Download a disc — one plan, or one plan per ticked layer.
+     *
+     * They share the same 1 km circle, so they are fetched as one queue: the
+     * viewer's prefetch already takes a flat list of entries tagged with their
+     * layer, and the progress bar counts the whole disc across all of them.
+     * Entries of every layer are interleaved level by level, so the camera's
+     * opening view is finished first whichever layers were chosen.
+     */
+    function prepare(plans, options) {
         options = options || {};
         var api = viewer();
-        if (!plan || !api || typeof api.prefetchTiles !== 'function') {
-            return Promise.resolve({ total: 0, done: 0, prepared: 0, failed: 0, stopped: false, errors: [] });
+        var list = (Array.isArray(plans) ? plans : [plans]).filter(Boolean);
+        var empty = { total: 0, done: 0, prepared: 0, failed: 0, stopped: false, errors: [] };
+        if (!list.length || !api || typeof api.prefetchTiles !== 'function') {
+            return Promise.resolve(empty);
         }
-        var entries = planEntries(plan);
-        if (!entries.length) {
-            return Promise.resolve({ total: 0, done: 0, prepared: 0, failed: 0, stopped: false, errors: [] });
-        }
-        plan.count = entries.length;
+        var perLayer = list.map(function (plan) { return planEntries(plan); });
+        var entries = interleave(perLayer);
+        if (!entries.length) return Promise.resolve(empty);
+        list.forEach(function (plan, at) { plan.count = perLayer[at].length; });
         var started = Date.now();
         return api.prefetchTiles(entries, {
             concurrency: Number(options.concurrency) || (LIMITS.concurrency || 0),
@@ -1279,30 +1542,119 @@
             }
         }).then(function (report) {
             report.ms = Date.now() - started;
-            lastPrep = { plan: plan, report: report, startedAt: started };
+            lastPrep = { plan: list[0], plans: list, report: report, startedAt: started };
             return report;
         });
+    }
+
+    /** Round-robin the per-layer queues, so no layer waits for another. */
+    function interleave(queues) {
+        var out = [];
+        var longest = 0;
+        (queues || []).forEach(function (queue) { longest = Math.max(longest, queue.length); });
+        for (var at = 0; at < longest; at += 1) {
+            (queues || []).forEach(function (queue) { if (queue[at]) out.push(queue[at]); });
+        }
+        return out;
     }
 
     /* ── what the buttons do ────────────────────────────────────────────── */
     function applyFocus(focus) {
         var api = viewer();
         if (!api || typeof api.setLidarFocus !== 'function') return null;
-        /* Whatever asks for a disc (the dialog, a restored focus, the 3D bar),
-         * it can never ask for more than the entry rule allows. */
-        if (focus) {
+        if (focus && normalScope(focus.scope) === SCOPE_DISC) {
+            /* Whatever asks for a disc (the dialog, a restored focus, the 3D
+             * bar), it can never ask for more than the entry rule allows. */
             focus.radiusKm = Math.max(MIN_RADIUS_KM, Math.min(MAX_RADIUS_KM,
                 Number(focus.radiusKm) || DEFAULT_RADIUS_KM));
+            if (focus.mask) {
+                focus.mask.radiusKm = focus.radiusKm;
+                focus.mask.lat = Number(focus.lat != null ? focus.lat : focus.mask.lat);
+                focus.mask.lng = Number(focus.lng != null ? focus.lng : focus.mask.lng);
+            }
+            delete focus.bounds;            /* derived again by the viewer */
         }
         var applied = api.setLidarFocus(focus);
-        drawDisc(focus, { fill: true });
+        /* A whole-layer focus has no area to outline — and a leftover disc
+         * from an earlier entry must not stay on the 2D map claiming one. */
+        if (focus && normalScope(focus.scope) === SCOPE_DISC) drawDisc(focus, { fill: true });
+        else clearDisc();
         return applied;
+    }
+
+    /**
+     * The decision itself, in the shape js/map3d-terrain.js reads:
+     *
+     *   { scope, layers: [ { key, lidarKey, defId, label, plan? } ],
+     *     key, lidarKey, defId, label, labels,          // the first layer
+     *     mask, lat, lng, radiusKm, plan }              // disc only
+     */
+    function buildFocus(entries, disc) {
+        var list = (entries || []).map(function (entry, at) {
+            var plan = disc && dialog.plans[at] ? dialog.plans[at] : null;
+            var item = {
+                key: entry.key,
+                lidarKey: entry.lidarKey || null,
+                defId: entry.defId || null,
+                label: entry.label
+            };
+            if (plan) {
+                item.plan = { zoomFrom: plan.zoomFrom, zoomTo: plan.zoomTo, count: plan.count, route: plan.route };
+            }
+            return item;
+        });
+        if (!list.length) return null;
+        var focus = {
+            scope: disc ? SCOPE_DISC : SCOPE_FULL,
+            layers: list,
+            key: list[0].key,
+            lidarKey: list[0].lidarKey,
+            defId: list[0].defId,
+            label: list[0].label,
+            labels: list.map(function (layer) { return layer.label; })
+        };
+        if (disc) {
+            focus.lat = Number(dialog.point.lat);
+            focus.lng = Number(dialog.point.lng);
+            focus.radiusKm = Number(dialog.radiusKm);
+            focus.mask = { lat: focus.lat, lng: focus.lng, radiusKm: focus.radiusKm };
+            if (list[0].plan) focus.plan = list[0].plan;
+        }
+        return focus;
     }
 
     function confirmDialog() {
         if (dialog.preparing) return;
-        var plan = dialog.plan || refreshPlan({});
-        if (!plan || !plan.count) {
+        var picks = pickedEntries();
+        if (!picks.length) { paintDialog(); return; }
+
+        /* ── WHOLE LAYERS ───────────────────────────────────────────────────
+         * Nothing is downloaded in advance and nothing is bounded: the 3D view
+         * asks the 2D layers for whatever it is looking at, exactly like the
+         * 2D map does. The decision is the list itself. */
+        if (dialog.scope !== SCOPE_DISC) {
+            var whole = buildFocus(picks, false);
+            try {
+                applyFocus(whole);
+            } catch (error) {
+                dialog.el.estimate.textContent = String((error && error.message) || error);
+                return;
+            }
+            lastScope = SCOPE_FULL;
+            dialog.miniSummary = {
+                labels: whole.labels,
+                scope: SCOPE_FULL,
+                radiusKm: null,
+                tiles: null
+            };
+            settle({ cancelled: false, focus: whole, report: null }, { minimize: true });
+            return;
+        }
+
+        /* ── ONLY 1 KM ──────────────────────────────────────────────────────
+         * One plan per ticked layer, downloaded together. */
+        var plan = (dialog.plan && dialog.plans.length) ? dialog.plan : refreshPlan({});
+        if (!plan || !plan.count || !dialog.plans.length) {
             settle({ cancelled: true, reason: 'nothing-to-fetch' });
             return;
         }
@@ -1317,8 +1669,9 @@
          * 3D view uses, and that pipeline reads the disc from the focus. The
          * disc is also drawn in 2D now, so the user sees the exact area the
          * progress bar is talking about. */
+        var focus = buildFocus(picks, true);
         try {
-            applyFocus(plan.focus);
+            applyFocus(focus);
         } catch (error) {
             /* Nothing has been fetched yet, so the honest answer is the
              * dialog back, with the reason — not a sheet frozen in its
@@ -1331,17 +1684,16 @@
             return;
         }
 
-        prepare(plan, {
+        prepare(dialog.plans, {
             onProgress: function (report) { renderProgress(report); }
         }).then(function (report) {
             dialog.report = report;
             dialog.preparing = false;
             var prepared = report.prepared || 0;
             var failed = report.failed || 0;
-            var focus = plan.focus;
+            lastScope = SCOPE_DISC;
             focus.preparedTiles = prepared;
             focus.failedTiles = failed;
-            focus.plan = { zoomFrom: plan.zoomFrom, zoomTo: plan.zoomTo, count: plan.count, route: plan.route };
             /* The fetch is finished; everything from here is bookkeeping
              * (the counted re-application, the “Done” line, the pill
              * summary), and NONE of it may strand the entry: the gate is
@@ -1356,9 +1708,10 @@
                 applyFocus(focus);
                 renderProgress(report, { final: true });
                 /* The pill this window is about to fold into stands for exactly
-                 * this disc: layer, fetching distance, tiles prepared. */
+                 * this disc: layers, fetching distance, tiles prepared. */
                 dialog.miniSummary = {
-                    label: dialog.chosen ? dialog.chosen.label : (focus.label || 'LiDAR'),
+                    labels: focus.labels || [focus.label || 'LiDAR'],
+                    scope: SCOPE_DISC,
                     radiusKm: focus.radiusKm,
                     tiles: prepared
                 };
@@ -1479,6 +1832,8 @@
             maxRadiusKm: MAX_RADIUS_KM,
             minRadiusKm: MIN_RADIUS_KM,
             defaultRadiusKm: DEFAULT_RADIUS_KM,
+            scopes: SCOPES.slice(),
+            defaultScope: DEFAULT_SCOPE,
             budget: { url: BUDGET.url, canvas: BUDGET.canvas },
             layers: layers.map(function (entry) {
                 return { key: entry.key, lidarKey: entry.lidarKey, label: entry.label, opacity: entry.opacity,
@@ -1490,6 +1845,10 @@
                 mode: dialog.mode,
                 preparing: dialog.preparing,
                 chosen: dialog.chosen ? dialog.chosen.key : null,
+                scope: dialog.scope,
+                /* Every layer offered, and which of them are ticked. */
+                offered: dialog.layers.map(function (entry) { return entry.key; }),
+                picks: Object.keys(dialog.picks),
                 point: dialog.point ? { lat: dialog.point.lat, lng: dialog.point.lng } : null,
                 radiusKm: dialog.radiusKm,
                 pointPicked: !!(dialog.point && dialog.point.picked)
@@ -1507,6 +1866,20 @@
                 trimmed: dialog.plan.trimmed,
                 bytes: dialog.plan.bytes
             } : null,
+            /* The same disc, layer by layer: which layer, how many tiles, and
+             * the zoom ceiling its own source will be capped at. */
+            plans: dialog.plans.map(function (plan) {
+                return {
+                    key: plan.layer ? plan.layer.key : (plan.focus && plan.focus.key) || null,
+                    label: plan.layer ? plan.layer.label : '',
+                    route: plan.route,
+                    count: plan.count,
+                    prepared: plan.prepared,
+                    pending: plan.pending,
+                    zoomFrom: plan.zoomFrom,
+                    zoomTo: plan.zoomTo
+                };
+            }),
             lastPrepare: lastPrep.report ? {
                 total: lastPrep.report.total,
                 prepared: lastPrep.report.prepared,
@@ -1529,11 +1902,14 @@
         MIN_RADIUS_KM: MIN_RADIUS_KM,
         DEFAULT_RADIUS_KM: DEFAULT_RADIUS_KM,
         BUDGET: BUDGET,
+        SCOPES: SCOPES,
+        DEFAULT_SCOPE: DEFAULT_SCOPE,
         activeLayers: activeLayers,
         status: status,
         plan: planDisc,
         planEntries: planEntries,
         prepare: prepare,
+        buildFocus: buildFocus,
         applyFocus: applyFocus,
         drawDisc: drawDisc,
         clearDisc: clearDisc,
@@ -1593,13 +1969,14 @@
          * but only if that LiDAR layer is still active in 2D. */
         var restored = viewer().getLidarFocus && viewer().getLidarFocus();
         if (restored) {
+            var restoredKeys = focusKeysOf(restored);
             var stillActive = activeLayers().some(function (entry) {
-                return (restored.key && (entry.key === restored.key || entry.lidarKey === restored.key)) ||
-                       (restored.lidarKey && (entry.lidarKey === restored.lidarKey || entry.key === restored.lidarKey)) ||
-                       (restored.defId && (entry.defId === restored.defId || entry.lidarKey === 'def:' + restored.defId));
+                return restoredKeys.some(function (key) { return entryAnswersKey(entry, key); });
             });
-            if (stillActive) drawDisc(restored, { fill: true });
-            else {
+            /* A whole-layer focus has no disc to draw; a disc restores its
+             * outline only while at least one of its layers is still on the map. */
+            if (stillActive && normalScope(restored.scope) === SCOPE_DISC) drawDisc(restored, { fill: true });
+            else if (!stillActive) {
                 /* Stale focus from a previous session whose LiDAR is no longer
                  * on the 2D map: clear it so a new 3D entry at a different
                  * location does not teleport back to the old disc. */

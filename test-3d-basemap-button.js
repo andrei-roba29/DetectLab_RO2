@@ -41,7 +41,7 @@ const viewer = read('js/map3d-terrain.js');
 const html = read('index.html');
 const sw = read('sw.js');
 
-const TAG = '20261026-basemap-in-3d';
+const TAG = '20261026-lidar-whole-or-disc';
 const flatten = s => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ');
 
 /* ══════════════════════════════════════════════════════════════

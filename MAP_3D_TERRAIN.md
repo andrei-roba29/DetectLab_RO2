@@ -399,7 +399,7 @@ Romanian 1 m service) or outside its coverage, a provider answers with a blank o
 all-white tile. The 3D view draws what it was sent at that zoom; only the white *sheet*
 over the whole layer was ours to fix, and that is the blend above.
 
-### 6.4 LiDAR in 3D: one layer, one disc, prepared before the view opens
+### 6.4 LiDAR in 3D: whole layers, or one disc prepared before the view opens
 
 **4. “Some LiDAR layers still load really slow, or look really bad, or don't load at all
 in 3D — e.g. Romania 1m/pixel agregare, AB.”** The blend and the caching above fix *how* a
@@ -429,15 +429,16 @@ now asks the gate first and only opens when it is answered with a prepared disc:
    double that at 1–2 km, and sharper” report. At a fixed 1 km the opening view is always
    prepared at the layer's native detail. `window.DETECTLAB_LIDAR_3D.maxRadiusKm > 1`
    still raises the cap (and brings the slider back) for anyone who wants it.
-2. **One LiDAR layer at a time** — stated in the dialog exactly as the rule reads:
-   *“You can enter the 3D view with only one LiDAR layer at a time. The others stay on the
-   2D map.”* (`RO: „În vederea 3D poți intra cu un singur strat LiDAR o dată.”`). The
-   dialog lists every LiDAR layer the 2D map is showing, as a radio group. The 2D map may stack as many as it likes (that is how the
-   products are compared); the 3D deck keeps exactly one, `status().lidar.drawn` names it
-   and `status().lidar.notes` carries `{reason: 'focused', count, kept}` for the ones left
-   out — the bar then adds “One LiDAR layer in 3D” so “my other layer is missing in 3D” is
-   answerable. The choice is remembered in the focus, so the state survives closing and
-   reopening 3D.
+2. **Every LiDAR layer switched on is offered, and the ticked ones are the decision.**
+   The dialog lists every LiDAR layer the 2D map is showing, each with its own tick box —
+   for a whole-layer entry as much as for a disc, where the box means “prepare this layer
+   over the 1 km circle too”. The 2D map may stack as many as it likes (that is how the
+   products are compared); 3D draws exactly the ticked ones, `status().lidar.drawn` names
+   them and `status().lidar.notes` carries `{reason: 'focused', count, keptCount, kept,
+   scope}` for the ones left out. The choice is remembered in the focus, so the state
+   survives closing and reopening 3D. §6.4.3 has the 2026-10-26 change that replaced the
+   old “one LiDAR layer at a time” rule (the one that never let a national layer be drawn
+   whole).
 3. **A point on the map**, chosen by tapping the 2D map (`window._dlLidarFocusPicking`
    tells `js/lidar-scanner.js` to stand down while the tap belongs to the dialog). The disc
    is drawn on the 2D map immediately — a dashed outline with a centre dot in the pane
@@ -649,6 +650,82 @@ is overzoomed exactly as described in §6.4/`LIDAR_3D_MOBILE_ZOOM.md`.
 `test-lidar-3d-focus.js` (an asynchronous Danish-style canvas must come back painted, a
 one-argument canvas must not wait for a `done` that never comes, and no prepared tile of a
 Danish disc may be a transparent placeholder).
+
+### 6.4.3 Whole layers, or only the 1 km disc (the 2026-10-26 request)
+
+*“All the LiDAR layers should be able to load in 3D entirely, not only 1 km — but there
+must remain the option of loading them only for that 1 km radius, and in that option the
+dialog must include all the layers that are turned on at that moment, for the user to
+choose which of them get loaded for the 1 km radius.”*
+
+Opening 3D with a LiDAR layer switched on now starts with a **scope**, two buttons at the
+top of the same window:
+
+* **Whole layers** (`scope: 'full'`, the default) — nothing is bounded, clipped, planned or
+  downloaded in advance. The chosen layers are draped the way the 2D map draws them: over
+  their whole extent, at any zoom the layer itself supports, tiles requested as the camera
+  moves. A national pyramid is not a “disc that never grows”; it is the layer, and this is
+  the scope that lets it be seen beyond the opening kilometre.
+* **Only 1 km** (`scope: 'disc'`) — the flow of §6.4 unchanged: one fixed 1 km radius around
+  a point, whole zoom levels planned from the layer's own limits, downloaded through the
+  viewer's own tile pipeline before the view opens, the disc outlined on the 2D map, the
+  raster source bounded to it and capped at `plan.zoomTo`. What changed here is the list:
+  every LiDAR layer switched on is listed and **each ticked layer gets its own plan**, and
+  the plans are downloaded together (interleaved level by level) under one progress bar.
+
+The layer list is the same in both scopes — `js/lidar-3d-focus.js → activeLayers()`, read
+fresh from `window._lidarGroup` and the mirror — so a layer switched on while the window is
+open is neither silently skipped nor assumed; the list is rebuilt whenever the dialog is
+opened or the 2D visibility changes.
+
+**The focus grew a list.** `setLidarFocus()` normalises a legacy single-layer focus into
+`layers[0]`, so every caller from before this change keeps working:
+
+```js
+{ scope: 'full' | 'disc',
+  layers: [ { key, lidarKey, defId, label, plan? } ],   // every ticked layer
+  key, lidarKey, defId, label, labels,                  // the first layer, for old callers
+  mask, bounds, plan, lat, lng, radiusKm, at }           // disc only
+```
+
+and the viewer reads it with `focusLayers()`, `focusMatches()`, `maskOf()`,
+`planForLayer()` and `keyNamesFocusLayer()`, all of which understand both key spaces (the
+deck key `2d.<stamp>` and the LiDAR family key `lidar.ro1m` / `def:lidar.fr-mnh`).
+`sameFocus()` compares every layer and every prepared ceiling, so adding or removing one
+layer rebuilds exactly the affected sources — and `refreshFocusedSource()` only touches the
+sources that were marked `focused`, so the base map is not re-downloaded.
+
+**What “full” drops, concretely** (`js/map3d-terrain.js`):
+
+| mechanism | `scope: 'disc'` | `scope: 'full'` |
+| --- | --- | --- |
+| `spec.bounds` on the focused raster source | the disc's rectangle | absent — MapLibre may ask for any tile |
+| `spec.maxzoom` | `min(layer max, plan.zoomTo)` | the layer's own maximum, uncapped |
+| per-tile clip (`focusExcludesTile()` / `clipFocusedTile()`) | rim feathered, outside = blank | `maskOf()` returns null: no clip at all |
+| 2D disc outline | drawn, dashed, with centre dot | cleared |
+| camera teleport (`focusCamera()`) | framed on the disc | camera left where the 2D map was |
+| prefetch | `prefetchTiles()` before the view opens | none — the decision settles immediately |
+| tile route | `dl2d://` (or `dl3d://` for registry-only products) | the same route, per tile, on demand |
+
+Both render paths agree: `renderRaster()` (mirrored layers) and `renderRegistryRaster()`
+(the nine country products) compute `discFocus = focused && focusScope() === 'disc'` before
+touching `bounds` or `maxzoom`, so a whole-layer focus can never inherit a stale disc
+ceiling. The route rule of §6.4.1 still holds in both scopes: a focused layer is drawn
+through `dl2d://` (the live 2D layer's own URL and the viewer's own CORS/proxy decision),
+never through a registry template that never heard of `state.primed`.
+
+**When a focus cannot be drawn it says why.** A whole-layer focus is not a promise that
+every tile will arrive — a provider can be down or a layer switched off mid-view. The
+standing rule of `LIDAR_3D_DISC_ROUTE.md` applies unchanged: `status().lidar` carries
+`{focus: {scope, layers[]}, off, drawn, notes, primed}`, the bar surfaces the note, and
+`status().errors` receives a line rather than leaving a blank 3D view unexplained.
+
+`test-lidar-3d-focus.js` §5a–5c walks the whole thing: two scope buttons, checkboxes for
+every layer, the whole-layer confirm with **zero** tile requests, the pill naming whole
+layers, back to the disc with both layers still ticked, untick/re-tick re-planning, the
+point pick, and the confirm that downloads the sum of both plans. §4d-quater-bis asserts
+the viewer half on a real deck: no `bounds`, an uncapped `maxzoom`, both sources drawn, and
+a tile on the far side of the world served live instead of being blanked.
 
 ### 6.5 Raster refresh in a running 3D view
 

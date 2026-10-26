@@ -1,10 +1,60 @@
-# LiDAR in 3D: one layer, one point, one fixed 1 km disc
+# LiDAR in 3D: the 1 km disc (the option, since 2026-10-26)
 
-**Status: 2026-10-19.** Reported: choosing a 5 km fetching distance loaded only
-~65 tiles, while 1–2 km loaded about twice as many — and the 1–2 km view was
-noticeably sharper in 3D. Asked for: allow only **1 km**, and when entering 3D
-over a LiDAR layer ask only **which** layer (“You can enter the 3D view with only
-one LiDAR layer at a time.”) and **where**.
+> **Status: 2026-10-26 — read §0 first.** The 1 km disc is no longer the only
+> way into 3D. The default is **whole layers**, drawn entirely at every zoom;
+> the disc below is the second scope, chosen explicitly. And the disc can now
+> hold **several** LiDAR layers at once — every layer switched on is listed and
+> the user ticks which ones to prepare. See `MAP_3D_TERRAIN.md` §6.4.3. The
+> measurements and the depth fix below still describe the disc scope exactly as
+> shipped.
+
+**Status of this document: 2026-10-19.** Reported: choosing a 5 km fetching
+distance loaded only ~65 tiles, while 1–2 km loaded about twice as many — and
+the 1–2 km view was noticeably sharper in 3D. Asked for: allow only **1 km**, and
+when entering 3D over a LiDAR layer ask only **which** layer and **where**.
+
+---
+
+## 0. What 2026-10-26 changed here
+
+| | before | now |
+| --- | --- | --- |
+| entry | always a 1 km disc | **two scopes**: whole layers (default) or only 1 km |
+| layer choice | a radio group, exactly one | **a tick box each**, and every ticked layer is drawn (whole) or prepared (disc) |
+| the 1 km disc | one layer per disc | **one plan per ticked layer**, downloaded together, one progress bar |
+| whole layers | not possible | the layer is draped uncapped and unbounded, tiles on demand |
+| the “one layer at a time” sentence | stated in the dialog | gone — see §0.2 |
+
+### 0.1 The disc itself is unchanged
+
+Everything from §1 on still holds for `scope: 'disc'`: the fixed 1 km radius (no
+slider, no chips), the `zFit − 2 … maxNativeZoom` plan, whole levels or none, the
+budget, the source ceiling at `plan.zoomTo`, the disc clip, the 2D outline, the
+prefetch through `fetchTile()` / `blendedTile()` / `clipFocusedTile()`, and the
+pill. The only difference is that the plan is built **per ticked layer**
+(`refreshPlan()` → `dialog.plans[]`, summed by `aggregatePlans()`) and the
+download walks the per-layer queues round-robin (`prepare()` → `interleave()`),
+so one slow provider cannot hold back the other layer.
+
+### 0.2 The one-layer rule is retired
+
+The sentence *“You can enter the 3D view with only one LiDAR layer at a time”*
+is no longer shipped. The viewer keeps exactly the layers the focus names
+(`focusLayers()`, `focusMatches()`, `lidarFilter()`), the bar reports what it
+kept and in which scope (`status().lidar.notes → {reason: 'focused', count,
+keptCount, kept, scope}`), and `js/map-app.js` asks
+`DetectLabMap3D.lidarFocusCovers(activeLayers())` so switching **one** of several
+chosen layers off does not throw the decision away while any other chosen layer
+is still on.
+
+### 0.3 Whole layers, in one sentence
+
+`scope: 'full'` drops the bounds, the zoom cap, the per-tile clip, the 2D disc
+outline, the camera teleport and the prefetch — and keeps the route rule: a
+focused layer is still drawn through `dl2d://`, so the CORS/proxy decision the
+prefetch would have made is the one the render makes. On a national pyramid
+this is the scope that actually shows the pyramid; the disc remains the choice
+for “I only care about this one kilometre and I want it already downloaded”.
 
 ---
 
@@ -77,30 +127,35 @@ not offered in the UI.
 
 | file | change |
 | --- | --- |
-| `js/lidar-3d-focus.js` | `MAX_RADIUS_KM = MIN_RADIUS_KM = DEFAULT_RADIUS_KM = 1` (overridable); `RADIUS_CHOICE` decides whether the slider renders at all; new `fixedRadius` / `fixedNote` copy and a `.m3d-focus-fixed` line in the dialog; `layerHint` is the one-layer-at-a-time sentence; `applyFocus()` clamps any caller's radius to the entry rule. |
+| `js/lidar-3d-focus.js` | `MAX_RADIUS_KM = MIN_RADIUS_KM = DEFAULT_RADIUS_KM = 1` (overridable); `RADIUS_CHOICE` decides whether the slider renders at all; `fixedRadius` / `fixedNote` copy and a `.m3d-focus-fixed` line in the dialog; `layerHint` names the 1 km disc of the current scope; `applyFocus()` clamps any caller's radius to the entry rule. (Since 2026-10-26 the hint is `layerHintDisc` / `layerHintFull` and the layer list is checkboxes — §0.) |
 | `css/map3d-terrain.css` | `.m3d-focus-fixed` — the area reads as a sentence, not as a disabled slider. |
 | `index.html`, `sw.js` | `js/lidar-3d-focus.js?v=20261019-lidar-depth`; shell cache `v230-lidar-depth` (an installed PWA must replace the old module) — see §5 for the depth fix that shares this bump. |
 | `test-lidar-3d-focus.js` | the cap is 1 km; the dialog has **no** slider and **no** chips; the area line states 1 km / 2 km across; the one-layer message is asserted; the planner test pins the “5 km prepares two levels coarser” fact that motivated the change; the §4/§5 discs are 1 km so the end-to-end handoff stays the real path. |
 | `MAP_3D_TERRAIN.md` | §1 toggle, §6.4 items 1–3 and §9 verification. |
 
 Unchanged on purpose: the disc clip (`disc.maskTile`), the prefetch pipeline
-(same `fetchTile` / blend / clip), the memory cache, the entry gate, the pill,
-the “Change the area” flow, and the one-layer rule in the viewer.
+(same `fetchTile` / blend / clip), the memory cache, the entry gate, the pill and
+the “Change the area” flow. (The one-layer rule in the viewer was retired on
+2026-10-26 — §0.2.)
 
 ## 4. Verify
 
 ```bash
-node test-lidar-3d-focus.js     # 1 km cap, no slider/chips, one-layer message,
-                                # disc maths, prefetch, serve path, gate, pill
+node test-lidar-3d-focus.js     # both scopes, checkbox list, 1 km cap, no
+                                # slider/chips, disc maths, prefetch, serve path,
+                                # whole-layer deck (no bounds, no cap, no clip)
 node test-map3d-tile-order.js   # the SDK ordering patch (unrelated, same 3D path)
 ```
 
-In the app: switch two LiDAR layers on, press **3D** → the sheet lists both, one
-selected, with the one-layer sentence; there is no distance control; tap
-**Choose on the map**, pick a point, confirm — the 2D outline is a 1 km circle,
-the progress runs to ~145 tiles on a phone / ~144 on a desktop (both prepared to
-the layer's native maximum — see §5), and the 3D view opens framed on it at the
-same sharpness every time.
+In the app: switch two LiDAR layers on, press **3D** → the sheet opens on the
+whole-layer scope with both layers ticked; confirm and the 3D view shows both
+over their whole extent with nothing downloaded up front. Reopen it, press
+**Only 1 km**, keep both ticked, tap **Choose on the map**, pick a point,
+confirm — the 2D outline is a 1 km circle, the progress runs to ~145 tiles per
+layer on a phone / ~144 on a desktop (both prepared to the layer's native
+maximum — see §5), and the 3D view opens framed on it at the same sharpness
+every time. Untick one layer and the disc (and its download) narrows to the
+other.
 
 ## 5. Follow-up (same day): why the phone stopped at z16 and lost the LiDAR
 

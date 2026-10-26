@@ -80,8 +80,8 @@ const skin = read('css/map3d-terrain.css');
 
 const TAG = '20261019-tile-order';              /* MapLibre itself (coveringTiles patch) */
 const TAG_3D = '20261021-lidar-canvas-tiles';    /* mirror (canvas tiles)          */
-const TAG_VIEWER = '20261025-lidar-3d-tile-heal'; /* viewer (js)                         */
-const TAG_CSS = '20261025-pastel-orange-sliders';       /* viewer skin (css)              */
+const TAG_VIEWER = '20261026-lidar-whole-or-disc'; /* viewer (js)                         */
+const TAG_CSS = '20261026-lidar-whole-or-disc';       /* viewer skin (css)              */
 const TAG_FOCUS = '20261020-lidar-disc-route';  /* LiDAR focus (3D, one disc)     */
 const TAG_REGISTRY = '20261024-uk-historical-maps'; /* shared registry (UK historical maps) */
 

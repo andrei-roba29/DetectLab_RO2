@@ -28,7 +28,7 @@ assert(indexHtml.includes('js/country-dock.js?v=20261021-country-exit-3d-stack')
 assert(indexHtml.indexOf('js/globe-country-picker.js?v=20261017-outline-zoom-settle') <
     indexHtml.indexOf('js/country-dock.js?v=20261021-country-exit-3d-stack'), 'globe gate loads before the dock');
 assert(indexHtml.indexOf('js/country-dock.js?v=20261021-country-exit-3d-stack') <
-    indexHtml.indexOf('js/map-app.js?v=20261025-lidar-3d-tile-heal'), 'dock loads before map-app.js');
+    indexHtml.indexOf('js/map-app.js?v=20261026-lidar-whole-or-disc'), 'dock loads before map-app.js');
 // The dock lives *inside* the search wrap so it stays glued to the search bar.
 const wrapIdx = indexHtml.indexOf('id="mapSearchWrap"');
 const dockIdx = indexHtml.indexOf('id="countryDock"');

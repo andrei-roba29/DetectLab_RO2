@@ -49,7 +49,7 @@ const viewer = read('js/map3d-terrain.js');
 const indexHtml = read('index.html');
 const swJs = read('sw.js');
 
-const TAG = '20261025-lidar-3d-tile-heal';
+const TAG = '20261026-lidar-whole-or-disc';
 
 /* ══════════════════════════════════════════════════════════════════════════
  * A. The real basemap block, run end to end
@@ -225,7 +225,7 @@ const TAG = '20261025-lidar-3d-tile-heal';
     assert(/Re-tags js\/map-app\.js and js\/map3d-terrain\.js\./.test(swJs),
         'sw.js logs the re-tag');
     /* Assets this fix did NOT touch keep their own tags. */
-    assert(indexHtml.includes('css/map3d-terrain.css?v=20261025-pastel-orange-sliders') &&
+    assert(indexHtml.includes('css/map3d-terrain.css?v=20261026-lidar-whole-or-disc') &&
         indexHtml.includes('js/layer-registry.js?v=20261024-uk-historical-maps'),
         'untagged assets keep the tag of whatever last changed them');
     console.log('  ✓ cache wiring: ?v=' + TAG + ', shell v' + version);

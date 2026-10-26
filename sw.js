@@ -800,7 +800,7 @@
 //   view and there is no rotation lock any more. Re-tags css/styles.css,
 //   css/tutorial.css, css/offline-maps.css, css/map3d-terrain.css,
 //   js/map-rotate.js and js/tutorial.js.
-const CACHE_NAME = 'detectlab-v276-basemap-in-3d';
+const CACHE_NAME = 'detectlab-v277-lidar-whole-or-disc';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -958,6 +958,16 @@ const PRECACHE_URLS = [
   // v276: base-layer button visible in 3D, above the ⓘ and the scale.
   'css/map3d-terrain.css?v=20261026-basemap-in-3d',
   'js/map3d-terrain.js?v=20261026-basemap-in-3d',
+  // v277: LiDAR in 3D loads WHOLE layers (every LiDAR layer switched on can be
+  //   drawn entirely, at every zoom) with the 1 km disc kept as an option — and
+  //   in that option every layer switched on at that moment is listed so the
+  //   user chooses which ones are prepared over the disc. Re-tags
+  //   css/map3d-terrain.css, js/map3d-terrain.js, js/map-app.js and
+  //   js/lidar-3d-focus.js.
+  'css/map3d-terrain.css?v=20261026-lidar-whole-or-disc',
+  'js/map3d-terrain.js?v=20261026-lidar-whole-or-disc',
+  'js/map-app.js?v=20261026-lidar-whole-or-disc',
+  'js/lidar-3d-focus.js?v=20261026-lidar-whole-or-disc',
   'js/map3d-terrain.js?v=20261024-gesture-only-camera',
   'js/map3d-terrain.js?v=20261023-pwa-only-3d-column',
   'js/map3d-terrain.js?v=20261020-outline-camera-handoff',
