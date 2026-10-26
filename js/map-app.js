@@ -7975,6 +7975,12 @@
             // ── Public: master toggle ──
             window.toggleLidarLayer = function(on) {
                 _lidarVisible = on;
+                if (!on) {
+                    var dk = window.DetectLabDanishLayers;
+                    var al = window.AsigAlbaniaLayers;
+                    if (dk) dk.layers.forEach(function(def) { if (def.id.indexOf('lidar_') === 0) dk.toggle(def.id, false); });
+                    if (al) al.CONFIG.layers.forEach(function(def) { if (def.section === 'lidar') al.toggle(def.id, false); });
+                }
                 if (on) {
                     _lidarGroup.addTo(map);
                     Object.keys(LIDAR_SUB_LAYERS).forEach(function(key) {
@@ -14440,6 +14446,11 @@
                     // their per-layer extents are sourced from their configs.
                     var danish = window.DetectLabDanishLayers;
                     var danishCount = updateGeneratedLayers(danish, danish && danish.CONFIG && danish.CONFIG.countryBounds, mapBounds);
+                    if (danish && danish.state && danish.state.rows) {
+                        Object.keys(danish.state.rows).forEach(function(id) {
+                            if (id.indexOf('lidar_') === 0 && !danish.state.rows[id].row.classList.contains('viewport-layer-unavailable')) groupVisible.lidar = true;
+                        });
+                    }
                     var finland = window.FinlandLayers;
                     var finlandCount = updateGeneratedLayers(finland, finland && finland.CONFIG && finland.CONFIG.countryBounds, mapBounds);
 
@@ -14455,6 +14466,7 @@
                             if (!row) return;
                             setViewportAvailability(row, albaniaAvailable);
                             if (albaniaAvailable) albaniaCount++;
+                            if (albaniaAvailable && albania.CONFIG.layers.some(function(def) { return def.id === id && def.section === 'lidar'; })) groupVisible.lidar = true;
                         });
                     }
                     [
@@ -14698,6 +14710,12 @@
                         var groupRow = getGroupRow(gKey);
                         if (!groupRow) return;
                         var anyAvailable = false;
+                        if (gKey === 'lidar') {
+                            ['danishLidarLayers', 'albaniaLidarLayers'].forEach(function(id) {
+                                var mount = document.getElementById(id);
+                                if (mount && !mount.classList.contains('country-layer-unavailable') && mount.children.length) anyAvailable = true;
+                            });
+                        }
                         allDefs.forEach(function (def) {
                             if (anyAvailable) return;
                             var row = null;

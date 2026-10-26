@@ -451,7 +451,7 @@ async function testMapModule() {
     assert.ok(sandbox.toggleDanishLayers && sandbox.setDanishBase && sandbox.showDanishInfo,
         'the inline handlers in index.html exist');
 
-    const rowIds = dom.childIds('danishSubLayers');
+    const rowIds = dom.byId.danishSubLayers.children.filter(child => child.attributes['class'] === 'transp-layer-row').flatMap(child => child.children.map(row => row.attributes['data-danish-row']).filter(Boolean)).concat(dom.childIds('danishLidarLayers'));
     assert.deepStrictEqual(rowIds, RENDERED, 'ungrouped base rows first, then ungrouped overlays');
     for (const group of CONFIG.panelGroups) {
         assert.ok(dom.byId['danishGroup_' + group.id], group.id + ' has a collapsible group');
@@ -682,8 +682,8 @@ function testWiring() {
     assert.match(danishGroupMarkup[0], /\bdata-category="free"/,
         'the Denmark group appears in the Gratis / Free tab, not an unrecognized category');
     assert.ok(html.indexOf('id="danishSubLayers"') !== -1, '…and the container the rows are built into');
-    assert.ok(html.indexOf('id="danishToggle"') !== -1, '…and the group switch');
-    assert.ok(html.indexOf('onclick="toggleDanishSubLayers()"') !== -1, '…and the collapse button');
+    assert.ok(html.indexOf('id="danishToggle"') === -1, 'no country master switch');
+    assert.ok(html.indexOf('onclick="toggleDanishSubLayers()"') === -1, 'no country collapse button');
     assert.ok(html.indexOf('js/danish-layers.config.js?v=') <
         html.indexOf('js/layer-registry.js?v='),
         'the config loads before the registry that mirrors it');
@@ -816,7 +816,7 @@ function buildDom() {
     }
 
     /* The static markup index.html provides (at 375 px it is all present). */
-    const staticIds = ['danishRow', 'danishSubLayers', 'danishToggle', 'danishExpandBtn',
+    const staticIds = ['danishLidarLayers', 'danishRow', 'danishSubLayers', 'danishToggle', 'danishExpandBtn',
         'danishExpandIcon', 'danishGroupTitle', 'danishGroupNotice', 'arcgisBasemapCtrl', 'transpPanel'];
     staticIds.forEach((id) => {
         const element = makeElement(id === 'danishToggle' ? 'input' : 'div');

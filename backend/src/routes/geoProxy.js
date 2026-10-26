@@ -1,3 +1,4 @@
+import { asigHeritageResponse } from '../lib/asig-heritage.mjs';
 /*
  * geoProxy.js — credential-adding, caching proxy for national LiDAR services.
  * ───────────────────────────────────────────────────────────────────────────
@@ -401,6 +402,14 @@ router.get('/geo/dk-orto', async (req, res) => {
   } catch (err) {
     logger.error({ err: err?.message }, 'GeoDanmark Ortofoto proxy request failed');
     return res.status(502).json({ error: 'upstream_unreachable' });
+  }
+});
+
+router.get('/geo/asig-heritage', async (req, res) => {
+  try {
+    return await sendWebResponse(res, await asigHeritageResponse(webRequest(req, '/api/geo/asig-heritage')));
+  } catch {
+    return res.status(502).json({ error: 'asig_wfs_unavailable' });
   }
 });
 

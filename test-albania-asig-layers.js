@@ -202,6 +202,7 @@ presetElement('albaniaToggle', 'input');
 presetElement('albaniaExpandBtn', 'button');
 presetElement('albaniaExpandIcon', 'svg');
 const mount = presetElement('albaniaSubLayers', 'div');
+const lidarMount = presetElement('albaniaLidarLayers', 'div');
 
 const document = {
     readyState: 'complete',
@@ -301,6 +302,7 @@ const sandbox = {
     L: {
         TileLayer,
         GridLayer,
+        Layer: proto,
         setOptions: (target, options) => Object.assign(target.options || (target.options = {}), options),
         latLngBounds: (bounds) => { const b = bounds.slice ? { south: bounds[0][0], west: bounds[0][1], north: bounds[1][0], east: bounds[1][1] } : bounds; return b; },
         CRS: { EPSG3857: { project: map.options.crs.project } },
@@ -334,6 +336,7 @@ sandbox.window = sandbox;
 sandbox.ASIG_ALBANIA_CONFIG = CONFIG;
 sandbox.ASIG_LAYERS_CATALOGUE = MIRROR;
 vm.createContext(sandbox);
+vm.runInContext(read('js/asig-heritage.js'), sandbox, { filename: 'js/asig-heritage.js' });
 vm.runInContext(read('js/asig-albania-layers.js'), sandbox, { filename: 'js/asig-albania-layers.js' });
 const API = sandbox.AsigAlbaniaLayers;
 assert.ok(API, 'the module exposes window.AsigAlbaniaLayers');
@@ -349,22 +352,19 @@ function allRows(node, found) {
     });
     return found;
 }
-const rows = allRows(mount);
+const rows = allRows(mount).concat(allRows(lidarMount));
 const sections = mount.children.filter((child) => child.attributes['data-albania-section']);
-check(mount.children[0].className === 'albania-catalogue-tools', 'the search box and active list come first');
-const tools = mount.children[0];
-check(tools.children.some((child) => child.id === 'albaniaSearch'), 'the panel has a search box');
-check(tools.children.some((child) => child.id === 'albaniaActive'), 'the panel has an active-layer list');
-const heritageBlock = mount.children[1];
+check(!mount.children.some(child => child.className === 'albania-catalogue-tools'), 'no country-level catalogue toolbar');
+const heritageBlock = mount.children[0];
 check(heritageBlock.className === 'albania-heritage-block', 'Heritage sits at the top of the panel, above every section');
 const heritageRows = heritageBlock.children.filter((child) => child.className && child.className.indexOf('albania-layer-row') === 0);
 check(heritageRows.length === 1 && heritageRows[0].id === 'albaniaRow_heritage',
     'Heritage is ONE toggle — its parts are not rows');
 check(!sections.some((section) => section.attributes['data-albania-section'] === 'heritage'),
     'Heritage is not a collapsible section of parts');
-check(sections.length === 6, 'the six catalogue sections render as collapsible blocks');
+check(sections.length === 5, 'the six catalogue sections render as collapsible blocks');
 assert.deepStrictEqual(sections.map((section) => section.attributes['data-albania-section']),
-    ['orthophotos', 'lidar', 'cadastre', 'maps', 'environment', 'planning']);
+    ['orthophotos', 'cadastre', 'maps', 'environment', 'planning']);
 sections.forEach((section) => {
     const head = section.children[0];
     const body = section.children[1];
@@ -407,7 +407,7 @@ check(API.state.rows.heritage.row.style.display === '', 'searching the service n
 API.setSearch('zzz-nothing');
 check(mount.children.some((child) => child.id === 'albaniaSearchEmpty'), 'an unmatched search says so');
 API.setSearch('');
-const restored = allRows(mount);
+const restored = allRows(mount).concat(allRows(lidarMount));
 check(restored.length === 29 && restored.every((row) => row.style.display === ''), 'clearing the search restores every row');
 
 /* ── country gate ────────────────────────────────────────────────────────── */
@@ -440,21 +440,18 @@ check(map.panes[API.PANE_ID].style.zIndex === '404' && map.panes[API.PANE_ID].st
 /* Heritage: one switch, one opacity, every part. */
 API.toggle('heritage', true);
 const heritageParts = API.activeLeaves().filter((leaf) => /^(akzm|iktk):/.test(leaf.name));
-check(heritageParts.length >= 4, 'Heritage puts all of its WMS parts on the map with one toggle');
-const heritageLayers = Array.from(layersOnMap).filter((layer) =>
-    ['heritage_cultural_protected_sites_point', 'heritage_natural_protected_areas'].indexOf(layer._layerId) === -1
-        ? false : true);
-check(heritageLayers.length === 2, 'Heritage rows are individual parts in one entry');
+check(heritageParts.length === 0, 'Heritage does not create WMS stacks or GetFeatureInfo queries');
+const heritageLayers = Array.from(layersOnMap).filter(layer => layer._dlDefId === 'albania.heritage');
+check(heritageLayers.length === 1, 'Heritage uses one bounded viewport controller');
 API.setOpacity('heritage', 42);
-check(heritageLayers.every((layer) => Math.abs(layer.opacity - 0.42) < 1e-9),
-    'the one Heritage opacity slider applies to every part');
+check(heritageLayers.every(layer => Math.abs(layer._opacity - 0.42) < 1e-9), 'Heritage opacity reaches the viewport controller');
 check(API.state.opacity.heritage === 42, 'Heritage keeps a single opacity value');
 API.toggle('heritage', false);
 check(layersOnMap.size === 2, 'one click removes every Heritage part');
 
 API.toggleAll(true);
 const expectedLayers = CONFIG.layers.reduce((sum, def) => {
-    if (def.kind === 'group') return sum + CONFIG.heritage.parts.filter((part) => !!part.name).length;
+    if (def.kind === 'group') return sum + 1;
     return sum + (def.name ? 1 : 0);
 }, 0);
 check(layersOnMap.size === expectedLayers, 'the group master switch turns the whole catalogue on');
@@ -509,6 +506,44 @@ const worldPlan = API.planWmtsTile(0, 0, 0, 256, 0);
 check(worldPlan.cols.length === 2 && worldPlan.rows[0].r === 0,
     'level 0 of the EPSG:4326 grid is two tiles wide, as the WMTS matrix set says');
 
+/* Shared WMTS images: concurrent/revisited destination tiles reuse requests. */
+const originalCreateElement = document.createElement;
+const sourceImages = [];
+let paints = 0;
+document.createElement = (tag) => {
+    const node = originalCreateElement(tag);
+    if (tag === 'img') sourceImages.push(node);
+    if (tag === 'canvas') node.getContext = () => ({ drawImage() { paints++; } });
+    return node;
+};
+const wmtsLayer = new API.WmtsLayer(CONFIG.byId('hillshade_2015'));
+let completedTiles = 0;
+const destination = { z: 12, x: 2273, y: 1530 };
+wmtsLayer.createTile(destination, (error) => { assert.ifError(error); completedTiles++; });
+const uniqueRequests = sourceImages.length;
+check(uniqueRequests > 1, 'WMTS mosaic has multiple source images');
+wmtsLayer.createTile(destination, (error) => { assert.ifError(error); completedTiles++; });
+check(sourceImages.length === uniqueRequests, 'concurrent WMTS tiles share in-flight source requests');
+sourceImages[0].naturalWidth = sourceImages[0].naturalHeight = 256;
+sourceImages[0].onload();
+check(paints > 0 && completedTiles === 0, 'available imagery paints before the slowest source completes');
+sourceImages.slice(1).forEach(image => {
+    image.naturalWidth = image.naturalHeight = 256;
+    image.onload();
+});
+check(completedTiles === 2, 'all shared request consumers complete once');
+wmtsLayer.createTile(destination, (error) => { assert.ifError(error); completedTiles++; });
+check(sourceImages.length === uniqueRequests && completedTiles === 3, 'revisiting a tile reuses decoded source images');
+const failedLayer = new API.WmtsLayer(CONFIG.byId('dsm_hill'));
+let failedDone = 0;
+const failedStart = sourceImages.length;
+failedLayer.createTile({ z: 0, x: 0, y: 0 }, (error) => { check(!!error, 'missing WMTS sources report an error'); failedDone++; });
+sourceImages.slice(failedStart).forEach(image => image.onerror());
+const failedRequests = sourceImages.length;
+failedLayer.createTile({ z: 0, x: 0, y: 0 }, () => { failedDone++; });
+check(failedDone === 2 && sourceImages.length === failedRequests, 'recent failed sources are shared rather than immediately requested again');
+document.createElement = originalCreateElement;
+
 /* ── run-time name resolution ────────────────────────────────────────────── */
 (async () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -556,11 +591,11 @@ check(worldPlan.cols.length === 2 && worldPlan.rows[0].r === 0,
         'index.html loads the generated catalogue before the config');
     /* Each asset carries the tag of whatever last changed it: the data file and
      * the config by the “LiDAR” rename, the module by the catalogue itself. */
-    check(/js\/asig-albania-layers\.js\?v=20261024-asig-catalogue/.test(html) &&
+    check(/js\/asig-albania-layers\.js\?v=20261026-viewport-heritage/.test(html) &&
         /js\/asig-albania-layers\.config\.js\?v=20261024-asig-lidar/.test(html),
         'index.html loads the re-tagged module and config');
     check(html.includes('id="albaniaSubLayers"'), 'the single Albania mount is still in the shell');
-    check(/data-key="albania_group_title"/.test(html), 'the group title keeps its translation key');
+    check(!/data-key="albania_group_title"/.test(html), 'no country-level layer heading');
     check(/#albaniaRow\.albania-out-of-country\s*\{[\s\S]*?display:\s*none\s*!important/.test(read('css/styles.css')),
         'the country gate is still enforced by CSS');
     check(/\.albania-section-head/.test(read('css/styles.css')) && /\.albania-active-item/.test(read('css/styles.css')),
