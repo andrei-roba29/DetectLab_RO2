@@ -4336,10 +4336,9 @@
         /* ── Historical sublayer rows carry a photo of one of their own tiles ──
            `--row-preview` is set by js/layer-panel-rows.js once the tile has
            actually loaded, so a dead service leaves the plain glass row behind
-           instead of an empty box. The photo is deliberately mean-ed out
-           (heavy blur, low saturation, low brightness) and then washed with
-           violet, because the slider, the switch, the info button and the
-           label all sit on top of it and have to stay readable. */
+           instead of an empty box. Keep map details recognizable rather than
+           blurring the tile into a flat colour. A dark violet wash keeps the
+           slider, switch, info button and labels readable above the image. */
         .transp-layer-row[data-row-preview]::before,
         .dl-sublayer-row[data-row-preview]::before {
             content: '';
@@ -4351,11 +4350,11 @@
             background-position: center;
             background-size: cover;
             background-repeat: no-repeat;
-            filter: blur(7px) saturate(0.45) brightness(0.72) contrast(0.95);
+            filter: saturate(0.85) brightness(0.9) contrast(1.05);
             /* The blur softens the edges outwards; clip them back to the row. */
             -webkit-clip-path: inset(0 round var(--row-radius));
             clip-path: inset(0 round var(--row-radius));
-            opacity: 0.7;
+            opacity: 0.95;
             pointer-events: none;
         }
 
