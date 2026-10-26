@@ -47,12 +47,12 @@ const CA_BBOX = [-141.0, 41.0, -52.0, 83.0];    // Canada (group availability fa
    ══════════════════════════════════════════════════════════════ */
 assert(/#transpPanel\.country-filter-active \.country-layer-unavailable\s*\{\s*display:\s*none\s*!important/.test(css),
     'styles.css hides rows marked country-layer-unavailable while the filter is active');
-assert(html.includes('css/styles.css?v=20261025-pastel-orange-sliders'), 'index.html loads the re-versioned styles.css');
-assert(html.includes('js/map-app.js?v=20261025-lidar-3d-tile-heal'), 'index.html loads the ArcGIS-basemap map-app.js');
+assert(html.includes('css/styles.css?v=20261026-viewport-heritage'), 'index.html loads the re-versioned styles.css');
+assert(html.includes('js/map-app.js?v=20261026-lidar-hillshade-zoom'), 'index.html loads the single-row hillshade map-app.js');
 assert(html.includes('js/historical-eu-maps.js?v=20261013-flat-hist-maps'), 'index.html loads the country-attribution catalog');
 assert(html.includes('js/globe-country-picker.js?v=20261017-outline-zoom-settle'), 'index.html loads the re-versioned picker');
-['css/styles.css?v=20261025-pastel-orange-sliders',
- 'js/map-app.js?v=20261025-lidar-3d-tile-heal',
+['css/styles.css?v=20261026-viewport-heritage',
+ 'js/map-app.js?v=20261026-lidar-hillshade-zoom',
  'js/historical-eu-maps.js?v=20261013-flat-hist-maps',
  'js/globe-country-picker.js?v=20261017-outline-zoom-settle'].forEach(function (p) {
     assert(sw.includes("'" + p + "'"), 'sw.js precaches ' + p);
@@ -107,6 +107,11 @@ class ElementMock extends EventTarget {
         this.tagName = tag;
         this.id = attrs.id || '';
         this.parentElement = parent;
+        // Real DOM `children`: map-app.js counts mount containers with
+        // `mount.children.length` when it decides whether the LiDAR group is
+        // still available, so the mock tree must expose it too.
+        this.children = [];
+        if (parent && parent.children) parent.children.push(this);
         this.style = {};
         this.dataset = { category: attrs['data-category'], tab: attrs['data-tab'] };
         const classes = new Set((attrs.class || '').split(/\s+/));
@@ -301,11 +306,15 @@ function groupRowOf(document, iconId) {
     // The Romanian county catalogue is not Italian either.
     assert.equal(rowOfSlider(document, 'lidarHdOpacitySlider', 'lidarSubLayers').classList.contains(UNAVAILABLE),
         true, 'HD county row hidden for Italy');
-    // Every European country carries the generic Hillshade LiDAR derivate
-    // (MapTiler Terrain RGB), so Italy gets its own row and the LiDAR group
-    // stays — but no foreign national LiDAR service leaks in.
-    assert.equal(unavailable(document, 'lidarDerivateITRow'), false,
-        'Italy has its own Hillshade LiDAR derivate row available');
+    // The generic Hillshade LiDAR derivate row is ONE continent-wide layer
+    // (MapTiler Hillshade is a single global raster — it used to be duplicated
+    // as one row per country, which tripled the same switch down the panel),
+    // so Italy keeps that one row and the LiDAR group, but no foreign national
+    // LiDAR service leaks in.
+    assert.equal(unavailable(document, 'lidarDerivateRow'), false,
+        'Italy keeps the single Hillshade LiDAR derivate row');
+    assert.equal(document.getElementById('lidarDerivateITRow'), null,
+        'no per-country Hillshade LiDAR derivate rows are left in the panel');
     assert.equal(groupRowOf(document, 'lidarExpandIcon').classList.contains(UNAVAILABLE), false,
         'LiDAR group kept for Italy (generic Hillshade LiDAR derivate row)');
     // ...and the Romania-only free historical group disappears entirely.

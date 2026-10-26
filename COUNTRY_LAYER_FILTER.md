@@ -20,14 +20,23 @@ layers** and keeps the selection visible on the map:
     **no** France/Switzerland rows (their boxes reach Italy's bbox but the
     services carry zero Italian data); Denmark selected → **no** Sweden/Poland
     rows (their boxes clip Denmark's bbox at Bornholm/Zealand).
-  - Every European country also gets a generic **Hillshade LiDAR derivate**
-    row (MapTiler Hillshade, `api.maptiler.com/tiles/hillshade`,
-    transparent shaded-relief raster tiles), attributed to its own ISO in `LAYER_COUNTRIES`
-    with a coverage box from `data/countries-50m.json` restricted to the
-    European box. Rows live in `js/map-app.js` (`LIDAR_SUB_LAYERS` keys
-    `derivate<ISO>` plus `LIDAR_DERIVATE_BOUNDS`) and render as panel rows
-    in `index.html` (`lidarEuropeanSubLayers`), gated by the same country
-    filter as the national services.
+  - **Hillshade LiDAR derivate** (MapTiler Hillshade,
+    `api.maptiler.com/tiles/hillshade`, transparent shaded-relief raster
+    tiles) is **ONE continent-wide row**, not a per-country one. It used to be
+    duplicated as `derivate<ISO>` for every European country, but the service
+    is a single GLOBAL raster: all 50 copies requested exactly the same tiles,
+    so the panel showed "Hillshade LiDAR derivate" once per country whose box
+    touched the viewport (the same layer, tripled) and every extra toggle added
+    another identical overlay. It is now a single `LIDAR_SUB_LAYERS.derivate`
+    layer with a continent box in `LIDAR_DERIVATE_BOUNDS`, rendered as one row
+    (`#lidarDerivateRow`) inside `lidarEuropeanSubLayers`, declared
+    `countryIndependent` so every country view keeps it — a global shaded-relief
+    overlay belongs to every European country and never leaks a *national*
+    service into the wrong ISO. The layer also carries `maxNativeZoom: 12`
+    (the tileset's real `maxzoom`, from its TileJSON): without it Leaflet asked
+    for z13+ tiles the service does not have, so above zoom 12 the overlay went
+    blank and only the basemap was left on screen. Above z12 the last native
+    tile is upscaled instead.
   - **Romanian national layers** (county LiDAR grids, APM, UAT, patrimoniu,
     Biblioteca din Babel, the free historical sheets, battles, scanner, archeo
     tools, Amprenta Vegetației) are attributed `['RO']` and disappear for every
