@@ -4,7 +4,11 @@
  *  - rotates the map pane around the viewport centre
  *  - keeps click / pan / pinch coordinates correct
  *  - lets the user twist the map with two fingers (touch)
- *    or Alt/Option-drag / Ctrl-wheel (desktop) with stable deadband
+ *    or Alt/Option-drag / Ctrl-wheel (desktop). The two-finger twist has a
+ *    Google-Earth-style deadband: the fingers must travel ~34 px along the
+ *    arc of the rotation before anything turns (never under 8°, however wide
+ *    the fingers), and a pinch-zoom never turns the map at all — as soon as
+ *    the finger spread changes, the gesture is a zoom and stays one.
  *  - shows a bottom-left column of 38x38 map buttons:
  *      * compass — the rose follows the camera continuously, a tap eases
  *        the view back to true north, a horizontal drag on the rose turns
@@ -21,8 +25,31 @@
     var DEG = Math.PI / 180;
     var RAD = 180 / Math.PI;
     var SNAP = 3.0; // Snap to north when within 3 degrees
-    var TOUCH_ROTATE_THRESHOLD = 9.0; // Intentional twist threshold in degrees
-    var MIN_TOUCH_DISTANCE = 35; // Minimum pixel distance between fingers for angular stability
+    /* Two-finger twist deadband — Google-Earth style.
+     *
+     * A fixed angle threshold (the old 9°) is wrong for touch: the same 9°
+     * is a wide, deliberate sweep when the fingers are 300 px apart and a
+     * 5 px twitch when they are close together, which is exactly what a
+     * pinch-zoom produces. Google Earth gates a twist on how far the fingers
+     * actually travel along the arc of their rotation, so the threshold is
+     * expressed in pixels of arc at the CURRENT finger spacing, with a
+     * degree floor so a very wide two-finger hand cannot rotate on a couple
+     * of degrees. */
+    var TOUCH_ROTATE_ARC = 34;      // px of tangential finger travel before a twist counts
+    var TOUCH_ROTATE_ANGLE_MIN = 8; // …but never below this many degrees, however wide the fingers
+    var TOUCH_ROTATE_ANGLE_MAX = 45; // …and never above this, however close together
+    var MIN_TOUCH_DISTANCE = 64;   // px between fingers; closer than this the angle is pure noise
+    /* Pinch arbitration: a two-finger zoom must never turn the map. If the
+     * spread between the fingers changes by more than a few percent, the
+     * gesture is a pinch, not a twist — Google Earth likewise keeps a pinch
+     * purely radial. An already-engaged twist is cancelled (and locked out
+     * for the rest of the gesture) as soon as it turns into a real pinch. */
+    var TOUCH_PINCH_SLOP = 0.06;   // >6 % spread change before any twist engages → it is a pinch
+    var TOUCH_PINCH_ABORT = 0.18;  // >18 % spread change cancels an already engaged twist
+    /* iOS Safari's gesture events carry rotation in degrees but no finger
+     * spacing, so they get their own (wider) degree deadband instead of the
+     * arc test. */
+    var TOUCH_GESTURE_MIN_ANGLE = 12;
     var COMPASS_DRAG_THRESHOLD = 3; // px of horizontal travel before a press becomes a drag
     var COMPASS_DRAG_SENSITIVITY = 0.55; // degrees of bearing per dragged pixel
     var RESET_DURATION = 320; // ms — Google Earth's ease back to north
@@ -256,8 +283,10 @@
         });
     }
 
-    // Two-finger twist with intentional threshold and distance guard.
-    // Pinch-zoom stays with Leaflet's own TouchZoom.
+    // Two-finger twist with a Google-Earth-style arc deadband and pinch
+    // arbitration. Pinch-zoom stays with Leaflet's own TouchZoom and must
+    // never turn the map: only a deliberate twist — the fingers travelling
+    // tangentially around each other, not away from each other — rotates.
     L.Map.TouchRotate = L.Handler.extend({
         addHooks: function () {
             L.DomEvent.on(this._map._container, 'touchstart', this._onStart, this);
@@ -277,64 +306,152 @@
             L.DomEvent.off(document, 'touchmove', this._onMove, this);
             L.DomEvent.off(document, 'touchend touchcancel', this._onEnd, this);
         },
+
+        /* How far the twist must go before it counts, for this finger spacing:
+         * enough tangential travel along the arc of the rotation (px), clamped
+         * to a sensible degree range. Close fingers therefore demand a big,
+         * obvious angle; wide fingers demand real travel — never a twitch. */
+        _angleThreshold: function (distance) {
+            var deg = (TOUCH_ROTATE_ARC / Math.max(distance, 1)) * RAD;
+            return Math.min(TOUCH_ROTATE_ANGLE_MAX, Math.max(TOUCH_ROTATE_ANGLE_MIN, deg));
+        },
+
+        /* The two-finger pair as { angle, distance }, or null when the angle
+         * cannot be trusted (not two fingers, or fingers too close together). */
+        _pair: function (e) {
+            if (!e.touches || e.touches.length !== 2) return null;
+            var a = this._map.mouseEventToContainerPoint(e.touches[0]);
+            var b = this._map.mouseEventToContainerPoint(e.touches[1]);
+            var distance = a.distanceTo(b);
+            if (distance < MIN_TOUCH_DISTANCE) return null;
+            return { angle: angleBetween(a, b), distance: distance };
+        },
+
+        /* (Re)start the gesture's reference frame at the current finger pair.
+         * Used at touchstart and again whenever the fingers were too close to
+         * read and have just spread far enough apart. */
+        _rebase: function (e) {
+            var g = this._gesture;
+            var pair = this._pair(e);
+            if (!g || !pair || g.engaged || g.pinching) return;
+            g.startAngle = pair.angle;
+            g.startBearing = this._map.getBearing();
+            g.startDistance = pair.distance;
+            g.engagedDistance = pair.distance;
+            g.pending = false;
+        },
+
+        _onStart: function (e) {
+            if (this._usingGesture) return;
+            if (!e.touches || e.touches.length !== 2 || !this._map._rotate) return;
+            this._gesture = {
+                pending: true,   // no trustworthy angle yet — baselined below
+                engaged: false,
+                pinching: false,
+                offset: 0
+            };
+            L.DomEvent.on(document, 'touchmove', this._onMove, this);
+            L.DomEvent.on(document, 'touchend touchcancel', this._onEnd, this);
+            this._rebase(e);
+        },
+
+        _onMove: function (e) {
+            if (this._usingGesture || !this._gesture) return;
+            if (!e.touches || e.touches.length !== 2) return;
+            var g = this._gesture;
+            var pair = this._pair(e);
+            if (!pair) {
+                // Fingers converged below a readable spacing mid-twist: the
+                // angle is noise now — stop turning and lock the gesture out.
+                if (g.engaged) {
+                    g.pinching = true;
+                    g.engaged = false;
+                    this._map.fire('moveend');
+                }
+                return;
+            }
+            if (g.pinching) return;
+            if (g.pending) {
+                this._rebase(e);
+                if (g.pending) return;
+            }
+            var twist = wrapDeg(pair.angle - g.startAngle);
+            if (!g.engaged) {
+                var spread = (pair.distance - g.startDistance) / g.startDistance;
+                if (Math.abs(spread) > TOUCH_PINCH_SLOP) {
+                    // The fingers are moving apart/together: a two-finger zoom,
+                    // not a request to turn. Google Earth keeps a pinch purely
+                    // radial and so must we.
+                    g.pinching = true;
+                    return;
+                }
+                if (Math.abs(twist) < this._angleThreshold(pair.distance)) return;
+                g.engaged = true;
+                g.engagedDistance = pair.distance;
+                g.offset = twist; // the turn starts from 0° — no jump at engage
+            } else {
+                var engagedSpread = (pair.distance - g.engagedDistance) / g.engagedDistance;
+                if (Math.abs(engagedSpread) > TOUCH_PINCH_ABORT) {
+                    // A real pinch grew out of the twist: stop turning and do
+                    // not resume for the rest of the gesture.
+                    g.pinching = true;
+                    g.engaged = false;
+                    this._map.fire('moveend');
+                    return;
+                }
+            }
+            this._map.setBearing(g.startBearing + (twist - g.offset), { noMove: true });
+            L.DomEvent.preventDefault(e);
+        },
+
+        _onEnd: function () {
+            L.DomEvent.off(document, 'touchmove', this._onMove, this);
+            L.DomEvent.off(document, 'touchend touchcancel', this._onEnd, this);
+            if (this._gesture && this._gesture.engaged) this._map.fire('moveend');
+            this._gesture = null;
+        },
+
+        // iOS Safari gesture events: rotation in degrees, no finger spacing —
+        // same pinch arbitration, with a degree deadband instead of the arc test.
         _onGestureStart: function (e) {
             if (!this._map._rotate) return;
             this._usingGesture = true;
+            this._gesturePinch = false;
+            this._gestureEngaged = false;
+            this._gestureRotation = 0;
+            this._gestureScale = (typeof e.scale === 'number' && e.scale) || 1;
             this._gestureBearing = this._map.getBearing();
-            this._gestureMoved = false;
             e.preventDefault();
         },
         _onGestureChange: function (e) {
             if (!this._map._rotate || typeof e.rotation !== 'number') return;
-            var rot = e.rotation;
-            if (!this._gestureMoved) {
-                if (Math.abs(rot) < TOUCH_ROTATE_THRESHOLD) return;
-                this._gestureMoved = true;
-            }
-            // Smoothly subtract deadband so rotation begins gently without sudden jumps
-            var smoothRot = rot > 0 ? (rot - TOUCH_ROTATE_THRESHOLD) : (rot + TOUCH_ROTATE_THRESHOLD);
-            this._map.setBearing(this._gestureBearing + smoothRot, { noMove: true });
             e.preventDefault();
+            if (this._gesturePinch) return;
+            var scale = (typeof e.scale === 'number' && e.scale) || this._gestureScale;
+            if (Math.abs(scale / this._gestureScale - 1) > TOUCH_PINCH_SLOP) {
+                // The spread is changing: a zoom. Its rotation delta is finger
+                // noise, not a request to turn the map.
+                this._gesturePinch = true;
+                if (this._gestureEngaged) {
+                    this._gestureEngaged = false;
+                    this._map.fire('moveend');
+                }
+                return;
+            }
+            var rot = e.rotation;
+            if (!this._gestureEngaged) {
+                if (Math.abs(rot) < TOUCH_GESTURE_MIN_ANGLE) return;
+                this._gestureEngaged = true;
+                this._gestureRotation = rot;      // the turn starts from 0°
+                this._gestureBearing = this._map.getBearing();
+            }
+            this._map.setBearing(this._gestureBearing + (rot - this._gestureRotation), { noMove: true });
         },
         _onGestureEnd: function () {
-            if (this._gestureMoved) this._map.fire('moveend');
-            this._gestureMoved = false;
+            if (this._gestureEngaged) this._map.fire('moveend');
+            this._gestureEngaged = false;
+            this._gesturePinch = false;
             this._usingGesture = false;
-        },
-        _onStart: function (e) {
-            if (this._usingGesture) return;
-            if (!e.touches || e.touches.length !== 2 || !this._map._rotate) return;
-            var a = this._map.mouseEventToContainerPoint(e.touches[0]);
-            var b = this._map.mouseEventToContainerPoint(e.touches[1]);
-            if (a.distanceTo(b) < MIN_TOUCH_DISTANCE) return;
-            this._startAngle = angleBetween(a, b);
-            this._startBearing = this._map.getBearing();
-            this._moved = false;
-            L.DomEvent.on(document, 'touchmove', this._onMove, this);
-            L.DomEvent.on(document, 'touchend touchcancel', this._onEnd, this);
-        },
-        _onMove: function (e) {
-            if (this._usingGesture) return;
-            if (!e.touches || e.touches.length !== 2) return;
-            var a = this._map.mouseEventToContainerPoint(e.touches[0]);
-            var b = this._map.mouseEventToContainerPoint(e.touches[1]);
-            if (a.distanceTo(b) < MIN_TOUCH_DISTANCE) return;
-            var angle = angleBetween(a, b);
-            var delta = wrapDeg(angle - this._startAngle);
-            if (!this._moved) {
-                if (Math.abs(delta) < TOUCH_ROTATE_THRESHOLD) return;
-                this._moved = true;
-            }
-            // Smoothly subtract deadband so rotation starts smoothly
-            var smoothDelta = delta > 0 ? (delta - TOUCH_ROTATE_THRESHOLD) : (delta + TOUCH_ROTATE_THRESHOLD);
-            this._map.setBearing(this._startBearing + smoothDelta, { noMove: true });
-            L.DomEvent.preventDefault(e);
-        },
-        _onEnd: function () {
-            L.DomEvent.off(document, 'touchmove', this._onMove, this);
-            L.DomEvent.off(document, 'touchend touchcancel', this._onEnd, this);
-            if (this._moved) this._map.fire('moveend');
-            this._moved = false;
         }
     });
 

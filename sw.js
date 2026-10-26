@@ -812,7 +812,13 @@
 //   belongs to. The “Overlay the map” panel exposes the square size as an
 //   option for the exceptional case. Re-tags js/other-maps-overlay.js,
 //   js/other-maps.js and css/other-maps.css. See OTHER_MAPS.md.
-const CACHE_NAME = 'detectlab-v282-other-maps-georef';
+// v283: the two-finger twist gets a Google-Earth-style deadband — the fingers
+//   must travel ~34 px along the arc of the rotation before anything turns
+//   (never under 8°, however wide apart they are), fingers closer than 64 px
+//   can never rotate at all, and a pinch-zoom never turns the map: as soon as
+//   the finger spread changes, the gesture is a zoom and stays one. Re-tags
+//   js/map-rotate.js. See MAP_TOUCH_ROTATION.md.
+const CACHE_NAME = 'detectlab-v283-touch-rotate-deadband';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -903,6 +909,9 @@ const PRECACHE_URLS = [
   'css/offline-maps.css?v=20261025-layer-glass',
   'css/map3d-terrain.css?v=20261025-layer-glass',
   'js/map-rotate.js?v=20261025-earth-compass',
+  // v283: Google-Earth-style two-finger twist deadband + pinch arbitration
+  // (a two-finger zoom can no longer turn the map).
+  'js/map-rotate.js?v=20261026-touch-rotate-deadband',
   'js/tutorial.js?v=20261025-layer-glass',
   'js/layer-panel-rows.js?v=20261025-layer-glass',
   'js/layer-panel-rows.js?v=20261026-historical-previews',
