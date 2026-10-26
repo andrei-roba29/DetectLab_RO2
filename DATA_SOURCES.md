@@ -301,3 +301,18 @@ Finnish credential variables (env-only, documented in
 `/api/geo/finland` is allow-listed per source, rejects cross-origin callers,
 strips credentials and caps bodies — it is the *fallback* path; direct
 requests are always tried first.
+
+## “Alte hărți / Other maps” — the two non-georeferenced sources
+
+The premium “Other maps” sub-layer merges two independent portals behind one
+green-dot / free-overlay experience. Full architecture, request shapes and the
+offline catalogues: **`OTHER_MAPS.md`**.
+
+| provider | service | licence / terms | attribution as shown | credential |
+|---|---|---|---|---|
+| Hungaricana · Maps (maps.hungaricana.hu) | ECW tile pyramid + offline catalogue `data/other-maps-catalog.json` | content belongs to the partner archives (MNL, HIM, county archives); publication needs the content provider's agreement | “© Hungaricana – Kulturális Örökség Portál …” | none |
+| National Library of Scotland Map Finder (maps.nls.uk/geo/find) | GeoServer WFS 1.1.0 on `geoserver.nls.uk` (sheet footprints, live bbox queries) + IIIF Image API 2 on `map-view.nls.uk`; offline seed `data/other-maps-nls-catalog.json` | NLS terms per https://maps.nls.uk/copyright — most OS historic series are out of copyright; re-use requires the Library's attribution | “© National Library of Scotland · maps.nls.uk” | none (public, CORS-enabled) |
+
+NLS needs no key or proxy: the browser calls the WFS and IIIF endpoints directly.
+Live WFS queries are zoom-gated (≥ z9), coverage-gated (GB/Ireland box),
+debounced and failure-silent; the static seed keeps the layer useful offline.

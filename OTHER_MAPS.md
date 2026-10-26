@@ -1,9 +1,11 @@
-# „Alte hărți / Other maps” — hărți ne-georeferențiate (Hungaricana)
+# „Alte hărți / Other maps” — hărți ne-georeferențiate (Hungaricana + National Library of Scotland)
 
 **Cerere:** hărțile istorice care NU sînt georeferențiate — cele de pe
-[maps.hungaricana.hu](https://maps.hungaricana.hu/) care pe portal nu apar deloc pe
-hartă, pentru că au doar un nume de loc, nu și o amprentă la sol — să intre în aplicație
-ca sub-strat în grupul premium **„Hărți istorice / Historical Maps”**, sub numele
+[maps.hungaricana.hu](https://maps.hungaricana.hu/) și, din octombrie 2026, cele din
+[National Library of Scotland Map Finder](https://maps.nls.uk/geo/find/) care pe
+portaluri apar doar printr-un nume de loc / o amprentă de foaie, nu ca strat aliniat —
+să intre în aplicație ca sub-strat în grupul premium
+**„Hărți istorice / Historical Maps”**, sub numele
 **„Alte hărți / Other maps”**:
 
 1. cînd stratul e pornit, fiecare loc care are hărți apare ca **punct verde
@@ -67,6 +69,67 @@ Dimensiunea naturală se ia de la `/tile/imagesize/`; dacă acel endpoint nu e c
 din browser (CORS), modulul **sondează** piramida: întreabă tile-ul `(0,0,z)` cu z
 crescător ca să afle nivelul maxim, apoi numără tile-urile de pe rîndul și coloana de
 sus. Rezultatul se păstrează în `localStorage` (`dlOtherMaps.pyramid.v1`).
+
+## 2.1 A doua sursă: National Library of Scotland Map Finder
+
+Din octombrie 2026 sub-stratul are o a doua sursă, complet independentă:
+[maps.nls.uk/geo/find/](https://maps.nls.uk/geo/find/) — Map Finder-ul Bibliotecii
+Naționale a Scoției (NLS), ~200 000 de scanări istorice, în mare parte britanice și
+irlandeze. Sursa se numește `nls` și e servită de `js/other-maps-nls.js`, care se
+înregistrează singură în dispatcherul de tile-uri din `js/other-maps-tiles.js`
+(`registerSource('nls', …)`). Un record cu `source: "nls"` e rutat spre adapterul NLS;
+un string de cale sau un record fără sursă rămîne pe drumul Hungaricana, deci
+comportamentul vechi e neschimbat.
+
+Două servicii publice NLS sînt folosite, ambele CORS-deschise:
+
+| Lucru | Unde |
+| --- | --- |
+| Căutarea pe loc (footprint-uri) | `https://geoserver.nls.uk/geoserver/wfs` (GeoServer WFS 1.1.0) |
+| Piramida de tile-uri (IIIF Image API 2) | `https://map-view.nls.uk/iiif/2/<prefix>%2F<id>/info.json` |
+| Pagina omului | `https://maps.nls.uk/view/<id>` |
+| Deep-link în finder | `https://maps.nls.uk/geo/find/#…&point=<lat>,<lng>` |
+
+**Identificatorii.** Pentru o foaie cu id-ul de viewer `102345214`, identificatorul
+IIIF e `10234/102345214` (primele cinci cifre, apoi id-ul complet), iar serviciul de
+imagine e `https://map-view.nls.uk/iiif/2/10234%2F102345214`. Dacă serviciul `/iiif/2/`
+nu răspunde, adapterul încearcă și formele moștenite `/iiif/<id>/info.json` și
+`/iiif/1/<id>/info.json` (Image API 1.1, cu `tile_width`/`scale_factors`).
+
+**Tile-urile sînt cereri IIIF canonice, nu hash-uri.** Adapterul mapează grila
+`(x, y, nivel)` a overlay-ului pe regiuni: la nivelul `L`, factorul de scară e
+`s = 2^(maxZoom−L)`, iar tile-ul `(x,y)` cere
+`{bază}/{rx},{ry},{rw},{rh}/{tw},{th}/0/default.jpg`, cu muchiile clampate la
+dimensiunea imaginii. `maxZoom` vine din `scaleFactors`-ii din `info.json` (sau din
+regula 512 px cînd documentul nu listează gresia); miniatura e
+`{bază}/full/256,/0/default.jpg`. Dimensiunile se țin în
+`localStorage` (`dlOtherMaps.nls.pyramid.v1`).
+
+**WFS — aceeași interogare pe care o face finder-ul NLS.** `wfsBBoxUrl()` construiește
+un `GetFeature` pe cele 12 straturi de catalog (`nls:OS_6inch_all_find`,
+`nls:OS_one_inch_combined`, …), cu cîte un filtru
+`INTERSECTS(the_geom,SRID=4326;POLYGON(…))` per strat, unite cu `;`, și
+`propertyName=(the_geom,IMAGE,SHEET,DATES,YEAR)` — `the_geom` e cerut explicit, altfel
+GeoServer nu întoarce amprenta. `featureToRecord()` transformă fiecare feature în
+forma de catalog a aplicației: `id: "nls/<IMAGE>"`, `path: <prefix>/<IMAGE>`, locul
+după prefixul titlului foii (`"Accrington - Sheet 1 …"` → `Accrington`), anul din
+`YEAR`/`DATES`, iar coordonatele punctului verde sînt centroidul bbox-ului amprentei.
+
+**Descoperire live.** Catalogul static (`data/other-maps-nls-catalog.json`) e doar o
+sămînță. Cît timp stratul e pornit, `other-maps.js` întreabă WFS-ul și pentru fereastra
+curentă: cererea e debouncată (700 ms), nu pornește sub zoom 9 (o scară de țară ar
+întoarce prea multe foi), nu pleacă în afara cutiei de acoperire NLS
+(49.1–61°N, 12.9°V–1.8°E) și se memoizează pe celulă de jumătate de grad
+(`nlsCellKey`, maxim 20 celule). Foile întoarse se unesc în același index de puncte verzi
+ca cele două cataloage, dedublate după id; o eroare de rețea e silențioasă — punctele
+Hungaricana și sămînța NLS rămîn vizibile.
+
+**Sămînța offline.** `tools/build-nls-catalog.mjs` construiește catalogul static:
+live, cu interogări punct WFS pentru o listă de orașe (`--place/--lat/--lng`), cu o
+interogare de fereastră (`--bbox`), sau offline din răspunsuri WFS salvate
+(`--json-dir ./director`), caz în care nu e nevoie de rețea. Sămînța livrată acum e
+construită offline dintr-un răspuns WFS real (planuri cadastrale OS, Anglia): 262 de
+foi din 73 de locuri.
 
 ## 3. Punctele verzi și gruparea
 
@@ -179,9 +242,10 @@ Totul e local, per browser (`localStorage`), conform opțiunii alese:
 
 | Cheie | Conținut |
 | --- | --- |
-| `dlOtherMaps.v1` | stratul pornit/oprit, opacitatea, hărțile adăugate cu ancora, rotația, scara, dimensiunea pătratului georeferențieră și opacitatea fiecăreia |
-| `dlOtherMaps.pyramid.v1` | dimensiunea naturală a fiecărei foi deja citite |
+| `dlOtherMaps.v1` | stratul pornit/oprit, opacitatea, hărțile adăugate (din ambele surse) cu ancora, rotația, scara, dimensiunea pătratului georeferențieră și opacitatea fiecăreia |
+| `dlOtherMaps.pyramid.v1` | dimensiunea naturală a fiecărei foi Hungaricana deja citite |
 | `dlOtherMaps.pyramid.v1.order` | ordinea hash-ului care a funcționat |
+| `dlOtherMaps.nls.pyramid.v1` | dimensiunile naturale (`w/h/maxZoom`) ale foilor NLS citite prin `info.json` |
 
 Alinierea supraviețuiește reîncărcării paginii și repornirii stratului. Cînd se va dori
 împărțirea ei între utilizatori, punctul de schimb e `writeStore()` /
@@ -191,15 +255,18 @@ Alinierea supraviețuiește reîncărcării paginii și repornirii stratului. C�
 
 | Fișier | Rol |
 | --- | --- |
-| `js/other-maps-tiles.js` | piramida ECW a portalului: hash-ul AES, descoperirea dimensiunii, URL-urile |
-| `js/other-maps-overlay.js` | suprapunerea liberă: transformare, tile-uri vizibile, mînere, gesturi, pătratul georeferențieră |
-| `js/other-maps.js` | catalogul, punctele verzi, gruparea, fereastra, panoul, persistența |
-| `css/other-maps.css` | stilurile pentru toate cele de mai sus |
-| `data/other-maps-catalog.json` | catalogul (131 de foi → 42 de locuri: seed + lotul Transilvania, oct. 2026) |
-| `tools/build-hungaricana-catalog.mjs` | re-generează/extinde catalogul de pe portal |
+| `js/other-maps-tiles.js` | dispatcherul de surse + piramida ECW Hungaricana: hash-ul AES, descoperirea dimensiunii, URL-urile; `registerSource()` și rutarea după `record.source` |
+| `js/other-maps-nls.js` | sursa `nls`: adapter IIIF (info.json, regiuni, miniaturi), interogarea WFS a Map Finder-ului, parsarea feature-urilor, acoperirea, deep-link-urile |
+| `js/other-maps-overlay.js` | suprapunerea liberă: transformare, tile-uri vizibile, mînere, gesturi, pătratul georeferențieră ( independent de sursă) |
+| `js/other-maps.js` | cele două cataloage, punctele verzi, gruparea, fereastra, panoul, persistența, descoperirea live NLS |
+| `css/other-maps.css` | stilurile pentru toate cele de mai sus (inclusiv ecusonul de sursă) |
+| `data/other-maps-catalog.json` | catalogul Hungaricana (131 de foi → 42 de locuri: seed + lotul Transilvania, oct. 2026) |
+| `data/other-maps-nls-catalog.json` | sămînța NLS (262 de foi → 73 de locuri, planuri OS ale Angliei; se regenerază cu tool-ul de mai jos) |
+| `tools/build-hungaricana-catalog.mjs` | re-generează/extinde catalogul Hungaricana de pe portal |
+| `tools/build-nls-catalog.mjs` | construiește catalogul NLS din WFS (live sau `--json-dir` offline); `--self-test` |
 | `test-other-maps.js` | regresia (rulează fără rețea) |
 | `index.html` | rîndul din panoul „Hărți istorice” + tagurile de asset |
-| `sw.js` | cache `detectlab-v282-other-maps-georef` |
+| `sw.js` | cache `detectlab-v284-nls-find` |
 
 ## 7. Cum extinzi catalogul
 
@@ -240,15 +307,46 @@ coordonatele de comitat sînt aproximative). La foile cu mai multe locuri cîșt
 primul numit, traseele A–B primesc puncte la mijloc, iar foile fără scanare (multe
 S 118) sînt sărite — cardul fără `path` nu ajunge în catalog.
 
+### 7.1 Extinderea sursei NLS
+
+Sursa NLS are API JSON (GeoServer WFS) și header-e CORS, deci catalogul se poate
+construi atît live, cît și din răspunsuri salvate:
+
+```bash
+# orașele din gazetarul încorporat (o cerere WFS punct, cu politețe de 1 s)
+node tools/build-nls-catalog.mjs
+
+# un oraș anume
+node tools/build-nls-catalog.mjs --place Edinburgh --lat 55.9533 --lng -3.1883
+
+# o fereastră geografică (același GetFeature pe care îl face și modulul live)
+node tools/build-nls-catalog.mjs --bbox -3.3,55.9,-3.1,56.0
+
+# offline: răspunsuri WFS salvate (*.json / *.geojson, căutare recursivă)
+node tools/build-nls-catalog.mjs --json-dir ./wfs-dumps
+
+# verificarea parserului și a URL-urilor IIIF, fără rețea
+node tools/build-nls-catalog.mjs --self-test
+```
+
+Fiecare feature WFS devine un record `nls/<IMAGE>` (deduplicat), punctul verde stă pe
+centroidul amprentei, iar foile aceluiași loc sînt eșantionate uniform peste ani
+(`--per-place`, implicit 6). Spre deosebire de Hungaricana, dimensiunile naturale ale
+imaginii **nu** sînt în catalog: `info.json` IIIF e citit la prima adăugare a foii și
+păstrat în `localStorage`. Pe lîngă catalogul static, stratul face oricum o interogare
+WFS live pentru fereastra curentă (§2.1), deci extinderea acoperirii nu necesită niciun
+release.
+
 ## 8. Regresie
 
 ```bash
 node test-other-maps.js
 ```
 
-959 de verificări, fără rețea:
+peste 3 100 de verificări, fără rețea:
 
-* hash-ul tile-ului reproduce vectorul publicat de dezoomify (ambele ordini);
+* hash-ul tile-ului Hungaricana reproduce vectorul publicat de dezoomify (ambele ordini),
+  iar stringurile de cale și recordurile fără `source` rămîn rutate pe același drum;
 * matematica transformării: alegerea nivelului din piramidă, **scara de încadrare
   (fitScale) și preferința pentru nivelul mai fin lizibil (cu plafon de tile-uri)**,
   păstrarea proporțiilor, limitele de scală, inversa transformării (fereastra de
@@ -278,8 +376,28 @@ node test-other-maps.js
   translate(ancora)` pe foi, fiecare punct desenat ajungând exact la poziția lui la
   zoom-ul țintă; pinch-ul (zoom 13→14, `touchZoom._zooming`) rescalează cadrul
   stabilizat fără redraw, iar la stabilire transformarea se șterge.
+* **sursa NLS** (`js/other-maps-nls.js`, §10–14): derivarea identificatorilor
+  (`102345214` → `10234/102345214` → `iiif/2/10234%2F…`), URL-urile IIIF
+  (rădăcina piramidei, tile nativ, muchii clampate, tile în afara grilei),
+  parsarea `info.json` v2 și v1.1 cu lanțul de fallback `/iiif/2/ → /iiif/ →
+  /iiif/1/`, forma interogării WFS (12 tipuri, 12 filtre `INTERSECTS`,
+  `the_geom` în `propertyName`, `maxFeatures`), maparea feature→record pe
+  Polygon și MultiPolygon, filtrele de id invalid și dedublarea, cutia de
+  acoperire și deep-link-ul finder-ului, eșecul de rețea care întoarce lista
+  goală;
+* **dispatcherul multi-sursă**: recordurile `{source:"nls"}` sînt rutate spre
+  adapterul NLS pentru tile/thumb/record/resolve, iar stringurile și recordurile
+  fără sursă rămîn pe Hungaricana — verificat și prin managerul de overlay, care
+  pictează o foaie NLS cu URL-uri IIIF și o foaie Hungaricana cu URL-uri cu hash,
+  ambele încadrate identic (`fitScale`);
+* **catalogul NLS comis**: fiecare record are id `nls/<număr>`, cale IIIF
+  `<prefix>/<număr>`, coordonate în cutia de acoperire și id unic, iar
+  `combineCatalogMaps` etichetează corect cele două surse și îmbinarea live
+  (`mergeLiveRecords`/`rebuildRecords`) crește indexul comun fără dubluri.
 
-`js/other-maps-overlay.js`, `js/other-maps.js` și `css/other-maps.css` sînt
-versionate `20261026-other-maps-georef`; catalogul
-(`data/other-maps-catalog.json`) rămîne la `20261026-cluj-alba`; cache-ul
-service-worker-ului e `detectlab-v282-other-maps-georef`.
+`js/other-maps-tiles.js`, `js/other-maps-nls.js`, `js/other-maps-overlay.js`,
+`js/other-maps.js` și `css/other-maps.css` sînt versionate `20261026-nls-find`;
+catalogul Hungaricana (`data/other-maps-catalog.json`) rămîne la
+`20261026-cluj-alba`, iar catalogul NLS (`data/other-maps-nls-catalog.json`) e
+la `20261026-nls-find`; cache-ul service-worker-ului e
+`detectlab-v284-nls-find`.

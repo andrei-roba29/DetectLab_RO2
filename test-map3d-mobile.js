@@ -291,8 +291,8 @@ assert(shellVersion >= 196,
  * the bottom-left control column, above the base-layer button. */
 const TAGS = {
     'js/layer-registry.js': '20261024-uk-historical-maps',
-    'js/map3d-terrain.js': '20261026-lidar-whole-or-disc',
-    'css/map3d-terrain.css': '20261026-lidar-whole-or-disc',
+    'js/map3d-terrain.js': '20261026-desktop-basemap',
+    'css/map3d-terrain.css': '20261026-pwa-3d-button-size',
     'js/danish-layers.config.js': '20261024-danish-heritage-proxy',
     'js/danish-layers.js': '20261026-flat-country-sections'
 };

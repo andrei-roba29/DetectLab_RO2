@@ -9,6 +9,12 @@ Scope: **installed PWA (`body.is-pwa`) only.** On the website
 (`66px` desktop, `58px` phones) and the 3D bar still anchors at `bottom: 34px`,
 centred over the bottom-centre switch.
 
+> **Update (v285):** in the PWA the switch/refresh buttons are now 38×38
+> squares matching the rest of the column, and while 3D is open the group
+> (2D switch + refresh) leaves this column for the bottom-centre slot under
+> the centred 3D bar. In 2D everything described here still applies. See
+> [PWA_3D_BUTTON_SIZE_CENTRE.md](PWA_3D_BUTTON_SIZE_CENTRE.md).
+
 ---
 
 ## The ask
@@ -114,9 +120,13 @@ scrolls, exactly as it already did — `overflow-y: auto` is untouched.
 - `#arcgisBasemapCtrl` itself, the compass column, the layer panel, the search
   bar, the country dock and the PWA action dock.
 - The country “Exit view” pill's anchors (`18px`, PWA `60px + inset`) and the
-  `--country-exit-lift` hook `js/country-dock.js` publishes; the switch simply
-  no longer needs it. The dock's `--layer-dock-clearance` still lifts the
-  bottom-centre stack (APM help, zoom hints).
+  `--country-exit-lift` hook `js/country-dock.js` publishes. In the **2D**
+  column the switch does not need it; while **3D is on** the switch + refresh
+  group returns to the bottom-centre slot and reads the lift again so it can
+  never cover the pill — see
+  [PWA_3D_BUTTON_SIZE_CENTRE.md](PWA_3D_BUTTON_SIZE_CENTRE.md). The dock's
+  `--layer-dock-clearance` still lifts the bottom-centre stack (APM help,
+  zoom hints).
 - The folded LiDAR window `#map3d-focus .m3d-focus-mini`, which keeps the
   bottom-centre slot to itself (`10px + inset`, 44px tall).
 

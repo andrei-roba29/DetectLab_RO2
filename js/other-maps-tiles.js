@@ -1,6 +1,14 @@
 /* =====================================================================
- * other-maps-tiles.js — Hungaricana ECW pyramid reader (no georeference)
+ * other-maps-tiles.js — tile dispatcher for “Other maps”
  * ---------------------------------------------------------------------
+ * This file owns the Hungaricana ECW pyramid reader and, since the NLS
+ * source was added, also the per-source dispatch table (registerSource):
+ * a record carrying a known `source` is routed to its own adapter
+ * (js/other-maps-nls.js for the National Library of Scotland IIIF service),
+ * while a plain path string or a sourceless record stays on the legacy
+ * Hungaricana path below.  Every Hungaricana function keeps its original
+ * signature and behaviour byte-for-byte.
+ *
  * The non-georeferenced sheets on maps.hungaricana.hu are served as an ECW
  * tile pyramid from static-cdn.hungaricana.hu.  A tile is addressed by a
  * 32-character hash rather than by /z/x/y:
@@ -320,25 +328,89 @@
         return task;
     }
 
+    /* ── multi-source registry ──────────────────────────────────────────
+     * Other maps can be served by more than one portal.  Each source
+     * registers an adapter implementing tileUrl / thumbUrl / recordUrl /
+     * resolve for its own records (js/other-maps-nls.js is the NLS IIIF
+     * adapter).  A record object carrying a known `source` routes to that
+     * adapter; a plain path string, or a record without a source, stays on
+     * the legacy Hungaricana pyramid — so every older caller and test keeps
+     * working unchanged. */
+    var sources = Object.create(null);
+
+    function registerSource(name, adapter) {
+        if (name && adapter) sources[name] = adapter;
+    }
+
+    function sourceAdapter(arg) {
+        if (arg && typeof arg === 'object' && arg.source && sources[arg.source]) {
+            return sources[arg.source];
+        }
+        return null;
+    }
+
+    /* Legacy callers pass ECW path strings; source callers pass the whole
+     * record.  Normalise the latter to the path the Hungaricana helpers key
+     * their caches on. */
+    function asPath(arg) {
+        return arg && typeof arg === 'object' ? arg.path : arg;
+    }
+
+    function dispatchTileUrl(arg, x, y, z) {
+        var adapter = sourceAdapter(arg);
+        if (adapter) return adapter.tileUrl(arg, x, y, z);
+        return tileUrl(asPath(arg), x, y, z);
+    }
+
+    function dispatchTileUrlAlt(arg, x, y, z) {
+        var adapter = sourceAdapter(arg);
+        if (adapter) {
+            /* IIIF has no hash-order ambiguity: the "alternate order" retry
+             * simply re-requests the same canonical region URL. */
+            return adapter.tileUrl(arg, x, y, z);
+        }
+        return tileUrlAlt(asPath(arg), x, y, z);
+    }
+
+    function dispatchThumbUrl(arg) {
+        var adapter = sourceAdapter(arg);
+        if (adapter) return adapter.thumbUrl(arg);
+        var path = asPath(arg);
+        return path ? bases.thumb + path : '';
+    }
+
+    function dispatchRecordUrl(arg) {
+        var adapter = sourceAdapter(arg);
+        if (adapter) return adapter.recordUrl(arg);
+        var id = asPath(arg);
+        if (!id) return bases.record;
+        return bases.record + id + '/view/';
+    }
+
+    function dispatchResolve(arg, hint) {
+        var adapter = sourceAdapter(arg);
+        if (adapter) return adapter.resolve(arg, hint);
+        return resolve(asPath(arg), hint);
+    }
+
     root.DetectLabOtherMapsTiles = {
         TILE_SIZE: TILE_SIZE,
         MAX_LEVEL: MAX_LEVEL,
+        registerSource: registerSource,
+        source: function (name) { return sources[name] || null; },
         configure: function (overrides) {
             Object.assign(bases, DEFAULT_BASES, overrides || {});
         },
         bases: function () { return Object.assign({}, bases); },
-        thumbUrl: function (path) { return path ? bases.thumb + path : ''; },
-        recordUrl: function (id) {
-            if (!id) return bases.record;
-            return bases.record + id + '/view/';
-        },
-        tileUrl: tileUrl,
-        tileUrlAlt: tileUrlAlt,
+        thumbUrl: dispatchThumbUrl,
+        recordUrl: dispatchRecordUrl,
+        tileUrl: dispatchTileUrl,
+        tileUrlAlt: dispatchTileUrlAlt,
         preferredOrder: preferredOrder,
         alternateOrder: alternateOrder,
         noteOrder: noteOrder,
         maxZoomFor: maxZoomFor,
-        resolve: resolve,
+        resolve: dispatchResolve,
         clearCache: function () {
             _hashCache = Object.create(null);
             _metaCache = Object.create(null);
