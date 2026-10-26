@@ -2602,6 +2602,14 @@
                         <div id="danishSubLayers" class="danish-sublayers" style="display:flex;flex-direction:column;gap:8px;overflow:hidden;transition:max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;max-height:6000px;opacity:1;"></div>
                     </div>
 
+                    <!-- United Kingdom: Historic England's NHLE and the principal
+                         RCAHMW, Heneb and Cadw registers for Wales. Rows and
+                         viewport-limited ArcGIS queries are built lazily by
+                         js/uk-heritage-layers.js. -->
+                    <div id="ukHeritageRow" class="country-section-list" data-category="free">
+                        <div id="ukHeritageSubLayers" style="display:flex;flex-direction:column;gap:8px;overflow:hidden;max-height:6000px;opacity:1;"></div>
+                    </div>
+
                     <!-- Suomi / Finland — MML terrain + cadastral, Museovirasto
                          heritage registers, SYKE protected sites, Åland and the
                          locally hosted Supabase conversions. Every entry (title
@@ -5280,6 +5288,9 @@
          WMS tiles, debounced WFS, local GeoJSON — all built from
          js/finland-layers.config.js. -->
     <script src="js/finland-layers.js?v=20261019-finland-filter"></script>
+    <!-- UK heritage: viewport-limited ArcGIS FeatureServer overlays for
+         Historic England, RCAHMW, Heneb and Cadw. -->
+    <script src="js/uk-heritage-layers.js?v=20261026-uk-heritage"></script>
     <script src="js/historical-eu-maps.js?v=20261013-flat-hist-maps"></script>
     <!-- The layers window's own row chrome: tags every nested `*SubLayers`
          row with the shared glass material and gives each historical-map row
