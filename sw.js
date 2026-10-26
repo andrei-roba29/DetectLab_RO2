@@ -800,7 +800,7 @@
 //   view and there is no rotation lock any more. Re-tags css/styles.css,
 //   css/tutorial.css, css/offline-maps.css, css/map3d-terrain.css,
 //   js/map-rotate.js and js/tutorial.js.
-const CACHE_NAME = 'detectlab-v271-pastel-orange-sliders';
+const CACHE_NAME = 'detectlab-v274-viewport-heritage';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -837,6 +837,8 @@ const PRECACHE_URLS = [
   'js/danish-layers.config.js?v=20261024-danish-heritage-proxy',
   'js/asig-albania-layers.config.js',
   'js/asig-albania-layers.config.js?v=20261017-albania-asig',
+  'js/asig-heritage.js?v=20261026-viewport-heritage',
+  'js/asig-albania-layers.js?v=20261026-viewport-heritage',
   'js/asig-albania-layers.js',
   'js/asig-albania-layers.js?v=20261017-albania-asig',
   'js/asig-albania-layers.config.js?v=20261021-albania-country-group',

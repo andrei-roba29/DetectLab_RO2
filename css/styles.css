@@ -9339,3 +9339,17 @@ a.dl-gmaps-directions-btn {
     outline: 2px solid currentColor;
     outline-offset: 2px;
 }
+
+/* Country catalogues expose ordinary sections, not another master layer. */
+.country-section-list,
+.country-section-list > #albaniaSubLayers,
+.country-section-list > #danishSubLayers {
+    display: contents !important;
+}
+.country-section-list.country-layer-unavailable,
+.country-section-list.albania-out-of-country,
+.country-section-list.viewport-layer-unavailable {
+    display: none !important;
+}
+
+.asig-heritage-cluster { background:#7354a3; color:#fff; border:2px solid #e6d7ff; border-radius:50%; text-align:center; line-height:28px; font-weight:bold; box-shadow:0 1px 5px #0008; }

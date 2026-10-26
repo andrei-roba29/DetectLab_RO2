@@ -25,6 +25,7 @@
  *     /api/corona/rasters, /api/geo/*  → proxied to Netlify in dev, or answered
  *                          with a short explanation when no upstream is set
  */
+import { asigHeritageResponse } from '../backend/src/lib/asig-heritage.mjs';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -124,9 +125,10 @@ const server = http.createServer(async (req, res) => {
      * deployment does: /api/geo/dk-dtk25 adds DATAFORSYNINGEN_TOKEN, /api/geo/dk-orto
      * adds the Datafordeler service user, /api/geo/dk-heritage returns
      * Fund og Fortidsminder as EPSG:4326 GeoJSON. */
-    if (DANISH_ROUTES[url.pathname]) {
+    if (url.pathname === '/api/geo/asig-heritage' || DANISH_ROUTES[url.pathname]) {
         try {
-            const response = await DANISH_ROUTES[url.pathname](new Request(url.toString(), { method: req.method }));
+            const handler = url.pathname === '/api/geo/asig-heritage' ? asigHeritageResponse : DANISH_ROUTES[url.pathname];
+            const response = await handler(new Request(url.toString(), { method: req.method }));
             const headers = {};
             response.headers.forEach((value, key) => { headers[key] = value; });
             headers['X-Danish-Proxy'] = 'dev-server';

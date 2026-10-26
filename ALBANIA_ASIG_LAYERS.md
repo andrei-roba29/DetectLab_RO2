@@ -1,3 +1,43 @@
+## Heritage performance change — 2026-10-26
+
+Heritage no longer creates one WMS tile overlay per source. A single viewport
+controller (`js/asig-heritage.js`) queries `/api/geo/asig-heritage` at zoom 10+
+and clusters the returned representatives in screen-pixel cells (80/50/24 px
+as zoom increases). Below zoom 10 it asks the user to zoom in, with no feature
+requests. Counts are a **bounded viewport sample**, not national totals.
+
+Queries are debounced 350 ms, serial, aborted on movement/removal, and guarded
+against stale replies. Old markers are cleared on movement and removal. Limits:
+150 objects per source, 600 per view, 2 MB per upstream response, 10 seconds per
+upstream query. Capped or failed queries have visible status messages. There is
+no automatic return to the memory-heavy WMS stack. Cluster clicks zoom in;
+individual clicks show a text-only title. Area features use bbox-centre markers,
+**not original polygon boundaries or guaranteed interior points**. Representatives
+outside the viewport are omitted. Full polygon detail and exhaustive results
+would require a separate, verified server-side generalization/aggregation feed.
+
+The proxy implementation is shared by Netlify, Express and the preview server.
+It requests WFS 1.0 EPSG:4326 (longitude,latitude) from ASIG's `/service/wfs`,
+using fixed host, validated bounds and constrained heritage type names. Existing
+WMS catalogue/attribution metadata stays intact for auditing, but Heritage is
+excluded from raster GetFeatureInfo queries. Marker attribution is retained.
+
+**Deployment verification required:** this environment cannot contact the ASIG
+host. WFS availability, type names, output-format support and production speed
+have not been verified live. A WMS layer being published does **not** guarantee
+that the equivalent WFS type is enabled. If ASIG refuses WFS or a type is absent,
+the UI reports an unavailable/incomplete feature service rather than silently
+showing an empty successful result. This change has mock/offline tests, not a
+confirmed PWA crash reproduction or device-memory benchmark.
+
+Tests: `node test-asig-heritage.mjs`, `node test-albania-asig-layers.js`.
+
+---
+
+> WMTS performance (2026-10-26): reprojection shares in-flight source images, caches up to 128 completed images, briefly caches failed URLs (15 seconds), and paints each source as it arrives. Source zoom/detail and CRS are unchanged. This reduces repeat work but cannot accelerate an uncached response from ASIG itself.
+
+> UI update (2026-10-26): thematic sections now appear directly in the layer list, without a country master layer. All Albanian and Danish LiDAR rows live once under the existing shared LiDAR accordion. Country filtering and per-layer controls remain in place.
+
 # Albania ASIG geoportal catalogue — one Albania-only panel
 
 The Albanian layers are the **ASIG geoportal catalogue** (Autoriteti Shtetëror

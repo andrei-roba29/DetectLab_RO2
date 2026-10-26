@@ -838,21 +838,27 @@
         var container = document.getElementById(SUB_CONTAINER_ID);
         if (!container) return;
         container.innerHTML = '';
+        var lidarMount = document.getElementById('danishLidarLayers');
+        if (lidarMount) lidarMount.innerHTML = '';
         var sections = [
             [tr(TEXT.base), PANEL_LAYERS.filter(function (l) { return l.group === 'base' && !l.panelGroup; })],
-            [tr(TEXT.overlay), PANEL_LAYERS.filter(function (l) { return l.group !== 'base' && !l.panelGroup; })]
+            [tr(TEXT.overlay), PANEL_LAYERS.filter(function (l) { return l.group !== 'base' && !l.panelGroup && !(lidarMount && l.id.indexOf('lidar_') === 0); })]
         ];
+        if (lidarMount) PANEL_LAYERS.filter(function (l) { return l.id.indexOf('lidar_') === 0; })
+            .forEach(function (layer) { lidarMount.appendChild(buildRow(layer)); });
         sections.forEach(function (section, index) {
             if (!section[1].length && index !== 0) return;
-            container.appendChild(el('div', { class: 'danish-layer-section', text: section[0] }));
+            var sectionContainer = el('div', { class: 'transp-layer-row', 'data-category': 'free' });
+            container.appendChild(sectionContainer);
+            sectionContainer.appendChild(el('div', { class: 'danish-layer-section', text: section[0] }));
             if (index === 0) {
                 var yearControl = buildYearSelector();
-                if (yearControl) container.appendChild(yearControl);
+                if (yearControl) sectionContainer.appendChild(yearControl);
             }
-            section[1].forEach(function (layer) { container.appendChild(buildRow(layer)); });
+            section[1].forEach(function (layer) { sectionContainer.appendChild(buildRow(layer)); });
         });
         (CONFIG.panelGroups || []).forEach(function (group) {
-            var details = el('details', { class: 'danish-layer-group', id: 'danishGroup_' + group.id });
+            var details = el('details', { class: 'danish-layer-group transp-layer-row', 'data-category': 'free', id: 'danishGroup_' + group.id });
             details.appendChild(el('summary', { class: 'danish-layer-section', text: tr(group.title) }));
             group.layers.forEach(function (id) {
                 var layer = CONFIG.byId(id);
@@ -927,6 +933,7 @@
     }
 
     function setExpanded(expanded) {
+        expanded = true; // Sections are exposed directly, without a country accordion.
         runtime.expanded = !!expanded;
         var container = document.getElementById(SUB_CONTAINER_ID);
         if (container) {
@@ -988,6 +995,8 @@
             row.classList.toggle('country-layer-unavailable', !inCountry);
             row.setAttribute('aria-hidden', inCountry ? 'false' : 'true');
         });
+        var lidarMount = document.getElementById('danishLidarLayers');
+        if (lidarMount) lidarMount.classList.toggle('country-layer-unavailable', !inCountry);
         var groupRow = document.getElementById(GROUP_ROW_ID);
         if (groupRow) {
             groupRow.classList.toggle('country-layer-unavailable', !inCountry);

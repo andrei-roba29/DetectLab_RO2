@@ -1,3 +1,5 @@
+> UI update (2026-10-26): thematic sections now appear directly in the layer list, without a country master layer. All Albanian and Danish LiDAR rows live once under the existing shared LiDAR accordion. Country filtering and per-layer controls remain in place.
+
 ## Free Denmark-only source groups (October 2026)
 
 The Danish panel now includes three collapsible groups, with no premium gate:

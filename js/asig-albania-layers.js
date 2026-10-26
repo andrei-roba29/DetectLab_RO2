@@ -382,6 +382,47 @@
         return { z: z, rows: rows, cols: cols };
     }
 
+    /* Adjacent Mercator tiles often use the same plate-carrée source image.
+     * Share in-flight requests and retain a bounded LRU of decoded images, so
+     * panning/reprojection does not repeatedly download and decode them. */
+    var wmtsImages = new Map();
+    function loadWmtsImage(url, callback) {
+        var cached = wmtsImages.get(url);
+        if (cached && cached.failedAt && Date.now() - cached.failedAt >= 15000) {
+            wmtsImages.delete(url);
+            cached = null;
+        }
+        if (cached) {
+            wmtsImages.delete(url);
+            wmtsImages.set(url, cached);
+            if (cached.waiters) cached.waiters.push(callback);
+            else callback(cached.image);
+            return;
+        }
+        var entry = { waiters: [callback], image: null, failedAt: 0 };
+        wmtsImages.set(url, entry);
+        var img = document.createElement('img');
+        function finish(image) {
+            if (!entry.waiters) return;
+            img.onload = img.onerror = null;
+            entry.image = image;
+            entry.failedAt = image ? 0 : Date.now();
+            var waiters = entry.waiters;
+            entry.waiters = null;
+            // Never evict an in-flight entry: its consumers still need it.
+            var completed = 0;
+            wmtsImages.forEach(function (item) { if (!item.waiters) completed++; });
+            wmtsImages.forEach(function (item, key) {
+                if (completed > 128 && !item.waiters) { wmtsImages.delete(key); completed--; }
+            });
+            waiters.forEach(function (notify) { notify(image); });
+        }
+        // No crossOrigin: ASIG does not provide CORS for these images.
+        img.onload = function () { finish(img.naturalWidth && img.naturalHeight ? img : null); };
+        img.onerror = function () { finish(null); };
+        img.src = url;
+    }
+
     var AsigWmtsLayer = L.GridLayer.extend({
         options: {
             tileSize: CONFIG.wmts.tileSize, opacity: 1, attribution: CONFIG.attribution,
@@ -439,30 +480,28 @@
                     }
                     st.ok += 1;
                     st.okLevel[level] = (st.okLevel[level] || 0) + 1;
-                    var context = null;
-                    try { context = canvas.getContext && canvas.getContext('2d'); }
-                    catch (e) { context = null; }
-                    if (context) {
-                        plan.rows.forEach(function (row, j) {
-                            plan.cols.forEach(function (col) {
-                                var img = images.get(col.c + '/' + row.r);
-                                if (img) context.drawImage(img, col.sx, row.sy, col.sw, row.sh, col.dx, j, col.dw, 1);
-                            });
-                        });
-                    }
                     done(null, canvas);
                 }
                 if (!pending) { finish(); return; }
                 images.forEach(function (_, key) {
                     var split = key.split('/');
-                    var img = document.createElement('img');
-                    /* No crossOrigin: the WMTS sends no CORS header, and the
-                     * canvas is only a drawing surface here (no getImageData),
-                     * so a tainted canvas is harmless — asking for CORS would
-                     * refuse every tile instead. */
-                    img.onload = function () { images.set(key, img); loaded += 1; if (!--pending) finish(); };
-                    img.onerror = function () { if (!--pending) finish(); };
-                    img.src = self.tileUrl(plan.z, Number(split[0]), Number(split[1]));
+                    loadWmtsImage(self.tileUrl(plan.z, Number(split[0]), Number(split[1])), function (img) {
+                        if (img) {
+                            images.set(key, img);
+                            loaded += 1;
+                            // Paint each available source immediately rather than
+                            // waiting for the slowest image in the mosaic.
+                            var context = null;
+                            try { context = canvas.getContext && canvas.getContext('2d'); } catch (e) {}
+                            if (context) plan.rows.forEach(function (row, j) {
+                                if (row.r !== Number(split[1])) return;
+                                plan.cols.forEach(function (col) {
+                                    if (col.c === Number(split[0])) context.drawImage(img, col.sx, row.sy, col.sw, row.sh, col.dx, j, col.dw, 1);
+                                });
+                            });
+                        }
+                        if (!--pending) finish();
+                    });
                 });
             }
             attempt(start);
@@ -676,7 +715,9 @@
         var mount = document.getElementById(MOUNT_ID);
         if (mount) {
             clear(mount);
-            mount.appendChild(toolsNode());
+            // Sections are normal layer-list entries, not a country catalogue.
+            var lidarMount = document.getElementById('albaniaLidarLayers');
+            if (lidarMount) clear(lidarMount);
             /* Heritage is ONE toggle at the top of the panel — never a group of
              * rows and never inside a section, so its parts cannot be mistaken
              * for layers the visitor has to switch on one by one. */
@@ -692,7 +733,16 @@
             }
             (CONFIG.sections || []).forEach(function (section) {
                 if (section.id === HERITAGE_ID) return;
-                mount.appendChild(sectionNode(section.id));
+                if (section.id === 'lidar' && lidarMount) {
+                    // Reuse the existing LiDAR accordion; render each source once.
+                    LAYERS.filter(function (def) { return def.section === 'lidar'; })
+                        .forEach(function (def) { lidarMount.appendChild(createRow(def)); });
+                } else {
+                    var sectionRow = sectionNode(section.id);
+                    sectionRow.classList.add('transp-layer-row');
+                    sectionRow.setAttribute('data-category', 'free');
+                    mount.appendChild(sectionRow);
+                }
             });
         }
         Object.keys(runtime.rows).forEach(function (id) {
@@ -965,6 +1015,22 @@
             opacity: runtime.opacity[def.id] / 100,
             overzoom: false
         };
+        if (def.id === HERITAGE_ID) {
+            // One bounded vector controller replaces N simultaneous WMS stacks.
+            if (!window.AsigHeritageLayer) {
+                setStatus(def.id, 'Heritage renderer unavailable. Reload the app.', 'error');
+                return entry;
+            }
+            var heritageLayer = new window.AsigHeritageLayer({
+                opacity: entry.opacity,
+                attribution: CONFIG.attribution,
+                parts: currentHeritageParts,
+                status: function (message, kind) { setStatus(def.id, message, kind); }
+            });
+            heritageLayer._dlDefId = 'albania.' + def.id;
+            entry.parts.push({ leaf: { kind: 'heritage-vector' }, layer: heritageLayer });
+            return entry;
+        }
         var leaves = def.kind === 'group'
             ? currentHeritageParts().filter(function (part) {
                 /* Only WMS parts carry a map layer; the keyword rule has no
@@ -1045,6 +1111,7 @@
         var def = CONFIG.byId(id);
         var entry = runtime.entries[id];
         if (!def || !runtime.active[id]) return;
+        if (id === HERITAGE_ID) return; // The viewport controller owns loading/error status.
         var parts = entry ? entry.parts : [];
         if (!parts.length) return;
         var missing = parts.filter(function (part) { return part.missingName; }).length;
@@ -1332,7 +1399,7 @@
             if (!entry) return;
             entry.parts.forEach(function (part) {
                 if (!part.layer || part.missingName) return;
-                if (part.leaf.kind === 'wmts') return;
+                if (part.leaf.kind === 'wmts' || part.leaf.kind === 'heritage-vector') return;
                 leaves.push({
                     name: part.leaf.name,
                     title: part.leaf.title || entry.def.title,
@@ -1449,6 +1516,8 @@
             }
             groupRow.setAttribute('aria-hidden', visible ? 'false' : 'true');
         }
+        var lidarMount = document.getElementById('albaniaLidarLayers');
+        if (lidarMount) lidarMount.classList.toggle('country-layer-unavailable', !visible);
         LAYERS.forEach(function (def) {
             var row = runtime.rows[def.id] && runtime.rows[def.id].row;
             if (!row) return;
@@ -1510,7 +1579,8 @@
      * 10. EXPANSION + GROUP INFO + START
      * ═══════════════════════════════════════════════════════════════════════ */
     function setExpanded(expanded) {
-        runtime.expanded = !!expanded;
+        expanded = true; // No country-level accordion; sections own their expansion.
+        runtime.expanded = true;
         var mount = document.getElementById(MOUNT_ID);
         if (mount && mount.style) {
             mount.style.maxHeight = expanded ? '6000px' : '0px';
