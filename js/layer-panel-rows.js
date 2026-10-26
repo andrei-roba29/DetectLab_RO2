@@ -223,8 +223,12 @@
            removing property by property would leave half a box behind, and
            the row material wants to own all of it anyway. */
         Array.prototype.forEach.call(host.querySelectorAll('.cenagis-map-row'), function (row) {
-            row.classList.add('dl-sublayer-row');
-            row.removeAttribute('style');
+            /* Only strip the generator's inline box once. Later sweeps must
+               preserve --row-preview, which paint() stores in the same style. */
+            if (!row.classList.contains('dl-sublayer-row')) {
+                row.removeAttribute('style');
+                row.classList.add('dl-sublayer-row');
+            }
         });
 
         return tagged;

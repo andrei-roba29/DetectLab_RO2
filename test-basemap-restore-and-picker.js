@@ -216,7 +216,7 @@ const TAG = '20261026-lidar-whole-or-disc';
  * ══════════════════════════════════════════════════════════════════════════ */
 {
     ['js/map-app.js', 'js/map3d-terrain.js'].forEach((file) => {
-        const url = file + '?v=' + TAG;
+        const url = file + '?v=' + (file === 'js/map3d-terrain.js' ? '20261026-desktop-basemap' : TAG);
         assert(indexHtml.includes(url), 'index.html loads ' + url);
         assert(swJs.includes("'" + url + "'"), 'sw.js precaches ' + url);
     });

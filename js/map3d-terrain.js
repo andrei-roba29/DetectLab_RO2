@@ -2470,7 +2470,17 @@
     }
 
     function ensureBaseFallback() {
-        if (!map || mirroredBaseItem()) return;
+        if (!map) return;
+        if (mirroredBaseItem() || desktopBasemapDefs().length) {
+            /* The boot fallback is not tracked in state.rendered. Remove it
+             * explicitly once the real basemap is ready. */
+            if (state.status['base.imagery'] && state.status['base.imagery'].fallbackBase) {
+                if (map.getLayer('base.imagery')) map.removeLayer('base.imagery');
+                if (map.getSource('base.imagery')) map.removeSource('base.imagery');
+                delete state.status['base.imagery'];
+            }
+            return;
+        }
         /* No 2D basemap visible (or the 2D map is not up yet): fall back to the
          * registry's own base imagery so the 3D view is never empty. */
         var def = REGISTRY.get('base.imagery');
@@ -2614,10 +2624,33 @@
         return false;   /* without a focus none of the registry's own is kept */
     }
 
+    function desktopBasemapDefs() {
+        if (isMobile() || typeof root.getArcgisBasemap !== 'function') return [];
+        var ids = {
+            imagery: ['base.imagery'],
+            topographic: ['base.topographic'],
+            terrain: ['base.terrain-base', 'base.terrain-relief']
+        };
+        var key;
+        try { key = root.getArcgisBasemap(); } catch (e) { return []; }
+        return (ids[key] || []).map(function (id) { return REGISTRY.get(id); }).filter(Boolean);
+    }
+
     function plan() {
         var cfg = REGISTRY.config();
         var lidarKeep = lidarFilter();
         var items = state.mirror.items.slice().filter(lidarKeep);
+        /* Desktop basemaps follow the picker, not a transient snapshot of the
+         * hidden Leaflet stack. Keep overlays mirrored, but give the selected
+         * ArcGIS sheet(s) stable, explicit entries in the 3D deck. */
+        var desktopBases = desktopBasemapDefs();
+        if (desktopBases.length) {
+            items = items.filter(function (item) {
+                var def = item.defId && REGISTRY.get(item.defId);
+                return item.pane !== 'pane_satellite' &&
+                    !(def && def.base && def.id !== 'base.hillshade');
+            });
+        }
         var entries = [];
         var seq = 0;
 
@@ -2626,8 +2659,13 @@
             entries.push({ id: 'm3d-2d-' + item.key, z: item.z, seq: seq += 1, kind: item.kind, item: item, mirrored: true });
         });
 
+        desktopBases.forEach(function (def) {
+            entries.push({ id: def.id, z: 398, seq: seq += 1, kind: 'registry', def: def });
+        });
+
         /* 2. registry fallbacks (raster only) */
         activeRegistryFallbacks().forEach(function (def) {
+            if (desktopBases.length && def.base && def.id !== 'base.hillshade') return;
             entries.push({ id: def.id, z: def.z == null ? 500 : def.z, seq: seq += 1, kind: 'registry', def: def });
         });
 
@@ -2635,7 +2673,8 @@
          *    overlay: that is the whole point — the relief reads through the
          *    imagery instead of hiding underneath it. */
         var base = mirroredBaseItem();
-        var baseEntryId = base ? 'm3d-2d-' + base.key
+        var baseEntryId = desktopBases.length ? desktopBases[desktopBases.length - 1].id
+            : base ? 'm3d-2d-' + base.key
             : (map && map.getLayer('base.imagery') ? 'base.imagery' : null);
 
         return {
@@ -4703,6 +4742,11 @@
             attachLeafletWatchers();
             var result = MIRROR.collect(leafletMap() || {});
             var signature = result.signature;
+            /* A desktop choice must invalidate the deck even if the hidden
+             * Leaflet snapshot has not changed (or the same sheet is picked). */
+            if (!isMobile() && typeof root.getArcgisBasemap === 'function') {
+                signature += '|basemap:' + root.getArcgisBasemap();
+            }
             if (signature !== state.signature) {
                 /* Commit the signature only after a pass that really ran: a
                  * failed pass must stay “pending” so the next tick retries,

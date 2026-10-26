@@ -800,7 +800,8 @@
 //   view and there is no rotation lock any more. Re-tags css/styles.css,
 //   css/tutorial.css, css/offline-maps.css, css/map3d-terrain.css,
 //   js/map-rotate.js and js/tutorial.js.
-const CACHE_NAME = 'detectlab-v277-lidar-whole-or-disc';
+// v278: desktop 3D uses the selected ArcGIS basemap explicitly.
+const CACHE_NAME = 'detectlab-v279-historical-previews';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -893,6 +894,8 @@ const PRECACHE_URLS = [
   'js/map-rotate.js?v=20261025-earth-compass',
   'js/tutorial.js?v=20261025-layer-glass',
   'js/layer-panel-rows.js?v=20261025-layer-glass',
+  'js/layer-panel-rows.js?v=20261026-historical-previews',
+  'css/styles.css?v=20261026-historical-previews',
   // v271: unified slim 3D-style pastel faded semitransparent orange sliders
   // and blurred button-box (--ctl-*) slider containers across desktop & PWA.
   'css/styles.css?v=20261025-pastel-orange-sliders',
@@ -966,6 +969,7 @@ const PRECACHE_URLS = [
   //   js/lidar-3d-focus.js.
   'css/map3d-terrain.css?v=20261026-lidar-whole-or-disc',
   'js/map3d-terrain.js?v=20261026-lidar-whole-or-disc',
+  'js/map3d-terrain.js?v=20261026-desktop-basemap',
   'js/map-app.js?v=20261026-lidar-whole-or-disc',
   'js/lidar-3d-focus.js?v=20261026-lidar-whole-or-disc',
   'js/map3d-terrain.js?v=20261024-gesture-only-camera',

@@ -57,10 +57,10 @@ const before = ruleOf(css, '.transp-layer-row[data-row-preview]::before,\n      
 assert(/background-image:\s*var\(--row-preview\)/.test(before),
     'the row background is the layer\'s own tile, passed in as --row-preview');
 const filter = (before.match(/filter:([^;]+);/) || [])[1] || '';
-assert(/blur\(\d+px\)/.test(filter), 'the tile is blurred into a mean wash');
-assert(/saturate\(0\.[0-5]/.test(filter) && /brightness\(0\.[0-7]/.test(filter),
-    'the tile is desaturated and dimmed so text stays readable on top of it');
-assert(/opacity:\s*0\.[0-7]/.test(before), 'the photo never owns the row');
+assert(!/blur\(/.test(filter), 'tile details remain recognizable, not blurred away');
+assert(/saturate\(0\.85\)/.test(filter) && /brightness\(0\.9\)/.test(filter),
+    'the preview keeps map colours and detail beneath the dark wash');
+assert(/opacity:\s*0\.95/.test(before), 'the preview is visible rather than a faint colour wash');
 assert(/clip-path:\s*inset\(0 round var\(--row-radius\)\)/.test(before),
     'the blur is clipped back to the row radius');
 
@@ -221,9 +221,26 @@ assert(/\.cenagis-map-row/.test(moduleSource) && /removeAttribute\('style'\)/.te
 assert(/SubLayers\$/.test(moduleSource), 'the nested rows are found through their *SubLayers containers');
 console.log('  ✓ previews load only for visible rows, once, and fail soft');
 
+/* Refreshing generated rows must not erase an already-loaded background. */
+{
+    const classes = new Set();
+    let removals = 0;
+    const row = {
+        classList: { contains: key => classes.has(key), add: key => classes.add(key) },
+        removeAttribute: name => { assert.strictEqual(name, 'style'); removals++; }
+    };
+    const host = { querySelectorAll: selector => selector === '.cenagis-map-row' ? [row] : [] };
+    fakeDocument.getElementById = id => id === 'transpPanel' ? host : null;
+    api.markGlass();
+    api.markGlass();
+    assert.strictEqual(removals, 1, 'later sweeps preserve the preview custom property');
+    fakeDocument.getElementById = () => null;
+
+}
+
 /* ── 6. Wiring: cache-busting, precache, shell version ─────────────────── */
-const TAG = '20261025-layer-glass';
-const STYLES_TAG = '20261025-pastel-orange-sliders';
+const TAG = '20261026-historical-previews';
+const STYLES_TAG = '20261026-historical-previews';
 assert(html.includes('js/layer-panel-rows.js?v=' + TAG), 'index.html loads the row chrome, versioned');
 assert(sw.includes("'js/layer-panel-rows.js?v=" + TAG + "'"), 'sw.js precaches the row chrome');
 const stylesUrl = (html.match(/href="(css\/styles\.css\?v=[^"]+)"/) || [])[1];
