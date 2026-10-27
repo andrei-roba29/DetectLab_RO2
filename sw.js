@@ -1682,11 +1682,14 @@ const PRECACHE_URLS = [
   // v288: every free Denmark layer is restyled like the other countries'
   // rows (pill on/off switch + opacity slider), grouped as LiDAR /
   // Heritage / Historical maps (incl. DTK25) / Ortophoto; the “Base map”
-  // section and the Denmark DHM WMTS row are gone from the panel. The
-  // three URLs below are the live ones index.html requests.
+  // section and the Denmark DHM WMTS row are gone from the panel.
+  // Albania's free rows get the same Romania-style treatment (pill switch
+  // + opacity slider rows, section headers with chevron + master switch).
+  // The four URLs below are the live ones index.html requests.
   'css/styles.css?v=20261027-danish-row-style',
   'js/danish-layers.config.js?v=20261027-danish-row-style',
-  'js/danish-layers.js?v=20261027-danish-row-style'
+  'js/danish-layers.js?v=20261027-danish-row-style',
+  'js/asig-albania-layers.js?v=20261027-albania-row-style'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──
