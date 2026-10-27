@@ -1,22 +1,46 @@
 > UI update (2026-10-26): thematic sections now appear directly in the layer list, without a country master layer. All Albanian and Danish LiDAR rows live once under the existing shared LiDAR accordion. Country filtering and per-layer controls remain in place.
 
+> UI update (2026-10-27): every free Denmark layer is now styled exactly like
+> the other countries' rows (Romania's free rows are the template) — a glass
+> sublayer row with the pill on/off switch (`.apm-toggle-switch`), an
+> “Opacity” line with the ⓘ button and percentage badge, and its own opacity
+> slider. The “Base map” section is gone: there are no Danish radio base maps
+> any more. All rendered layers are independent overlays (the historical
+> sheets, orthophoto years and DTK25 included; DTK25 now lives under
+> Historical maps and is still the one layer on by default). The former base
+> rows — the GeoDanmark spring-orthophoto year dropdown and the Danish OSM
+> base — are no longer rendered; their catalogue entries remain for the
+> proxy, the registry and the 3D catalogue, but stored preferences for them
+> are never restored. The separate “Denmark · DHM hillshade (DHM/Terræn)”
+> WMTS row is also removed from the LiDAR accordion: its terrain/surface
+> products are the Danish WMS LiDAR rows below; the WMTS module stays loaded
+> only as the 3D registry builder (`lidar.dk-dhm`).
+
 ## Free Denmark-only source groups (October 2026)
 
-The Danish panel now includes three collapsible groups, with no premium gate:
+The Danish panel shows four collapsible groups, with no premium gate. Each
+group header carries an expand chevron and a master on/off switch, and every
+layer inside has its own switch and opacity slider:
 
+- **LiDAR** (inside the shared LiDAR accordion, after the global “Hillshade
+  LiDAR derivate” row): LiDAR hillshade 1.6 m (DHM historik); LiDAR
+  hillshade, exaggerated terrain (quickDHM); LiDAR terrain hillshade (DHM);
+  LiDAR surface hillshade (DHM).
 - **Heritage**: Protected nature types (NBL § 3); Scheduled ancient monuments
   (areas); Not protected ancient monuments; Protected ancient monuments.
   The monument layers reuse the official Kulturarv public services (CC0), while
   the nature overlay comes from Danmarks Miljøportal.
 - **Historical maps**: Topographic map 1980–2001; Topographic map 1953–1976;
   Low measuring table leaves 1901–1971; High measuring table leaves 1842–1899;
-  Prussian measuring table leaves 1877–1920.
+  Prussian measuring table leaves 1877–1920; Denmark · DTK25 topographic map
+  (1:25,000).
 - **Ortophoto**: 2008, 2005, 2002, 1999.
 
 These groups inherit the Danish panel's country filter: selecting a country
-other than Denmark hides them. Historical maps and orthophotos retain the
-existing mutually exclusive base-map behavior; heritage overlays can be combined
-and have opacity sliders. Existing layer IDs/preferences are preserved.
+other than Denmark hides them. All of them are overlays now, so any
+combination can be stacked and each slider blends its sheet over the
+basemap — the same rule as the Romanian free layers. Existing layer
+IDs/preferences are preserved.
 
 ### Deployment
 
@@ -92,9 +116,9 @@ a relative `import`/`require` that resolves outside `backend/`, and it runs the
 
 | id | group | type | on by default | needs |
 |---|---|---|---|---|
-| `danish.dtk25` | base | WMS 1.3.0 | **yes** | `DATAFORSYNINGEN_TOKEN` |
-| `danish.orto` | base | WMS 1.3.0 | no | `DATAFORDELER_USERNAME` + `DATAFORDELER_PASSWORD` |
-| `danish.osm` | base | XYZ | no | — (fallback base) |
+| `danish.dtk25` | overlay (Historical maps) | WMS 1.3.0 | **yes** | `DATAFORSYNINGEN_TOKEN` |
+| `danish.orto` | base (catalogue only, no panel row) | WMS 1.3.0 | no | `DATAFORDELER_USERNAME` + `DATAFORDELER_PASSWORD` |
+| `danish.osm` | base (catalogue only, no panel row) | XYZ | no | — |
 | `danish.naturtyper` | overlay | WMS 1.3.0 (direct) | no | — |
 | `danish.fortidsminder` | overlay | WFS 2.0.0 → GeoJSON | no | — |
 | `danish.fortidsminder_punkt_fredet` | overlay | WMS 1.3.0 (direct) | no | — |

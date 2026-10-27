@@ -32,8 +32,8 @@ requests are always tried first.
 ## Danish LiDAR and historical layers
 
 The Danish layer catalogue is `js/danish-layers.config.js`; the existing
-`js/danish-layers.js` panel reads it, creates layers lazily, and uses the
-existing radio/overlay controls. The config mirror used by the separately
+`js/danish-layers.js` panel reads it, creates layers lazily, and renders
+every free layer in the shared switch + opacity-slider row style. The config mirror used by the separately
 rooted backend is generated with:
 
 ```sh
@@ -64,11 +64,14 @@ and the layer panel shows a generic configuration notice. Datafordeler access re
 a normal website login is not enough. `DATAFORDELER_USER` is accepted as a
 legacy alias for `DATAFORDELER_USERNAME`.
 
-The three LiDAR layers are overlays (opacity defaults to 100%, with individual
-sliders); historical map sheets and orthophotos are mutually exclusive base
-layers. Spring orthophoto years 2016–2025 are selected through a single year
-dropdown. `bes_naturtyper` and OSM remain available. The witx.dk WFS/tiles are
-disabled placeholders pending written permission.
+Every rendered Danish layer is an independent overlay with its own on/off
+switch and opacity slider, grouped as LiDAR (in the shared LiDAR accordion),
+Heritage, Historical maps (including DTK25, still on by default) and
+Ortophoto (1999–2008). There is no Danish “Base map” section any more: the
+spring orthophoto years 2016–2025 and the Danish OSM base stay in the
+catalogue for the proxy/registry/3D but have no panel row, and the separate
+DHM WMTS hillshade row was removed from the LiDAR accordion. The witx.dk
+WFS/tiles are disabled placeholders pending written permission.
 
 ### Add a layer
 

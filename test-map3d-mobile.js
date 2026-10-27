@@ -293,8 +293,8 @@ const TAGS = {
     'js/layer-registry.js': '20261024-uk-historical-maps',
     'js/map3d-terrain.js': '20261026-desktop-basemap',
     'css/map3d-terrain.css': '20261026-pwa-3d-button-size',
-    'js/danish-layers.config.js': '20261024-danish-heritage-proxy',
-    'js/danish-layers.js': '20261026-flat-country-sections'
+    'js/danish-layers.config.js': '20261027-danish-row-style',
+    'js/danish-layers.js': '20261027-danish-row-style'
 };
 ['js/map3d-terrain.js', 'js/layer-registry.js', 'css/map3d-terrain.css',
     'js/danish-layers.config.js'].forEach(function (asset) {

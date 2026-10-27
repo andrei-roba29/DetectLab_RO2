@@ -240,7 +240,7 @@ console.log('  ✓ previews load only for visible rows, once, and fail soft');
 
 /* ── 6. Wiring: cache-busting, precache, shell version ─────────────────── */
 const TAG = '20261026-historical-previews';
-const STYLES_TAG = '20261026-historical-previews';
+const STYLES_TAG = '20261027-danish-row-style';
 assert(html.includes('js/layer-panel-rows.js?v=' + TAG), 'index.html loads the row chrome, versioned');
 assert(sw.includes("'js/layer-panel-rows.js?v=" + TAG + "'"), 'sw.js precaches the row chrome');
 const stylesUrl = (html.match(/href="(css\/styles\.css\?v=[^"]+)"/) || [])[1];

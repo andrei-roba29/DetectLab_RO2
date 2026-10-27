@@ -113,7 +113,7 @@
     /* Read at *runtime* by the proxy functions and in the audit; a layer is
      * only credential-gated when the deployment really needs a variable. */
     var CONFIG = {
-        version: '20261024-danish-v5',
+        version: '20261027-danish-row-style',
 
         /* Country this group belongs to. Drives the country filter (rows are
          * shown when Denmark is the selected country) and the coverage check. */
@@ -135,26 +135,40 @@
                 'The required attribution appears on the map while a layer is on.'
         },
 
-        /* Free app layers; provider credentials are injected only by the proxy. */
+        /* The free Denmark panel, in the same thematic groups (and row style)
+         * as the other countries: LiDAR rows are mounted inside the shared
+         * LiDAR accordion next to the global “Hillshade LiDAR derivate” row,
+         * the other three groups are Romania-style sections in the Denmark
+         * mount. There is no “Base map” section any more: DTK25 lives under
+         * Historical maps, and the former base-map rows (GeoDanmark spring
+         * orthophoto selector, the Danish OSM base) are no longer rendered as
+         * panel rows — their catalogue entries stay for the proxy, the shared
+         * registry and the 3D catalogue, but js/danish-layers.js only renders
+         * the layers listed here. Provider credentials are injected only by
+         * the proxy. */
         panelGroups: [
+            { id: 'lidar', title: { da: 'LiDAR', en: 'LiDAR' },
+                mount: 'danishLidarLayers',
+                layers: ['lidar_hillshade_historik', 'lidar_quickdhm_exaggerated', 'lidar_dhm_terrain_hillshade', 'lidar_dhm_surface_hillshade'] },
             { id: 'heritage', title: { da: 'Kulturarv', en: 'Heritage' },
                 layers: ['naturtyper', 'fortidsminder', 'fortidsminder_punkt_ikkefredet', 'fortidsminder_punkt_fredet'] },
             { id: 'historical', title: { da: 'Historiske kort', en: 'Historical maps' },
-                layers: ['topo4cm_1980_2001', 'topo4cm_1953_1976', 'hist_lave', 'hist_hoeje', 'hist_preussen'] },
+                layers: ['topo4cm_1980_2001', 'topo4cm_1953_1976', 'hist_lave', 'hist_hoeje', 'hist_preussen', 'dtk25'] },
             { id: 'orthophoto', title: { da: 'Ortofoto', en: 'Ortophoto' },
                 layers: ['orto_sommer_2008', 'orto_sommer_2005', 'orto_sommer_2002', 'orto_sommer_1999'] }
         ],
 
         /** @type {DanishLayer[]} */
         layers: [
-            /* ── 1. DTK25 topographic base map ─────────────────────────────── */
+            /* ── 1. DTK25 topographic map (Historical maps group) ─────────── */
             {
                 id: 'dtk25',
+                panelGroup: 'historical',
                 title: {
                     da: 'Danmark · DTK25 topografisk kort (1:25 000)',
                     en: 'Denmark · DTK25 topographic map (1:25,000)'
                 },
-                group: 'base',
+                group: 'overlay',
                 type: 'wms',
                 /* Same-origin: the proxy adds the account-wide token server-side; it
                  * never reaches the browser. */
@@ -163,7 +177,7 @@
                 layers: 'dtk25_2023',
                 crs: 'EPSG:3857',
                 format: 'image/png',
-                transparent: false,          /* a base map: it is the picture */
+                transparent: false,          /* opaque sheet: blending is the opacity slider's job */
                 tiled: true,
                 tileSize: 256,
                 version: '1.3.0',
@@ -538,6 +552,7 @@
             /* ── LiDAR (terrain model / hillshade) overlays ─────────────── */
             {
                 id: 'lidar_hillshade_historik',
+                panelGroup: 'lidar',
                 title: { da: 'LiDAR skyggekort 1.6 m (DHM historik)', en: 'LiDAR hillshade 1.6 m (DHM historik)' },
                 group: 'overlay',
                 type: 'wms',
@@ -560,6 +575,7 @@
             },
             {
                 id: 'lidar_quickdhm_exaggerated',
+                panelGroup: 'lidar',
                 title: { da: 'LiDAR skyggekort, overdrevet terræn (quickDHM)', en: 'LiDAR hillshade, exaggerated terrain (quickDHM)' },
                 group: 'overlay',
                 type: 'wms',
@@ -582,6 +598,7 @@
             },
             {
                 id: 'lidar_dhm_terrain_hillshade',
+                panelGroup: 'lidar',
                 title: { da: 'LiDAR terræn skyggekort (DHM)', en: 'LiDAR terrain hillshade (DHM)' },
                 group: 'overlay',
                 type: 'wms',
@@ -604,6 +621,7 @@
             },
             {
                 id: 'lidar_dhm_surface_hillshade',
+                panelGroup: 'lidar',
                 title: { da: 'LiDAR overflade skyggekort (DHM)', en: 'LiDAR surface hillshade (DHM)' },
                 group: 'overlay',
                 type: 'wms',
@@ -631,7 +649,7 @@
                 id: 'hist_hoeje',
                 panelGroup: 'historical',
                 title: { da: 'Høje målebordsblade', en: 'High measuring table leaves 1842-1899' },
-                group: 'base', type: 'wms',
+                group: 'overlay', type: 'wms',
                 url: '/api/geo/dk-dtk25?layer=hist_hoeje',
                 upstream: 'https://api.dataforsyningen.dk/topo20_hoeje_maalebordsblade_DAF',
                 layers: 'dtk_hoeje_maalebordsblade',
@@ -651,7 +669,7 @@
                 id: 'hist_lave',
                 panelGroup: 'historical',
                 title: { da: 'Lave målebordsblade', en: 'Low measuring table leaves 1901-1971' },
-                group: 'base', type: 'wms',
+                group: 'overlay', type: 'wms',
                 url: '/api/geo/dk-dtk25?layer=hist_lave',
                 upstream: 'https://api.dataforsyningen.dk/topo20_lave_maalebordsblade_DAF',
                 layers: 'dtk_lave_maalebordsblade',
@@ -671,7 +689,7 @@
                 id: 'hist_preussen',
                 panelGroup: 'historical',
                 title: { da: 'Preussiske målebordsblade', en: 'Prussian measuring table leaves 1877-1920' },
-                group: 'base', type: 'wms',
+                group: 'overlay', type: 'wms',
                 url: '/api/geo/dk-dtk25?layer=hist_preussen',
                 upstream: 'https://api.dataforsyningen.dk/topo25_preussen_maalebordsblade_DAF',
                 layers: 'dtk_preussen_maalebordsblade',
@@ -691,7 +709,7 @@
                 id: 'topo4cm_1953_1976',
                 panelGroup: 'historical',
                 title: { da: '4 cm kort 1953-1976', en: 'Topographic map 1953-1976' },
-                group: 'base', type: 'wms',
+                group: 'overlay', type: 'wms',
                 url: '/api/geo/dk-dtk25?layer=topo4cm_1953_1976',
                 upstream: 'https://api.dataforsyningen.dk/topo4cm_1953_1976_DAF',
                 layers: 'topo4cm_1953_1976',
@@ -711,7 +729,7 @@
                 id: 'topo4cm_1980_2001',
                 panelGroup: 'historical',
                 title: { da: '4 cm kort 1980-2001', en: 'Topographic map 1980-2001' },
-                group: 'base', type: 'wms',
+                group: 'overlay', type: 'wms',
                 url: '/api/geo/dk-dtk25?layer=topo4cm_1980_2001',
                 upstream: 'https://api.dataforsyningen.dk/topo4cm_1980_2001_DAF',
                 layers: 'topo4cm_1980_2001',
@@ -731,7 +749,7 @@
                 id: 'orto_sommer_1999',
                 panelGroup: 'orthophoto',
                 title: { da: 'Sommerortofoto 1999', en: '1999' },
-                group: 'base', type: 'wms',
+                group: 'overlay', type: 'wms',
                 url: '/api/geo/dk-dtk25?layer=orto_sommer_1999',
                 upstream: 'https://api.dataforsyningen.dk/wms/orto_sommer_1999',
                 layers: 'orto_sommer_1999',
@@ -751,7 +769,7 @@
                 id: 'orto_sommer_2002',
                 panelGroup: 'orthophoto',
                 title: { da: 'Sommerortofoto 2002', en: '2002' },
-                group: 'base', type: 'wms',
+                group: 'overlay', type: 'wms',
                 url: '/api/geo/dk-dtk25?layer=orto_sommer_2002',
                 upstream: 'https://api.dataforsyningen.dk/wms/orto_sommer_2002',
                 layers: 'orto_sommer_2002',
@@ -771,7 +789,7 @@
                 id: 'orto_sommer_2005',
                 panelGroup: 'orthophoto',
                 title: { da: 'Sommerortofoto 2005', en: '2005' },
-                group: 'base', type: 'wms',
+                group: 'overlay', type: 'wms',
                 url: '/api/geo/dk-dtk25?layer=orto_sommer_2005',
                 upstream: 'https://api.dataforsyningen.dk/wms/orto_sommer_2005',
                 layers: 'orto_sommer_2005',
@@ -791,7 +809,7 @@
                 id: 'orto_sommer_2008',
                 panelGroup: 'orthophoto',
                 title: { da: 'Sommerortofoto 2008', en: '2008' },
-                group: 'base', type: 'wms',
+                group: 'overlay', type: 'wms',
                 url: '/api/geo/dk-dtk25?layer=orto_sommer_2008',
                 upstream: 'https://api.dataforsyningen.dk/wms/orto_sommer_2008',
                 layers: 'orto_sommer_2008',

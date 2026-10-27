@@ -8348,9 +8348,14 @@
 }
 
 /* ── Danish layers (js/danish-layers.config.js + js/danish-layers.js) ───────
-   The rows are generated, so they carry their own small set of classes. They
-   inherit the panel's colours and type scale and stay inside the existing
-   .transp-layer-row, which is what keeps 375 px unchanged. */
+   The rows are generated in the same style as the other countries' rows:
+   the shared glass `.dl-sublayer-row` box, the `.apm-toggle-switch` pill
+   on/off switch, the `.transp-layer-label` opacity line with the `.pct`
+   badge and `.layer-info-btn`, and the `.transp-slider` opacity slider —
+   inside Romania-style `.transp-layer-row` sections (Heritage, Historical
+   maps, Ortophoto) and the shared LiDAR accordion. Only the small Danish
+   leftovers below (title truncation, the per-row status line, focus rings)
+   still need their own rules, which is what keeps 375 px unchanged. */
 .danish-sublayers {
     padding-left: 6px;
     border-left: 2px solid rgba(214, 69, 80, 0.3);
@@ -8489,6 +8494,19 @@
 
 .danish-layer-row.is-active .danish-layer-title {
     color: rgba(245, 240, 235, 0.98);
+}
+
+/* The shared pill switch hides its checkbox, so keyboard focus has to land
+   on the track that follows it; the section chevron gets the same ring. */
+#transpPanel .danish-layer-row .apm-toggle-switch input:focus-visible + .apm-toggle-track,
+#transpPanel .danish-group-row .apm-toggle-switch input:focus-visible + .apm-toggle-track {
+    outline: 2px solid #d64550;
+    outline-offset: 1px;
+}
+
+#transpPanel .danish-group-row button:focus-visible {
+    outline: 2px solid #d64550;
+    outline-offset: 1px;
 }
 
 /* The Danish bases mirrored into the existing basemap control. */
