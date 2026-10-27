@@ -111,6 +111,15 @@ archaeological list is meant to be regenerated, not hand-edited (see
 
 ## The panel
 
+- **Free tab only.** Every Albanian row — Heritage included — is a free
+  layer and must never show in the Premium tab. Heritage once leaked there:
+  its block was a plain `<div>` with no `data-category`, and the tab gate
+  only hides `.transp-layer-row[data-category]` rows, so it appeared in
+  both tabs. The block is now a `data-category="free"` transp-layer-row,
+  `buildPanel` re-applies the current tab after every rebuild
+  (`applyPanelTab`, so a language change cannot undo the gate), and CSS
+  tab-gates the whole `.country-section-list[data-category]` container as
+  a backstop.
 - **Same row style as the other countries** (Romania is the template, restyle
   of 2026-10-27). Every layer is a glass `.dl-sublayer-row`: title on the left
   and the pill on/off switch (`.apm-toggle-switch`) on the right of the header

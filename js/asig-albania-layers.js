@@ -819,9 +819,46 @@
         return el('div', { className: 'albania-catalogue-tools' }, [search, active]);
     }
 
+    /* The panel's Free/Premium tabs gate rows purely by `data-category` +
+     * `.active` (switchLayerTab in js/map-app.js, `.transp-layer-row
+     * [data-category]` in css/styles.css). Every Albanian row is FREE —
+     * Heritage included — so none of them may ever appear in the Premium
+     * tab. (Heritage once did: its block was a plain div with no
+     * data-category, so the tab CSS never hid it and it showed in both
+     * tabs.) switchLayerTab only re-marks nodes that exist when a tab is
+     * clicked, and a rebuild (language change) creates fresh nodes with
+     * no `.active`; re-apply the current tab after every build so the
+     * free rows are visible in the Free tab and absent from Premium. */
+    function currentPanelTab() {
+        try {
+            if (typeof document.querySelector === 'function') {
+                var btn = document.querySelector('.transp-panel-tabs button.active');
+                if (btn) {
+                    if (btn.dataset && btn.dataset.tab) return btn.dataset.tab;
+                    if (btn.getAttribute) return btn.getAttribute('data-tab') || 'free';
+                }
+            }
+        } catch (e) { /* the tab bar is best-effort; Free is the default */ }
+        return 'free';
+    }
+
+    function applyPanelTab() {
+        var free = currentPanelTab() === 'free';
+        var nodes = [];
+        if (runtime.heritageBlock) nodes.push(runtime.heritageBlock);
+        Object.keys(runtime.sectionNodes || {}).forEach(function (id) {
+            var node = runtime.sectionNodes[id];
+            if (node && node.wrapper) nodes.push(node.wrapper);
+        });
+        nodes.forEach(function (node) {
+            if (node.classList) node.classList.toggle('active', free);
+        });
+    }
+
     function buildPanel() {
         runtime.rows = {};
         runtime.sectionNodes = {};
+        runtime.heritageBlock = null;
         var mount = document.getElementById(MOUNT_ID);
         if (mount) {
             clear(mount);
@@ -832,14 +869,18 @@
              * rows and never inside a section, so its parts cannot be mistaken
              * for layers the visitor has to switch on one by one. */
             if (HERITAGE) {
-                mount.appendChild(el('div', { className: 'albania-heritage-block transp-layer-row', 'data-category': 'free' }, [
+                /* data-category="free" + transp-layer-row is what keeps this
+                 * block in the Free tab only (see applyPanelTab above). */
+                var heritageBlock = el('div', { className: 'albania-heritage-block transp-layer-row', 'data-category': 'free' }, [
                     el('div', { className: 'albania-heritage-caption', text: text(HERITAGE.title) }),
                     createRow(HERITAGE),
                     el('div', {
                         className: 'albania-heritage-note',
                         text: words().infoParts + ' (' + currentHeritageParts().length + ' ' + words().parts + ')'
                     })
-                ]));
+                ]);
+                runtime.heritageBlock = heritageBlock;
+                mount.appendChild(heritageBlock);
             }
             (CONFIG.sections || []).forEach(function (section) {
                 if (section.id === HERITAGE_ID) return;
@@ -863,6 +904,8 @@
         setExpanded(runtime.expanded);
         /* Rebuilding the DOM must not undo the country gate. */
         applyCountryVisibility(runtime.inCountry);
+        /* …nor the Free/Premium tab gate (Heritage is free-tab only). */
+        applyPanelTab();
         refreshResolverNotices();
     }
 
@@ -1812,6 +1855,7 @@
         setSearch: setSearch,
         toggleSection: toggleSection,
         toggleSectionLayers: toggleSectionLayers,
+        applyPanelTab: applyPanelTab,
         moveActive: moveActive,
         activeOrder: orderList,
         activeLeaves: activeWmsLeaves,

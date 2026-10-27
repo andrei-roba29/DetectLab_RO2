@@ -358,6 +358,33 @@ check(!mount.children.some(child => child.className === 'albania-catalogue-tools
 const heritageBlock = mount.children[0];
 check(heritageBlock.className.indexOf('albania-heritage-block') === 0 && heritageBlock.className.includes('transp-layer-row'),
     'Heritage sits at the top of the panel, above every section, as a Romania-style row');
+/* Heritage (like every Albanian row) is FREE: it must appear in the Free
+ * tab only and never leak into the Premium tab. The tab gate is
+ * data-category + .active on transp-layer-rows (switchLayerTab/CSS), and
+ * buildPanel re-applies the current tab so a rebuild cannot undo it. */
+(function HERITAGE_FREE_TAB_CHECK() {
+    check(heritageBlock.attributes['data-category'] === 'free',
+        'the Heritage block is categorised free, not premium');
+    check(API.state.heritageBlock === heritageBlock && heritageBlock.classList.contains('active'),
+        'the Heritage block is marked active for the (default) Free tab');
+    check(sections.every((section) => section.classList.contains('active')),
+        'every free section row is marked active for the Free tab');
+    check(mount.children.every((child) => !child.attributes || child.attributes['data-category'] !== 'premium'),
+        'nothing in the Albania group is categorised premium');
+    /* Simulate the Premium tab being selected, then a rebuild-time re-apply:
+     * Heritage and the sections must lose .active (hidden in Premium). */
+    document.querySelector = () => ({ dataset: { tab: 'premium' }, getAttribute: () => 'premium' });
+    API.applyPanelTab();
+    check(!heritageBlock.classList.contains('active') &&
+        sections.every((section) => !section.classList.contains('active')),
+        'in the Premium tab the Heritage block and sections are not active (not shown)');
+    document.querySelector = () => ({ dataset: { tab: 'free' }, getAttribute: () => 'free' });
+    API.applyPanelTab();
+    check(heritageBlock.classList.contains('active'),
+        'back in the Free tab the Heritage block is active again');
+    delete document.querySelector;
+    API.applyPanelTab();
+})();
 const heritageRows = heritageBlock.children.filter((child) => child.className && child.className.indexOf('albania-layer-row') === 0);
 check(heritageRows.length === 1 && heritageRows[0].id === 'albaniaRow_heritage',
     'Heritage is ONE toggle — its parts are not rows');
@@ -656,7 +683,7 @@ document.createElement = originalCreateElement;
         'index.html loads the generated catalogue before the config');
     /* Each asset carries the tag of whatever last changed it: the data file and
      * the config by the “LiDAR” rename, the module by the catalogue itself. */
-    check(/js\/asig-albania-layers\.js\?v=20261027-albania-row-style/.test(html) &&
+    check(/js\/asig-albania-layers\.js\?v=20261027-albania-heritage-free-tab/.test(html) &&
         /js\/asig-albania-layers\.config\.js\?v=20261024-asig-lidar/.test(html),
         'index.html loads the re-tagged module and config');
     check(html.includes('id="albaniaSubLayers"'), 'the single Albania mount is still in the shell');
@@ -665,6 +692,8 @@ document.createElement = originalCreateElement;
         'the country gate is still enforced by CSS');
     check(/\.albania-section-head/.test(read('css/styles.css')) && /\.albania-active-item/.test(read('css/styles.css')),
         'the new panel parts are styled with the panel’s own classes');
+    check(/\.country-section-list\[data-category\]:not\(\.active\)\s*\{\s*display:\s*none\s*!important/.test(read('css/styles.css')),
+        'the whole free country catalogue is tab-gated so Heritage cannot leak into Premium');
     check(/'geoportal\.asig\.gov\.al':/.test(read('js/wms-health.js')), 'the ASIG host stays in the health list');
     check(/filterForCountry\(iso\)/.test(read('js/map-app.js')) &&
         /AsigAlbaniaLayers[\s\S]{0,200}?filterForCountry\(null\)/.test(read('js/map-app.js')),

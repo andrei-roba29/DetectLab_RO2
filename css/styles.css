@@ -9373,5 +9373,15 @@ a.dl-gmaps-directions-btn {
 .country-section-list.viewport-layer-unavailable {
     display: none !important;
 }
+/* The Free/Premium tabs gate `.transp-layer-row[data-category]`, but these
+   containers are display:contents, so a child that is not itself a
+   transp-layer-row (Albania's Heritage block used to be a plain div)
+   leaked into the Premium tab and duplicated the free layer there.
+   Gate the whole free country catalogue by the tab .active marker that
+   switchLayerTab() keeps on every [data-category] element: free country
+   layers (Albania's Heritage included) belong to the Free tab only. */
+.country-section-list[data-category]:not(.active) {
+    display: none !important;
+}
 
 .asig-heritage-cluster { background:#7354a3; color:#fff; border:2px solid #e6d7ff; border-radius:50%; text-align:center; line-height:28px; font-weight:bold; box-shadow:0 1px 5px #0008; }

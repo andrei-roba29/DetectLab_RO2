@@ -804,7 +804,7 @@
 //   centred 3D bar, stepping above the country “Exit view” pill via the
 //   existing --country-exit-lift hook. Re-tags css/map3d-terrain.css.
 //   See PWA_3D_BUTTON_SIZE_CENTRE.md.
-const CACHE_NAME = 'detectlab-v288-danish-row-style';
+const CACHE_NAME = 'detectlab-v289-albania-heritage-free-tab';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1689,7 +1689,12 @@ const PRECACHE_URLS = [
   'css/styles.css?v=20261027-danish-row-style',
   'js/danish-layers.config.js?v=20261027-danish-row-style',
   'js/danish-layers.js?v=20261027-danish-row-style',
-  'js/asig-albania-layers.js?v=20261027-albania-row-style'
+  'js/asig-albania-layers.js?v=20261027-albania-row-style',
+  // v289: Albania's (free) Heritage block no longer leaks into the Premium
+  // tab — it is a data-category="free" transp-layer-row, the whole free
+  // country catalogue is tab-gated in CSS, and the module re-applies the
+  // current tab after every panel rebuild. The live module URL is:
+  'js/asig-albania-layers.js?v=20261027-albania-heritage-free-tab'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──
