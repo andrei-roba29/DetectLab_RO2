@@ -804,7 +804,8 @@
 //   centred 3D bar, stepping above the country “Exit view” pill via the
 //   existing --country-exit-lift hook. Re-tags css/map3d-terrain.css.
 //   See PWA_3D_BUTTON_SIZE_CENTRE.md.
-const CACHE_NAME = 'detectlab-v291-other-maps-fix';
+// v292: opt-in, image-only LiDAR photo effects in a 1 km prepared circle.
+const CACHE_NAME = 'detectlab-v292-lidar-photo-effects';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -954,6 +955,11 @@ const PRECACHE_URLS = [
   'js/roman-roads.js?v=20261015-roman-roads',
   'js/roman-roads-worker.js?v=20261015-roman-roads',
   /* LiDAR in the 3D view: the focus dialog, the prefetch and the entry gate. */
+  'js/lidar-3d-focus.js?v=20261028-lidar-photo-bridge',
+  'js/lidar-photo-filter.js?v=1',
+  'js/rvt-panel.js?v=2',
+  'css/rvt-panel.css?v=1',
+  'rvt_service/methods.json',
   'js/lidar-3d-focus.js?v=20261020-lidar-disc-route',
   'js/lidar-3d-focus.js?v=20261019-lidar-depth',
   'js/lidar-3d-focus.js?v=20261019-lidar-1km',

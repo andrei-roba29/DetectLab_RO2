@@ -15,6 +15,7 @@ import evidenceRouter from './routes/evidence.js';
 import newsletterRouter from './routes/newsletter.js';
 import geoProxyRouter from './routes/geoProxy.js';
 import finlandProxyRouter from './routes/finlandProxy.js';
+import rvtRouter from './routes/rvt.js';
 import { startScheduler } from './jobs/scheduler.js';
 import { startEvidenceWorker } from './services/evidence/ingestionWorker.js';
 
@@ -47,6 +48,7 @@ app.use('/api', geoProxyRouter);
 // requests and attaches MML_API_KEY server-side when configured.
 // See backend/src/lib/finland-geo.mjs and FINLAND_LAYERS.md.
 app.use('/api', finlandProxyRouter);
+app.use('/api', rvtRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });

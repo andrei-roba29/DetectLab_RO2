@@ -1775,8 +1775,13 @@
         var api = viewer();
         if (!api || typeof api.setEntryGate !== 'function') return Promise.resolve(true);
         if (!ready()) return Promise.resolve(true);
+        if (api.isOpen && api.isOpen()) return Promise.resolve(true);
         var layers = activeLayers();
+        var photo = root.DLPhotoFilter && root.DLPhotoFilter.get && root.DLPhotoFilter.get();
+        var usePhoto = photo && photo.center && isFinite(photo.center.lat) && isFinite(photo.center.lng);
+        var samePhoto = usePhoto ? root.confirm('A 1 km LiDAR image area is prepared. Open this same area in 3D?\n\nOK: same area. Cancel: choose a different area in the 3D window.') : false;
         if (!layers.length) {
+            if (samePhoto && leafletMap() && leafletMap().setView) leafletMap().setView(photo.center, leafletMap().getZoom(), { animate: false });
             /* No LiDAR on the 2D map: 3D opens exactly as it always did.
              * If a stale yellow point/disc was left over from an earlier LiDAR
              * session, remove it now so the 3D camera does not teleport to it. */
@@ -1784,8 +1789,21 @@
             try { clearDisc(); } catch (e3) {}
             return Promise.resolve(true);
         }
-        if (api.isOpen && api.isOpen()) return Promise.resolve(true);
-        return showDialog({ mode: 'gate' }).then(function (result) {
+        /* An image-only 2D filter can have a separate prepared 1 km area.
+         * Ask before the normal 3D preparation; do not reuse its processed
+         * bytes as 3D terrain or silently move the user's 3D camera. */
+        var options = { mode: 'gate' };
+        if (usePhoto) {
+            if (samePhoto) {
+                options = { mode: 'gate', scope: 'disc', radiusKm: 1,
+                    lat: photo.center.lat, lng: photo.center.lng, keys: ['lidar.' + photo.key] };
+            } else {
+                var c = leafletMap() && leafletMap().getCenter();
+                options = { mode: 'gate', scope: 'disc', radiusKm: 1,
+                    lat: c && c.lat, lng: c && c.lng };
+            }
+        }
+        return showDialog(options).then(function (result) {
             if (!result || result.cancelled) return false;
             return true;                     /* applyFocus() already ran in confirmDialog */
         });

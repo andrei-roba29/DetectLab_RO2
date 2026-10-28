@@ -1,0 +1,4 @@
+{
+  "nlAhn": {"path": "/srv/dtm/nl_ahn4_dtm_cog.tif", "attribution": "AHN / Esri Nederland"},
+  "ukLidar": {"path": "/srv/dtm/england_ea_composite_dtm_1m.tif", "attribution": "Environment Agency"}
+}

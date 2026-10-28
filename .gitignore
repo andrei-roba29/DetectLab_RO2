@@ -22,3 +22,10 @@ data/corona-europe-catalog.json
 # Geocoding cache written by tools/build-hungaricana-catalog.mjs —
 # per-machine answers from Nominatim, never part of the catalogue.
 data/other-maps/geocode-cache.json
+
+# Local RVT configuration, COGs and cache must not be checked in
+rvt_service/sources.json
+rvt_service/cache/
+*.tif
+*.tiff
+*.cog
