@@ -250,6 +250,7 @@
          * only on settled views — see renderAll), so the zoom-animation
          * transform can express every scale relative to it. */
         var lastZoom = null;
+        var lastOrigin = null;
 
         /* ── overlay construction ─────────────────────────────────────── */
         function build(record) {
@@ -357,6 +358,7 @@
                 frameEl: frameEl,
                 boxEl: boxEl,
                 handles: handles,
+                lineEl: line,
                 georefEl: georefEl,
                 georefInner: georefInner,
                 tiles: Object.create(null),
@@ -572,6 +574,7 @@
                 ov.projectAnchor = map.project(L.latLng(ov.state.lat, ov.state.lng), map.getZoom());
             }
             lastZoom = map.getZoom();
+            if (typeof map.getPixelOrigin === 'function') lastOrigin = map.getPixelOrigin();
 
             renderGeoref(ov);
 
@@ -607,32 +610,37 @@
          * same way the dots canvas does (js/other-maps.js): the map pane is
          * stationary while the tile containers CSS-scale for 250 ms, so each
          * sheet root gets the matching transform
-         *     translate(scale·(projectAnchor − anchor) − newPixelOrigin) ·
-         *     scale · translate(anchor)
-         * — Web Mercator project space is linear in zoom, so every point of
-         * the sheet lands at its exact target-zoom position.  The 250 ms
-         * glide comes from `.leaflet-zoom-anim .leaflet-zoom-animated`
+         *     translate(scale·bitmapAnchor − newPixelOrigin) · scale
+         * — Web Mercator project space is linear in zoom, and bitmapAnchor is
+         * the integer centre the content was last drawn against, so every
+         * point of the sheet lands at its exact target-zoom position.  The
+         * 250 ms glide comes from `.leaflet-zoom-anim .leaflet-zoom-animated`
          * (css/leaflet.css).  A settled render() resets the root transform,
          * so it never lingers. */
         function applyZoomTransform(center, zoom) {
-            if (lastZoom == null || typeof map._getNewPixelOrigin !== 'function') return;
+            if (lastZoom == null || lastOrigin == null || typeof map._getNewPixelOrigin !== 'function') return;
             var scale = map.getZoomScale(zoom, lastZoom);
             var newOrigin = map._getNewPixelOrigin(center, zoom);
             order.forEach(function (id) {
                 var ov = overlays[id];
-                if (!ov || !ov.anchor || !ov.projectAnchor) return;
-                var local = ov.projectAnchor.subtract(ov.anchor);
-                var offset = local.multiplyBy(scale).subtract(newOrigin)._round();
+                if (!ov || !ov.anchor) return;
+                /* The bitmap anchor is the integer centre the content was last
+                 * drawn against (the layer anchor plus the pixel origin of
+                 * that settled view).  Scaling that rather than the unrounded
+                 * project() centre is what keeps the animated end exactly on
+                 * the settled position, so the sheet does not drift a pixel
+                 * and snap back at the end of the CSS transition. */
+                var bitmapAnchor = lastOrigin.add(ov.anchor);
+                var offset = bitmapAnchor.multiplyBy(scale).subtract(newOrigin)._round();
                 ov.root.style.transform = 'translate3d(' + offset.x + 'px,' + offset.y + 'px,0) ' +
-                    'scale(' + scale + ') translate3d(' + ov.anchor.x + 'px,' + ov.anchor.y + 'px,0)';
+                    'scale(' + scale + ')';
                 /* The georeference square is geographic too: scale it around
                  * its own centre (the place) with the same transform. */
-                if (ov.georefEl && ov.georefAnchor && ov.georefProject) {
-                    var gLocal = ov.georefProject.subtract(ov.georefAnchor);
-                    var gOffset = gLocal.multiplyBy(scale).subtract(newOrigin)._round();
+                if (ov.georefEl && ov.georefAnchor) {
+                    var georefBitmap = lastOrigin.add(ov.georefAnchor);
+                    var gOffset = georefBitmap.multiplyBy(scale).subtract(newOrigin)._round();
                     ov.georefEl.style.transform = 'translate3d(' + gOffset.x + 'px,' + gOffset.y + 'px,0) ' +
-                        'scale(' + scale + ') translate3d(' + ov.georefAnchor.x + 'px,' +
-                        ov.georefAnchor.y + 'px,0)';
+                        'scale(' + scale + ')';
                 }
             });
         }
@@ -781,10 +789,28 @@
         function paintFrames() {
             order.forEach(function (id) {
                 var ov = overlays[id];
-                var show = alignMode && id === activeId;
-                ov.frameEl.style.display = show ? '' : 'none';
-                ov.root.classList.toggle('om-active', show);
-                if (ov.georefEl) ov.georefEl.style.display = show ? '' : 'none';
+                var isActive = id === activeId;
+                /* The dashed border marks the active sheet so a sheet left at
+                 * opacity 0 — or with the panel closed — can still be found;
+                 * the interactive handles and the georeference square only
+                 * exist in align mode. */
+                var showBorder = isActive;
+                var showHandles = isActive && alignMode;
+                ov.frameEl.style.display = (showBorder || showHandles) ? '' : 'none';
+                ov.boxEl.style.display = showBorder ? '' : 'none';
+                Object.keys(ov.handles).forEach(function (key) {
+                    ov.handles[key].style.display = showHandles ? '' : 'none';
+                });
+                if (ov.lineEl) ov.lineEl.style.display = showHandles ? '' : 'none';
+                if (showBorder && ov.geom) {
+                    ov.frameEl.style.transform = 'rotate(' + ov.state.rotation + 'deg)';
+                    ov.boxEl.style.width = ov.geom.dW + 'px';
+                    ov.boxEl.style.height = ov.geom.dH + 'px';
+                    ov.boxEl.style.left = (-ov.geom.dW / 2) + 'px';
+                    ov.boxEl.style.top = (-ov.geom.dH / 2) + 'px';
+                }
+                ov.root.classList.toggle('om-active', isActive);
+                if (ov.georefEl) ov.georefEl.style.display = showHandles ? '' : 'none';
             });
         }
 

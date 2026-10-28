@@ -189,8 +189,10 @@ proporțiile ei naturale** — nu ca un punct difuz care „schimbă formatul”
   la zoom spre un nivel mai gros se refac direct cele 1–2 tile-uri groase.
 * **Foiile stau blocate de tile-uri la zoom** — la fel ca punctele (§3): rădăcina fiecărei
   foi are clasa `leaflet-zoom-animated`, iar `zoomanim`/pinch aplică
-  `translate(scale·(proiecțiaAncorei − ancora) − nouaOrigine) scale(scale)
-  translate(ancora)`; redraw-ul la stabilire o reîntoarce la plasarea obișnuită.
+  `translate(scale·ancoraBitmap − nouaOrigine) scale(scale)` (ancoraBitmap e
+  ancora în pixeli + originea pixelilor de la redraw-ul stabilizat, adică
+  centrul pe care s-a desenat conținutul — același principiu ca la canvas-ul
+  punctelor); redraw-ul la stabilire o reîntoarce la plasarea obișnuită.
 
 | Gest | Efect |
 | --- | --- |
@@ -396,8 +398,8 @@ peste 3 100 de verificări, fără rețea:
   (`mergeLiveRecords`/`rebuildRecords`) crește indexul comun fără dubluri.
 
 `js/other-maps-tiles.js`, `js/other-maps-nls.js`, `js/other-maps-overlay.js`,
-`js/other-maps.js` și `css/other-maps.css` sînt versionate `20261026-nls-find`;
+`js/other-maps.js` și `css/other-maps.css` sînt versionate `20261028-other-maps-fix`;
 catalogul Hungaricana (`data/other-maps-catalog.json`) rămîne la
 `20261026-cluj-alba`, iar catalogul NLS (`data/other-maps-nls-catalog.json`) e
-la `20261026-nls-find`; cache-ul service-worker-ului e
-`detectlab-v284-nls-find`.
+la `20261028-other-maps-fix`; cache-ul service-worker-ului e
+`detectlab-v291-other-maps-fix`.

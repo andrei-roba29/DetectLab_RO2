@@ -103,6 +103,10 @@ function fakeEl(tag) {
         dispatch(type) { (el.listeners[type] || []).slice().forEach((fn) => fn({ type })); },
         getAttribute(name) { return el.attributes[name] == null ? null : el.attributes[name]; },
         setAttribute(name, value) { el.attributes[name] = String(value); },
+        /* The panel markup is a string, so a real selector is not needed:
+         * hand back a fresh element for `ensurePanel`'s listener wiring. */
+        querySelector: () => fakeEl('div'),
+        querySelectorAll: () => [],
         matches: () => false,
         setPointerCapture: () => {},
         getContext: () => (el._ctx2d = el._ctx2d || {
@@ -758,20 +762,29 @@ const OtherMaps = sandbox.DetectLabOtherMaps;
     // translate(s·(projectAnchor − anchor) − newOrigin) scale(s) translate(anchor).
     projMap.fire('zoomanim', { center: projMap.getCenter(), zoom: 15 });
     const a14 = pt(ov7.anchor.x, ov7.anchor.y);
-    const local7 = ov7.projectAnchor.subtract(a14);
-    const off7 = local7.multiplyBy(2).subtract(originAt(15))._round();
+    const bitmapAnchor7 = originAt(14).add(a14);
+    const off7 = bitmapAnchor7.multiplyBy(2).subtract(originAt(15))._round();
     eq(ov7.root.style.transform,
-        'translate3d(' + off7.x + 'px,' + off7.y + 'px,0) scale(2) translate3d(' + a14.x + 'px,' + a14.y + 'px,0)',
-        'zoomanim scales the sheet around its project anchor (14 → 15)');
+        'translate3d(' + off7.x + 'px,' + off7.y + 'px,0) scale(2)',
+        'zoomanim scales the sheet around its bitmap anchor (14 → 15)');
 
     // …and the sheet's anchor point stays on the ground: container of the
     // anchor after the transform = the settled z15 container of its LatLng.
     const anchorContainer15 = projectAt(rec7, 15).subtract(originAt(15)).add(PANE_POS);
-    // The anchor is the root's local (0,0): translate(off7)·scale(2)·translate(a14)
-    // maps it to off7 + 2·a14 in pane coordinates.
-    const gotAnchor = PANE_POS.add(pt(off7.x + 2 * a14.x, off7.y + 2 * a14.y));
-    ok(Math.abs(gotAnchor.x - anchorContainer15.x) < 1e-4 && Math.abs(gotAnchor.y - anchorContainer15.y) < 1e-4,
+    // The anchor is the root's local (0,0): translate(off7)·scale(2) maps it
+    // to off7 in pane coordinates.
+    const gotAnchor = PANE_POS.add(pt(off7.x, off7.y));
+    ok(Math.abs(gotAnchor.x - anchorContainer15.x) < 1 && Math.abs(gotAnchor.y - anchorContainer15.y) < 1,
         'the sheet anchor stays on its ground point through the animation');
+
+    // …and a content point stays on the ground too — the whole scan must not
+    // drift, not just the anchor.
+    const p7 = pt(123, 45);
+    const gotContent = PANE_POS.add(pt(off7.x + 2 * p7.x, off7.y + 2 * p7.y));
+    const wantContent = projectAt(rec7, 15).add(pt(2 * p7.x, 2 * p7.y))
+        .subtract(originAt(15)).add(PANE_POS);
+    ok(Math.abs(gotContent.x - wantContent.x) < 1 && Math.abs(gotContent.y - wantContent.y) < 1,
+        'a sheet content point stays on its ground point through the animation');
 
     // Settle: render() resets the root transform and re-records the frame.
     projMap._state.zoom = 15;
@@ -788,12 +801,11 @@ const OtherMaps = sandbox.DetectLabOtherMaps;
     // root gets, so the square stays locked to the ground through the glide.
     const homeLL = { lat: rec7.lat, lng: rec7.lng };
     const homeLayer = projMap.latLngToLayerPoint(homeLL);
-    const homeProject = projMap.project(homeLL, 15);
     projMap.fire('zoomanim', { center: projMap.getCenter(), zoom: 16 });
-    const gOff = homeProject.subtract(homeLayer).multiplyBy(2).subtract(originAt(16))._round();
+    const homeBitmap = originAt(15).add(homeLayer);
+    const gOff = homeBitmap.multiplyBy(2).subtract(originAt(16))._round();
     eq(ov7.georefEl.style.transform,
-        'translate3d(' + gOff.x + 'px,' + gOff.y + 'px,0) scale(2) translate3d(' +
-        homeLayer.x + 'px,' + homeLayer.y + 'px,0)',
+        'translate3d(' + gOff.x + 'px,' + gOff.y + 'px,0) scale(2)',
         'the georeference square scales around the place through the animation');
 
     /* ══ 8. the georeference square ═════════════════════════════════════
@@ -914,7 +926,8 @@ const OtherMaps = sandbox.DetectLabOtherMaps;
 
     eq(Nls.imageIdOf({ id: 'nls/228799835' }), '228799835', 'imageIdOf strips the nls/ prefix');
     eq(Nls.imageIdOf('228799835'), '228799835', 'imageIdOf accepts a bare viewer id');
-    eq(Nls.iiifPath('102345214'), '10234/102345214', 'the IIIF path prefix is the first five digits');
+    eq(Nls.iiifPath('102345214'), '10234/102345214', 'the IIIF path prefix drops the last four digits');
+    eq(Nls.iiifPath('74415150'), '7441/74415150', 'an eight-digit town plan takes a four-digit prefix');
     eq(Nls.iiifBase({ path: '10234/102345214' }),
         'https://map-view.nls.uk/iiif/2/10234%2F102345214', 'the IIIF base URL encodes the slash');
     eq(Nls.thumbUrl({ id: 'nls/102345214', path: '10234/102345214' }),
@@ -1041,7 +1054,7 @@ const OtherMaps = sandbox.DetectLabOtherMaps;
         ok(/^nls\/\d+$/.test(entry.id), entry.id + ' is an nls record id');
         ok(!nlsIds.has(entry.id), entry.id + ' is unique');
         nlsIds.add(entry.id);
-        ok(/^\d{5}\/\d+$/.test(entry.path), entry.id + ' carries a <prefix>/<id> IIIF path');
+        ok(entry.path === Nls.iiifPath(entry.id.split('/')[1]), entry.id + ' carries the correct <prefix>/<id> IIIF path');
         ok(entry.source === 'nls', entry.id + ' is tagged with the nls source');
         ok(entry.lat >= Nls.COVERAGE.south && entry.lat <= Nls.COVERAGE.north, entry.id + ' sits inside the coverage latitude band');
         ok(entry.lng >= Nls.COVERAGE.west && entry.lng <= Nls.COVERAGE.east, entry.id + ' sits inside the coverage longitude band');
@@ -1107,6 +1120,43 @@ const OtherMaps = sandbox.DetectLabOtherMaps;
     ok(hungImgs.length >= 1 && hungImgs.every((img) => /static-cdn\.hungaricana\.hu/.test(img.src || '')),
         'sourceless sheets still paint through the Hungaricana hash pyramid');
     hungMgr.remove('TST/NLS');
+
+    /* ══ 15. finding and re-opening an added sheet ═══════════════════ */
+    const fm = OtherMaps.state.map;          // the projMap attached in §7
+    const fmgr = OtherMaps.state.manager;
+    fm._state.zoom = 15;
+    fm.fire('move');
+    fm.fire('zoomend');
+    await new Promise((r) => setImmediate(r));
+
+    // The active sheet keeps its dashed border with align mode off, so a
+    // sheet left at opacity 0 can be found again; the handles stay hidden.
+    fmgr.setAlignMode(false);
+    fmgr.setActive('TST/7');
+    const ov7b = fmgr.get('TST/7');
+    ok(ov7b.frameEl.style.display !== 'none', 'the active sheet keeps its dashed border with align mode off');
+    ok(ov7b.handles.nw.style.display === 'none', 'the resize handles stay hidden outside align mode');
+    ok(ov7b.georefEl.style.display === 'none', 'the georeference square stays hidden outside align mode');
+
+    // A tap on the sheet hits the added map (container coordinates), so the
+    // panel can be reopened by clicking the map that was added.
+    fm.latLngToContainerPoint = (ll) => projectAt(ll, fm.getZoom())
+        .subtract(originAt(fm.getZoom())).add(PANE_POS);
+    const sheetPt = fm.latLngToContainerPoint({ lat: rec7.lat, lng: rec7.lng });
+    eq(OtherMaps.overlayAtContainer(sheetPt).id, 'TST/7', 'a tap on the sheet lands on the added map');
+    eq(OtherMaps.overlayAtContainer({ x: sheetPt.x + 100000, y: sheetPt.y + 100000 }), null,
+        'a tap far from the sheet misses it');
+    ok(OtherMaps.findAddedOverlay([{ id: 'TST/none' }, { id: 'TST/7' }]) === 'TST/7',
+        'findAddedOverlay returns the first sheet already on the map');
+    ok(OtherMaps.findAddedOverlay([{ id: 'TST/none' }]) === null,
+        'findAddedOverlay returns null when nothing is added');
+
+    // Clicking the added map reopens the panel: clear the green dots so the
+    // tap resolves to the sheet, not to a place dot.
+    OtherMaps.state.hits = [];
+    fm.fire('click', { latlng: { lat: rec7.lat, lng: rec7.lng }, containerPoint: sheetPt });
+    ok(OtherMaps.state.panel && OtherMaps.state.panel.classList.contains('show'),
+        'clicking the added map reopens the panel');
 
     console.log('✓ other-maps: ' + checks + ' checks passed ' +
         ('(' + catalog.maps.length + ' Hungaricana + ' + nlsCatalog.maps.length + ' NLS catalogue records, ' +

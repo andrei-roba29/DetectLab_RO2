@@ -48,7 +48,7 @@
      * catalogue, the NLS source is also queried live for the current
      * viewport while the layer is on. */
     var CATALOG_URL = 'data/other-maps-catalog.json?v=20261026-cluj-alba';
-    var NLS_CATALOG_URL = 'data/other-maps-nls-catalog.json?v=20261026-nls-find';
+    var NLS_CATALOG_URL = 'data/other-maps-nls-catalog.json?v=20261028-other-maps-fix';
     var NLS_LIVE_MIN_ZOOM = 9;          // city scale: below this a finder query would return too many sheets
     var NLS_LIVE_DEBOUNCE_MS = 700;     // one finder query per settled view
     var NLS_LIVE_MAX_KEYS = 20;         // remembered viewport cells, so panning back does not refetch
@@ -689,12 +689,61 @@
         return { sheets: sheets, places: places };
     }
 
+    /* The on-screen footprint of an added sheet, in container pixels, so a
+     * tap on the sheet itself can reopen its panel. The footprint is the
+     * sheet's screen rectangle (dW × dH, rotated by the sheet's own angle
+     * around the place). A sheet left at opacity 0 is still hit-testable,
+     * which is what lets a transparent sheet be found and clicked again. */
+    function overlayAtContainer(point) {
+        var manager = state.manager;
+        var map = state.map;
+        if (!manager || !map || map._animatingZoom ||
+            typeof map.latLngToContainerPoint !== 'function') return null;
+        var list = manager.list();
+        for (var i = list.length - 1; i >= 0; i--) {
+            var ov = list[i];
+            if (!ov || !ov.geom || !ov.state) continue;
+            var dW = ov.geom.dW, dH = ov.geom.dH;
+            if (!(dW > 0) || !(dH > 0)) continue;
+            var center = map.latLngToContainerPoint(L.latLng(ov.state.lat, ov.state.lng));
+            var theta = (ov.state.rotation || 0) * Math.PI / 180;
+            var cos = Math.cos(theta), sin = Math.sin(theta);
+            var dx = point.x - center.x, dy = point.y - center.y;
+            var lx = cos * dx + sin * dy;
+            var ly = -sin * dx + cos * dy;
+            if (Math.abs(lx) <= dW / 2 + 1 && Math.abs(ly) <= dH / 2 + 1) return ov;
+        }
+        return null;
+    }
+
+    /* The id of the first sheet in `sheets` that is already on the map, or
+     * null. A place with one sheet added and others still available is the
+     * common case: the tap should select the visible — possibly transparent
+     * — sheet so its border lights up, instead of opening another window. */
+    function findAddedOverlay(sheets) {
+        if (!state.manager) return null;
+        for (var i = 0; i < sheets.length; i++) {
+            var id = sheets[i] && sheets[i].id;
+            if (id && state.manager.has(id)) return id;
+        }
+        return null;
+    }
+
     function onMapClick(e) {
         if (!state.enabled || !e.latlng || !e.containerPoint) return;
         if (typeof state.map._draggableMoved === 'function' && state.map._draggableMoved(state.map)) return;
         var point = e.layerPoint || state.map.containerPointToLayerPoint(e.containerPoint);
         var matched = hitsAt(point);
-        if (!matched.length) return;
+        if (!matched.length) {
+            /* A tap that missed every dot may still land on an added sheet
+             * (the panel can be closed); reopen that sheet's panel. */
+            var sheet = overlayAtContainer(e.containerPoint);
+            if (sheet) {
+                state.manager.setActive(sheet.id);
+                showPanel();
+            }
+            return;
+        }
         var first = matched[0];
         var cluster = first.cluster;
         // One place → its sheets. Several places grouped by distance →
@@ -711,6 +760,16 @@
         }
         var merged = mergeTapSheets(matched);
         if (!merged.sheets.length) return;
+        var added = findAddedOverlay(merged.sheets);
+        if (added) {
+            /* The place already has a sheet on the map — possibly at opacity
+             * 0, which is exactly why it cannot be seen. Select it, light
+             * up its border and reopen the panel instead of opening another
+             * "available maps" window. */
+            state.manager.setActive(added);
+            showPanel();
+            return;
+        }
         var label = merged.places.length > 1 ?
             tCount('om_places_count', merged.places.length) : merged.places[0];
         openModal(merged.sheets, first.latlng, label);
@@ -1290,6 +1349,8 @@
         clusterSpreadMeters: clusterSpreadMeters,
         groupByPlace: groupByPlace,
         mergeTapSheets: mergeTapSheets,
+        overlayAtContainer: overlayAtContainer,
+        findAddedOverlay: findAddedOverlay,
         formatMeters: formatMeters,
         georefOptionsHtml: georefOptionsHtml,
         combineCatalogMaps: combineCatalogMaps,
