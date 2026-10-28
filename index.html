@@ -26,7 +26,7 @@
     <link rel="stylesheet" href="css/leaflet.photon.css">
     <link rel="stylesheet" href="css/leaflet-measure.css">
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
-    <link rel="stylesheet" href="css/styles.css?v=20261027-danish-row-style">
+    <link rel="stylesheet" href="css/styles.css?v=20261028-uk-heritage-free-sublayers">
     <!-- 3D TERRAIN VIEW (2D ⇄ 3D) — MapLibre GL JS, vendored like Leaflet.
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
@@ -2601,12 +2601,67 @@
                         <div id="danishSubLayers" class="danish-sublayers" style="display:flex;flex-direction:column;gap:8px;overflow:hidden;transition:max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;max-height:6000px;opacity:1;"></div>
                     </div>
 
-                    <!-- United Kingdom: Historic England's NHLE and the principal
-                         RCAHMW, Heneb and Cadw registers for Wales. Rows and
-                         viewport-limited ArcGIS queries are built lazily by
-                         js/uk-heritage-layers.js. -->
-                    <div id="ukHeritageRow" class="country-section-list" data-category="free">
-                        <div id="ukHeritageSubLayers" style="display:flex;flex-direction:column;gap:8px;overflow:hidden;max-height:6000px;opacity:1;"></div>
+                    <!-- United Kingdom · Heritage — a FREE layer, built exactly like the
+                         other country catalogues: one Romania-style glass group row
+                         (title, ⓘ, expand chevron, master switch, group opacity
+                         slider) over a left-bordered #ukHeritageSubLayers column.
+
+                         The group AND every row js/uk-heritage-layers.js creates
+                         inside it are `transp-layer-row` / `data-category="free"`
+                         nodes, so the Free/Premium tabs gate them with the same CSS
+                         rule as every other free layer — the UK registers belong to
+                         the Free tab and can never be listed under Premium. (They
+                         used to: the block was a plain `.country-section-list` whose
+                         children carried no category.)
+
+                         Each of the seven registers — Historic England's NHLE and
+                         the RCAHMW, Heneb and Cadw services for Wales — has its own
+                         on/off switch, its own opacity slider, its own percentage
+                         badge and its own ⓘ (licence, coverage, zoom limit), and
+                         queries its own ArcGIS FeatureServer for the visible map
+                         area only while it is switched on. See
+                         js/uk-heritage-layers.js and UK_HERITAGE_LAYERS.md. -->
+                    <div class="transp-layer-row active uk-heritage-group" data-category="free" id="ukHeritageRow">
+                        <div class="transp-layer-label" style="margin-bottom:6px">
+                            <span style="display:flex;align-items:center;gap:7px;min-width:0">
+                                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style="flex-shrink:0">
+                                    <path d="M6.5 1.1 L11.4 2.8 V6.3 C11.4 9.1 9.2 10.9 6.5 11.9 C3.8 10.9 1.6 9.1 1.6 6.3 V2.8 Z" fill="rgba(217,164,65,0.25)" stroke="#d9a441" stroke-width="0.9" />
+                                    <path d="M6.5 3.4v5.2M3.9 6.1h5.2" stroke="#d9a441" stroke-width="0.8" opacity="0.85" />
+                                </svg>
+                                <span class="t" data-key="layer_uk_heritage" id="ukHeritageTitle">United Kingdom · Heritage</span>
+                                <button type="button" class="layer-info-btn" onclick="event.stopPropagation();showUkHeritageGroupInfo()" title="UK heritage registers: sources, licences and zoom levels"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="7.5" r="1.3" fill="currentColor" /><rect x="10.8" y="10.5" width="2.4" height="7" rx="1.2" fill="currentColor" /></svg></button>
+                            </span>
+                            <span style="display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0">
+                                <button type="button" onclick="toggleUkHeritageSubLayers()" id="ukHeritageExpandBtn" aria-expanded="true" title="Expand/Collapse the UK heritage sources" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:rgba(217,164,65,0.85);display:flex;align-items:center;transition:color 0.2s;" onmouseover="this.style.color='#d9a441'" onmouseout="this.style.color='rgba(217,164,65,0.85)'">
+                                    <svg id="ukHeritageExpandIcon" width="12" height="12" viewBox="0 0 12 12" fill="none" style="transition:transform 0.25s ease;transform:rotate(0deg)">
+                                        <polyline points="2,4 6,8 10,4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                                    </svg>
+                                </button>
+                                <label class="apm-toggle-switch" title="Toggle every UK heritage source">
+                                    <input type="checkbox" id="ukHeritageToggle" onchange="toggleUkHeritageLayers(this.checked)">
+                                    <span class="apm-toggle-track"></span>
+                                </label>
+                            </span>
+                        </div>
+
+                        <!-- Group opacity: applies to every register; each row can then be
+                             fine-tuned with its own slider. -->
+                        <div class="transp-layer-label" style="margin-bottom:6px;margin-top:2px">
+                            <span style="display:flex;align-items:center;gap:6px;min-width:0">
+                                <span style="font-size:0.72rem;opacity:0.6" class="t" data-key="layer_opacity_label">Opacity</span>
+                            </span>
+                            <span style="display:flex;align-items:center;gap:5px">
+                                <span class="pct" id="ukHeritagePct">80%</span>
+                            </span>
+                        </div>
+                        <input type="range" class="transp-slider" id="ukHeritageOpacitySlider"
+                               min="0" max="100" value="80"
+                               aria-label="Opacity — every UK heritage register"
+                               oninput="setUkHeritageOpacity(this.value)">
+
+                        <!-- One row per register (switch + slider + ⓘ), built by
+                             js/uk-heritage-layers.js. -->
+                        <div id="ukHeritageSubLayers" class="uk-heritage-sublayers" style="margin-top:8px;padding-left:6px;border-left:2px solid rgba(217,164,65,0.3);display:flex;flex-direction:column;gap:8px;overflow:hidden;transition:max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;max-height:none;opacity:1;"></div>
                     </div>
 
                     <!-- Suomi / Finland — MML terrain + cadastral, Museovirasto
@@ -5293,7 +5348,7 @@
     <script src="js/finland-layers.js?v=20261019-finland-filter"></script>
     <!-- UK heritage: viewport-limited ArcGIS FeatureServer overlays for
          Historic England, RCAHMW, Heneb and Cadw. -->
-    <script src="js/uk-heritage-layers.js?v=20261026-uk-heritage"></script>
+    <script src="js/uk-heritage-layers.js?v=20261028-uk-heritage-free-sublayers"></script>
     <script src="js/historical-eu-maps.js?v=20261013-flat-hist-maps"></script>
     <!-- The layers window's own row chrome: tags every nested `*SubLayers`
          row with the shared glass material and gives each historical-map row
@@ -5912,7 +5967,8 @@
             'Season Green-Up rate': 'layer_vegfp_sgu',
             'SGD': 'layer_vegfp_sgd',
             'SGD — Season Green-Down rate': 'layer_vegfp_sgd',
-            'Season Green-Down rate': 'layer_vegfp_sgd'
+            'Season Green-Down rate': 'layer_vegfp_sgd',
+            'United Kingdom · Heritage': 'layer_uk_heritage'
         };
 
         // Al treilea parametru (opțional) e o descriere mai lungă, afișată sub

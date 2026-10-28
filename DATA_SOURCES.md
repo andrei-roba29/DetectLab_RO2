@@ -327,6 +327,36 @@ Finnish credential variables (env-only, documented in
 strips credentials and caps bodies — it is the *fallback* path; direct
 requests are always tried first.
 
+## The UK heritage layers (United Kingdom · Heritage — **free**)
+
+Seven national heritage registers for England and Wales, declared in
+`js/uk-heritage-layers.js` (one entry per register: label ro/en, provider,
+attribution, `info` text, colour, minimum zoom). Each register is its own
+switch, its own opacity slider and its own ⓘ in the panel; the group is a free
+layer (Free tab only, GB view only). Records are queried live from the
+visible map area — nothing is bulk-imported. Full behaviour:
+**`UK_HERITAGE_LAYERS.md`**.
+
+| provider | register (panel row) | service | licence / terms | attribution as shown | min zoom |
+|---|---|---|---|---|---|
+| Historic England | National Heritage List for England (NHLE) | ArcGIS FeatureServer `National_Heritage_List_for_England_NHLE_v02_VIEW` (public sublayers discovered from `?f=json`) | Historic England open data / statutory list; re-use needs the attribution | “© Historic England · National Heritage List for England (NHLE)” | 8 |
+| RCAHMW (Royal Commission on the Ancient and Historical Monuments of Wales) | National Monuments Records of Wales | ArcGIS FeatureServer `National_Monuments_Record_of_Wales/FeatureServer/2` | RCAHMW / NMRW terms | “© RCAHMW · Royal Commission on the Ancient and Historical Monuments of Wales” | 13 |
+| Heneb (the regional Welsh archaeology trusts) | Historic Environment Record of Wales | ArcGIS FeatureServer `Welsh_Historic_Environment_Records/FeatureServer/0` | Heneb / HER terms | “© Heneb · Welsh Historic Environment Records” | 13 |
+| Cadw (Welsh Government historic environment service) | Listed buildings | ArcGIS FeatureServer `Listed_Buildings/FeatureServer/0` | Cadw open data; attribution required | “© Cadw · Welsh Government historic environment service” | 12 |
+| Cadw | Scheduled monuments | ArcGIS FeatureServer `Scheduled_Monuments/FeatureServer/0` | Cadw open data; attribution required | as above | 9 |
+| Cadw | Designated wrecks | ArcGIS FeatureServer `Designated_Wrecks/FeatureServer/0` | Cadw open data; attribution required | as above | 8 |
+| Cadw | Registered historical parks & gardens | ArcGIS FeatureServer `Registered_Parks_and_Gardens/FeatureServer/0` | Cadw open data; attribution required | as above | 9 |
+
+No key, token or proxy: the ArcGIS FeatureServers are public and CORS-enabled,
+so the browser queries them directly. Every request is a viewport envelope
+(`esriGeometryEnvelope`, `esriSpatialRelIntersects`, max 8 000 records), the
+in-flight request is aborted when its row is switched off, `moveend`/`zoomend`
+re-query is debounced (180 ms) and each register stays silent below its own
+zoom limit (the row shows “Zoom to 13+” instead). A row that cannot reach its
+service says “Temporarily unavailable” and nothing else; a failure never turns
+into an empty basemap. England + Wales coverage only — the group is hidden for
+every other country.
+
 ## “Alte hărți / Other maps” — the two non-georeferenced sources
 
 The premium “Other maps” sub-layer merges two independent portals behind one
