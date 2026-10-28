@@ -24,15 +24,22 @@
             map.off('movestart zoomstart', this._cancel, this);
             map.off('moveend zoomend', this._schedule, this);
             if (this._group) { this._group.clearLayers(); map.removeLayer(this._group); }
+            if (this._fallback) map.removeLayer(this._fallback);
+            this._fallback = null;
             this._group = null;
             this._map = null;
         },
         setOpacity: function (value) {
             this._opacity = value;
             if (this._group) this._group.eachLayer(function (marker) { marker.setOpacity(value); });
+            if (this._fallback) this._fallback.setOpacity(value);
             return this;
         },
-        setZIndex: function () { return this; },
+        setZIndex: function (value) {
+            this._zIndex = value;
+            if (this._fallback) this._fallback.setZIndex(value);
+            return this;
+        },
         _status: function (message, kind) {
             if (this.options.status) this.options.status(message, kind || 'info');
         },
@@ -52,6 +59,7 @@
             var map = this._map;
             if (!map || !this._group) return;
             var ro = /^ro/i.test(root.document.documentElement.lang || '');
+            if (this._fallback) return;
             if (map.getZoom() < 10) {
                 this._status(ro ? 'Mărește la zoom 10 pentru patrimoniu (doar zona vizibilă).' : 'Zoom to level 10 to load Heritage in the visible area.');
                 return;
@@ -88,13 +96,22 @@
                 } catch (error) {
                     if (controller.signal.aborted || generation !== this._generation) return;
                     errors++;
-                    // Do not repeatedly hit an unsupported or blocked WFS endpoint.
-                    if (!points.length) break;
+                    // One unavailable type must not hide the remaining sources.
                 }
             }
             if (generation !== this._generation || !this._map) return;
             this._controller = null;
-            if (errors) this._status(ro ? 'Serviciul de obiecte ASIG nu este disponibil sau a răspuns incomplet. Nu se încarcă rastere suplimentare.' : 'ASIG feature service unavailable or incomplete. No heavy raster fallback loaded.', 'error');
+            if (errors && this.options.createFallback) {
+                // A single server-composited tile layer, never one stack per source.
+                this._group.clearLayers();
+                this._fallback = this.options.createFallback(parts, this._opacity, function (message, kind) {
+                    this._status(message, kind);
+                }.bind(this));
+                if (this._zIndex != null) this._fallback.setZIndex(this._zIndex);
+                map.addLayer(this._fallback);
+                this._status(ro ? 'Patrimoniu afișat ca hartă ASIG (serviciul de obiecte este incomplet).' : 'Showing Heritage as an ASIG map (feature service incomplete).', 'warn');
+            }
+            else if (errors) this._status(ro ? 'Serviciul de obiecte ASIG nu este disponibil sau a răspuns incomplet.' : 'ASIG feature service unavailable or incomplete.', 'error');
             else if (limited) this._status(ro ? 'Rezultat parțial (max. 600 obiecte / 150 per sursă). Mărește harta pentru detalii.' : 'Partial viewport sample (max. 600 objects / 150 per source). Zoom in for more detail.', 'warn');
             else this._status(points.length + (ro ? ' obiecte în zona vizibilă.' : ' objects in the visible area.'));
         },

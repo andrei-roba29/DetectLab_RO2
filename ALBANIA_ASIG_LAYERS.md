@@ -1,3 +1,21 @@
+## Heritage availability fix — 2026-10-28
+
+The feature-only renderer could leave Heritage entirely blank when ASIG refused
+WFS, and stopped querying after the first failed type. It now continues past
+individual failures. Incomplete feature results trigger **one composite WMS tile
+layer** using the global ASIG WMS endpoint and all current Heritage names. This
+is not the old per-source tile stack: it uses no offscreen tile buffer, updates
+when idle, stays within Albania, and starts at zoom 10. Opacity, z-order and
+removal follow the Heritage toggle. The fallback remains active until toggled
+off, avoiding repeated WFS failures on every pan. Tile errors are visible.
+
+Offline tests cover partial-source failure, a single fallback, opacity, z-order,
+cleanup and no repeat feature queries. Live ASIG availability still requires
+production verification; this environment cannot reach the upstream host.
+
+The older feature-only / no-fallback notes below describe the previous behaviour
+and are superseded by this fix.
+
 ## Heritage performance change — 2026-10-26
 
 Heritage no longer creates one WMS tile overlay per source. A single viewport
