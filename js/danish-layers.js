@@ -374,11 +374,11 @@
         var style = (layer.wfs && layer.wfs.style) || {};
         var scale = fraction(layer.id);
         return {
-            color: style.color || '#ffd166',
-            weight: style.weight || 1.6,
+            color: style.color || '#ff5e00',
+            weight: style.weight || 2,
             opacity: (style.opacity === undefined ? 0.95 : style.opacity) * scale,
-            fillColor: style.fillColor || '#ffb703',
-            fillOpacity: (style.fillOpacity === undefined ? 0.28 : style.fillOpacity) * scale
+            fillColor: style.fillColor || '#ff9e3d',
+            fillOpacity: (style.fillOpacity === undefined ? 0.32 : style.fillOpacity) * scale
         };
     }
 
@@ -416,6 +416,202 @@
             rows + link +
             '<div style="margin-top:5px;font-size:0.68rem;opacity:0.55">' +
             escapeHtml(layer.provider || '') + '</div></div>';
+    }
+
+    /* ── WMS click identify (GetFeatureInfo) ───────────────────────────────
+     * The two kultur arv point layers are raster tiles: Leaflet cannot
+     * hit-test their dots, so a click is resolved server-side with a WMS
+     * GetFeatureInfo request against the very same agency GeoServer that
+     * serves the tiles. The JSON answer opens a popup with the monument
+     * record; when the host sends no CORS headers (the browser cannot read
+     * the cross-origin answer) the same request is asked as HTML and shown
+     * in a sandboxed iframe instead — the browser renders it without reading
+     * it, the same pattern the Albanian ASIG layers use. */
+
+    function identifyLayers() {
+        var map = runtime.map;
+        if (!map) return [];
+        var zoom = map.getZoom();
+        return LAYERS.filter(function (layer) {
+            return layer.identify && runtime.active[layer.id] &&
+                runtime.built[layer.id] &&
+                zoom >= (layer.minZoom || 0) &&
+                (typeof map.hasLayer !== 'function' || map.hasLayer(runtime.built[layer.id]));
+        });
+    }
+
+    /* One GetFeatureInfo (WMS 1.1.1, EPSG:4326) for a map click. X/Y are
+     * the pixel offsets inside the viewport image, counted from its
+     * north-west corner — the 1.1.1 convention. */
+    function identifyUrl(layer, map, latlng) {
+        var size = map.getSize();
+        var bounds = map.getBounds();
+        var zoom = map.getZoom();
+        var nw = map.project(bounds.getNorthWest(), zoom);
+        var point = map.project(latlng, zoom);
+        var x = Math.round(point.x - nw.x);
+        var y = Math.round(point.y - nw.y);
+        var bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+        return String(layer.url) + '?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetFeatureInfo' +
+            '&LAYERS=' + encodeURIComponent(layer.layers) +
+            '&QUERY_LAYERS=' + encodeURIComponent(layer.layers) +
+            '&STYLES=' +
+            '&SRS=EPSG%3A4326' +
+            '&BBOX=' + bbox.map(function (v) { return Math.round(v * 1e6) / 1e6; }).join(',') +
+            '&WIDTH=' + Math.round(size.x) + '&HEIGHT=' + Math.round(size.y) +
+            '&X=' + x + '&Y=' + y +
+            '&INFO_FORMAT=application%2Fjson' +
+            '&FEATURE_COUNT=10';
+    }
+
+    /* The popup content for a GetFeatureInfo answer. The configured fields
+     * come first; anything else the service returns still shows, so the
+     * popup is never empty because of a schema drift between the WMS point
+     * layers and the WFS areas layer. */
+    function identifyPopupHtml(layer, props) {
+        var identify = layer.identify || {};
+        var fields = identify.fields || [];
+        var rows = [];
+        var covered = {};
+        fields.forEach(function (field) {
+            var value = props[field];
+            if (value === undefined || value === null || value === '') return;
+            covered[field] = true;
+            rows.push('<div><span style="opacity:0.6">' + escapeHtml(field) + ':</span> ' +
+                '<strong>' + escapeHtml(value) + '</strong></div>');
+        });
+        Object.keys(props).forEach(function (key) {
+            if (covered[key] || key === 'geometry' || key === 'bbox') return;
+            var value = props[key];
+            if (value === undefined || value === null || value === '' ||
+                typeof value === 'object') return;
+            rows.push('<div><span style="opacity:0.6">' + escapeHtml(key) + ':</span> ' +
+                '<strong>' + escapeHtml(value) + '</strong></div>');
+        });
+        var link = '';
+        if (identify.linkField && props[identify.linkField]) {
+            link = '<div style="margin-top:5px"><a href="' + escapeHtml(props[identify.linkField]) +
+                '" target="_blank" rel="noopener">' +
+                escapeHtml(tr(identify.linkLabel) || 'Open') + '</a></div>';
+        }
+        return '<div style="min-width:150px">' +
+            '<div style="font-weight:600;margin-bottom:3px">' + escapeHtml(tr(layer.title)) + '</div>' +
+            rows.join('') + link +
+            '<div style="margin-top:5px;font-size:0.68rem;opacity:0.55">' +
+            escapeHtml(layer.provider || '') + '</div></div>';
+    }
+
+    /* Pick the feature closest to the click, in screen pixels, so a dot does
+     * not have to be hit exactly; the server's own pick is the anchor when
+     * nothing is within the tolerance. */
+    function nearestFeature(features, latlng, map) {
+        var zoom = map.getZoom();
+        var click = map.project(latlng, zoom);
+        var best = features[0];
+        var bestDistance = Infinity;
+        features.forEach(function (feature) {
+            var geometry = feature && feature.geometry;
+            if (!geometry || geometry.type !== 'Point') return;
+            var coords = geometry.coordinates;
+            if (!coords || coords.length < 2) return;
+            var point = map.project([coords[1], coords[0]], zoom);
+            var distance = point.distanceTo(click);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = feature;
+            }
+        });
+        return { feature: best, distance: bestDistance };
+    }
+
+    function openIdentifyPopup(layer, features, latlng, map) {
+        var picked = nearestFeature(features, latlng, map);
+        var feature = picked.feature;
+        var props = (feature && feature.properties) || {};
+        var anchor = latlng;
+        if (feature && feature.geometry && feature.geometry.type === 'Point' &&
+            feature.geometry.coordinates && feature.geometry.coordinates.length >= 2) {
+            anchor = [feature.geometry.coordinates[1], feature.geometry.coordinates[0]];
+        }
+        L.popup({ maxWidth: 320 })
+            .setLatLng(anchor)
+            .setContent(identifyPopupHtml(layer, props))
+            .openOn(map);
+    }
+
+    /* The cross-origin JSON answer cannot be read without CORS headers. Ask
+     * the same request as HTML and render it in a sandboxed iframe: the
+     * browser displays the server's own answer without reading it. */
+    function openIdentifyIframePopup(layer, map, latlng) {
+        var url = identifyUrl(layer, map, latlng)
+            .replace('INFO_FORMAT=application%2Fjson', 'INFO_FORMAT=text%2Fhtml');
+        var html = '<iframe src="' + escapeHtml(url) + '" style="width:300px;height:220px;border:0" ' +
+            'sandbox="" title="Fund og Fortidsminder"></iframe>';
+        L.popup({ maxWidth: 320, className: 'danish-identify-popup' })
+            .setLatLng(latlng)
+            .setContent(html)
+            .openOn(map);
+    }
+
+    var identifyHandler = null;
+
+    function ensureIdentifyHandler() {
+        var map = runtime.map;
+        if (!map || typeof map.on !== 'function' || identifyHandler) return;
+        identifyHandler = function (event) {
+            identifyOnClick(event);
+        };
+        map.on('click', identifyHandler);
+    }
+
+    function dropIdentifyHandler() {
+        if (!identifyHandler) return;
+        var map = runtime.map;
+        if (map && typeof map.off === 'function') {
+            try { map.off('click', identifyHandler); } catch (e) { /* best effort */ }
+        }
+        identifyHandler = null;
+    }
+
+    /* Keep the single shared handler in step with the active identify
+     * layers: one handler for all of them, removed when the last one goes
+     * off the map. */
+    function maybeDropIdentifyHandler() {
+        if (!identifyHandler) return;
+        var any = LAYERS.some(function (layer) {
+            return layer.identify && runtime.active[layer.id];
+        });
+        if (!any) dropIdentifyHandler();
+    }
+
+    function identifyOnClick(event) {
+        var map = runtime.map;
+        if (!map || !event || !event.latlng) return;
+        /* Topmost layer first: the last activated one is painted on top, so
+         * its answer wins when a click could hit either of the two layers. */
+        var candidates = identifyLayers().reverse();
+        if (!candidates.length) return;
+        var latlng = event.latlng;
+        var index = 0;
+        function tryNext() {
+            if (index >= candidates.length) return;
+            var layer = candidates[index];
+            index += 1;
+            window.fetch(identifyUrl(layer, map, latlng))
+                .then(function (response) {
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    return response.json();
+                })
+                .then(function (collection) {
+                    var features = (collection && collection.features) || [];
+                    if (!features.length) { tryNext(); return; }
+                    openIdentifyPopup(layer, features, latlng, map);
+                })
+                .catch(function () {
+                    openIdentifyIframePopup(layer, map, latlng);
+                });
+        }
+        tryNext();
     }
 
     /* ── the heritage WFS: one bbox query per view, debounced ─────────────── */
@@ -571,10 +767,25 @@
      * not used here — it flips the very switch that drives this module's state,
      * and a base map must never switch itself off; see DATA_SOURCES.md.) */
     function watchTiles(layer, built) {
-        var state = { fails: 0, loaded: 0, reported: false };
+        var state = { fails: 0, loaded: 0, reported: false, retried: false };
         built.on('tileload', function () { state.loaded += 1; });
         built.on('tileerror', function () {
             state.fails += 1;
+            /* GeoServer answers a cold first burst with HTTP 200 + an
+             * exception XML body the browser cannot decode, so the very
+             * first toggle can look empty while the server warms up. Retry
+             * the whole view once after a short pause: the warm server
+             * answers and the layer appears without the visitor toggling
+             * the switch off and on again. */
+            if (state.loaded === 0 && !state.retried) {
+                state.retried = true;
+                window.setTimeout(function () {
+                    if (built._map && typeof built._map.hasLayer === 'function' &&
+                        built._map.hasLayer(built) && typeof built.redraw === 'function') {
+                        try { built.redraw(); } catch (e) { /* best effort */ }
+                    }
+                }, 2000);
+            }
             if (state.reported || state.loaded > 0 || state.fails < 3) return;
             state.reported = true;
             setStatus(layer.id, tr(TEXT.unavailable), 'error');
@@ -637,6 +848,7 @@
                 runtime.wfs.last = '';
                 refreshOneWfs(layer, true);
             }
+            if (layer.identify) ensureIdentifyHandler();
         }
         syncUI();
         save();
@@ -657,6 +869,7 @@
             }
             runtime.wfs.last = '';
         }
+        if (layer.identify) maybeDropIdentifyHandler();
         syncUI();
         save();
         void options;
@@ -1337,6 +1550,11 @@
             wfsQueryUrl: wfsQueryUrl,
             wfsDirectUrl: wfsDirectUrl,
             popupHtml: popupHtml,
+            identifyUrl: identifyUrl,
+            identifyPopupHtml: identifyPopupHtml,
+            nearestFeature: nearestFeature,
+            identifyLayers: identifyLayers,
+            identifyOnClick: identifyOnClick,
             setStatus: setStatus,
             tr: tr,
             filterForCountry: filterForCountry,
