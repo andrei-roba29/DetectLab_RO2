@@ -356,7 +356,35 @@ const rows = allRows(mount).concat(allRows(lidarMount));
 const sections = mount.children.filter((child) => child.attributes['data-albania-section']);
 check(!mount.children.some(child => child.className === 'albania-catalogue-tools'), 'no country-level catalogue toolbar');
 const heritageBlock = mount.children[0];
-check(heritageBlock.className === 'albania-heritage-block', 'Heritage sits at the top of the panel, above every section');
+check(heritageBlock.className.indexOf('albania-heritage-block') === 0 && heritageBlock.className.includes('transp-layer-row'),
+    'Heritage sits at the top of the panel, above every section, as a Romania-style row');
+/* Heritage (like every Albanian row) is FREE: it must appear in the Free
+ * tab only and never leak into the Premium tab. The tab gate is
+ * data-category + .active on transp-layer-rows (switchLayerTab/CSS), and
+ * buildPanel re-applies the current tab so a rebuild cannot undo it. */
+(function HERITAGE_FREE_TAB_CHECK() {
+    check(heritageBlock.attributes['data-category'] === 'free',
+        'the Heritage block is categorised free, not premium');
+    check(API.state.heritageBlock === heritageBlock && heritageBlock.classList.contains('active'),
+        'the Heritage block is marked active for the (default) Free tab');
+    check(sections.every((section) => section.classList.contains('active')),
+        'every free section row is marked active for the Free tab');
+    check(mount.children.every((child) => !child.attributes || child.attributes['data-category'] !== 'premium'),
+        'nothing in the Albania group is categorised premium');
+    /* Simulate the Premium tab being selected, then a rebuild-time re-apply:
+     * Heritage and the sections must lose .active (hidden in Premium). */
+    document.querySelector = () => ({ dataset: { tab: 'premium' }, getAttribute: () => 'premium' });
+    API.applyPanelTab();
+    check(!heritageBlock.classList.contains('active') &&
+        sections.every((section) => !section.classList.contains('active')),
+        'in the Premium tab the Heritage block and sections are not active (not shown)');
+    document.querySelector = () => ({ dataset: { tab: 'free' }, getAttribute: () => 'free' });
+    API.applyPanelTab();
+    check(heritageBlock.classList.contains('active'),
+        'back in the Free tab the Heritage block is active again');
+    delete document.querySelector;
+    API.applyPanelTab();
+})();
 const heritageRows = heritageBlock.children.filter((child) => child.className && child.className.indexOf('albania-layer-row') === 0);
 check(heritageRows.length === 1 && heritageRows[0].id === 'albaniaRow_heritage',
     'Heritage is ONE toggle — its parts are not rows');
@@ -366,11 +394,20 @@ check(sections.length === 5, 'the six catalogue sections render as collapsible b
 assert.deepStrictEqual(sections.map((section) => section.attributes['data-albania-section']),
     ['orthophotos', 'cadastre', 'maps', 'environment', 'planning']);
 sections.forEach((section) => {
+    const sectionId = section.attributes['data-albania-section'];
     const head = section.children[0];
     const body = section.children[1];
-    check(head.attributes['aria-expanded'] === 'true', section.attributes['data-albania-section'] + ' starts expanded');
-    check(body.children.length === Number(head.children[2].textContent.replace(/[()]/g, '')),
-        section.attributes['data-albania-section'] + ' body holds exactly its rows');
+    /* Romania-style header: transp-layer-label with title+count left,
+     * expand chevron + master pill switch right. */
+    check(section.className.includes('transp-layer-row') && head.className === 'transp-layer-label',
+        sectionId + ' is a Romania-style transp-layer-row section');
+    check(head.attributes['aria-expanded'] === 'true', sectionId + ' starts expanded');
+    check(body.children.length === Number(head.children[0].children[1].textContent.replace(/[()]/g, '')),
+        sectionId + ' body holds exactly its rows');
+    const node = API.state.sectionNodes[sectionId];
+    check(!!node && !!node.master && node.master.id === 'albaniaSectionToggle_' + sectionId &&
+        !!node.button && node.button.id === 'albaniaSectionHead_' + sectionId,
+        sectionId + ' header carries a master switch and an expand button');
 });
 check(rows.length === 29 && rows.filter((row) => row.id !== 'albaniaRow_heritage').length === 28,
     'all 28 catalogue rows plus the Heritage toggle are mounted in the one Albania group');
@@ -390,6 +427,61 @@ function LAYERS_CHECK() {
 check(API.HERITAGE_ID === 'heritage' && !!API.state.rows.heritage &&
     API.state.rows.heritage.input.id === 'albaniaToggle_heritage',
     'the Heritage row is addressable as “heritage” and owns exactly one checkbox');
+
+/* Every row is styled like the other countries' free rows (Romania is the
+ * template): glass dl-sublayer-row, title left + pill switch right, then
+ * the “Opacity” line with the shared ⓘ button + % badge and a transp-slider. */
+(function ROW_STYLE_CHECK() {
+    const entry = API.state.rows.ortho_2018;
+    const row = entry.row;
+    check(row.className.includes('dl-sublayer-row'), 'Albanian rows use the shared glass sublayer shell');
+    const head = row.children[0];
+    const switchLabel = head.children[1].children[1];
+    check(switchLabel.className === 'apm-toggle-switch' &&
+        switchLabel.children[0] === entry.input &&
+        switchLabel.children[1].className === 'apm-toggle-track',
+        'the row header ends in the pill on/off switch around the checkbox');
+    const opacityLine = row.children[1];
+    check(opacityLine.className === 'transp-layer-label' &&
+        opacityLine.children[1].children[0] === entry.info &&
+        entry.info.className === 'layer-info-btn' && entry.info.textContent === 'ⓘ' &&
+        opacityLine.children[1].children[1] === entry.pct,
+        'the Opacity line carries the shared info button and % badge');
+    check(entry.slider.className.includes('transp-slider') &&
+        !entry.slider.className.includes('albania-layer-slider') &&
+        entry.slider.id === 'albaniaOpacity_ortho_2018',
+        'the opacity slider is the shared transp-slider');
+    check(API.state.rows.hillshade_2015.row.className.includes('lidar-country-row') &&
+        API.state.rows.hillshade_2015.slider.className.includes('lidar-country-opacity'),
+        'LiDAR rows keep the shared LiDAR row + slider treatment');
+})();
+
+/* The section master switch turns the whole section on/off, reads
+ * indeterminate for a partial section, and the chevron collapse still works. */
+(function SECTION_MASTER_CHECK() {
+    API.toggleSectionLayers('maps', true);
+    const node = API.state.sectionNodes.maps;
+    check(API.isActive('italiane_100k') && API.isActive('krgjsh_25k') &&
+        node.master.checked === true && node.master.indeterminate === false,
+        'the section master turns every layer of the section on');
+    API.toggle('italiane_100k', false);
+    check(node.master.checked === false && node.master.indeterminate === true,
+        'a partially active section reads indeterminate on the master');
+    API.toggleSectionLayers('maps', false);
+    check(!API.isActive('italiane_100k') && !API.isActive('krgjsh_25k') &&
+        node.master.checked === false && node.master.indeterminate === false,
+        'the section master turns the whole section off again');
+    API.toggleSection('maps');
+    check(node.body.style.display === 'none' &&
+        node.button.attributes['aria-expanded'] === 'false' &&
+        node.icon.style.transform === 'rotate(-90deg)',
+        'the chevron collapses the section and rotates');
+    API.toggleSection('maps');
+    check(node.body.style.display === '' &&
+        node.button.attributes['aria-expanded'] === 'true' &&
+        node.icon.style.transform === '',
+        'the chevron expands the section back');
+})();
 
 /* ── search ──────────────────────────────────────────────────────────────── */
 API.setSearch('durres');
@@ -591,7 +683,7 @@ document.createElement = originalCreateElement;
         'index.html loads the generated catalogue before the config');
     /* Each asset carries the tag of whatever last changed it: the data file and
      * the config by the “LiDAR” rename, the module by the catalogue itself. */
-    check(/js\/asig-albania-layers\.js\?v=20261026-asig-tap-guard/.test(html) &&
+    check(/js\/asig-albania-layers\.js\?v=20261027-albania-heritage-free-tab/.test(html) &&
         /js\/asig-albania-layers\.config\.js\?v=20261024-asig-lidar/.test(html),
         'index.html loads the re-tagged module and config');
     check(html.includes('id="albaniaSubLayers"'), 'the single Albania mount is still in the shell');
@@ -600,6 +692,8 @@ document.createElement = originalCreateElement;
         'the country gate is still enforced by CSS');
     check(/\.albania-section-head/.test(read('css/styles.css')) && /\.albania-active-item/.test(read('css/styles.css')),
         'the new panel parts are styled with the panel’s own classes');
+    check(/\.country-section-list\[data-category\]:not\(\.active\)\s*\{\s*display:\s*none\s*!important/.test(read('css/styles.css')),
+        'the whole free country catalogue is tab-gated so Heritage cannot leak into Premium');
     check(/'geoportal\.asig\.gov\.al':/.test(read('js/wms-health.js')), 'the ASIG host stays in the health list');
     check(/filterForCountry\(iso\)/.test(read('js/map-app.js')) &&
         /AsigAlbaniaLayers[\s\S]{0,200}?filterForCountry\(null\)/.test(read('js/map-app.js')),

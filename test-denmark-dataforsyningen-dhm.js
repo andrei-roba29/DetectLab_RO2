@@ -778,23 +778,31 @@ check('the service worker shell is v163 (dk-dhm-wmts) or newer',
     Number((swSource.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]) >= 163);
 check('the shell history records the v163 WMTS switch',
     /v163[^\n]*dk-dhm-wmts/.test(swSource));
-check('the product dropdown offers exactly the two WMTS hillshades',
-    /<option value="terrain">/.test(indexHtml) && /<option value="surface">/.test(indexHtml) &&
-    !/<option value="contours/.test(indexHtml));
-check('the dropdown is also filled from the module at runtime',
+/* The 2D panel row was removed at the owner's request: Denmark's terrain
+   and surface hillshades are now the WMS LiDAR rows of
+   js/danish-layers.config.js (panelGroup "lidar"), each with its own
+   switch and slider. The WMTS module, its proxy routes and the map-app
+   plumbing below stay in place for the 3D registry builder
+   (lidar.dk-dhm), dormant in the 2D panel. */
+check('the Denmark DHM hillshade row is removed from the 2D layer panel',
+    !/lidarDkLidarRow/.test(indexHtml) &&
+    !/Denmark · DHM hillshade \(DHM\/Terræn\)/.test(indexHtml) &&
+    !/denmarkLidarModeSelect/.test(indexHtml));
+check('no dkLidar switch or opacity slider remains in the panel markup',
+    !/toggleInternationalLidar\('dkLidar', this\.checked\)/.test(indexHtml) &&
+    !/lidarDkLidarToggle|lidarDkLidarOpacitySlider|lidarDkLidarPct/.test(indexHtml) &&
+    !/setInternationalLidarOpacity\('dkLidar', this\.value\)/.test(indexHtml));
+check('the Danish terrain/surface hillshades live on as styled WMS LiDAR rows',
+    /id: 'lidar_dhm_terrain_hillshade',\s*\n\s*panelGroup: 'lidar'/.test(read('js/danish-layers.config.js')) &&
+    /id: 'lidar_dhm_surface_hillshade',\s*\n\s*panelGroup: 'lidar'/.test(read('js/danish-layers.config.js')) &&
+    /id="danishLidarLayers"/.test(indexHtml));
+check('the dropdown filler stays dormant but intact in map-app',
     /_populateDenmarkModeSelect/.test(mapApp) && /DataforsyningenDHM\.modeKeys\(\)/.test(mapApp));
 check('switching product uses setMode instead of rebuilding',
     /setDenmarkLidarMode/.test(mapApp) && /cfg\.leafletLayer\.setMode\(mode\)/.test(mapApp));
-check('the on/off switch still drives the Denmark row',
-    /toggleInternationalLidar\('dkLidar', this\.checked\)/.test(indexHtml));
-check('the opacity slider defaults to 60%',
-    /id="lidarDkLidarOpacitySlider"[^>]*value="60"/.test(indexHtml) &&
-    /id="lidarDkLidarPct">60%/.test(indexHtml));
-check('the opacity slider is wired to the layer',
-    /setInternationalLidarOpacity\('dkLidar', this\.value\)/.test(indexHtml));
-check('the info popup explains the WMTS, the reprojection, the licence and the proxy',
-    /WMTS/.test(indexHtml) && /EPSG:25832/.test(indexHtml) &&
-    /CC BY 4\.0/.test(indexHtml) && /token/.test(indexHtml));
+check('the WMTS module stays loaded for the 3D registry builder',
+    /lidar\.dk-dhm/.test(read('js/layer-registry.js')) &&
+    /builder: \{ module: 'DataforsyningenDHM'/.test(read('js/layer-registry.js')));
 check('the fly-to bounds match the published extent',
     /dkLidar: \[\[54\.4265, 7\.99125\], \[57\.7781, 15\.5995\]\]/.test(mapApp));
 

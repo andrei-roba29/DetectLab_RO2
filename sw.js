@@ -804,7 +804,7 @@
 //   centred 3D bar, stepping above the country “Exit view” pill via the
 //   existing --country-exit-lift hook. Re-tags css/map3d-terrain.css.
 //   See PWA_3D_BUTTON_SIZE_CENTRE.md.
-const CACHE_NAME = 'detectlab-v287-legend-strong-asig-tap-guard';
+const CACHE_NAME = 'detectlab-v289-albania-heritage-free-tab';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1678,7 +1678,23 @@ const PRECACHE_URLS = [
   // map tap only queries inside Albania while a layer is really on the map.
   // Both URLs below are the live ones index.html requests.
   'js/translations.js?v=20261026-legend-strong',
-  'js/asig-albania-layers.js?v=20261026-asig-tap-guard'
+  'js/asig-albania-layers.js?v=20261026-asig-tap-guard',
+  // v288: every free Denmark layer is restyled like the other countries'
+  // rows (pill on/off switch + opacity slider), grouped as LiDAR /
+  // Heritage / Historical maps (incl. DTK25) / Ortophoto; the “Base map”
+  // section and the Denmark DHM WMTS row are gone from the panel.
+  // Albania's free rows get the same Romania-style treatment (pill switch
+  // + opacity slider rows, section headers with chevron + master switch).
+  // The four URLs below are the live ones index.html requests.
+  'css/styles.css?v=20261027-danish-row-style',
+  'js/danish-layers.config.js?v=20261027-danish-row-style',
+  'js/danish-layers.js?v=20261027-danish-row-style',
+  'js/asig-albania-layers.js?v=20261027-albania-row-style',
+  // v289: Albania's (free) Heritage block no longer leaks into the Premium
+  // tab — it is a data-category="free" transp-layer-row, the whole free
+  // country catalogue is tab-gated in CSS, and the module re-applies the
+  // current tab after every panel rebuild. The live module URL is:
+  'js/asig-albania-layers.js?v=20261027-albania-heritage-free-tab'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──

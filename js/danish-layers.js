@@ -9,18 +9,34 @@
  *   It holds no data of its own: a new Danish layer, another orthophoto year,
  *   a different upstream is a change in the CONFIG file only.
  *
- * Panel behaviour
- *   • base rows are radio buttons — mutually exclusive, exactly one Danish base
- *     map draws at a time; Danish bases live only in the Denmark group and are
- *     never mirrored into the ArcGIS basemap control (which only shows Imagery,
- *     Topographic and Terrain);
- *   • overlay rows are checkboxes with their own opacity slider;
-     *   • the group switch turns the selected base map on/off, the chevron
- *     collapses the group, the ℹ button credits sources and explains protected
- *     layers need server-side credentials;
- *   • rows are keyboard-operable (real radio/checkbox/range inputs inside
- *     <label>s, so Tab + Space + arrows work) and the group row carries
- *     aria-expanded / aria-hidden where the country filter needs them.
+ * Panel behaviour — the same row style as the other countries (Romania's
+ * free rows are the template):
+ *   • every Danish row is a glass sublayer row with the title on the left,
+ *     the pill on/off switch (`.apm-toggle-switch` + `.apm-toggle-track`)
+ *     on the right, then an “Opacity” line carrying the ⓘ info button and
+ *     the percentage badge, and its own `.transp-slider` opacity slider —
+ *     including the historical sheets, the orthophoto years and DTK25,
+ *     which used to be radio “base maps” without a slider;
+ *   • rows are grouped exactly like the other free catalogues: the four
+ *     Danish LiDAR overlays sit in the shared LiDAR accordion (after the
+ *     global “Hillshade LiDAR derivate” row), and Heritage, Historical maps
+ *     and Ortophoto are Romania-style sections — a `.transp-layer-row`
+ *     header with an expand chevron and a master on/off switch over a
+ *     bordered `…SubLayers` column. There is no “Base map” section any
+ *     more, and only the layers in `CONFIG.panelGroups` are rendered; the
+ *     remaining catalogue entries (the spring-orthophoto years, the Danish
+ *     OSM base) stay available to the proxy, the registry and the API but
+ *     have no panel row, so a stored preference can never resurrect a
+ *     layer the visitor cannot switch off;
+ *   • every rendered layer is an independent overlay: switches combine
+ *     freely and each slider blends its own sheet over the basemap, exactly
+ *     like the Romanian historical sublayers. (The unrendered catalogue
+ *     bases keep their old mutually-exclusive behaviour if the API
+ *     activates them.) Danish layers are never mirrored into the ArcGIS
+ *     basemap control (which only shows Imagery, Topographic and Terrain);
+ *   • rows are keyboard-operable (real checkbox/range inputs, so Tab +
+ *     Space + arrows work) and the group row carries aria-expanded /
+ *     aria-hidden where the country filter needs them.
  *
  * Laziness
  *   Nothing is requested until a row is switched on: the layer object is built
@@ -57,7 +73,17 @@
     /* ── constants ────────────────────────────────────────────────────────── */
 
     var LAYERS = CONFIG.enabledLayers();
-    var PANEL_LAYERS = LAYERS.filter(function (layer) { return !layer.selectorGroup; });
+    /* The panel renders only the free catalogue in CONFIG.panelGroups
+     * (LiDAR, Heritage, Historical maps, Ortophoto). Everything else in the
+     * config — the spring-orthophoto selector years, the Danish OSM base —
+     * is catalogue/proxy data without a row: it is never built into the
+     * panel and never restored from a stored preference. */
+    var PANEL_GROUP_IDS = {};
+    (CONFIG.panelGroups || []).forEach(function (group) { PANEL_GROUP_IDS[group.id] = true; });
+    function isPanelLayer(layer) {
+        return !!(layer && layer.panelGroup && PANEL_GROUP_IDS[layer.panelGroup]);
+    }
+    var PANEL_LAYERS = LAYERS.filter(isPanelLayer);
     var GROUP_ROW_ID = 'danishRow';
     var SUB_CONTAINER_ID = 'danishSubLayers';
     var GROUP_NOTICE_ID = 'danishGroupNotice';
@@ -106,8 +132,9 @@
      * group markup (title, switch titles) lives in index.html with data-key
      * attributes and therefore travels through js/translations.js. */
     var TEXT = {
-        base: { da: 'Baggrundskort', en: 'Base map' },
-        overlay: { da: 'Tema', en: 'Overlay' },
+        toggle: { da: 'Slå til eller fra', en: 'Toggle' },
+        layerInfo: { da: 'Laginfo', en: 'Layer info' },
+        expand: { da: 'Udvid/skjul underlag', en: 'Expand/Collapse sublayers' },
         opacity: { da: 'Gennemsigtighed', en: 'Opacity' },
         needsToken: {
             da: 'Serveren har ikke konfigureret legitimationsoplysninger til dette kortlag.',
@@ -141,7 +168,6 @@
             en: 'only the first ones are shown — zoom in for the rest'
         },
         unavailable: { da: 'kilden svarer ikke', en: 'the source is not answering' },
-        springYear: { da: 'Forårsortofoto år', en: 'Spring orthophoto year' },
         missingCredentials: {
             da: 'Kortlaget er ikke konfigureret på serveren endnu.',
             en: 'This map layer is not configured on the server yet.'
@@ -160,7 +186,8 @@
         active: {},         /* id → true when it is on the map     */
         opacity: {},        /* id → 0–100                          */
         rows: {},           /* id → { row, input, slider, pct, status } */
-        yearStatus: null,
+        groupRows: {},      /* panelGroup id → { row, body, master, icon, button } */
+        expandedGroups: {}, /* panelGroup id → true when its section is unfolded */
         expanded: true,
         wfs: { timer: null, controller: null, running: false, dirty: false, last: '', layer: null },
         notices: {},        /* id → { text, kind }                 */
@@ -209,6 +236,19 @@
         if (defaultBase && typeof savedActive[defaultBase.id] !== 'boolean') {
             runtime.active[defaultBase.id] = true;
         }
+        /* A rendered overlay may also start on (DTK25, now a Historical-maps
+         * overlay): honour `defaultOn` whenever the visitor has no stored
+         * choice for it. Layers without a panel row are never restored — a
+         * preference saved by an older build (the Danish OSM base, a spring
+         * orthophoto year) must not switch on a layer that no longer has a
+         * switch to turn it back off with. */
+        LAYERS.forEach(function (layer) {
+            if (!isPanelLayer(layer)) { runtime.active[layer.id] = false; return; }
+            if (layer.group !== 'base' && layer.defaultOn &&
+                typeof savedActive[layer.id] !== 'boolean') {
+                runtime.active[layer.id] = true;
+            }
+        });
         if (saved.selected && CONFIG.byId(saved.selected)) runtime.selected = saved.selected;
         if (!runtime.selected) {
             var firstBase = LAYERS.filter(function (l) { return l.group === 'base'; })[0];
@@ -327,19 +367,25 @@
         return new L.TileLayer.WMS(url, options);
     }
 
+    /* The heritage polygons have no tile opacity: the row's slider scales
+     * the stroke/fill opacity of the vector style instead, so the Heritage
+     * slider does the same visible job as every raster row's slider. */
+    function wfsStyle(layer) {
+        var style = (layer.wfs && layer.wfs.style) || {};
+        var scale = fraction(layer.id);
+        return {
+            color: style.color || '#ffd166',
+            weight: style.weight || 1.6,
+            opacity: (style.opacity === undefined ? 0.95 : style.opacity) * scale,
+            fillColor: style.fillColor || '#ffb703',
+            fillOpacity: (style.fillOpacity === undefined ? 0.28 : style.fillOpacity) * scale
+        };
+    }
+
     function buildWfsLayer(layer) {
         return L.geoJSON(null, {
             pane: PANE_VECTOR,
-            style: function () {
-                var style = (layer.wfs && layer.wfs.style) || {};
-                return {
-                    color: style.color || '#ffd166',
-                    weight: style.weight || 1.6,
-                    opacity: style.opacity === undefined ? 0.95 : style.opacity,
-                    fillColor: style.fillColor || '#ffb703',
-                    fillOpacity: style.fillOpacity === undefined ? 0.28 : style.fillOpacity
-                };
-            },
+            style: function () { return wfsStyle(layer); },
             onEachFeature: function (feature, featureLayer) {
                 featureLayer.bindPopup(popupHtml(layer, feature));
             }
@@ -566,10 +612,13 @@
         options = options || {};
         var map = runtime.map;
         if (!map) return;
+        /* Remember the last layer switched on (`selectedBase()` kept its
+         * historical name for API callers; every rendered layer is an
+         * overlay now, so it simply reports the last activation). */
+        runtime.selected = layer.id;
         if (layer.group === 'base') {
-            /* Base rows are exclusive: first switch the other Danish bases off,
-             * then remember this one as the selected base map. */
-            runtime.selected = layer.id;
+            /* The unrendered catalogue bases stay exclusive if the API
+             * activates them: first switch the other Danish bases off. */
             LAYERS.forEach(function (other) {
                 if (other.group === 'base' && other.id !== layer.id && runtime.active[other.id]) {
                     deactivate(other, {});
@@ -686,16 +735,7 @@
     function setStatus(id, text, kind) {
         runtime.notices[id] = text ? { text: text, kind: kind || 'info' } : null;
         var row = runtime.rows[id];
-        var configLayer = CONFIG.byId(id);
-        if (!row || !row.status) {
-            if (configLayer && configLayer.selectorGroup === 'spring-orthophoto' && runtime.yearStatus) {
-                runtime.yearStatus.textContent = text || '';
-                runtime.yearStatus.style.display = text ? 'block' : 'none';
-                runtime.yearStatus.className = 'danish-layer-status' + (kind ? ' is-' + kind : '');
-                runtime.yearStatus.setAttribute('role', kind === 'error' ? 'alert' : 'status');
-            }
-            return;
-        }
+        if (!row || !row.status) return;
         row.status.textContent = text || '';
         row.status.style.display = text ? 'block' : 'none';
         row.status.className = 'danish-layer-status' + (kind ? ' is-' + kind : '');
@@ -709,162 +749,272 @@
         node.style.display = text ? 'block' : 'none';
     }
 
+    /* One row, the same shape as every other country's free rows — the
+     * Romanian sublayers in index.html are the template:
+     *
+     *   ┌ title ────────────────────────── [pill on/off switch] ┐
+     *   │ Opacity                              ⓘ  [ 80% ]      │
+     *   │ ────────────●──────────────── (opacity slider)        │
+     *   └ (status line, only when the layer has something to say)
+     *
+     * The switch is the shared `.apm-toggle-switch` (a real checkbox whose
+     * `.apm-toggle-track` sibling paints the pill — the input must stay the
+     * track's immediate predecessor for the checked CSS to bite), the
+     * percentage is the shared `.pct` badge next to the shared
+     * `.layer-info-btn`, and the slider is the shared `.transp-slider`
+     * (LiDAR rows also carry `.lidar-country-opacity`, like their
+     * neighbours in the European LiDAR accordion). EVERY Danish layer gets
+     * the slider, including the opaque historical/orthophoto sheets and
+     * DTK25: they are overlays now, so the slider blends them over the
+     * basemap instead of replacing it. `.dl-sublayer-row` gives the row the
+     * same glass box as a nested row anywhere else in the window. */
     function buildRow(layer) {
-        var isBase = layer.group === 'base';
         var title = tr(layer.title);
+        var isLidar = layer.panelGroup === 'lidar' || layer.id.indexOf('lidar_') === 0;
         var row = el('div', {
-            class: 'danish-layer-row' + (isBase ? ' is-base' : ' is-overlay'),
+            class: 'danish-layer-row dl-sublayer-row is-overlay' + (isLidar ? ' lidar-country-row' : ''),
             id: 'danishRow_' + layer.id,
+            'data-category': 'free',
             'data-danish-row': layer.id
         });
-        var head = el('div', { class: 'danish-layer-head' });
 
         var input = el('input', {
-            type: isBase ? 'radio' : 'checkbox',
+            type: 'checkbox',
             id: 'danishToggle_' + layer.id,
-            name: isBase ? 'danishBaseMap' : 'danishOverlay',
+            name: 'danishOverlay',
             value: layer.id,
-            'data-danish-input': layer.id
+            'data-danish-input': layer.id,
+            'aria-label': title
         });
-        input.checked = isBase ? runtime.selected === layer.id : !!runtime.active[layer.id];
+        input.checked = !!runtime.active[layer.id];
         input.addEventListener('change', function () {
-            if (isBase) {
-                runtime.selected = layer.id;
-                switchOn(layer);
-            } else if (input.checked) {
-                switchOn(layer);
-            } else {
-                deactivate(layer, {});
-            }
+            if (input.checked) switchOn(layer);
+            else deactivate(layer, {});
             syncUI();
         });
 
-        var label = el('label', { class: 'danish-layer-label', for: 'danishToggle_' + layer.id },
-            [input, el('span', { class: 'danish-layer-title', text: title })]);
+        var toggle = el('label', {
+            class: 'apm-toggle-switch',
+            title: tr(TEXT.toggle) + ' ' + title,
+            style: 'transform:scale(0.85);transform-origin:right center;flex-shrink:0;'
+        }, [input, el('span', { class: 'apm-toggle-track' })]);
+
+        var head = el('div', {
+            class: 'danish-layer-head',
+            style: 'display:flex;align-items:center;justify-content:space-between;' +
+                'font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;gap:5px;'
+        }, [
+            el('span', { style: 'display:flex;align-items:center;gap:5px;min-width:0;' }, [
+                el('span', { class: 'danish-layer-title', text: title })
+            ]),
+            toggle
+        ]);
+        row.appendChild(head);
 
         var info = el('button', {
             type: 'button',
-            class: 'danish-layer-info',
-            title: tr(CONFIG.groupInfo).slice(0, 120),
-            'aria-label': (isBase ? tr(TEXT.base) : tr(TEXT.overlay)) + ' — ' + title,
+            class: 'layer-info-btn',
+            title: tr(TEXT.layerInfo),
+            'aria-label': tr(TEXT.layerInfo) + ' — ' + title,
             'data-danish-info': layer.id,
-            text: 'i'
+            text: 'ⓘ'
         });
         info.addEventListener('click', function (event) {
-            event.preventDefault();
-            event.stopPropagation();
+            if (event && event.preventDefault) event.preventDefault();
+            if (event && event.stopPropagation) event.stopPropagation();
             showInfo(layer);
         });
 
-        head.appendChild(label);
-        head.appendChild(info);
-        row.appendChild(head);
+        var pct = el('span', {
+            class: 'pct danish-layer-pct',
+            id: 'danishPct_' + layer.id,
+            text: runtime.opacity[layer.id] + '%'
+        });
+
+        var opacityLine = el('div', {
+            class: 'transp-layer-label',
+            style: 'margin-bottom:5px;'
+        }, [
+            el('span', { style: 'font-size:0.72rem;opacity:0.6', text: tr(TEXT.opacity) }),
+            el('span', { style: 'display:flex;align-items:center;gap:5px' }, [info, pct])
+        ]);
+        row.appendChild(opacityLine);
+
+        var slider = el('input', {
+            type: 'range',
+            class: 'transp-slider' + (isLidar ? ' lidar-country-opacity' : ''),
+            id: 'danishOpacity_' + layer.id,
+            min: '0', max: '100', step: '1',
+            value: String(runtime.opacity[layer.id]),
+            'aria-label': tr(TEXT.opacity) + ' — ' + title
+        });
+        slider.addEventListener('input', function () {
+            setOpacity(layer, Number(slider.value), true);
+        });
+        row.appendChild(slider);
 
         var status = el('div', {
             class: 'danish-layer-status',
             id: 'danishStatus_' + layer.id,
             role: 'status',
-            style: 'display:none'
+            style: 'display:none;padding-left:0;'
         });
+        status.style.display = 'none';
         row.appendChild(status);
 
-        var entry = { row: row, input: input, slider: null, pct: null, status: status };
-
-        if (!isBase) {
-            var legend = el('div', { class: 'danish-layer-opacity' }, [
-                el('span', { class: 'danish-layer-opacity-label', text: tr(TEXT.opacity) }),
-                el('span', { class: 'danish-layer-pct', text: runtime.opacity[layer.id] + '%' })
-            ]);
-            entry.pct = legend.lastChild;
-            var slider = el('input', {
-                type: 'range',
-                class: 'transp-slider danish-layer-slider',
-                id: 'danishOpacity_' + layer.id,
-                min: '0', max: '100', step: '1',
-                value: String(runtime.opacity[layer.id]),
-                'aria-label': tr(TEXT.opacity) + ' — ' + title
-            });
-            slider.addEventListener('input', function () {
-                setOpacity(layer, Number(slider.value), true);
-            });
-            entry.slider = slider;
-            row.appendChild(legend);
-            row.appendChild(slider);
-        }
-
-        runtime.rows[layer.id] = entry;
+        runtime.rows[layer.id] = { row: row, input: input, slider: slider, pct: pct, status: status };
         var notice = runtime.notices[layer.id];
         if (notice) setStatus(layer.id, notice.text, notice.kind);
         return row;
     }
 
-    function buildYearSelector() {
-        var years = LAYERS.filter(function (layer) { return layer.selectorGroup === 'spring-orthophoto'; });
-        if (!years.length) return null;
-        var current = years.filter(function (layer) { return runtime.selected === layer.id; })[0] ||
-            years.filter(function (layer) { return /2025$/.test(layer.id); })[0] || years[years.length - 1];
-        var select = el('select', {
-            class: 'danish-year-select',
-            id: 'danishSpringOrthoYear',
-            'aria-label': tr(TEXT.springYear)
+    /* The id of a group's sublayer column. It deliberately ends in
+     * `SubLayers`, the suffix the window's row chrome
+     * (js/layer-panel-rows.js) and the accordion helpers look for. */
+    function groupSubLayersId(group) {
+        return 'danish' + group.id.charAt(0).toUpperCase() + group.id.slice(1) + 'SubLayers';
+    }
+
+    function setGroupExpanded(groupId, expanded) {
+        runtime.expandedGroups[groupId] = !!expanded;
+        var entry = runtime.groupRows[groupId];
+        if (!entry) return;
+        if (entry.body) {
+            entry.body.style.maxHeight = expanded ? '6000px' : '0';
+            entry.body.style.opacity = expanded ? '1' : '0';
+            entry.body.style.marginTop = expanded ? '8px' : '0';
+        }
+        if (entry.icon) entry.icon.style.transform = expanded ? 'rotate(0deg)' : 'rotate(-90deg)';
+        if (entry.button) entry.button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    }
+
+    /* A section's master switch: on → every layer of the section on, off →
+     * every layer off (the Finland section-master rule). The switch itself
+     * is re-synced from the layers in syncUI(), indeterminate in between. */
+    function togglePanelGroup(group, on) {
+        (group.layers || []).forEach(function (id) {
+            var layer = CONFIG.byId(id);
+            if (!layer || layer.enabled === false) return;
+            if (on) switchOn(layer);
+            else if (runtime.active[layer.id]) deactivate(layer, {});
         });
-        years.forEach(function (layer) {
-            var year = layer.id.slice('orto_foraar_'.length);
-            select.appendChild(el('option', { value: layer.id, text: year }));
+        syncUI();
+    }
+
+    /* One thematic section (Heritage / Historical maps / Ortophoto) in the
+     * shape of Romania's Historical Maps group: a glass `.transp-layer-row`
+     * whose `.transp-layer-label` header carries the section title, an
+     * expand chevron and the master `.apm-toggle-switch`, over a
+     * left-bordered `…SubLayers` column of buildRow() rows. Sections start
+     * collapsed, like the Romanian group. */
+    function buildGroup(group) {
+        var title = tr(group.title);
+        var expanded = !!runtime.expandedGroups[group.id];
+        var wrap = el('div', {
+            class: 'transp-layer-row danish-group-row',
+            'data-category': 'free',
+            'data-danish-group': group.id,
+            id: 'danishGroup_' + group.id
         });
-        select.value = current.id;
-        select.addEventListener('change', function () {
-            var layer = CONFIG.byId(select.value);
-            if (layer && layer.selectorGroup === 'spring-orthophoto') {
-                years.forEach(function (yearLayer) { setStatus(yearLayer.id, '', 'info'); });
-                runtime.selected = layer.id;
-                switchOn(layer);
-                syncUI();
-            }
+
+        var master = el('input', {
+            type: 'checkbox',
+            id: 'danishGroupToggle_' + group.id,
+            'aria-label': title
         });
-        var wrap = el('div', { class: 'danish-year-wrap' }, [
-            el('label', { class: 'danish-year-control', for: 'danishSpringOrthoYear' }, [
-                el('span', { class: 'danish-layer-title', text: tr(TEXT.springYear) }), select
+        master.addEventListener('change', function () { togglePanelGroup(group, master.checked); });
+        var masterSwitch = el('label', {
+            class: 'apm-toggle-switch',
+            title: tr(TEXT.toggle) + ' ' + title,
+            style: 'flex-shrink:0;'
+        }, [master, el('span', { class: 'apm-toggle-track' })]);
+
+        var icon = el('span', {
+            id: 'danishGroupExpandIcon_' + group.id,
+            style: 'display:inline-block;transition:transform 0.25s ease;font-size:0.72rem;line-height:1;',
+            text: '▾'
+        });
+        icon.style.transform = expanded ? 'rotate(0deg)' : 'rotate(-90deg)';
+        var expandBtn = el('button', {
+            type: 'button',
+            id: 'danishGroupExpandBtn_' + group.id,
+            title: tr(TEXT.expand),
+            'aria-expanded': expanded ? 'true' : 'false',
+            style: 'background:none;border:none;cursor:pointer;padding:2px 4px;' +
+                'color:rgba(214,69,80,0.85);display:flex;align-items:center;'
+        }, [icon]);
+        expandBtn.addEventListener('click', function (event) {
+            if (event && event.preventDefault) event.preventDefault();
+            if (event && event.stopPropagation) event.stopPropagation();
+            setGroupExpanded(group.id, !runtime.expandedGroups[group.id]);
+        });
+
+        var head = el('div', { class: 'transp-layer-label', style: 'margin-bottom:6px' }, [
+            el('span', { style: 'display:flex;align-items:center;gap:7px;min-width:0;' }, [
+                el('span', { text: title })
             ]),
-            el('div', { class: 'danish-layer-status', id: 'danishSpringOrthoStatus', role: 'status', style: 'display:none' })
+            el('span', { style: 'display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0;' },
+                [expandBtn, masterSwitch])
         ]);
-        runtime.yearStatus = wrap.lastChild;
-        var notice = runtime.notices[current.id];
-        if (notice) setStatus(current.id, notice.text, notice.kind);
+        wrap.appendChild(head);
+
+        var body = el('div', {
+            id: groupSubLayersId(group),
+            style: 'margin-top:0;padding-left:6px;border-left:2px solid rgba(214,69,80,0.3);' +
+                'display:flex;flex-direction:column;gap:8px;overflow:hidden;' +
+                'transition:max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;'
+        });
+        body.style.maxHeight = expanded ? '6000px' : '0';
+        body.style.opacity = expanded ? '1' : '0';
+        body.style.marginTop = expanded ? '8px' : '0';
+        (group.layers || []).forEach(function (id) {
+            var layer = CONFIG.byId(id);
+            if (layer && layer.enabled !== false) body.appendChild(buildRow(layer));
+        });
+        wrap.appendChild(body);
+
+        runtime.groupRows[group.id] = {
+            row: wrap, body: body, master: master, icon: icon, button: expandBtn
+        };
+        syncGroupMaster(group);
         return wrap;
+    }
+
+    function syncGroupMaster(group) {
+        var entry = runtime.groupRows[group.id];
+        if (!entry || !entry.master) return;
+        var ids = (group.layers || []).filter(function (id) {
+            var layer = CONFIG.byId(id);
+            return layer && layer.enabled !== false;
+        });
+        var onCount = ids.filter(function (id) { return !!runtime.active[id]; }).length;
+        entry.master.checked = ids.length > 0 && onCount === ids.length;
+        try { entry.master.indeterminate = onCount > 0 && onCount < ids.length; } catch (e) {}
     }
 
     function buildPanel() {
         var container = document.getElementById(SUB_CONTAINER_ID);
         if (!container) return;
         container.innerHTML = '';
+        runtime.groupRows = {};
         var lidarMount = document.getElementById('danishLidarLayers');
         if (lidarMount) lidarMount.innerHTML = '';
-        var sections = [
-            [tr(TEXT.base), PANEL_LAYERS.filter(function (l) { return l.group === 'base' && !l.panelGroup; })],
-            [tr(TEXT.overlay), PANEL_LAYERS.filter(function (l) { return l.group !== 'base' && !l.panelGroup && !(lidarMount && l.id.indexOf('lidar_') === 0); })]
-        ];
-        if (lidarMount) PANEL_LAYERS.filter(function (l) { return l.id.indexOf('lidar_') === 0; })
-            .forEach(function (layer) { lidarMount.appendChild(buildRow(layer)); });
-        sections.forEach(function (section, index) {
-            if (!section[1].length && index !== 0) return;
-            var sectionContainer = el('div', { class: 'transp-layer-row', 'data-category': 'free' });
-            container.appendChild(sectionContainer);
-            sectionContainer.appendChild(el('div', { class: 'danish-layer-section', text: section[0] }));
-            if (index === 0) {
-                var yearControl = buildYearSelector();
-                if (yearControl) sectionContainer.appendChild(yearControl);
-            }
-            section[1].forEach(function (layer) { sectionContainer.appendChild(buildRow(layer)); });
-        });
+        /* Only the panelGroups are rendered, each row once: the LiDAR group
+         * goes into the shared LiDAR accordion (its mount follows the
+         * global “Hillshade LiDAR derivate” row in index.html), the other
+         * groups become Romania-style sections in the Denmark mount. No
+         * “Base map” section, no spring-year dropdown, no Danish OSM row. */
         (CONFIG.panelGroups || []).forEach(function (group) {
-            var details = el('details', { class: 'danish-layer-group transp-layer-row', 'data-category': 'free', id: 'danishGroup_' + group.id });
-            details.appendChild(el('summary', { class: 'danish-layer-section', text: tr(group.title) }));
-            group.layers.forEach(function (id) {
-                var layer = CONFIG.byId(id);
-                if (layer && layer.enabled !== false) details.appendChild(buildRow(layer));
-            });
-            container.appendChild(details);
+            if (group.mount || group.id === 'lidar') {
+                var mount = document.getElementById(group.mount || 'danishLidarLayers');
+                if (!mount) return;
+                (group.layers || []).forEach(function (id) {
+                    var layer = CONFIG.byId(id);
+                    if (layer && layer.enabled !== false) mount.appendChild(buildRow(layer));
+                });
+                return;
+            }
+            container.appendChild(buildGroup(group));
         });
         // Danish bases are intentionally NOT mirrored into the ArcGIS basemap control —
         // the control must only ever show Imagery (ArcGIS), Topographic (ArcGIS) and Terrain (ArcGIS).
@@ -889,19 +1039,16 @@
             var entry = runtime.rows[layer.id];
             if (!entry) return;
             var on = !!runtime.active[layer.id];
-            var checked = layer.group === 'base' ? (runtime.selected === layer.id && on) : on;
-            if (entry.input && entry.input.checked !== checked) entry.input.checked = checked;
+            if (entry.input && entry.input.checked !== on) entry.input.checked = on;
             if (entry.row) entry.row.classList.toggle('is-active', on);
             if (entry.slider && entry.slider.value !== String(runtime.opacity[layer.id])) {
                 entry.slider.value = String(runtime.opacity[layer.id]);
             }
             if (entry.pct) entry.pct.textContent = runtime.opacity[layer.id] + '%';
         });
-        var yearSelect = document.getElementById('danishSpringOrthoYear');
-        if (yearSelect) {
-            var selectedSpring = LAYERS.filter(function (layer) { return layer.selectorGroup === 'spring-orthophoto' && layer.id === runtime.selected; })[0];
-            if (selectedSpring) yearSelect.value = selectedSpring.id;
-        }
+        (CONFIG.panelGroups || []).forEach(function (group) {
+            if (!group.mount && group.id !== 'lidar') syncGroupMaster(group);
+        });
         var any = LAYERS.some(function (layer) { return !!runtime.active[layer.id]; });
         var master = document.getElementById(MASTER_ID);
         if (master && master.checked !== any) master.checked = any;
@@ -922,6 +1069,9 @@
         runtime.opacity[layer.id] = Math.max(0, Math.min(100, Number(value)));
         var built = runtime.built[layer.id];
         if (built && typeof built.setOpacity === 'function') built.setOpacity(fraction(layer.id));
+        if (built && layer.type === 'wfs' && typeof built.setStyle === 'function') {
+            try { built.setStyle(wfsStyle(layer)); } catch (e) { /* style refresh is best-effort */ }
+        }
         var entry = runtime.rows[layer.id];
         if (entry) {
             if (entry.pct) entry.pct.textContent = runtime.opacity[layer.id] + '%';
@@ -991,6 +1141,12 @@
         var inCountry = !code || code === String(CONFIG.country || '').toUpperCase();
         Object.keys(runtime.rows).forEach(function (id) {
             var row = runtime.rows[id].row;
+            if (!row) return;
+            row.classList.toggle('country-layer-unavailable', !inCountry);
+            row.setAttribute('aria-hidden', inCountry ? 'false' : 'true');
+        });
+        Object.keys(runtime.groupRows).forEach(function (id) {
+            var row = runtime.groupRows[id].row;
             if (!row) return;
             row.classList.toggle('country-layer-unavailable', !inCountry);
             row.setAttribute('aria-hidden', inCountry ? 'false' : 'true');
@@ -1084,8 +1240,9 @@
             ensurePanes(map);
             wireMap(map);
             /* Restore the session. This is the first moment anything is
-             * requested: rows that were off make no call at all. */
-            LAYERS.forEach(function (layer) {
+             * requested: rows that were off make no call at all, and layers
+             * without a panel row are never restored. */
+            PANEL_LAYERS.forEach(function (layer) {
                 if (runtime.active[layer.id]) switchOn(layer);
             });
             syncUI();
@@ -1100,8 +1257,20 @@
 
     function toggleGroup(on) {
         if (on) {
-            var selected = CONFIG.byId(runtime.selected);
-            if (selected) switchOn(selected);
+            /* No country master switch exists in the panel any more; for
+             * API callers, “on” restores the rendered layers that were on
+             * (or start on by default — DTK25). */
+            var restored = false;
+            PANEL_LAYERS.forEach(function (layer) {
+                if (runtime.active[layer.id] || layer.defaultOn) {
+                    restored = true;
+                    switchOn(layer);
+                }
+            });
+            if (!restored) {
+                var fallback = CONFIG.byId('dtk25');
+                if (fallback) switchOn(fallback);
+            }
         } else {
             LAYERS.forEach(function (layer) {
                 if (runtime.active[layer.id]) deactivate(layer, {});
@@ -1125,10 +1294,16 @@
     var API = {
         CONFIG: CONFIG,
         layers: LAYERS,
+        panelLayers: PANEL_LAYERS,
         state: runtime,
         TEXT: TEXT,
         init: start,
         toggleGroup: toggleGroup,
+        togglePanelGroup: function (groupId, on) {
+            var group = (CONFIG.panelGroups || []).filter(function (g) { return g.id === groupId; })[0];
+            if (group) togglePanelGroup(group, !!on);
+        },
+        setGroupExpanded: setGroupExpanded,
         toggleSubLayers: function () { setExpanded(!runtime.expanded); },
         setExpanded: setExpanded,
         select: function (id) { var l = CONFIG.byId(id); if (l) { runtime.selected = l.id; switchOn(l); } },
@@ -1155,6 +1330,8 @@
         modeOf: function (id) { return runtime.mode[id] || null; },
         _test: {
             build: build,
+            buildRow: buildRow,
+            buildGroup: buildGroup,
             buildTileLayer: buildTileLayer,
             probeUrl: proxyProbeUrl,
             wfsQueryUrl: wfsQueryUrl,

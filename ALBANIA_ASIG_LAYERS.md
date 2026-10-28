@@ -111,12 +111,39 @@ archaeological list is meant to be regenerated, not hand-edited (see
 
 ## The panel
 
-- **Collapsible sections.** One header per section with its row count; the
-  collapsed state is remembered in `localStorage`.
-- **One checkbox and one opacity slider per layer**, plus a per-row ⓘ popup
-  (title, exact service name, ASIG attribution, licence caveat) and a per-row
-  **Tirana** button (centre the map on the capital) — both kept from the earlier
-  group.
+- **Free tab only.** Every Albanian row — Heritage included — is a free
+  layer and must never show in the Premium tab. Heritage once leaked there:
+  its block was a plain `<div>` with no `data-category`, and the tab gate
+  only hides `.transp-layer-row[data-category]` rows, so it appeared in
+  both tabs. The block is now a `data-category="free"` transp-layer-row,
+  `buildPanel` re-applies the current tab after every rebuild
+  (`applyPanelTab`, so a language change cannot undo the gate), and CSS
+  tab-gates the whole `.country-section-list[data-category]` container as
+  a backstop.
+- **Same row style as the other countries** (Romania is the template, restyle
+  of 2026-10-27). Every layer is a glass `.dl-sublayer-row`: title on the left
+  and the pill on/off switch (`.apm-toggle-switch`) on the right of the header
+  line, then the “Opacity” line (`.transp-layer-label`, with the shared ⓘ
+  button and `%` badge) and the shared `.transp-slider` slider. The old
+  Albania-only rows (native checkbox on the left inside a wrapping label,
+  `.albania-layer-slider` offset by 19px, text-“i” info button) are gone. Row
+  ids did not move (`albaniaRow_` / `albaniaToggle_` / `albaniaOpacity_` /
+  `albaniaPct_` / `albaniaStatus_` + layer id), so the registry, the
+  vertical-opacity control and saved state keep working unchanged; the LiDAR
+  rows in the shared LiDAR accordion also keep their `lidar-country-row` /
+  `lidar-country-opacity` treatment.
+- **Collapsible sections.** One Romania-style header per section
+  (`.transp-layer-row` + `.transp-layer-label`): title and row count on the
+  left, an expand chevron (`#albaniaSectionHead_<id>`) and a **master on/off
+  switch** (`#albaniaSectionToggle_<id>`, new with the restyle —
+  `toggleSectionLayers(id, on)`, indeterminate when only part of the section
+  is on) on the right. Sections still start expanded; the collapsed state is
+  remembered in `localStorage`.
+- **One switch and one opacity slider per layer** (the switch wraps the same
+  per-layer checkbox as before), plus a per-row ⓘ popup (title, exact service
+  name, ASIG attribution, licence caveat) and a per-row **Tirana** button
+  (centre the map on the capital, now next to the switch) — both kept from
+  the earlier group.
 - **Search box** (`#albaniaSearch`) filtering by display title, exact layer name
   and — for Heritage — every part's title/name, so `zonat_mbrojtura` or
   `arkeologjike` finds the Heritage toggle even though its parts are not rows.

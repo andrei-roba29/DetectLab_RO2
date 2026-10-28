@@ -10,7 +10,13 @@
  * is a re-run of tools/build-asig-catalogue.mjs, not a code change.
  *
  * Panel (all inside the single Albania group, #albaniaRow → #albaniaSubLayers)
- *   • collapsible sections, one checkbox and one opacity slider per layer;
+ *   • rows in the same style as the other countries' free rows (Romania is
+ *     the template): glass `.dl-sublayer-row`, title left and the pill
+ *     on/off switch (`.apm-toggle-switch`) right, then the “Opacity” line
+ *     with the ⓘ button and `%` badge and a `.transp-slider` slider;
+ *   • collapsible Romania-style sections — a `.transp-layer-row` header with
+ *     title + count, an expand chevron and a master on/off switch — with
+ *     one switch and one opacity slider per layer;
  *   • Heritage is ONE toggle at the top: one checkbox, one opacity slider, one
  *     entry in the active-layer list, one reorder control, one remove button.
  *     Its parts are never rendered as rows;
@@ -94,6 +100,9 @@
     var STRINGS = {
         en: {
             opacity: 'Opacity',
+            toggle: 'On / off',
+            layerInfo: 'Layer information',
+            expand: 'Expand section',
             go: 'Tirana',
             unavailable: 'the source is not answering',
             resolving: 'resolving the layer name from the service …',
@@ -118,6 +127,9 @@
         },
         ro: {
             opacity: 'Opacitate',
+            toggle: 'Pornit / oprit',
+            layerInfo: 'Informații despre strat',
+            expand: 'Deschide secțiunea',
             go: 'Tirana',
             unavailable: 'sursa nu răspunde',
             resolving: 'se rezolvă numele stratului din serviciu …',
@@ -595,30 +607,40 @@
         return null;
     }
 
+    /* One layer row, in the same shape as the other countries' free rows
+     * (Romania's hand-written markup in index.html is the template): the
+     * glass `.dl-sublayer-row` shell, the layer's title on the left and the
+     * pill on/off switch (`.apm-toggle-switch`) on the right of the header
+     * line, then the “Opacity” line — word left, ⓘ button and `%` badge
+     * right — and the shared `.transp-slider` slider. Albania keeps one
+     * extra: the little Tirana fly-to button next to the switch. The ids
+     * stay the ones the registry and the vertical-opacity control already
+     * watch (`albaniaToggle_/albaniaOpacity_/albaniaPct_` + id). */
     function createRow(def) {
         var row = el('div', {
-            className: 'albania-layer-row' + (def.kind === 'group' ? ' albania-layer-group' : ''),
+            className: 'albania-layer-row dl-sublayer-row' +
+                (def.section === 'lidar' ? ' lidar-country-row' : '') +
+                (def.kind === 'group' ? ' albania-layer-group' : ''),
             id: 'albaniaRow_' + def.id,
             'data-category': 'free',
             'data-albania-row': def.id
         });
-        var head = el('div', { className: 'albania-layer-head' });
         var input = el('input', {
             type: 'checkbox',
             id: 'albaniaToggle_' + def.id,
-            'aria-label': text(def.title)
+            'aria-label': text(def.title) + ' — ' + words().toggle
         });
         input.checked = !!runtime.active[def.id];
+        if (row.classList) row.classList.toggle('is-active', !!runtime.active[def.id]);
         input.addEventListener('change', function () { toggle(def.id, input.checked); });
         var titleNode = el('span', { className: 'albania-layer-title', text: text(def.title) });
         var partsNode = def.kind === 'group'
             ? el('span', { className: 'albania-layer-parts', text: currentHeritageParts().length + ' ' + words().parts })
             : null;
-        var label = el('label', { className: 'albania-layer-label', htmlFor: input.id }, [
-            input, titleNode, partsNode
-        ]);
-        head.appendChild(label);
-        var actions = el('span', { className: 'albania-layer-actions' });
+        var titleWrap = el('span', {
+            style: 'display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;'
+        }, [titleNode, partsNode]);
+
         var go = el('button', {
             type: 'button', className: 'albania-layer-go', text: words().go, title: 'Centre map on Tirana'
         });
@@ -627,70 +649,158 @@
             if (event && event.stopPropagation) event.stopPropagation();
             gotoTirana();
         });
-        actions.appendChild(go);
+        var switchLabel = el('label', {
+            className: 'apm-toggle-switch',
+            style: 'transform:scale(0.85);',
+            title: text(def.title) + ' — ' + words().toggle
+        }, [input, el('span', { className: 'apm-toggle-track' })]);
+        var headRight = el('span', {
+            style: 'display:inline-flex;align-items:center;gap:6px;flex-shrink:0;'
+        }, [go, switchLabel]);
+        var head = el('div', {
+            style: 'display:flex;justify-content:space-between;align-items:center;font-size:0.78rem;margin-bottom:6px;gap:8px;'
+        }, [titleWrap, headRight]);
+        row.appendChild(head);
+
         var infoBtn = el('button', {
-            type: 'button', className: 'albania-layer-info', title: 'Layer information',
-            'aria-label': 'Layer information', text: 'i'
+            type: 'button', className: 'layer-info-btn', title: words().layerInfo,
+            'aria-label': words().layerInfo, text: 'ⓘ'
         });
         infoBtn.addEventListener('click', function (event) {
             if (event && event.preventDefault) event.preventDefault();
             if (event && event.stopPropagation) event.stopPropagation();
             info(def);
         });
-        actions.appendChild(infoBtn);
-        head.appendChild(actions);
-        row.appendChild(head);
-
         var pct = el('span', { className: 'pct', id: 'albaniaPct_' + def.id, text: runtime.opacity[def.id] + '%' });
-        var opacityLine = el('div', { className: 'albania-layer-opacity' }, [
-            el('span', { text: words().opacity }),
-            pct
+        var opacityRight = el('span', {
+            style: 'display:flex;align-items:center;gap:4px;flex-shrink:0;'
+        }, [infoBtn, pct]);
+        var opacityLine = el('div', {
+            className: 'transp-layer-label', style: 'margin-bottom:5px;'
+        }, [
+            el('span', { style: 'font-size:0.72rem;opacity:0.7;', text: words().opacity }),
+            opacityRight
         ]);
         row.appendChild(opacityLine);
         var slider = el('input', {
-            type: 'range', className: 'albania-layer-slider lidar-country-opacity',
+            type: 'range',
+            className: 'transp-slider' + (def.section === 'lidar' ? ' lidar-country-opacity' : ''),
             id: 'albaniaOpacity_' + def.id, min: '0', max: '100',
             value: String(runtime.opacity[def.id]),
             'aria-label': text(def.title) + ' ' + words().opacity
         });
         slider.addEventListener('input', function () { setOpacity(def.id, slider.value); });
         row.appendChild(slider);
-        var status = el('div', { className: 'albania-layer-status', id: 'albaniaStatus_' + def.id, role: 'status' });
+        var status = el('div', {
+            className: 'albania-layer-status', id: 'albaniaStatus_' + def.id, role: 'status',
+            style: 'display:none;padding-left:0;'
+        });
         if (status.style) status.style.display = 'none';
         row.appendChild(status);
 
         runtime.rows[def.id] = {
             row: row, input: input, slider: slider, status: status, go: go,
-            pct: pct, title: titleNode, parts: partsNode
+            pct: pct, title: titleNode, parts: partsNode, info: infoBtn
         };
         return row;
     }
 
+    /* One collapsible section, headered like the other countries' groups
+     * (Romania in index.html is the template): a `.transp-layer-row` shell
+     * whose `.transp-layer-label` header carries the section title and row
+     * count on the left and, on the right, the expand chevron button and a
+     * master pill switch that turns the whole section on or off. Sections
+     * start expanded (as Albania's always have); the collapsed choice is
+     * persisted exactly as before. */
     function sectionNode(sectionId) {
         var section = sectionById(sectionId) || { id: sectionId, title: sectionId };
         var defs = LAYERS.filter(function (def) { return def.section === sectionId; });
         var collapsed = !!runtime.collapsed[sectionId];
-        var head = el('button', {
+        var sectionTitle = text(section.label || section.title);
+
+        var icon = el('span', {
+            style: 'display:inline-block;transition:transform 0.25s ease;font-size:12px;opacity:0.75;line-height:1;',
+            text: '▾'
+        });
+        if (icon.style) icon.style.transform = collapsed ? 'rotate(-90deg)' : '';
+        var expandButton = el('button', {
             type: 'button',
-            className: 'albania-section-head',
             id: 'albaniaSectionHead_' + sectionId,
+            style: 'background:none;border:none;color:inherit;font:inherit;cursor:pointer;padding:2px 4px;line-height:1;display:inline-flex;align-items:center;flex-shrink:0;',
             'aria-expanded': collapsed ? 'false' : 'true',
-            title: text(section.label || section.title)
+            'aria-label': sectionTitle + ' — ' + words().expand,
+            title: words().expand
+        }, [icon]);
+        expandButton.addEventListener('click', function (event) {
+            if (event && event.preventDefault) event.preventDefault();
+            if (event && event.stopPropagation) event.stopPropagation();
+            toggleSection(sectionId);
+        });
+
+        var master = el('input', {
+            type: 'checkbox',
+            id: 'albaniaSectionToggle_' + sectionId,
+            'aria-label': sectionTitle + ' — ' + words().toggle
+        });
+        master.addEventListener('change', function () { toggleSectionLayers(sectionId, !!master.checked); });
+        var masterLabel = el('label', {
+            className: 'apm-toggle-switch',
+            style: 'transform:scale(0.85);',
+            title: sectionTitle + ' — ' + words().toggle
+        }, [master, el('span', { className: 'apm-toggle-track' })]);
+
+        var titleSpan = el('span', {
+            style: 'display:flex;align-items:center;gap:5px;flex-wrap:wrap;min-width:0;'
         }, [
-            el('span', { className: 'albania-section-caret', text: collapsed ? '▸' : '▾' }),
-            el('span', { className: 'albania-section-title', text: text(section.label || section.title) }),
+            el('span', { className: 'albania-section-title', text: sectionTitle }),
             el('span', { className: 'albania-section-count', text: '(' + defs.length + ')' })
         ]);
-        head.addEventListener('click', function () { toggleSection(sectionId); });
+        var rightSpan = el('span', {
+            style: 'display:flex;align-items:center;gap:4px;flex-shrink:0;'
+        }, [expandButton, masterLabel]);
+        var head = el('div', {
+            className: 'transp-layer-label',
+            style: 'margin-bottom:6px;',
+            'aria-expanded': collapsed ? 'false' : 'true',
+            title: sectionTitle
+        }, [titleSpan, rightSpan]);
+
         var body = el('div', { className: 'albania-section-body', id: 'albaniaSectionBody_' + sectionId });
         if (collapsed) if (body.style) body.style.display = 'none';
         defs.forEach(function (def) { body.appendChild(createRow(def)); });
         var wrapper = el('div', {
-            className: 'albania-section', id: 'albaniaSection_' + sectionId, 'data-albania-section': sectionId
+            className: 'albania-section transp-layer-row', id: 'albaniaSection_' + sectionId,
+            'data-albania-section': sectionId, 'data-category': 'free'
         }, [head, body]);
         runtime.sectionNodes = runtime.sectionNodes || {};
-        runtime.sectionNodes[sectionId] = { wrapper: wrapper, head: head, body: body };
+        runtime.sectionNodes[sectionId] = {
+            wrapper: wrapper, head: head, body: body,
+            master: master, icon: icon, button: expandButton
+        };
+        syncSectionMaster(sectionId);
         return wrapper;
+    }
+
+    /* Master switch of one section: on when every layer in it is on the
+     * map, indeterminate (the pill's half-way state) when only some are. */
+    function syncSectionMaster(sectionId) {
+        var node = runtime.sectionNodes && runtime.sectionNodes[sectionId];
+        if (!node || !node.master) return;
+        var defs = LAYERS.filter(function (def) { return def.section === sectionId; });
+        var on = 0;
+        defs.forEach(function (def) { if (runtime.active[def.id]) on += 1; });
+        node.master.checked = defs.length > 0 && on === defs.length;
+        node.master.indeterminate = on > 0 && on < defs.length;
+    }
+
+    function syncSectionMasters() {
+        (CONFIG.sections || []).forEach(function (section) { syncSectionMaster(section.id); });
+    }
+
+    function toggleSectionLayers(sectionId, on) {
+        LAYERS.filter(function (def) { return def.section === sectionId; })
+            .forEach(function (def) { toggle(def.id, on); });
+        syncSectionMaster(sectionId);
     }
 
     function toolsNode() {
@@ -709,9 +819,46 @@
         return el('div', { className: 'albania-catalogue-tools' }, [search, active]);
     }
 
+    /* The panel's Free/Premium tabs gate rows purely by `data-category` +
+     * `.active` (switchLayerTab in js/map-app.js, `.transp-layer-row
+     * [data-category]` in css/styles.css). Every Albanian row is FREE —
+     * Heritage included — so none of them may ever appear in the Premium
+     * tab. (Heritage once did: its block was a plain div with no
+     * data-category, so the tab CSS never hid it and it showed in both
+     * tabs.) switchLayerTab only re-marks nodes that exist when a tab is
+     * clicked, and a rebuild (language change) creates fresh nodes with
+     * no `.active`; re-apply the current tab after every build so the
+     * free rows are visible in the Free tab and absent from Premium. */
+    function currentPanelTab() {
+        try {
+            if (typeof document.querySelector === 'function') {
+                var btn = document.querySelector('.transp-panel-tabs button.active');
+                if (btn) {
+                    if (btn.dataset && btn.dataset.tab) return btn.dataset.tab;
+                    if (btn.getAttribute) return btn.getAttribute('data-tab') || 'free';
+                }
+            }
+        } catch (e) { /* the tab bar is best-effort; Free is the default */ }
+        return 'free';
+    }
+
+    function applyPanelTab() {
+        var free = currentPanelTab() === 'free';
+        var nodes = [];
+        if (runtime.heritageBlock) nodes.push(runtime.heritageBlock);
+        Object.keys(runtime.sectionNodes || {}).forEach(function (id) {
+            var node = runtime.sectionNodes[id];
+            if (node && node.wrapper) nodes.push(node.wrapper);
+        });
+        nodes.forEach(function (node) {
+            if (node.classList) node.classList.toggle('active', free);
+        });
+    }
+
     function buildPanel() {
         runtime.rows = {};
         runtime.sectionNodes = {};
+        runtime.heritageBlock = null;
         var mount = document.getElementById(MOUNT_ID);
         if (mount) {
             clear(mount);
@@ -722,14 +869,18 @@
              * rows and never inside a section, so its parts cannot be mistaken
              * for layers the visitor has to switch on one by one. */
             if (HERITAGE) {
-                mount.appendChild(el('div', { className: 'albania-heritage-block' }, [
+                /* data-category="free" + transp-layer-row is what keeps this
+                 * block in the Free tab only (see applyPanelTab above). */
+                var heritageBlock = el('div', { className: 'albania-heritage-block transp-layer-row', 'data-category': 'free' }, [
                     el('div', { className: 'albania-heritage-caption', text: text(HERITAGE.title) }),
                     createRow(HERITAGE),
                     el('div', {
                         className: 'albania-heritage-note',
                         text: words().infoParts + ' (' + currentHeritageParts().length + ' ' + words().parts + ')'
                     })
-                ]));
+                ]);
+                runtime.heritageBlock = heritageBlock;
+                mount.appendChild(heritageBlock);
             }
             (CONFIG.sections || []).forEach(function (section) {
                 if (section.id === HERITAGE_ID) return;
@@ -753,6 +904,8 @@
         setExpanded(runtime.expanded);
         /* Rebuilding the DOM must not undo the country gate. */
         applyCountryVisibility(runtime.inCountry);
+        /* …nor the Free/Premium tab gate (Heritage is free-tab only). */
+        applyPanelTab();
         refreshResolverNotices();
     }
 
@@ -763,7 +916,8 @@
             var collapsed = !!runtime.collapsed[sectionId];
             if (node.body.style) node.body.style.display = collapsed ? 'none' : '';
             node.head.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-            if (node.head.children && node.head.children[0]) node.head.children[0].textContent = collapsed ? '▸' : '▾';
+            if (node.button) node.button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            if (node.icon && node.icon.style) node.icon.style.transform = collapsed ? 'rotate(-90deg)' : '';
         }
         save();
     }
@@ -1185,6 +1339,7 @@
                 row.slider.value = String(runtime.opacity[def.id]);
             }
         });
+        syncSectionMasters();
         var master = document.getElementById(GROUP_TOGGLE_ID);
         if (master) master.checked = anyActive;
     }
@@ -1699,6 +1854,8 @@
         setOpacity: setOpacity,
         setSearch: setSearch,
         toggleSection: toggleSection,
+        toggleSectionLayers: toggleSectionLayers,
+        applyPanelTab: applyPanelTab,
         moveActive: moveActive,
         activeOrder: orderList,
         activeLeaves: activeWmsLeaves,

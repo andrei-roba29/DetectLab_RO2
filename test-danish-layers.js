@@ -16,7 +16,8 @@
  *      heritage WFS is asked in EPSG:25832 and answered in
  *      EPSG:4326 (the projection is checked against PROJ reference values);
  *   4. the map module (js/danish-layers.js) in a stub DOM + Leaflet — rows built
- *      from the config, exclusive bases, per-overlay opacity, nothing requested
+ *      from the config in the shared switch + slider style (every rendered
+ *      layer an independent overlay), per-layer opacity, nothing requested
  *      before a row is switched on, and the country filter;
  *   5. the wiring — index.html (row, container, script order), the i18n keys
  *      (EN + DA), css/styles.css, sw.js and the country-filter hook in
@@ -40,8 +41,11 @@ let passed = 0;
 function ok(label) { passed += 1; console.log('  ✓ ' + label); }
 
 const WIRED = CONFIG.enabledLayers().map((layer) => layer.id);
-const RENDERED = CONFIG.enabledLayers().filter((layer) => !layer.selectorGroup && !layer.panelGroup)
-    .sort((a, b) => (a.group === b.group ? 0 : (a.group === 'base' ? -1 : 1))).map((layer) => layer.id);
+/* The panel renders exactly the panelGroups catalogue, in group order:
+   LiDAR (in the shared LiDAR accordion), then Heritage, Historical maps
+   and Ortophoto. Everything else (the spring-orthophoto years, the Danish
+   OSM base) is catalogue/proxy data without a row. */
+const RENDERED = CONFIG.panelGroups.reduce((ids, group) => ids.concat(group.layers), []);
 /* A stand-in for the Dataforsyningen token: the suite only checks that the
    token travels server-side, never in browser requests, never that a
    real one works. No credential may ever be committed. */
@@ -65,10 +69,13 @@ const TOKEN = 'test-token-not-a-credential';
     assert.strictEqual(CONFIG.byId('witx_fundogfortidsminder_areal').layers, 'witx:FundOgFortidsminderAreal');
     assert.strictEqual(CONFIG.byId('witx_fundogfortidsminder').layers, 'witx:FundOgFortidsminder');
     assert.deepStrictEqual(CONFIG.panelGroups.map((group) => [group.id, group.title.en, group.layers]), [
+        ['lidar', 'LiDAR', ['lidar_hillshade_historik', 'lidar_quickdhm_exaggerated', 'lidar_dhm_terrain_hillshade', 'lidar_dhm_surface_hillshade']],
         ['heritage', 'Heritage', ['naturtyper', 'fortidsminder', 'fortidsminder_punkt_ikkefredet', 'fortidsminder_punkt_fredet']],
-        ['historical', 'Historical maps', ['topo4cm_1980_2001', 'topo4cm_1953_1976', 'hist_lave', 'hist_hoeje', 'hist_preussen']],
+        ['historical', 'Historical maps', ['topo4cm_1980_2001', 'topo4cm_1953_1976', 'hist_lave', 'hist_hoeje', 'hist_preussen', 'dtk25']],
         ['orthophoto', 'Ortophoto', ['orto_sommer_2008', 'orto_sommer_2005', 'orto_sommer_2002', 'orto_sommer_1999']]
     ], 'the requested free Denmark groups and sublayer order are explicit in the catalogue');
+    assert.strictEqual(CONFIG.panelGroups.filter((group) => group.id === 'lidar')[0].mount, 'danishLidarLayers',
+        'the LiDAR group is mounted in the shared LiDAR accordion');
     CONFIG.panelGroups.forEach((group) => group.layers.forEach((id) => {
         assert.strictEqual(CONFIG.byId(id).enabled, true, id + ' is available in the free Denmark catalogue');
         assert.strictEqual(CONFIG.byId(id).panelGroup, group.id, id + ' is rendered only inside ' + group.id);
@@ -111,16 +118,26 @@ const TOKEN = 'test-token-not-a-credential';
     const defaults = CONFIG.layers.filter((l) => l.defaultOn);
     assert.strictEqual(defaults.length, 1, 'one and only one layer starts on');
     assert.strictEqual(defaults[0].id, 'dtk25');
-    assert.strictEqual(defaults[0].group, 'base');
-    ok('exactly one Danish base map starts switched on (DTK25)');
+    assert.strictEqual(defaults[0].group, 'overlay', 'DTK25 is a Historical-maps overlay now, not a base map');
+    assert.strictEqual(defaults[0].panelGroup, 'historical');
+    ok('exactly one Danish layer starts switched on (DTK25, as an overlay)');
 
-    assert.ok(CONFIG.enabledLayers().filter((l) => l.group === 'base').length >= 15);
-    assert.ok(CONFIG.enabledLayers().filter((l) => l.group !== 'base').length >= 5);
-    assert.ok(CONFIG.enabledLayers().filter((l) => l.group === 'base').every((l) => l.defaultOn === false || l.id === 'dtk25'));
+    /* Every rendered layer is an independent overlay: no Danish panel row
+       is a mutually-exclusive base map any more. The only remaining
+       `base` entries are the unrendered catalogue layers (the GeoDanmark
+       spring orthophoto + its ten selector years and the Danish OSM base). */
+    RENDERED.forEach((id) => {
+        assert.strictEqual(CONFIG.byId(id).group, 'overlay', id + ' is an independent overlay');
+    });
+    assert.deepStrictEqual(
+        CONFIG.enabledLayers().filter((l) => l.group === 'base').map((l) => l.id),
+        ['orto', 'osm'].concat(CONFIG.layers.filter((l) => l.selectorGroup === 'spring-orthophoto').map((l) => l.id)),
+        'the only enabled bases left are the unrendered catalogue entries');
+    assert.ok(CONFIG.enabledLayers().filter((l) => l.group === 'base').every((l) => l.defaultOn === false));
     assert.ok(CONFIG.byId('lidar_hillshade_historik').minZoom <= 12 && CONFIG.byId('lidar_hillshade_historik').maxZoom >= 17);
     assert.ok(CONFIG.byId('lidar_quickdhm_exaggerated').minZoom <= 12 && CONFIG.byId('lidar_dhm_terrain_hillshade').minZoom <= 12);
     assert.ok(CONFIG.layers.filter((l) => l.selectorGroup === 'spring-orthophoto').length === 10);
-    ok('exclusive base maps (radio) and independent overlays (checkbox)');
+    ok('every rendered Danish layer is an independent overlay (on/off switch); bases survive only unrendered');
 
     const nature = CONFIG.byId('naturtyper');
     assert.strictEqual(nature.requiresCredentials.length, 0);
@@ -209,6 +226,11 @@ const TOKEN = 'test-token-not-a-credential';
         assert.strictEqual(def.version, layer.version, id + ': same version');
         assert.strictEqual(def.crs, layer.crs, id + ': same CRS');
         assert.strictEqual(def.group, layer.group === 'base' ? 'danish-base' : 'danish-overlay');
+        if (RENDERED.indexOf(id) !== -1) {
+            assert.strictEqual(def.group, 'danish-overlay', id + ': rendered Danish layers are overlays in the registry too');
+            assert.strictEqual(def.ui.slider, 'danishOpacity_' + id, id + ': the registry knows its opacity slider');
+            assert.strictEqual(def.ui.toggle, 'danishToggle_' + id, id + ': the registry knows its on/off switch');
+        }
         assert.ok(def.title.en && def.title.da, id + ': both titles mirrored');
         assert.strictEqual(def.attribution, layer.attribution, id + ': attribution mirrored');
         assert.strictEqual(def.licence, layer.licence, id + ': licence mirrored');
@@ -451,24 +473,87 @@ async function testMapModule() {
     assert.ok(sandbox.toggleDanishLayers && sandbox.setDanishBase && sandbox.showDanishInfo,
         'the inline handlers in index.html exist');
 
-    const rowIds = dom.byId.danishSubLayers.children.filter(child => child.attributes['class'] === 'transp-layer-row').flatMap(child => child.children.map(row => row.attributes['data-danish-row']).filter(Boolean)).concat(dom.childIds('danishLidarLayers'));
-    assert.deepStrictEqual(rowIds, RENDERED, 'ungrouped base rows first, then ungrouped overlays');
+    /* Rendered rows, in panel order: the LiDAR mount first (it lives in the
+       shared LiDAR accordion, after the global derivate row), then the
+       three Denmark sections and their …SubLayers columns. */
+    const groupBodyId = (group) => 'danish' + group.id.charAt(0).toUpperCase() + group.id.slice(1) + 'SubLayers';
+    const rowIds = dom.childIds('danishLidarLayers').concat(
+        CONFIG.panelGroups.filter((group) => !group.mount && group.id !== 'lidar')
+            .flatMap((group) => dom.childIds(groupBodyId(group))));
+    assert.deepStrictEqual(rowIds, RENDERED, 'exactly the panelGroups rows are rendered, once each, in order');
+    assert.deepStrictEqual(dom.byId.danishSubLayers.children.map((child) => child.id),
+        ['danishGroup_heritage', 'danishGroup_historical', 'danishGroup_orthophoto'],
+        'the Denmark mount holds the three thematic sections and nothing else (no Base map section)');
     for (const group of CONFIG.panelGroups) {
-        assert.ok(dom.byId['danishGroup_' + group.id], group.id + ' has a collapsible group');
-        assert.deepStrictEqual(dom.childIds('danishGroup_' + group.id), group.layers,
+        if (group.mount || group.id === 'lidar') {
+            assert.deepStrictEqual(dom.childIds('danishLidarLayers'), group.layers,
+                'the LiDAR mount contains exactly the requested sublayers in order');
+            continue;
+        }
+        const wrap = dom.byId['danishGroup_' + group.id];
+        assert.ok(wrap, group.id + ' has a section');
+        assert.ok((wrap.attributes['class'] || '').indexOf('transp-layer-row') !== -1,
+            group.id + ' is a Romania-style glass section row');
+        assert.deepStrictEqual(dom.childIds(groupBodyId(group)), group.layers,
             group.id + ' contains exactly the requested sublayers in order');
+        assert.ok(dom.byId['danishGroupToggle_' + group.id], group.id + ' has a master on/off switch');
+        assert.strictEqual(dom.byId['danishGroupToggle_' + group.id].type, 'checkbox');
+        assert.ok(dom.byId['danishGroupExpandBtn_' + group.id], group.id + ' has an expand chevron');
+        assert.strictEqual(dom.byId[groupBodyId(group)].style.maxHeight, '0',
+            group.id + ' starts collapsed, like the Romanian Historical Maps group');
     }
-    assert.strictEqual(dom.byId['danishToggle_dtk25'].type, 'radio', 'base rows are radios');
-    assert.strictEqual(dom.byId['danishToggle_osm'].name, dom.byId['danishToggle_dtk25'].name,
-        'the base radios share one name → mutually exclusive');
-    assert.strictEqual(dom.byId['danishToggle_naturtyper'].type, 'checkbox', 'overlay rows are checkboxes');
-    assert.ok(dom.byId['danishOpacity_naturtyper'], 'overlays get an opacity slider');
-    ['lidar_hillshade_historik', 'lidar_quickdhm_exaggerated', 'lidar_dhm_terrain_hillshade'].forEach((id) => {
-        assert.ok(dom.byId['danishToggle_' + id], id + ' is a selectable overlay row');
-        assert.equal(dom.byId['danishOpacity_' + id].value, '100', id + ' slider starts at 100%');
+
+    /* Every rendered row has the shared Romania style: a glass sublayer
+       row, the pill on/off switch (checkbox + track sibling in an
+       .apm-toggle-switch label), the .pct badge next to the shared info
+       button on the Opacity line, and a .transp-slider opacity slider.
+       No radios, and no row without a slider. */
+    RENDERED.forEach((id) => {
+        const input = dom.byId['danishToggle_' + id];
+        assert.ok(input, id + ' has an on/off switch');
+        assert.strictEqual(input.type, 'checkbox', id + ' switch is a checkbox, not a radio');
+        const toggleLabel = input.parentNode;
+        assert.strictEqual(toggleLabel.attributes['class'], 'apm-toggle-switch',
+            id + ' switch uses the shared pill toggle');
+        assert.strictEqual(toggleLabel.children[0], input, id + ' input comes first in the switch');
+        assert.strictEqual(toggleLabel.children[1].attributes['class'], 'apm-toggle-track',
+            id + ' track immediately follows the input (checked CSS depends on it)');
+        const slider = dom.byId['danishOpacity_' + id];
+        assert.ok(slider, id + ' has an opacity slider');
+        assert.strictEqual(slider.type, 'range');
+        assert.ok((slider.attributes['class'] || '').indexOf('transp-slider') !== -1,
+            id + ' slider uses the shared transp-slider style');
+        assert.ok(dom.byId['danishPct_' + id], id + ' has a percentage badge');
+        assert.strictEqual(dom.byId['danishPct_' + id].textContent, API.opacityOf(id) + '%');
+        const row = dom.byId['danishRow_' + id];
+        assert.ok((row.attributes['class'] || '').indexOf('dl-sublayer-row') !== -1,
+            id + ' row carries the shared glass sublayer box');
+        const opacityLine = row.children[1];
+        assert.strictEqual(opacityLine.attributes['class'], 'transp-layer-label',
+            id + ' opacity line uses the shared label row');
+        assert.strictEqual(opacityLine.children[0].textContent, 'Opacity');
+        assert.strictEqual(opacityLine.children[1].children[0].attributes['class'], 'layer-info-btn',
+            id + ' info button uses the shared layer-info-btn');
+        assert.strictEqual(row.children[2], slider, id + ' slider sits under its Opacity line');
     });
-    assert.ok(dom.byId['danishSpringOrthoYear'], 'spring orthophoto years have one dropdown');
-    assert.equal(dom.byId['danishSpringOrthoYear'].children.length, 10, 'the year dropdown has 2016–2025');
+    ['lidar_hillshade_historik', 'lidar_quickdhm_exaggerated', 'lidar_dhm_terrain_hillshade'].forEach((id) => {
+        assert.equal(dom.byId['danishOpacity_' + id].value, '100', id + ' slider starts at 100%');
+        assert.ok((dom.byId['danishRow_' + id].attributes['class'] || '').indexOf('lidar-country-row') !== -1,
+            id + ' is a country LiDAR row like its neighbours in the accordion');
+    });
+    assert.equal(dom.byId['danishOpacity_dtk25'].value, '100', 'DTK25 slider starts at 100%');
+
+    /* The removed panel furniture stays removed: no Base map rows, no
+       spring-orthophoto dropdown, no Danish OSM row. The catalogue entries
+       still exist for the proxy/registry — they just have no row. */
+    ['orto', 'osm', 'orto_foraar_2016', 'orto_foraar_2025'].forEach((id) => {
+        assert.ok(!dom.byId['danishToggle_' + id], id + ' has no panel switch');
+        assert.ok(!dom.byId['danishRow_' + id], id + ' has no panel row');
+        assert.strictEqual(API.isActive(id), false, id + ' is not restored without a row');
+    });
+    assert.ok(!dom.byId['danishSpringOrthoYear'], 'the spring-orthophoto year dropdown is gone');
+    assert.ok(!dom.byId['danishSpringOrthoStatus'], 'and so is its status line');
+    ok('rows, pill switches, sliders and sections are generated from the config; removed rows stay removed');
 
     /* The info panel takes plain text: it links the URLs it finds and prints the
        description through textContent, so markup or newlines would show up
@@ -497,22 +582,22 @@ async function testMapModule() {
     assert.ok(/disabled/.test(info[2].description) && /permission required/.test(info[2].description),
         'the disabled WITX placeholder explains why it is disabled');
     ok('the per-row info panel gets plain, single-paragraph text');
-    assert.ok(!dom.byId['danishOpacity_dtk25'], 'base maps have no opacity slider (they are the picture)');
-    ok('rows, radio group, checkboxes and sliders are generated from the config');
 
-    /* The default base map is switched on at start and probed once; the stub
-     * answers 503, so DTK25 shows a generic missing-configuration notice and
-     * falls back to the public Danish basemap rather than leaving an empty map. */
+    /* The one default-on layer is switched on at start and probed once; the
+     * stub answers 503, so DTK25 shows a generic missing-configuration
+     * notice in its own row and stays off. It is an overlay now, so there
+     * is no OSM takeover: the app's own basemap simply shows through. */
     await settle();
     assert.ok(/not configured on the server/.test(dom.byId['danishStatus_dtk25'].textContent),
         'the row gives a generic server-configuration notice');
     assert.ok(!/DATAFORSYNINGEN_TOKEN|DATAFORDELER_USERNAME|DATAFORDELER_PASSWORD/.test(dom.byId['danishStatus_dtk25'].textContent),
         'the row does not expose environment variable names');
     assert.ok(dom.byId['danishGroupNotice'].textContent.length > 0, 'the group says what happened');
-    assert.strictEqual(API.isActive('osm'), true, 'OpenStreetMap took over');
-    assert.ok(leaflet.calls.tileLayer.some((c) => c.url.indexOf('tile.openstreetmap.org') !== -1),
-        'and it is the XYZ layer that was built');
-    ok('DTK25 generic 503 status explains the issue and falls back to OSM');
+    assert.strictEqual(API.isActive('dtk25'), false, 'the unconfigured overlay does not appear active');
+    assert.strictEqual(API.isActive('osm'), false, 'no OSM base takes over — that row is gone');
+    assert.ok(!leaflet.calls.tileLayer.some((c) => c.url.indexOf('tile.openstreetmap.org') !== -1),
+        'and no XYZ fallback layer was built');
+    ok('DTK25 generic 503 status explains the issue; the overlay simply stays off');
 
     /* The three requested LiDAR layers are lazy and report missing credentials generically. */
     assert.strictEqual(leaflet.calls.tileLayerWms.length, 0, 'no WMS tile layer is built before an overlay is activated');
@@ -551,8 +636,9 @@ async function testMapModule() {
     ok('the opacity slider sets the layer opacity (40% → 0.4, then 15% by hand)');
 
     /* A deployment with the token: the probe answers with the capabilities
-     * document and DTK25 becomes the second Danish base map — through the
-     * deployment's own route, never with a key in the browser. */
+     * document and DTK25 draws — through the deployment's own route, never
+     * with a key in the browser — as an independent overlay in the raster
+     * pane, with a working opacity slider and a switch that turns it off. */
     sandbox.fetch = () => Promise.resolve(new Response('<WMS_Capabilities/>', {
         status: 200, headers: { 'Content-Type': 'text/xml' }
     }));
@@ -564,10 +650,25 @@ async function testMapModule() {
     assert.strictEqual(proxied.options.uppercase, true, 'the documented uppercase request format');
     assert.ok(proxied.options.layers.indexOf('dtk25') === 0, 'the LAYERS value comes from the config');
     assert.strictEqual(API.modeOf('dtk25'), 'proxy', 'it goes through the deployment');
-    assert.strictEqual(API.isActive('osm'), false, 'the other Danish base went off');
-    assert.strictEqual(API.isActive('naturtyper'), true, 'the overlay stayed on');
-    assert.strictEqual(API.selectedBase(), 'dtk25');
-    ok('Danish base maps are mutually exclusive; overlays are independent');
+    assert.strictEqual(proxied.options.pane, 'pane_danish_raster', 'DTK25 paints as an overlay, not a base map');
+    assert.strictEqual(API.isActive('dtk25'), true);
+    assert.strictEqual(API.isActive('naturtyper'), true, 'the other overlay stayed on — overlays combine freely');
+    assert.strictEqual(API.selectedBase(), 'dtk25', 'selectedBase() reports the last activation (name kept for API callers)');
+    dom.byId['danishOpacity_dtk25'].value = '55';
+    dom.byId['danishOpacity_dtk25'].dispatch('input');
+    assert.strictEqual(API.opacityOf('dtk25'), 55, 'the former base map has a working opacity slider');
+    assert.strictEqual(leaflet.calls.opacity[leaflet.calls.opacity.length - 1], 0.55);
+    assert.strictEqual(dom.byId['danishPct_dtk25'].textContent, '55%');
+    const dtkToggle = dom.byId['danishToggle_dtk25'];
+    dtkToggle.checked = false;
+    dtkToggle.dispatch('change');
+    assert.strictEqual(API.isActive('dtk25'), false, 'the pill switch turns DTK25 off again');
+    assert.strictEqual(API.isActive('naturtyper'), true, 'switching one overlay off leaves the others alone');
+    dtkToggle.checked = true;
+    dtkToggle.dispatch('change');
+    await settle();
+    assert.strictEqual(API.isActive('dtk25'), true, 'and back on');
+    ok('former base maps are independent overlays with a working switch and slider');
 
     /* A client-injected token must never enable direct provider requests. */
     sandbox.DETECTLAB_DK_TOKEN = 'local-only-token';
@@ -580,28 +681,34 @@ async function testMapModule() {
     assert.strictEqual(API.isActive('dtk25'), false, 'a missing proxy leaves the protected layer off');
     ok('no client-side Dataforsyningen token fallback is permitted');
 
-    const springYear = dom.byId['danishSpringOrthoYear'];
-    springYear.value = 'orto_foraar_2024';
-    springYear.dispatch('change');
-    await settle();
-    assert.ok(/not configured on the server/.test(dom.byId['danishSpringOrthoStatus'].textContent),
-        'the one-year selector reports a generic missing-configuration state');
-    assert.ok(!/DATAFORDELER_USERNAME|DATAFORDELER_PASSWORD/.test(dom.byId['danishSpringOrthoStatus'].textContent),
-        'the selector does not expose variable names');
-    ok('the spring-year dropdown exposes a generic missing-credentials status');
-
+    /* A section's master switch and chevron (Romania-style sections):
+       expanding unfolds the sublayer column; the master turns the whole
+       section on and off and reflects partial states as indeterminate. */
     sandbox.fetch = () => Promise.resolve(new Response('<WMS_Capabilities/>', {
         status: 200, headers: { 'Content-Type': 'text/xml' }
     }));
-    delete API.state.guard.orto_foraar_2024;
-    springYear.value = 'orto_foraar_2024';
-    springYear.dispatch('change');
+    const heritageBody = dom.byId['danishHeritageSubLayers'];
+    assert.strictEqual(heritageBody.style.maxHeight, '0', 'Heritage starts collapsed');
+    dom.byId['danishGroupExpandBtn_heritage'].dispatch('click');
+    assert.strictEqual(heritageBody.style.maxHeight, '6000px', 'the chevron expands the section');
+    assert.strictEqual(dom.byId['danishGroupExpandBtn_heritage'].getAttribute('aria-expanded'), 'true');
+    assert.strictEqual(API.isActive('naturtyper'), true, 'naturtyper is already on');
+    const heritageMaster = dom.byId['danishGroupToggle_heritage'];
+    assert.strictEqual(heritageMaster.checked, false, 'the master is off while only some layers are on');
+    assert.strictEqual(heritageMaster.indeterminate, true, 'and indeterminate for the partial state');
+    heritageMaster.checked = false;
+    heritageMaster.dispatch('change');
+    assert.strictEqual(API.isActive('naturtyper'), false, 'the master switches the whole section off');
+    heritageMaster.checked = true;
+    heritageMaster.dispatch('change');
     await settle();
-    assert.strictEqual(API.selectedBase(), 'orto_foraar_2024');
-    assert.strictEqual(API.isActive('orto_foraar_2024'), true);
-    assert.ok(leaflet.calls.tileLayerWms.some((call) => call.url.indexOf('layer=orto_foraar_2024') !== -1),
-        'selecting a year creates exactly that year layer through the configured route');
-    ok('the spring-year dropdown activates the chosen mutually exclusive base layer');
+    assert.ok(['naturtyper', 'fortidsminder', 'fortidsminder_punkt_ikkefredet', 'fortidsminder_punkt_fredet']
+        .every((id) => API.isActive(id)), 'the master switches every Heritage layer on');
+    assert.strictEqual(heritageMaster.checked, true, 'and reads checked once all of them are on');
+    heritageMaster.checked = false;
+    heritageMaster.dispatch('change');
+    API.activate('naturtyper');
+    ok('section chevron + master switch unfold and toggle the whole group');
 
     delete API.state.guard.lidar_quickdhm_exaggerated;
     API.activate('lidar_quickdhm_exaggerated');

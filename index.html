@@ -26,7 +26,7 @@
     <link rel="stylesheet" href="css/leaflet.photon.css">
     <link rel="stylesheet" href="css/leaflet-measure.css">
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
-    <link rel="stylesheet" href="css/styles.css?v=20261026-historical-previews">
+    <link rel="stylesheet" href="css/styles.css?v=20261027-danish-row-style">
     <!-- 3D TERRAIN VIEW (2D ⇄ 3D) — MapLibre GL JS, vendored like Leaflet.
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
@@ -2317,18 +2317,13 @@
                                 <input type="range" class="lidar-country-opacity" id="lidarFrLidarOpacitySlider" min="0" max="100" value="80" oninput="setInternationalLidarOpacity('frLidar', this.value)">
                             </div>
 
-                            <!-- Denmark -->
-                            <div class="lidar-country-row" id="lidarDkLidarRow">
-                                <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;gap:5px;">
-                                    <span style="display:flex;align-items:center;gap:5px;"><span>Denmark · DHM hillshade (DHM/Terræn)</span><button type="button" class="layer-info-btn" onclick="event.stopPropagation();showLayerInfo('Denmark · Danmarks Højdemodel hillshade','Hillshade of Danmarks Højdemodel (the national LiDAR elevation model), streamed live from Dataforsyningen&#39;s WMTS (dhm_terraen_skyggekort / dhm_overflade_skyggekort, TileMatrixSet View1). View1 is a Danish national grid in EPSG:25832, not Web Mercator, so each tile is reprojected in the browser onto a canvas — the hillshade therefore lines up with the basemap to well under a pixel. JPEG tiles have no transparency, so use the opacity slider (default 60%) to see the map underneath. Free geographic data under CC BY 4.0 — Indeholder data fra Klimadatastyrelsen, Danmarks Højdemodel. The service needs a Dataforsyningen token, which this site adds server-side through its own proxy; no token is ever sent to the browser.')" title="Layer info">ⓘ</button></span>
-                                    <label class="apm-toggle-switch" title="Toggle Denmark LiDAR" style="transform:scale(0.85);transform-origin:right center;"><input type="checkbox" id="lidarDkLidarToggle" onchange="toggleInternationalLidar('dkLidar', this.checked)"><span class="apm-toggle-track"></span></label>
-                                </div>
-                                <select id="denmarkLidarModeSelect" class="lidar-country-select" aria-label="Denmark DHM product" onchange="setDenmarkLidarMode(this.value)">
-                                    <option value="terrain">DHM Terræn · hillshade (bare earth)</option><option value="surface">DHM Overflade · hillshade (surface)</option>
-                                </select>
-                                <div class="transp-layer-label" style="margin:5px 0"><span style="font-size:0.72rem;opacity:0.6">Opacity</span><span class="pct" id="lidarDkLidarPct">60%</span></div>
-                                <input type="range" class="lidar-country-opacity" id="lidarDkLidarOpacitySlider" min="0" max="100" value="60" oninput="setInternationalLidarOpacity('dkLidar', this.value)">
-                            </div>
+                            <!-- Denmark has no separate DHM WMTS row here any more:
+                                 its terrain/surface hillshades are the Danish WMS
+                                 LiDAR rows generated into #danishLidarLayers below
+                                 (js/danish-layers.config.js, panelGroup "lidar"),
+                                 each with its own on/off switch and opacity slider.
+                                 The WMTS module (js/dataforsyningen-dhm-layer.js)
+                                 stays loaded for the 3D registry builder only. -->
 
                             <!-- Sweden · Lantmäteriet terrängskuggning (WMS 1.1.1, EPSG:3857).
                                  LICENSED, fee-based service: tiles go through this site's own
@@ -2374,6 +2369,10 @@
                                 <input type="range" class="lidar-country-opacity" id="lidarDerivateOpacitySlider" min="0" max="100" value="70" oninput="setInternationalLidarOpacity('derivate', this.value)">
                             </div>
                             <div id="albaniaLidarLayers" data-category="free"></div>
+                            <!-- Denmark · the four DHM WMS LiDAR rows (historik,
+                                 quickDHM, terrain, surface) are generated here by
+                                 js/danish-layers.js in the same switch + slider
+                                 style as every other country row above. -->
                             <div id="danishLidarLayers" data-category="free"></div>
                         </div><!-- /lidarEuropeanSubLayers -->
 
@@ -5242,7 +5241,7 @@
     <!-- The Danish layers (Denmark): the CONFIG is the single description of
          every Danish layer and it is loaded before the registry, which mirrors
          it. js/danish-layers.js (below, after map-app.js) draws them. -->
-    <script src="js/danish-layers.config.js?v=20261024-danish-heritage-proxy"></script>
+    <script src="js/danish-layers.config.js?v=20261027-danish-row-style"></script>
     <!-- The Albanian layers (ASIG geoportal): same contract — the catalogue is
          the single description of every Albanian layer. data/asig-layers.data.js
          is the catalogue itself (sections, display titles, exact WMS/WMTS
@@ -5272,17 +5271,18 @@
     <script src="js/map-app.js?v=20261026-lidar-whole-or-disc"></script>
     <!-- Danish layers: panel rows, basemap-control buttons and the lazy
          Leaflet layers, all built from js/danish-layers.config.js. -->
-    <script src="js/danish-layers.js?v=20261026-flat-country-sections"></script>
+    <script src="js/danish-layers.js?v=20261027-danish-row-style"></script>
     <!-- Albanian layers (ASIG): the catalogue panel of the single Albania group
-         (#albaniaRow) — collapsible sections, one checkbox + opacity slider per
-         layer, a search box, an active-layer list with ↑/↓ reordering, one
+         (#albaniaRow) — collapsible Romania-style sections (chevron + master
+         switch), one pill on/off switch + opacity slider per layer, a search
+         box, an active-layer list with ↑/↓ reordering, one
          Heritage toggle (its parts are never rows), WMS tiles plus the three
          canvas-reprojected WMTS layers — all built from
          data/asig-layers.data.js + js/asig-albania-layers.config.js. Map clicks
          query every active WMS layer and show the answer in a sandboxed
          iframe. The group is shown only while Albania is the selected country. -->
     <script src="js/asig-heritage.js?v=20261026-viewport-heritage"></script>
-    <script src="js/asig-albania-layers.js?v=20261026-asig-tap-guard"></script>
+    <script src="js/asig-albania-layers.js?v=20261027-albania-heritage-free-tab"></script>
     <!-- Finnish layers: panel rows and the lazy Leaflet layers — canvas
          reprojection from the ETRS-TM35FIN grid, MVT cadastral decoding,
          WMS tiles, debounced WFS, local GeoJSON — all built from
