@@ -1,5 +1,17 @@
 > UI update (2026-10-26): thematic sections now appear directly in the layer list, without a country master layer. All Albanian and Danish LiDAR rows live once under the existing shared LiDAR accordion. Country filtering and per-layer controls remain in place.
 
+> UI update (2026-10-28): the Heritage section now exposes **every** layer of
+> the official Slots- og Kulturstyrelsen Kulturarv WMS
+> (`www.kulturarv.dk/ffgeoserver/public/wms`, GetCapabilities updateSequence
+> 526). Ten sublayers were added beside the three rows that already were
+> there — five more area views (all / administrative / heritage /
+> protection-zone / marine), the three line views (all / protected / marine),
+> the marine points and the service's own `relief` raster — all direct,
+> public, CC0 1.0, EPSG:3857 like their siblings, off by default, with the
+> vector rows answering GetFeatureInfo clicks (a small map-module fix makes
+> polygon/line records open their popup anchored on the click). Service
+> worker shell v290, config/module tag `20261028-kulturarv-sublayers`.
+
 > UI update (2026-10-27): every free Denmark layer is now styled exactly like
 > the other countries' rows (Romania's free rows are the template) — a glass
 > sublayer row with the pill on/off switch (`.apm-toggle-switch`), an
@@ -27,8 +39,12 @@ layer inside has its own switch and opacity slider:
   hillshade, exaggerated terrain (quickDHM); LiDAR terrain hillshade (DHM);
   LiDAR surface hillshade (DHM).
 - **Heritage**: Protected nature types (NBL § 3); Scheduled ancient monuments
-  (areas); Not protected ancient monuments; Protected ancient monuments.
-  The monument layers reuse the official Kulturarv public services (CC0), while
+  (areas); then the complete official Kulturarv WMS family as sublayers —
+  Finds and ancient monuments: all areas, administrative areas, heritage
+  areas, protection zones, marine areas, all lines, protected lines, marine
+  lines, protected points, unprotected points, marine points — and the
+  service's `relief` hillshade (14 rows in total). The monument layers
+  reuse the official Kulturarv public services (CC0), while
   the nature overlay comes from Danmarks Miljøportal.
 - **Historical maps**: Topographic map 1980–2001; Topographic map 1953–1976;
   Low measuring table leaves 1901–1971; High measuring table leaves 1842–1899;
@@ -123,6 +139,8 @@ a relative `import`/`require` that resolves outside `backend/`, and it runs the
 | `danish.fortidsminder` | overlay | WFS 2.0.0 → GeoJSON | no | — |
 | `danish.fortidsminder_punkt_fredet` | overlay | WMS 1.3.0 (direct) | no | — |
 | `danish.fortidsminder_punkt_ikkefredet` | overlay | WMS 1.3.0 (direct, z8+) | no | — |
+| `danish.fortidsminder_areal_*`, `danish.fortidsminder_linie_*`, `danish.fortidsminder_linje_fredet`, `danish.fortidsminder_punkt_marin` | overlay (Heritage sublayers) | WMS 1.3.0 (direct, z8–z9+) | no | — |
+| `danish.kulturarv_relief` | overlay (Heritage sublayer) | WMS 1.3.0 (direct, z6+) | no | — |
 | `danish.lidar_dhm_surface_hillshade` | overlay | WMS 1.3.0 | no | `DATAFORSYNINGEN_TOKEN` |
 | `danish.historic-witx` | base | XYZ | **disabled** | written permission from witx.dk |
 | `danish.witx_fundogfortidsminder_areal`, `danish.witx_fundogfortidsminder` | overlay | WFS | **disabled placeholders** | written permission from witx.dk |
@@ -265,6 +283,13 @@ whose licence is unclear or non-commercial ships `enabled: false` with
   numbers, link to the Fund og Fortidsminder page). If the cross-origin JSON
   answer is CORS-blocked, the same request is asked as HTML and rendered in a
   sandboxed iframe, so the record still shows.
+* **The other nine Kulturarv WMS rows (added 2026-10-28) follow the same
+  contract** — direct, tokenless, EPSG:3857, CC0 — with their layer names
+  taken from the live GetCapabilities (updateSequence 526): the broad views
+  open at z8, the dense area/line views at z9, and the relief raster at z6
+  (its native grid is unpublished, so it upscales beyond z14). Their
+  polygon/line records answer clicks too; `tools/verify-danish-capabilities.mjs`
+  re-checks all the names against the service from a network that may reach it.
 * **The kultur arv tile service answers failures with HTTP 200** — either a
   `ServiceExceptionReport` XML document or all-alpha tiles, which look like an
   empty layer until the tile is re-requested. `watchTiles` therefore re-issues

@@ -89,17 +89,7 @@ until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one
 
 | layer | kind | endpoint host | LAYERS | ver | format | CORS | proxy | availability guard |
 |---|---|---|---|---|---|---|---|---|
-| `danish.dtk25` | wms | same-origin | dtk25_2023 | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `danish.orto` | wms | same-origin | geodanmark_2025_12_5cm | 1.3.0 | image/png | unknown | auto | — same-origin |
-| `danish.hist_hoeje` | wms | same-origin | dtk_hoeje_maalebordsblade | 1.3.0 | image/png | unknown | auto | — same-origin |
-| `danish.hist_lave` | wms | same-origin | dtk_lave_maalebordsblade | 1.3.0 | image/png | unknown | auto | — same-origin |
-| `danish.hist_preussen` | wms | same-origin | dtk_preussen_maalebordsblade | 1.3.0 | image/png | unknown | auto | — same-origin |
-| `danish.topo4cm_1953_1976` | wms | same-origin | topo4cm_1953_1976 | 1.3.0 | image/png | unknown | auto | — same-origin |
-| `danish.topo4cm_1980_2001` | wms | same-origin | topo4cm_1980_2001 | 1.3.0 | image/png | unknown | auto | — same-origin |
-| `danish.orto_sommer_1999` | wms | same-origin | orto_sommer_1999 | 1.3.0 | image/png | unknown | auto | — same-origin |
-| `danish.orto_sommer_2002` | wms | same-origin | orto_sommer_2002 | 1.3.0 | image/png | unknown | auto | — same-origin |
-| `danish.orto_sommer_2005` | wms | same-origin | orto_sommer_2005 | 1.3.0 | image/png | unknown | auto | — same-origin |
-| `danish.orto_sommer_2008` | wms | same-origin | orto_sommer_2008 | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `danish.orto_foraar_2016` | wms | same-origin | geodanmark_2016_12_5cm | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `danish.orto_foraar_2017` | wms | same-origin | geodanmark_2017_12_5cm | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `danish.orto_foraar_2018` | wms | same-origin | geodanmark_2018_12_5cm | 1.3.0 | image/png | unknown | auto | — same-origin |
@@ -115,13 +105,33 @@ until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one
 | `albania.ortho_1999` | wms | geoportal.asig.gov.al | Orthophoto:Ortofoto_1999 | 1.3.0 | image/png | unknown | always | probe · ASIG / geoportal.asig.gov.al |
 | `sat.vhr-2018` | wms | image.discomap.eea.europa.eu | VHR_2018_WM | 1.1.1 | image/jpeg | no | always | probe · Copernicus Land / EEA discomap |
 | `sat.vhr-2021` | wms | image.discomap.eea.europa.eu | VHR_2021_LAEA | 1.1.1 | image/jpeg | no | always | probe · Copernicus Land / EEA discomap |
+| `danish.dtk25` | wms | same-origin | dtk25_2023 | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `danish.naturtyper` | wms | arealeditering-dist-geo.miljoeportal.dk | dai:bes_naturtyper | 1.3.0 | image/png | unknown | auto | probe · Danmarks Miljøportal |
 | `danish.fortidsminder_punkt_fredet` | wms | www.kulturarv.dk | fundogfortidsminder_punkt_fredet | 1.3.0 | image/png | unknown | auto | probe · Slots- og Kulturstyrelsen (Fund og Fortidsminder) |
 | `danish.fortidsminder_punkt_ikkefredet` | wms | www.kulturarv.dk | fundogfortidsminder_punkt_ikkefredet | 1.3.0 | image/png | unknown | auto | probe · Slots- og Kulturstyrelsen (Fund og Fortidsminder) |
+| `danish.fortidsminder_areal_alle` | wms | www.kulturarv.dk | fundogfortidsminder_areal_alle | 1.3.0 | image/png | unknown | auto | probe · Slots- og Kulturstyrelsen (Fund og Fortidsminder) |
+| `danish.fortidsminder_areal_adm` | wms | www.kulturarv.dk | fundogfortidsminder_areal_adm | 1.3.0 | image/png | unknown | auto | probe · Slots- og Kulturstyrelsen (Fund og Fortidsminder) |
+| `danish.fortidsminder_areal_ka` | wms | www.kulturarv.dk | fundogfortidsminder_areal_ka | 1.3.0 | image/png | unknown | auto | probe · Slots- og Kulturstyrelsen (Fund og Fortidsminder) |
+| `danish.fortidsminder_areal_beskyttelse` | wms | www.kulturarv.dk | fundogfortidsminder_areal_beskyttelse | 1.3.0 | image/png | unknown | auto | probe · Slots- og Kulturstyrelsen (Fund og Fortidsminder) |
+| `danish.fortidsminder_areal_marin` | wms | www.kulturarv.dk | fundogfortidsminder_areal_marin | 1.3.0 | image/png | unknown | auto | probe · Slots- og Kulturstyrelsen (Fund og Fortidsminder) |
+| `danish.fortidsminder_linie_alle` | wms | www.kulturarv.dk | fundogfortidsminder_linie_alle | 1.3.0 | image/png | unknown | auto | probe · Slots- og Kulturstyrelsen (Fund og Fortidsminder) |
+| `danish.fortidsminder_linje_fredet` | wms | www.kulturarv.dk | fundogfortidsminder_linje_fredet | 1.3.0 | image/png | unknown | auto | probe · Slots- og Kulturstyrelsen (Fund og Fortidsminder) |
+| `danish.fortidsminder_linie_marin` | wms | www.kulturarv.dk | fundogfortidsminder_linie_marin | 1.3.0 | image/png | unknown | auto | probe · Slots- og Kulturstyrelsen (Fund og Fortidsminder) |
+| `danish.fortidsminder_punkt_marin` | wms | www.kulturarv.dk | fundogfortidsminder_punkt_marin | 1.3.0 | image/png | unknown | auto | probe · Slots- og Kulturstyrelsen (Fund og Fortidsminder) |
+| `danish.kulturarv_relief` | wms | www.kulturarv.dk | relief | 1.3.0 | image/png | unknown | auto | probe · Slots- og Kulturstyrelsen (Fund og Fortidsminder) |
 | `danish.lidar_hillshade_historik` | wms | same-origin | hillshade_1_6m | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `danish.lidar_quickdhm_exaggerated` | wms | same-origin | quickDHM_skyggekort_terraen_overdrevet | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `danish.lidar_dhm_terrain_hillshade` | wms | same-origin | dhm_terraen_skyggekort | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `danish.lidar_dhm_surface_hillshade` | wms | same-origin | dhm_overflade_skyggekort | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.hist_hoeje` | wms | same-origin | dtk_hoeje_maalebordsblade | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.hist_lave` | wms | same-origin | dtk_lave_maalebordsblade | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.hist_preussen` | wms | same-origin | dtk_preussen_maalebordsblade | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.topo4cm_1953_1976` | wms | same-origin | topo4cm_1953_1976 | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.topo4cm_1980_2001` | wms | same-origin | topo4cm_1980_2001 | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.orto_sommer_1999` | wms | same-origin | orto_sommer_1999 | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.orto_sommer_2002` | wms | same-origin | orto_sommer_2002 | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.orto_sommer_2005` | wms | same-origin | orto_sommer_2005 | 1.3.0 | image/png | unknown | auto | — same-origin |
+| `danish.orto_sommer_2008` | wms | same-origin | orto_sommer_2008 | 1.3.0 | image/png | unknown | auto | — same-origin |
 | `finland.mml-hillshade` | wmts | karttamoottori.maanmittauslaitos.fi |  | 1.0.0 | image/png | unknown | auto | watch · Maanmittauslaitos (karttamoottori) |
 | `finland.maastokartta` | wmts | kartta.museoverkko.fi |  | 1.0.0 | image/png | unknown | auto | watch · Museovirasto (museoverkko) |
 | `finland.syke-rakennussuojelu-kohde` | wms | paikkatiedot.ymparisto.fi | Rakennussuojelukohteet | 1.1.1 | image/png | unknown | auto | probe · SYKE / paikkatiedot.ymparisto.fi |
@@ -214,7 +224,7 @@ until then **they must not**, and `W_DEAD_MOSAIC` (below) fails the audit if one
 | `premium.kdr-gb` | wms | pastmaps.cenagis.edu.pl | ihpan:kdr_gb_3857 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 | `premium.wig-100k` | wms | pastmaps.cenagis.edu.pl | ihpan:wig100k_3857 | 1.1.1 | image/png | unknown | auto | probe · CENAGIS / IH PAN |
 
-**96/96 third-party layers guarded** (78 probed, 18 watched); 0 self-handled + 27 same-origin, 1 runtime. 0 error(s), 0 warning(s).
+**106/106 third-party layers guarded** (88 probed, 18 watched); 0 self-handled + 27 same-origin, 1 runtime. 0 error(s), 0 warning(s).
 
 ### Small print
 
@@ -250,7 +260,7 @@ None — every checked invariant holds.
 | **Copernicus Land / EEA discomap** (`copernicus.discomap.eea.europa.eu`) | ArcGIS MapServer/WMSServer GetMap, WMS 1.1.1, JPEG (transparent=false) | 200 + an ArcGIS JSON error, or a blank JPEG outside the VHR footprint of that year | external | probe; the 3D view always goes through the same-origin proxy because the host sends no CORS headers |
 | **Copernicus Land / EEA discomap** (`image.discomap.eea.europa.eu`) | ArcGIS ImageServer/WMSServer GetMap, WMS 1.1.1, JPEG | 200 + an ArcGIS JSON error, or a blank JPEG where the LAEA-native mosaic has no data | external | probe; 3D through the proxy for the same reason |
 | **Danmarks Miljøportal** (`arealeditering-dist-geo.miljoeportal.dk`) | WMS 1.3.0 GetMap (CRS=EPSG:3857, uppercase KVP), dai:bes_naturtyper, PNG + transparent | 200 + ServiceExceptionReport XML (GeoServer answers exceptions with 200), or an all-alpha tile where the layer has no polygons. The capabilities advertise only EPSG:25832/CRS:84 while GetMap serves 3857 normally — judge by the tile, not by the capabilities | external (the agency GeoServer) | no guard row: js/danish-layers.js owns the switch and prints its own status line (the layer opts out with _detectlabNoGuard); the host is still named in js/wms-health.js HOSTS so a tile-error burst can be attributed |
-| **Slots- og Kulturstyrelsen (Fund og Fortidsminder)** (`www.kulturarv.dk`) | WMS 1.3.0 GetMap (CRS=EPSG:3857, uppercase KVP), fundogfortidsminder_punkt_fredet / _punkt_ikkefredet, PNG + transparent | 200 + ServiceExceptionReport XML (GeoServer answers exceptions with 200) or an all-alpha tile. The capabilities advertise EPSG:25832 and CRS:84 while GetMap serves EPSG:3857 normally (verified 2026-10-19) — judge by the tile, not by the capabilities. A renamed layer answers "Could not find layer …" the same way | external (the agency GeoServer) | no guard row: js/danish-layers.js owns the switch and prints its own status line (the layers opt out with _detectlabNoGuard); the host is still named in js/wms-health.js HOSTS so a tile-error burst can be attributed. A map click on an activated point layer is answered with a WMS 1.1.1 GetFeatureInfo (SRS=EPSG:4326, INFO_FORMAT=application/json, X/Y = pixel offset from the NW corner) that opens a popup on the nearest monument; when the cross-origin JSON is CORS-blocked, the same request with INFO_FORMAT=text/html is rendered in a sandboxed iframe. The GeoServer's own cold-cache 200-with-XML answer is retried once (2 s) by watchTiles when nothing has loaded yet |
+| **Slots- og Kulturstyrelsen (Fund og Fortidsminder)** (`www.kulturarv.dk`) | WMS 1.3.0 GetMap (CRS=EPSG:3857, uppercase KVP) for the whole fundogfortidsminder_* family (areas, lines, points) and relief, PNG + transparent | 200 + ServiceExceptionReport XML (GeoServer answers exceptions with 200) or an all-alpha tile. The capabilities advertise EPSG:25832 and CRS:84 while GetMap serves EPSG:3857 normally (verified 2026-10-19 for the point layers; the ten rows added 2026-10-28 follow the same GeoServer and their names come from the live GetCapabilities updateSequence 526) — judge by the tile, not by the capabilities. A renamed layer answers "Could not find layer …" the same way | external (the agency GeoServer) | no guard row: js/danish-layers.js owns the switch and prints its own status line (the layers opt out with _detectlabNoGuard); the host is still named in js/wms-health.js HOSTS so a tile-error burst can be attributed |
 | **ASIG / geoportal.asig.gov.al** (`geoportal.asig.gov.al`) | WMS 1.3.0 GetMap (CRS=EPSG:3857, STYLES=) for the exact catalogue Names the registry mirrors: orthophoto_2015:OrthoImagery_20cm, Orthophoto:Ortofoto_1999, akzm:zonat_mbrojtura_081124,akzm:monumentet_natyrore_07032023,iktk:zonatembrojturatetrashegimisekulturore_pike13_05_2026,iktk:zonatembrojturatetrashegimisekulturore22_07_2026 | HTTP 200 with XML/HTML or a body that is not a decodable image is a tile error; the same-origin production probe separately requires HTTP 200, image/*, at least 32 bytes, no exception body and no X-Map3D-Upstream failure marker. EPSG:3857 is retained as the request path but is not listed literally in the owner-supplied capabilities excerpt (which advertises EPSG:900913). | external (the agency GeoServer; government host, no SLA) | the rows are the ASIG catalogue in one Albania-only group (#albaniaRow) and are shown only while Albania is selected; the renderer owns error handling, retries EPSG:4326 after the configured EPSG:3857 error burst, then reports a persistent fallback failure on that layer row |
 | **SYKE / Finnish Environment Institute** (`paikkatiedot.ymparisto.fi`) | GeoServer WMS/WFS for Finnish protected-site layers | HTTP 200 ServiceException XML/HTML, a WFS JSON exception, or an empty image outside coverage | external (SYKE) | self-guarded Finland row reports failed tiles and retries through the Finland proxy |
 | **Ålands landskapsregering** (`kartor.regeringen.ax`) | ArcGIS REST export / query for Åland heritage layers | HTTP 200 JSON error or an image response without usable map pixels | external (Åland) | self-guarded Finland row reports failed tiles and retries through the Finland proxy |
@@ -287,70 +297,10 @@ Every one of these arrives as **HTTP 200**: the failure is in the body, which is
 One offline-built tile URL per layer. Albania uses `12/2273/1530` (Tirana); the other catalogue rows use the selected audit tile 12/2345/1480. These URLs do not prove live service or proxy behavior.
 
 ```
-# danish.dtk25 — Denmark · DTK25 topographic map (1:25,000)
-sample tile undefined
-2D https://api.dataforsyningen.dk/dtk_25_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dtk25_2023&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D /api/geo/dk-dtk25?service=WMS&request=GetMap&version=1.3.0&layers=dtk25_2023&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
-```
-```
 # danish.orto — Denmark · GeoDanmark orthophoto (spring)
 sample tile undefined
 2D https://services.datafordeler.dk/GeoDanmarkOrto/orto_foraar/1.0.0/WMS?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2025_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-orto?service=WMS&request=GetMap&version=1.3.0&layers=geodanmark_2025_12_5cm&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
-```
-```
-# danish.hist_hoeje — High measuring table leaves 1842-1899
-sample tile undefined
-2D https://api.dataforsyningen.dk/topo20_hoeje_maalebordsblade_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dtk_hoeje_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D /api/geo/dk-dtk25?layer=hist_hoeje&service=WMS&request=GetMap&version=1.3.0&layers=dtk_hoeje_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
-```
-```
-# danish.hist_lave — Low measuring table leaves 1901-1971
-sample tile undefined
-2D https://api.dataforsyningen.dk/topo20_lave_maalebordsblade_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dtk_lave_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D /api/geo/dk-dtk25?layer=hist_lave&service=WMS&request=GetMap&version=1.3.0&layers=dtk_lave_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
-```
-```
-# danish.hist_preussen — Prussian measuring table leaves 1877-1920
-sample tile undefined
-2D https://api.dataforsyningen.dk/topo25_preussen_maalebordsblade_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dtk_preussen_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D /api/geo/dk-dtk25?layer=hist_preussen&service=WMS&request=GetMap&version=1.3.0&layers=dtk_preussen_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
-```
-```
-# danish.topo4cm_1953_1976 — Topographic map 1953-1976
-sample tile undefined
-2D https://api.dataforsyningen.dk/topo4cm_1953_1976_DAF?service=WMS&request=GetMap&version=1.3.0&layers=topo4cm_1953_1976&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D /api/geo/dk-dtk25?layer=topo4cm_1953_1976&service=WMS&request=GetMap&version=1.3.0&layers=topo4cm_1953_1976&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
-```
-```
-# danish.topo4cm_1980_2001 — Topographic map 1980-2001
-sample tile undefined
-2D https://api.dataforsyningen.dk/topo4cm_1980_2001_DAF?service=WMS&request=GetMap&version=1.3.0&layers=topo4cm_1980_2001&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D /api/geo/dk-dtk25?layer=topo4cm_1980_2001&service=WMS&request=GetMap&version=1.3.0&layers=topo4cm_1980_2001&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
-```
-```
-# danish.orto_sommer_1999 — 1999
-sample tile undefined
-2D https://api.dataforsyningen.dk/wms/orto_sommer_1999?service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_1999&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D /api/geo/dk-dtk25?layer=orto_sommer_1999&service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_1999&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
-```
-```
-# danish.orto_sommer_2002 — 2002
-sample tile undefined
-2D https://api.dataforsyningen.dk/wms/orto_sommer_2002?service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2002&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D /api/geo/dk-dtk25?layer=orto_sommer_2002&service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2002&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
-```
-```
-# danish.orto_sommer_2005 — 2005
-sample tile undefined
-2D https://api.dataforsyningen.dk/wms/orto_sommer_2005?service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2005&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D /api/geo/dk-dtk25?layer=orto_sommer_2005&service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2005&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
-```
-```
-# danish.orto_sommer_2008 — 2008
-sample tile undefined
-2D https://api.dataforsyningen.dk/wms/orto_sommer_2008?service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2008&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
-3D /api/geo/dk-dtk25?layer=orto_sommer_2008&service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2008&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # danish.orto_foraar_2016 — Spring orthophoto 2016
@@ -443,6 +393,12 @@ sample tile undefined
 3D /api/map3d/tile?layer=sat.vhr-2021&z={z}&x={x}&y={y}
 ```
 ```
+# danish.dtk25 — Denmark · DTK25 topographic map (1:25,000)
+sample tile undefined
+2D https://api.dataforsyningen.dk/dtk_25_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dtk25_2023&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?service=WMS&request=GetMap&version=1.3.0&layers=dtk25_2023&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
 # danish.naturtyper — Denmark · Protected nature types (NBL § 3)
 sample tile undefined
 2D https://arealeditering-dist-geo.miljoeportal.dk/geoserver/wms?service=WMS&request=GetMap&version=1.3.0&layers=dai%3Abes_naturtyper&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
@@ -459,6 +415,66 @@ sample tile undefined
 sample tile undefined
 2D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_punkt_ikkefredet&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_punkt_ikkefredet&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.fortidsminder_areal_alle — Finds and ancient monuments (all areas)
+sample tile undefined
+2D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_areal_alle&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_areal_alle&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.fortidsminder_areal_adm — Finds and ancient monuments (administrative areas)
+sample tile undefined
+2D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_areal_adm&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_areal_adm&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.fortidsminder_areal_ka — Finds and ancient monuments (heritage areas)
+sample tile undefined
+2D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_areal_ka&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_areal_ka&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.fortidsminder_areal_beskyttelse — Finds and ancient monuments (protection zones)
+sample tile undefined
+2D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_areal_beskyttelse&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_areal_beskyttelse&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.fortidsminder_areal_marin — Finds and ancient monuments (marine areas)
+sample tile undefined
+2D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_areal_marin&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_areal_marin&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.fortidsminder_linie_alle — Finds and ancient monuments (all lines)
+sample tile undefined
+2D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_linie_alle&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_linie_alle&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.fortidsminder_linje_fredet — Protected ancient monuments (lines)
+sample tile undefined
+2D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_linje_fredet&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_linje_fredet&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.fortidsminder_linie_marin — Finds and ancient monuments (marine lines)
+sample tile undefined
+2D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_linie_marin&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_linie_marin&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.fortidsminder_punkt_marin — Finds and ancient monuments (marine points)
+sample tile undefined
+2D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_punkt_marin&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=fundogfortidsminder_punkt_marin&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.kulturarv_relief — Relief hillshade (Danish heritage service)
+sample tile undefined
+2D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=relief&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D https://www.kulturarv.dk/ffgeoserver/public/wms?service=WMS&request=GetMap&version=1.3.0&layers=relief&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # danish.lidar_hillshade_historik — LiDAR hillshade 1.6 m (DHM historik)
@@ -483,6 +499,60 @@ sample tile undefined
 sample tile undefined
 2D https://api.dataforsyningen.dk/dhm_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dhm_overflade_skyggekort&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
 3D /api/geo/dk-dtk25?layer=lidar_dhm_surface_hillshade&service=WMS&request=GetMap&version=1.3.0&layers=dhm_overflade_skyggekort&styles=&format=image%2Fpng&transparent=true&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.hist_hoeje — High measuring table leaves 1842-1899
+sample tile undefined
+2D https://api.dataforsyningen.dk/topo20_hoeje_maalebordsblade_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dtk_hoeje_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=hist_hoeje&service=WMS&request=GetMap&version=1.3.0&layers=dtk_hoeje_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.hist_lave — Low measuring table leaves 1901-1971
+sample tile undefined
+2D https://api.dataforsyningen.dk/topo20_lave_maalebordsblade_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dtk_lave_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=hist_lave&service=WMS&request=GetMap&version=1.3.0&layers=dtk_lave_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.hist_preussen — Prussian measuring table leaves 1877-1920
+sample tile undefined
+2D https://api.dataforsyningen.dk/topo25_preussen_maalebordsblade_DAF?service=WMS&request=GetMap&version=1.3.0&layers=dtk_preussen_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=hist_preussen&service=WMS&request=GetMap&version=1.3.0&layers=dtk_preussen_maalebordsblade&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.topo4cm_1953_1976 — Topographic map 1953-1976
+sample tile undefined
+2D https://api.dataforsyningen.dk/topo4cm_1953_1976_DAF?service=WMS&request=GetMap&version=1.3.0&layers=topo4cm_1953_1976&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=topo4cm_1953_1976&service=WMS&request=GetMap&version=1.3.0&layers=topo4cm_1953_1976&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.topo4cm_1980_2001 — Topographic map 1980-2001
+sample tile undefined
+2D https://api.dataforsyningen.dk/topo4cm_1980_2001_DAF?service=WMS&request=GetMap&version=1.3.0&layers=topo4cm_1980_2001&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=topo4cm_1980_2001&service=WMS&request=GetMap&version=1.3.0&layers=topo4cm_1980_2001&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.orto_sommer_1999 — 1999
+sample tile undefined
+2D https://api.dataforsyningen.dk/wms/orto_sommer_1999?service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_1999&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=orto_sommer_1999&service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_1999&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.orto_sommer_2002 — 2002
+sample tile undefined
+2D https://api.dataforsyningen.dk/wms/orto_sommer_2002?service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2002&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=orto_sommer_2002&service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2002&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.orto_sommer_2005 — 2005
+sample tile undefined
+2D https://api.dataforsyningen.dk/wms/orto_sommer_2005?service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2005&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=orto_sommer_2005&service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2005&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
+```
+```
+# danish.orto_sommer_2008 — 2008
+sample tile undefined
+2D https://api.dataforsyningen.dk/wms/orto_sommer_2008?service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2008&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox=2905830.0672892593,5547493.764824953,2915614.006909762,5557277.704445455
+3D /api/geo/dk-dtk25?layer=orto_sommer_2008&service=WMS&request=GetMap&version=1.3.0&layers=orto_sommer_2008&styles=&format=image%2Fpng&transparent=false&crs=EPSG%3A3857&width=256&height=256&bbox={bbox-epsg-3857}
 ```
 ```
 # finland.mml-hillshade — Finland · MML LiDAR hillshade

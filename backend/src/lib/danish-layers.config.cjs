@@ -113,7 +113,7 @@
     /* Read at *runtime* by the proxy functions and in the audit; a layer is
      * only credential-gated when the deployment really needs a variable. */
     var CONFIG = {
-        version: '20261027-danish-row-style',
+        version: '20261028-kulturarv-sublayers',
 
         /* Country this group belongs to. Drives the country filter (rows are
          * shown when Denmark is the selected country) and the coverage check. */
@@ -151,7 +151,19 @@
                 mount: 'danishLidarLayers',
                 layers: ['lidar_hillshade_historik', 'lidar_quickdhm_exaggerated', 'lidar_dhm_terrain_hillshade', 'lidar_dhm_surface_hillshade'] },
             { id: 'heritage', title: { da: 'Kulturarv', en: 'Heritage' },
-                layers: ['naturtyper', 'fortidsminder', 'fortidsminder_punkt_ikkefredet', 'fortidsminder_punkt_fredet'] },
+                /* Every layer of the official Kulturarv WMS family the panel
+                 * exposes (2026-10-28): the three rows that always were
+                 * there, then the remaining ten names of the service's
+                 * GetCapabilities (updateSequence 526) — areas, lines,
+                 * points, and the service's own relief raster — grouped
+                 * areas → lines → points → relief so the section reads like
+                 * the register itself. */
+                layers: ['naturtyper', 'fortidsminder',
+                    'fortidsminder_areal_alle', 'fortidsminder_areal_adm', 'fortidsminder_areal_ka',
+                    'fortidsminder_areal_beskyttelse', 'fortidsminder_areal_marin',
+                    'fortidsminder_linie_alle', 'fortidsminder_linje_fredet', 'fortidsminder_linie_marin',
+                    'fortidsminder_punkt_fredet', 'fortidsminder_punkt_ikkefredet', 'fortidsminder_punkt_marin',
+                    'kulturarv_relief'] },
             { id: 'historical', title: { da: 'Historiske kort', en: 'Historical maps' },
                 layers: ['topo4cm_1980_2001', 'topo4cm_1953_1976', 'hist_lave', 'hist_hoeje', 'hist_preussen', 'dtk25'] },
             { id: 'orthophoto', title: { da: 'Ortofoto', en: 'Ortophoto' },
@@ -421,9 +433,10 @@
                 sourcePage: 'https://slks.dk/omraader/kulturarv/databaserne/til-udviklere/webservices',
                 bounds: [[54.42, 7.99], [57.78, 15.6]],
                 notes: 'Official upstream replaces the unauthorised geoserver.witx.dk mirror the brief ' +
-                    'mentioned (witx:FundOgFortidsminderAreal). Other layers of the same service: ' +
-                    'areal_beskyttelse (protection zones), areal_ka (heritage areas), areal_adm, ' +
-                    'punkt_fredet, linie_alle — set `layers` to switch.',
+                    'mentioned (witx:FundOgFortidsminderAreal). The whole service family now has its own ' +
+                    'rows in this section: areal_alle, areal_adm, areal_ka, areal_beskyttelse, areal_marin, ' +
+                    'linie_alle, linje_fredet, linie_marin, punkt_fredet, punkt_ikkefredet, punkt_marin ' +
+                    'and the kulturarv_relief raster — see the rows below.',
                 /* The same service can answer a browser directly: WFS 2.0.0
                  * takes the bbox in degrees with the CRS spelled out and
                  * returns EPSG:4326 GeoJSON, so a workstation without the
@@ -570,6 +583,523 @@
                     linkField: 'url',
                     linkLabel: { da: 'Åbn i Fund og Fortidsminder', en: 'Open in Fund og Fortidsminder' }
                 },
+                wfs: null,
+                permission: { required: false, note: '' }
+            },
+            /* ── 6c. Fund og Fortidsminder — the REST of the official WMS
+             * family, as Heritage sublayers (2026-10-28) ──────────────────
+             * The public GeoServer's GetCapabilities (updateSequence 526)
+             * publishes thirteen named layers; until now the panel carried
+             * three of them (the protected-areas WFS row above and the two
+             * point rows). The rows below add the remaining TEN — five more
+             * area views, the three line views, the marine points and the
+             * service's own relief raster — so the whole register is
+             * switchable from the Heritage section. Same contract as the
+             * point rows: read straight from the agency GeoServer (public,
+             * tokenless — Leaflet draws the tiles as plain <img>, which
+             * needs no CORS), requested in EPSG:3857 like every other row
+             * (the root capabilities advertise it, and the same GeoServer
+             * answered 3857 GetMap for the point layers, verified
+             * 2026-10-19), CC0 1.0 with the Slots- og Kulturstyrelsen
+             * attribution. Every layer name below comes from the live
+             * capabilities document (checked 2026-10-28). The nine vector
+             * layers are queryable="1": a click answers WMS GetFeatureInfo
+             * exactly like the point rows (a polygon/line record anchors on
+             * the click and still shows type, dating, register numbers and
+             * the link to the register). The relief raster is not
+             * queryable and carries no identify block. */
+
+            /* Areas — the polygon family (WMS twin of the WFS row, plus the
+             * views the WFS row does not expose). ScaleHints in the
+             * capabilities stop at 1:250 000 (≈z10-11), but the densest
+             * views still open at z9 and the broad ones at z8 so a switch
+             * does something at a Denmark-wide view (z7-9) like the point
+             * rows do. */
+            {
+                id: 'fortidsminder_areal_alle',
+                panelGroup: 'heritage',
+                title: {
+                    da: 'Danmark · Fund og fortidsminder (alle arealer)',
+                    en: 'Finds and ancient monuments (all areas)'
+                },
+                group: 'overlay',
+                type: 'wms',
+                url: 'https://www.kulturarv.dk/ffgeoserver/public/wms',
+                upstream: null,
+                layers: 'fundogfortidsminder_areal_alle',
+                crs: 'EPSG:3857',
+                format: 'image/png',
+                transparent: true,
+                tiled: true,
+                tileSize: 256,
+                version: '1.3.0',
+                /* The densest polygon view of the register (“Alle arealer”,
+                 * source view v_mapservice_areal_lokalitet_alle): one
+                 * server-styled tile per view, gated one level above the
+                 * broader administrative/heritage areas. */
+                minZoom: 9,
+                maxZoom: 22,
+                maxNativeZoom: 19,
+                attribution: 'Fund og Fortidsminder © <a href="https://slks.dk/" target="_blank" ' +
+                    'rel="noopener">Slots- og Kulturstyrelsen</a> (CC0 1.0)',
+                opacity: 0.85,
+                defaultOn: false,
+                enabled: true,
+                requiresCredentials: [],
+                auth: 'none',
+                credentialsNote: { da: '', en: '' },
+                provider: 'Slots- og Kulturstyrelsen (Danish Agency for Culture and Palaces)',
+                licence: 'CC0 1.0',
+                licenceUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
+                sourcePage: 'https://slks.dk/omraader/kulturarv/databaserne/til-udviklere/webservices',
+                bounds: [[54.42, 7.99], [57.78, 15.6]],
+                notes: 'All locality areas of the register (GetCapabilities style “Lokaliteter, ' +
+                    'arealer”); the raster twin of the fortidsminder WFS row across the whole ' +
+                    'register, not only the protected sites. Layer name from the live ' +
+                    'GetCapabilities (updateSequence 526, checked 2026-10-28); the polygon ' +
+                    'record answers GetFeatureInfo clicks like the point rows.',
+                identify: {
+                    fields: ['anlaegstype', 'datering', 'frednr', 'stednr'],
+                    linkField: 'url',
+                    linkLabel: { da: 'Åbn i Fund og Fortidsminder', en: 'Open in Fund og Fortidsminder' }
+                },
+                wfs: null,
+                permission: { required: false, note: '' }
+            },
+            {
+                id: 'fortidsminder_areal_adm',
+                panelGroup: 'heritage',
+                title: {
+                    da: 'Danmark · Fund og fortidsminder (administrative arealer)',
+                    en: 'Finds and ancient monuments (administrative areas)'
+                },
+                group: 'overlay',
+                type: 'wms',
+                url: 'https://www.kulturarv.dk/ffgeoserver/public/wms',
+                upstream: null,
+                layers: 'fundogfortidsminder_areal_adm',
+                crs: 'EPSG:3857',
+                format: 'image/png',
+                transparent: true,
+                tiled: true,
+                tileSize: 256,
+                version: '1.3.0',
+                minZoom: 8,
+                maxZoom: 22,
+                maxNativeZoom: 19,
+                attribution: 'Fund og Fortidsminder © <a href="https://slks.dk/" target="_blank" ' +
+                    'rel="noopener">Slots- og Kulturstyrelsen</a> (CC0 1.0)',
+                opacity: 0.85,
+                defaultOn: false,
+                enabled: true,
+                requiresCredentials: [],
+                auth: 'none',
+                credentialsNote: { da: '', en: '' },
+                provider: 'Slots- og Kulturstyrelsen (Danish Agency for Culture and Palaces)',
+                licence: 'CC0 1.0',
+                licenceUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
+                sourcePage: 'https://slks.dk/omraader/kulturarv/databaserne/til-udviklere/webservices',
+                bounds: [[54.42, 7.99], [57.78, 15.6]],
+                notes: 'The administrative areas of the register’s localities (GetCapabilities ' +
+                    'style “Lokaliteter, administrative arealer”, abstract “Alle administrative ' +
+                    'arealer”, source view v_mapservice_ad_areal_lokalitet). Layer name from the ' +
+                    'live GetCapabilities (updateSequence 526, checked 2026-10-28).',
+                identify: {
+                    fields: ['anlaegstype', 'datering', 'frednr', 'stednr'],
+                    linkField: 'url',
+                    linkLabel: { da: 'Åbn i Fund og Fortidsminder', en: 'Open in Fund og Fortidsminder' }
+                },
+                wfs: null,
+                permission: { required: false, note: '' }
+            },
+            {
+                id: 'fortidsminder_areal_ka',
+                panelGroup: 'heritage',
+                title: {
+                    da: 'Danmark · Fund og fortidsminder (kulturarvsarealer)',
+                    en: 'Finds and ancient monuments (heritage areas)'
+                },
+                group: 'overlay',
+                type: 'wms',
+                url: 'https://www.kulturarv.dk/ffgeoserver/public/wms',
+                upstream: null,
+                layers: 'fundogfortidsminder_areal_ka',
+                crs: 'EPSG:3857',
+                format: 'image/png',
+                transparent: true,
+                tiled: true,
+                tileSize: 256,
+                version: '1.3.0',
+                minZoom: 9,
+                maxZoom: 22,
+                maxNativeZoom: 19,
+                attribution: 'Fund og Fortidsminder © <a href="https://slks.dk/" target="_blank" ' +
+                    'rel="noopener">Slots- og Kulturstyrelsen</a> (CC0 1.0)',
+                opacity: 0.85,
+                defaultOn: false,
+                enabled: true,
+                requiresCredentials: [],
+                auth: 'none',
+                credentialsNote: { da: '', en: '' },
+                provider: 'Slots- og Kulturstyrelsen (Danish Agency for Culture and Palaces)',
+                licence: 'CC0 1.0',
+                licenceUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
+                sourcePage: 'https://slks.dk/omraader/kulturarv/databaserne/til-udviklere/webservices',
+                bounds: [[54.42, 7.99], [57.78, 15.6]],
+                notes: 'The cultural-heritage areas of the register (GetCapabilities style ' +
+                    '“Lokaliteter, kulturarvsarealer”, abstract “Alle kulturarvsarealer”, source ' +
+                    'view v_mapservice_ka_areal_lokalitet). Layer name from the live ' +
+                    'GetCapabilities (updateSequence 526, checked 2026-10-28).',
+                identify: {
+                    fields: ['anlaegstype', 'datering', 'frednr', 'stednr'],
+                    linkField: 'url',
+                    linkLabel: { da: 'Åbn i Fund og Fortidsminder', en: 'Open in Fund og Fortidsminder' }
+                },
+                wfs: null,
+                permission: { required: false, note: '' }
+            },
+            {
+                id: 'fortidsminder_areal_beskyttelse',
+                panelGroup: 'heritage',
+                title: {
+                    da: 'Danmark · Fund og fortidsminder (beskyttelseszoner)',
+                    en: 'Finds and ancient monuments (protection zones)'
+                },
+                group: 'overlay',
+                type: 'wms',
+                url: 'https://www.kulturarv.dk/ffgeoserver/public/wms',
+                upstream: null,
+                layers: 'fundogfortidsminder_areal_beskyttelse',
+                crs: 'EPSG:3857',
+                format: 'image/png',
+                transparent: true,
+                tiled: true,
+                tileSize: 256,
+                version: '1.3.0',
+                minZoom: 9,
+                maxZoom: 22,
+                maxNativeZoom: 19,
+                attribution: 'Fund og Fortidsminder © <a href="https://slks.dk/" target="_blank" ' +
+                    'rel="noopener">Slots- og Kulturstyrelsen</a> (CC0 1.0)',
+                opacity: 0.85,
+                defaultOn: false,
+                enabled: true,
+                requiresCredentials: [],
+                auth: 'none',
+                credentialsNote: { da: '', en: '' },
+                provider: 'Slots- og Kulturstyrelsen (Danish Agency for Culture and Palaces)',
+                licence: 'CC0 1.0',
+                licenceUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
+                sourcePage: 'https://slks.dk/omraader/kulturarv/databaserne/til-udviklere/webservices',
+                bounds: [[54.42, 7.99], [57.78, 15.6]],
+                notes: 'The protection zones around the register’s localities (GetCapabilities ' +
+                    'style “Lokaliteter, beskyttelseslinier”, abstract “Alle beskyttelseslinier”, ' +
+                    'source view v_mapservice_beskyttelses_areal_lokalitet — the zones are ' +
+                    'published as polygons). Layer name from the live GetCapabilities ' +
+                    '(updateSequence 526, checked 2026-10-28).',
+                identify: {
+                    fields: ['anlaegstype', 'datering', 'frednr', 'stednr'],
+                    linkField: 'url',
+                    linkLabel: { da: 'Åbn i Fund og Fortidsminder', en: 'Open in Fund og Fortidsminder' }
+                },
+                wfs: null,
+                permission: { required: false, note: '' }
+            },
+            {
+                id: 'fortidsminder_areal_marin',
+                panelGroup: 'heritage',
+                title: {
+                    da: 'Danmark · Fund og fortidsminder (marine arealer)',
+                    en: 'Finds and ancient monuments (marine areas)'
+                },
+                group: 'overlay',
+                type: 'wms',
+                url: 'https://www.kulturarv.dk/ffgeoserver/public/wms',
+                upstream: null,
+                layers: 'fundogfortidsminder_areal_marin',
+                crs: 'EPSG:3857',
+                format: 'image/png',
+                transparent: true,
+                tiled: true,
+                tileSize: 256,
+                version: '1.3.0',
+                /* Underwater/offshore registrations: visible from the
+                 * Denmark view on so the offshore zones show at once. */
+                minZoom: 8,
+                maxZoom: 22,
+                maxNativeZoom: 19,
+                attribution: 'Fund og Fortidsminder © <a href="https://slks.dk/" target="_blank" ' +
+                    'rel="noopener">Slots- og Kulturstyrelsen</a> (CC0 1.0)',
+                opacity: 0.85,
+                defaultOn: false,
+                enabled: true,
+                requiresCredentials: [],
+                auth: 'none',
+                credentialsNote: { da: '', en: '' },
+                provider: 'Slots- og Kulturstyrelsen (Danish Agency for Culture and Palaces)',
+                licence: 'CC0 1.0',
+                licenceUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
+                sourcePage: 'https://slks.dk/omraader/kulturarv/databaserne/til-udviklere/webservices',
+                bounds: [[54.42, 7.99], [57.78, 15.6]],
+                notes: 'The marine (offshore) locality areas — finds and monuments in Danish ' +
+                    'waters (GetCapabilities style “Lokaliteter marine, arealer”, source view ' +
+                    'v_mapservice_areal_lokalitet_marin). The layer itself covers far beyond ' +
+                    'the land bbox shown here. Layer name from the live GetCapabilities ' +
+                    '(updateSequence 526, checked 2026-10-28).',
+                identify: {
+                    fields: ['anlaegstype', 'datering', 'frednr', 'stednr'],
+                    linkField: 'url',
+                    linkLabel: { da: 'Åbn i Fund og Fortidsminder', en: 'Open in Fund og Fortidsminder' }
+                },
+                wfs: null,
+                permission: { required: false, note: '' }
+            },
+
+            /* Lines — the register's line features (boundaries, dikes,
+             * trenches…), all three views of the capabilities. */
+            {
+                id: 'fortidsminder_linie_alle',
+                panelGroup: 'heritage',
+                title: {
+                    da: 'Danmark · Fund og fortidsminder (alle linjer)',
+                    en: 'Finds and ancient monuments (all lines)'
+                },
+                group: 'overlay',
+                type: 'wms',
+                url: 'https://www.kulturarv.dk/ffgeoserver/public/wms',
+                upstream: null,
+                layers: 'fundogfortidsminder_linie_alle',
+                crs: 'EPSG:3857',
+                format: 'image/png',
+                transparent: true,
+                tiled: true,
+                tileSize: 256,
+                version: '1.3.0',
+                minZoom: 9,
+                maxZoom: 22,
+                maxNativeZoom: 19,
+                attribution: 'Fund og Fortidsminder © <a href="https://slks.dk/" target="_blank" ' +
+                    'rel="noopener">Slots- og Kulturstyrelsen</a> (CC0 1.0)',
+                opacity: 0.9,
+                defaultOn: false,
+                enabled: true,
+                requiresCredentials: [],
+                auth: 'none',
+                credentialsNote: { da: '', en: '' },
+                provider: 'Slots- og Kulturstyrelsen (Danish Agency for Culture and Palaces)',
+                licence: 'CC0 1.0',
+                licenceUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
+                sourcePage: 'https://slks.dk/omraader/kulturarv/databaserne/til-udviklere/webservices',
+                bounds: [[54.42, 7.99], [57.78, 15.6]],
+                notes: 'All line features of the register (GetCapabilities style “Lokalitet ' +
+                    'linier”, abstract “Alle linier”, source view v_mapservice_linie_lokalitet_alle). ' +
+                    'Layer name from the live GetCapabilities (updateSequence 526, checked ' +
+                    '2026-10-28).',
+                identify: {
+                    fields: ['anlaegstype', 'datering', 'frednr', 'stednr'],
+                    linkField: 'url',
+                    linkLabel: { da: 'Åbn i Fund og Fortidsminder', en: 'Open in Fund og Fortidsminder' }
+                },
+                wfs: null,
+                permission: { required: false, note: '' }
+            },
+            {
+                id: 'fortidsminder_linje_fredet',
+                panelGroup: 'heritage',
+                title: {
+                    da: 'Danmark · Fredede fortidsminder (linjer)',
+                    en: 'Protected ancient monuments (lines)'
+                },
+                group: 'overlay',
+                type: 'wms',
+                url: 'https://www.kulturarv.dk/ffgeoserver/public/wms',
+                upstream: null,
+                /* Note the service's spelling: `linje` (with a j) for the
+                 * protected-lines view, `linie` (no j) for the other two. */
+                layers: 'fundogfortidsminder_linje_fredet',
+                crs: 'EPSG:3857',
+                format: 'image/png',
+                transparent: true,
+                tiled: true,
+                tileSize: 256,
+                version: '1.3.0',
+                minZoom: 8,
+                maxZoom: 22,
+                maxNativeZoom: 19,
+                attribution: 'Fund og Fortidsminder © <a href="https://slks.dk/" target="_blank" ' +
+                    'rel="noopener">Slots- og Kulturstyrelsen</a> (CC0 1.0)',
+                opacity: 0.9,
+                defaultOn: false,
+                enabled: true,
+                requiresCredentials: [],
+                auth: 'none',
+                credentialsNote: { da: '', en: '' },
+                provider: 'Slots- og Kulturstyrelsen (Danish Agency for Culture and Palaces)',
+                licence: 'CC0 1.0',
+                licenceUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
+                sourcePage: 'https://slks.dk/omraader/kulturarv/databaserne/til-udviklere/webservices',
+                bounds: [[54.42, 7.99], [57.78, 15.6]],
+                notes: 'The protected (scheduled) line features — the line twin of the ' +
+                    'fortidsminder areas row (source view v_mapservice_linje_lokalitet_freded). ' +
+                    'Layer name from the live GetCapabilities (updateSequence 526, checked ' +
+                    '2026-10-28); the line record answers GetFeatureInfo clicks like the point rows.',
+                identify: {
+                    fields: ['anlaegstype', 'datering', 'frednr', 'stednr'],
+                    linkField: 'url',
+                    linkLabel: { da: 'Åbn i Fund og Fortidsminder', en: 'Open in Fund og Fortidsminder' }
+                },
+                wfs: null,
+                permission: { required: false, note: '' }
+            },
+            {
+                id: 'fortidsminder_linie_marin',
+                panelGroup: 'heritage',
+                title: {
+                    da: 'Danmark · Fund og fortidsminder (marine linjer)',
+                    en: 'Finds and ancient monuments (marine lines)'
+                },
+                group: 'overlay',
+                type: 'wms',
+                url: 'https://www.kulturarv.dk/ffgeoserver/public/wms',
+                upstream: null,
+                layers: 'fundogfortidsminder_linie_marin',
+                crs: 'EPSG:3857',
+                format: 'image/png',
+                transparent: true,
+                tiled: true,
+                tileSize: 256,
+                version: '1.3.0',
+                minZoom: 8,
+                maxZoom: 22,
+                maxNativeZoom: 19,
+                attribution: 'Fund og Fortidsminder © <a href="https://slks.dk/" target="_blank" ' +
+                    'rel="noopener">Slots- og Kulturstyrelsen</a> (CC0 1.0)',
+                opacity: 0.9,
+                defaultOn: false,
+                enabled: true,
+                requiresCredentials: [],
+                auth: 'none',
+                credentialsNote: { da: '', en: '' },
+                provider: 'Slots- og Kulturstyrelsen (Danish Agency for Culture and Palaces)',
+                licence: 'CC0 1.0',
+                licenceUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
+                sourcePage: 'https://slks.dk/omraader/kulturarv/databaserne/til-udviklere/webservices',
+                bounds: [[54.42, 7.99], [57.78, 15.6]],
+                notes: 'The marine (offshore) line features (GetCapabilities style “Lokalitet ' +
+                    'marine linier”, source view v_mapservice_linie_lokalitet_marin). Layer name ' +
+                    'from the live GetCapabilities (updateSequence 526, checked 2026-10-28).',
+                identify: {
+                    fields: ['anlaegstype', 'datering', 'frednr', 'stednr'],
+                    linkField: 'url',
+                    linkLabel: { da: 'Åbn i Fund og Fortidsminder', en: 'Open in Fund og Fortidsminder' }
+                },
+                wfs: null,
+                permission: { required: false, note: '' }
+            },
+
+            /* Points — only the marine view was still missing (the two
+             * domestic point rows are above, section 6b). */
+            {
+                id: 'fortidsminder_punkt_marin',
+                panelGroup: 'heritage',
+                title: {
+                    da: 'Danmark · Fund og fortidsminder (marine punkter)',
+                    en: 'Finds and ancient monuments (marine points)'
+                },
+                group: 'overlay',
+                type: 'wms',
+                url: 'https://www.kulturarv.dk/ffgeoserver/public/wms',
+                upstream: null,
+                layers: 'fundogfortidsminder_punkt_marin',
+                crs: 'EPSG:3857',
+                format: 'image/png',
+                transparent: true,
+                tiled: true,
+                tileSize: 256,
+                version: '1.3.0',
+                minZoom: 8,
+                maxZoom: 22,
+                maxNativeZoom: 19,
+                attribution: 'Fund og Fortidsminder © <a href="https://slks.dk/" target="_blank" ' +
+                    'rel="noopener">Slots- og Kulturstyrelsen</a> (CC0 1.0)',
+                opacity: 1,
+                defaultOn: false,
+                enabled: true,
+                requiresCredentials: [],
+                auth: 'none',
+                credentialsNote: { da: '', en: '' },
+                provider: 'Slots- og Kulturstyrelsen (Danish Agency for Culture and Palaces)',
+                licence: 'CC0 1.0',
+                licenceUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
+                sourcePage: 'https://slks.dk/omraader/kulturarv/databaserne/til-udviklere/webservices',
+                bounds: [[54.42, 7.99], [57.78, 15.6]],
+                notes: 'The marine (offshore) locality points (GetCapabilities style ' +
+                    '“Lokaliteter marine, punkter”, source view v_mapservice_punkt_lokalitet_marin) — ' +
+                    'the third point view of the register. Layer name from the live ' +
+                    'GetCapabilities (updateSequence 526, checked 2026-10-28); its dots answer ' +
+                    'GetFeatureInfo clicks like the two domestic point rows.',
+                identify: {
+                    fields: ['anlaegstype', 'datering', 'frednr', 'stednr'],
+                    linkField: 'url',
+                    linkLabel: { da: 'Åbn i Fund og Fortidsminder', en: 'Open in Fund og Fortidsminder' }
+                },
+                wfs: null,
+                permission: { required: false, note: '' }
+            },
+
+            /* The service's own terrain relief — the one raster of the
+             * capabilities. Native grid EPSG:3044 (an ImageMosaic, like the
+             * Denmark-wide elevation mosaics), served through the root's
+             * inherited EPSG:3857 exactly like the vector layers. Not
+             * queryable, therefore no identify block. */
+            {
+                id: 'kulturarv_relief',
+                panelGroup: 'heritage',
+                title: {
+                    da: 'Danmark · Reliefskyggekort (kulturarv)',
+                    en: 'Relief hillshade (Danish heritage service)'
+                },
+                group: 'overlay',
+                type: 'wms',
+                url: 'https://www.kulturarv.dk/ffgeoserver/public/wms',
+                upstream: null,
+                layers: 'relief',
+                crs: 'EPSG:3857',
+                format: 'image/png',
+                /* Transparent PNG so anything the mosaic does not cover
+                 * (open sea, edges) lets the basemap through; the slider
+                 * blends the relief over the map like every other overlay. */
+                transparent: true,
+                tiled: true,
+                tileSize: 256,
+                version: '1.3.0',
+                minZoom: 6,
+                maxZoom: 22,
+                /* The mosaic's native pixel size is not published (no
+                 * ScaleHint in the capabilities): z14 ≈ 5 m/pixel at Danish
+                 * latitudes, beyond which Leaflet upscales the last real
+                 * tile instead of hammering the GeoServer for deeper ones. */
+                maxNativeZoom: 14,
+                attribution: 'Relief © <a href="https://slks.dk/" target="_blank" ' +
+                    'rel="noopener">Slots- og Kulturstyrelsen</a> (CC0 1.0)',
+                opacity: 1,
+                defaultOn: false,
+                enabled: true,
+                requiresCredentials: [],
+                auth: 'none',
+                credentialsNote: { da: '', en: '' },
+                provider: 'Slots- og Kulturstyrelsen (Danish Agency for Culture and Palaces)',
+                licence: 'CC0 1.0',
+                licenceUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
+                sourcePage: 'https://slks.dk/omraader/kulturarv/databaserne/til-udviklere/webservices',
+                bounds: [[54.42, 7.99], [57.78, 15.6]],
+                notes: 'The heritage service’s own Denmark-wide relief raster (GetCapabilities ' +
+                    'layer `relief`, ImageMosaic with native SRS EPSG:3044, style “Default ' +
+                    'Raster”) — a shaded terrain backdrop from the same agency as the register ' +
+                    'rows. Layer name from the live GetCapabilities (updateSequence 526, checked ' +
+                    '2026-10-28); drawn in EPSG:3857 like every other row. Not queryable, so ' +
+                    'there is no click identify.',
+                identify: null,
                 wfs: null,
                 permission: { required: false, note: '' }
             },

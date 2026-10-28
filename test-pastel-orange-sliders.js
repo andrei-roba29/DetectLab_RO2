@@ -91,14 +91,16 @@ assert(/var\s+PERIOD_THUMB_SIZE\s*=\s*13\s*;/.test(voJs),
 console.log('  ✓ slimmer geometry verified for both web desktop and PWA');
 
 /* 5. Cache-busting & SW precache */
-const TAG = '20261025-pastel-orange-sliders';
-for (const asset of [
-    'css/styles.css',
-    'css/map3d-terrain.css',
-    'css/other-maps.css',
-    'js/vertical-opacity-control.js'
-]) {
-    const url = asset + '?v=' + TAG;
+/* Each asset carries its own live tag — they moved on independently after
+ * this change; index.html and sw.js must agree on the exact URL. */
+const TAGS = {
+    'css/styles.css': '20261027-danish-row-style',
+    'css/map3d-terrain.css': '20261026-pwa-3d-button-size',
+    'css/other-maps.css': '20261026-nls-find',
+    'js/vertical-opacity-control.js': '20261026-flat-country-sections'
+};
+for (const asset of Object.keys(TAGS)) {
+    const url = asset + '?v=' + TAGS[asset];
     assert(indexHtml.includes(url), 'index.html loads ' + url);
     assert(swJs.includes("'" + url + "'"), 'sw.js precaches ' + url);
 }

@@ -2,11 +2,13 @@
  * test-danish-layers.js
  * ───────────────────────────────────────────────────────────────────────────
  * Test suite for the Danish layers (Denmark):
- *   1. the CONFIG contract (js/danish-layers.config.js) — six layers, the four
- *      that are wired plus the official heritage WFS, the disabled third-party
- *      placeholder, DA+EN titles, licences, attribution, credentials declared as
- *      environment variables, exactly one Danish base map on by default, and no
- *      secret anywhere near the browser;
+ *   1. the CONFIG contract (js/danish-layers.config.js) — the full Danish
+ *      catalogue: the original wired layers, the official heritage WFS, the
+ *      disabled third-party placeholders AND the complete official
+ *      Kulturarv WMS family (every layer of the service's GetCapabilities,
+ *      2026-10-28), DA+EN titles, licences, attribution, credentials
+ *      declared as environment variables, exactly one Danish base map on by
+ *      default, and no secret anywhere near the browser;
  *   2. the shared registry mirror (js/layer-registry.js) — the same layers in the
  *      catalogue the diagnostics and the offline audit read, with the same
  *      LAYERS / format / version / CRS, and a documented guard opt-out;
@@ -55,7 +57,7 @@ const TOKEN = 'test-token-not-a-credential';
  * 1. the config
  * ══════════════════════════════════════════════════════════════════════════ */
 {
-    assert.strictEqual(CONFIG.layers.length, 33, 'the existing Danish layers plus the requested LiDAR, heritage and historical layers are configured');
+    assert.strictEqual(CONFIG.layers.length, 43, 'the existing Danish layers plus the requested LiDAR, heritage and historical layers plus the ten Kulturarv sublayers are configured');
     assert.strictEqual(CONFIG.country, 'DK');
     assert.deepStrictEqual(CONFIG.layers.slice(0, 6).map((l) => l.id),
         ['dtk25', 'orto', 'naturtyper', 'osm', 'historic-witx', 'fortidsminder']);
@@ -70,7 +72,12 @@ const TOKEN = 'test-token-not-a-credential';
     assert.strictEqual(CONFIG.byId('witx_fundogfortidsminder').layers, 'witx:FundOgFortidsminder');
     assert.deepStrictEqual(CONFIG.panelGroups.map((group) => [group.id, group.title.en, group.layers]), [
         ['lidar', 'LiDAR', ['lidar_hillshade_historik', 'lidar_quickdhm_exaggerated', 'lidar_dhm_terrain_hillshade', 'lidar_dhm_surface_hillshade']],
-        ['heritage', 'Heritage', ['naturtyper', 'fortidsminder', 'fortidsminder_punkt_ikkefredet', 'fortidsminder_punkt_fredet']],
+        ['heritage', 'Heritage', ['naturtyper', 'fortidsminder',
+            'fortidsminder_areal_alle', 'fortidsminder_areal_adm', 'fortidsminder_areal_ka',
+            'fortidsminder_areal_beskyttelse', 'fortidsminder_areal_marin',
+            'fortidsminder_linie_alle', 'fortidsminder_linje_fredet', 'fortidsminder_linie_marin',
+            'fortidsminder_punkt_fredet', 'fortidsminder_punkt_ikkefredet', 'fortidsminder_punkt_marin',
+            'kulturarv_relief']],
         ['historical', 'Historical maps', ['topo4cm_1980_2001', 'topo4cm_1953_1976', 'hist_lave', 'hist_hoeje', 'hist_preussen', 'dtk25']],
         ['orthophoto', 'Ortophoto', ['orto_sommer_2008', 'orto_sommer_2005', 'orto_sommer_2002', 'orto_sommer_1999']]
     ], 'the requested free Denmark groups and sublayer order are explicit in the catalogue');
@@ -188,6 +195,77 @@ const TOKEN = 'test-token-not-a-credential';
     assert.strictEqual(CONFIG.byId('fortidsminder_punkt_ikkefredet').minZoom, 8,
         'the denser unprotected points join one zoom in');
     ok('heritage points: public CC0 WMS, EPSG:3857, no credential, sensible zoom gates');
+
+    /* The COMPLETE official Kulturarv WMS family (the service's
+     * GetCapabilities, updateSequence 526 — checked 2026-10-28): every
+     * layer name it publishes must be reachable from the config, and the
+     * ten rows that were added after the initial three all follow the
+     * direct public-CC0 contract as Heritage sublayers. */
+    const KULTURARV_CAPABILITIES = [
+        'fundogfortidsminder_areal_adm', 'fundogfortidsminder_areal_alle',
+        'fundogfortidsminder_areal_beskyttelse', 'fundogfortidsminder_areal_fredet',
+        'fundogfortidsminder_areal_ka', 'fundogfortidsminder_areal_marin',
+        'fundogfortidsminder_linie_alle', 'fundogfortidsminder_linie_marin',
+        'fundogfortidsminder_linje_fredet', 'fundogfortidsminder_punkt_fredet',
+        'fundogfortidsminder_punkt_ikkefredet', 'fundogfortidsminder_punkt_marin',
+        'relief'
+    ];
+    KULTURARV_CAPABILITIES.forEach((name) => {
+        const owner = CONFIG.layers.filter((l) => l.layers === name || l.layers === 'public:' + name)[0];
+        assert.ok(owner, name + ' of the live GetCapabilities is implemented as a layer');
+        assert.strictEqual(owner.provider.indexOf('Slots- og Kulturstyrelsen'), 0,
+            name + ' is served by the official agency');
+        assert.strictEqual(owner.enabled, true, name + ' ships enabled');
+    });
+    ok('every layer of the Kulturarv GetCapabilities is implemented (13/13)');
+
+    const KULTURARV_NEW = ['fortidsminder_areal_alle', 'fortidsminder_areal_adm',
+        'fortidsminder_areal_ka', 'fortidsminder_areal_beskyttelse', 'fortidsminder_areal_marin',
+        'fortidsminder_linie_alle', 'fortidsminder_linje_fredet', 'fortidsminder_linie_marin',
+        'fortidsminder_punkt_marin'];
+    KULTURARV_NEW.forEach((id) => {
+        const row = CONFIG.byId(id);
+        assert.ok(row, id + ' exists');
+        assert.strictEqual(row.type, 'wms', id + ' is a WMS overlay');
+        assert.strictEqual(row.url, 'https://www.kulturarv.dk/ffgeoserver/public/wms',
+            id + ' is read straight from the agency GeoServer (no proxy needed)');
+        assert.ok(/^fundogfortidsminder_(areal|linie|linje|punkt)_/.test(row.layers),
+            id + ' requests its own service layer (' + row.layers + ')');
+        assert.strictEqual(row.crs, 'EPSG:3857', id + ' asks for the map projection');
+        assert.strictEqual(row.transparent, true);
+        assert.strictEqual(row.version, '1.3.0');
+        assert.strictEqual(row.auth, 'none');
+        assert.deepStrictEqual(row.requiresCredentials, [], id + ' needs no credential');
+        assert.ok(/^CC0/.test(row.licence), id + ' is CC0 1.0 like the rest of the register');
+        assert.ok(!/witx/i.test(row.url), 'never the third-party mirror');
+        assert.strictEqual(row.group, 'overlay', id + ' is an independent overlay');
+        assert.strictEqual(row.defaultOn, false, id + ' starts off');
+        assert.strictEqual(row.panelGroup, 'heritage', id + ' renders inside the Heritage section');
+        assert.ok(row.title.da && row.title.en, id + ' has a DA and an EN title');
+        assert.ok(row.identify && row.identify.fields.length >= 3, id + ' answers GetFeatureInfo clicks');
+        assert.ok(row.minZoom >= 8 && row.minZoom <= 9 && row.maxZoom >= 20,
+            id + ' opens at a sensible zoom gate (got ' + row.minZoom + ')');
+    });
+    const relief = CONFIG.byId('kulturarv_relief');
+    assert.ok(relief, 'kulturarv_relief exists');
+    assert.strictEqual(relief.layers, 'relief', 'the service\'s own relief raster');
+    assert.strictEqual(relief.type, 'wms');
+    assert.strictEqual(relief.url, 'https://www.kulturarv.dk/ffgeoserver/public/wms');
+    assert.strictEqual(relief.crs, 'EPSG:3857');
+    assert.strictEqual(relief.transparent, true, 'the relief blends over the basemap');
+    assert.strictEqual(relief.panelGroup, 'heritage');
+    assert.strictEqual(relief.identify, null, 'a raster is not queryable');
+    assert.ok(relief.minZoom <= 6 && relief.maxNativeZoom >= 12 && relief.maxNativeZoom <= 16,
+        'the relief opens early and upscales beyond its unpublished native grid');
+    const heritageGroup = CONFIG.panelGroups.filter((g) => g.id === 'heritage')[0];
+    assert.deepStrictEqual(heritageGroup.layers.slice(2),
+        ['fortidsminder_areal_alle', 'fortidsminder_areal_adm', 'fortidsminder_areal_ka',
+            'fortidsminder_areal_beskyttelse', 'fortidsminder_areal_marin',
+            'fortidsminder_linie_alle', 'fortidsminder_linje_fredet', 'fortidsminder_linie_marin',
+            'fortidsminder_punkt_fredet', 'fortidsminder_punkt_ikkefredet', 'fortidsminder_punkt_marin',
+            'kulturarv_relief'],
+        'the Kulturarv rows are sublayers of the Heritage section, grouped areas → lines → points → relief');
+    ok('the ten new Kulturarv rows: direct public CC0 WMS, EPSG:3857, Heritage sublayers');
 
     /* The scheduled-monuments areas are bright neon orange now: the user asked
        for an eye-catching colour, and the areas are the group's hero layer. */
