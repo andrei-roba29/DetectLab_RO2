@@ -816,7 +816,7 @@
 //   Premium tab where they used to be listed a second time. Cache bumped
 //   so an installed PWA picks up the module, the stylesheet and the panel
 //   markup; see UK_HERITAGE_LAYERS.md.
-const CACHE_NAME = 'detectlab-v293-uk-heritage-free-sublayers';
+const CACHE_NAME = 'detectlab-v294-historical-tile-fallback';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -912,8 +912,8 @@ const PRECACHE_URLS = [
   'js/map-rotate.js?v=20261026-touch-rotate-deadband',
   'js/tutorial.js?v=20261025-layer-glass',
   'js/layer-panel-rows.js?v=20261025-layer-glass',
-  'js/layer-panel-rows.js?v=20261026-historical-previews',
-  'css/styles.css?v=20261026-historical-previews',
+  'js/layer-panel-rows.js?v=20261028-historical-tile-fallback',
+  'css/styles.css?v=20261028-historical-tile-fallback',
   // v271: unified slim 3D-style pastel faded semitransparent orange sliders
   // and blurred button-box (--ctl-*) slider containers across desktop & PWA.
   'css/styles.css?v=20261025-pastel-orange-sliders',

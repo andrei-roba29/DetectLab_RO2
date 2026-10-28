@@ -260,13 +260,6 @@
             description: { ro: 'Hartă istorică a Moldovei', en: 'Historical map of Moldova' }, onlineKey: '_moldova1868MapLayer'
         },
         {
-            id: 'moldova1771', label: { ro: 'Moldova 1771', en: 'Moldova 1771' }, category: 'premium', requiresPremium: true,
-            url: 'https://pub-638f9319d3994d9ba6b7c4ce178867fd.r2.dev/Moldova_1771/{z}/{x}/{y}.jpg',
-            minZoom: 8, maxNativeZoom: 15, tms: false,
-            bounds: boundsArray(45.0, 25.0, 48.5, 30.7),
-            description: { ro: 'Hartă istorică a Moldovei', en: 'Historical map of Moldova' }, onlineKey: '_moldova1771MapLayer'
-        },
-        {
             id: 'moldovawwii', label: { ro: 'Moldova WWII', en: 'Moldova WWII' }, category: 'premium', requiresPremium: true,
             url: 'https://pub-638f9319d3994d9ba6b7c4ce178867fd.r2.dev/Galitzien_and_Bukovina-1861-1864/moldova-wwii/{z}/{x}/{y}.jpg',
             minZoom: 8, maxNativeZoom: 13, tms: false,

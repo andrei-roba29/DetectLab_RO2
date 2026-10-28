@@ -13531,7 +13531,6 @@
                     premium_bucovina: ['RO', 'UA'],
                     premium_austrohu: ['RO', 'MD', 'UA'],
                     premium_moldova1868: ['RO', 'MD'],
-                    premium_moldova1771: ['RO', 'MD'],
                     premium_moldovawwii: ['RO', 'MD'],
                     premium_polishtactical1933: ['RO', 'MD', 'UA'],
                     premium_ww1: ['RO', 'MD', 'UA', 'BG', 'HU', 'RS'],
@@ -13820,7 +13819,6 @@
                     { key: 'polishtactical1933', toggle: 'polishTactical1933MapToggle', row: 'polishTactical1933Row' },
                     { key: 'ww1', toggle: 'ww1MapToggle', row: 'ww1Row' },
                     { key: 'ww2', toggle: 'ww2MapToggle', row: 'ww2Row' },
-                    { key: 'moldova1771', toggle: 'moldova1771MapToggle', row: 'moldova1771Row' },
                     { key: 'banat', toggle: 'banatMapToggle', row: 'banatRow' },
                     { key: 'transylvania1859', toggle: 'transylvania1859MapToggle', row: 'transylvania1859Row' },
                     { key: 'mitteleuropa', toggle: 'mitteleuropaMapToggle', row: 'mitteleuropaRow' },
@@ -13842,10 +13840,6 @@
                 ];
                 premiumKeys.forEach(function(item) {
                     var b = premiumMapCoverageBounds[item.key] ? premiumMapCoverageBounds[item.key].bounds : [[43.5,19.5],[48.5,30.5]];
-                    // moldova1771 doesn't have coverage entry, reuse moldova1868 bounds
-                    if (item.key === 'moldova1771' && premiumMapCoverageBounds.moldova1868) {
-                        b = premiumMapCoverageBounds.moldova1868.bounds;
-                    }
                     layerDefs.push({
                         key: 'premium_' + item.key,
                         bounds: toBounds(b),
@@ -14510,40 +14504,6 @@
                 };
             })();
 
-
-            // ── MOLDOVA 1771 (3 stitched sheets from Národní knihovna České republiky) ──
-            (function () {
-                map.createPane('pane_moldova1771');
-                map.getPane('pane_moldova1771').style.zIndex = 650;
-                map.getPane('pane_moldova1771').style.pointerEvents = 'none';
-
-                window.MOLDOVA1771_TILE_MAX_NATIVE_Z = (window.MOLDOVA1771_TILE_MAX_NATIVE_Z !== undefined) ? window.MOLDOVA1771_TILE_MAX_NATIVE_Z : 15;
-
-                window._moldova1771MapLayer = L.tileLayer(DL.url2d('premium.moldova-1771'), DL.tile2dOptions('premium.moldova-1771', {
-                    minZoom: 8, maxZoom: 20,
-                    maxNativeZoom: window.MOLDOVA1771_TILE_MAX_NATIVE_Z,
-                    pane: 'pane_moldova1771'
-                }));
-
-                window.toggleMoldova1771Map = function (on) {
-                    if (on) {
-                        var histPremToggle = document.getElementById('histPremiumToggle');
-                        if (histPremToggle && !histPremToggle.checked) {
-                            histPremToggle.checked = true;
-                            window.toggleHistPremiumLayer(true);
-                        }
-                        window._moldova1771MapLayer.addTo(map);
-                    } else {
-                        map.hasLayer(window._moldova1771MapLayer) && map.removeLayer(window._moldova1771MapLayer);
-                    }
-                    window.updatePremiumMapCoverageVisibility && window.updatePremiumMapCoverageVisibility();
-                };
-
-                window.setMoldova1771MapOpacity = function (val) {
-                    document.getElementById('moldova1771MapPct').textContent = val + '%';
-                    window._moldova1771MapLayer.setOpacity(val / 100);
-                };
-            })();
 
             // ── MOLDOVA WWII (XYZ tiles, JPG, direct din Cloudflare R2) ──
             // Strat premium nou. Același pattern ca celelalte hărți istorice de mai sus,
@@ -15356,7 +15316,6 @@
                 { id: 'bucovinaMapToggle', fnName: 'toggleBucovinaMap' },
                 { id: 'austrohuMapToggle', fnName: 'toggleAustrohuMap' },
                 { id: 'moldova1868MapToggle', fnName: 'toggleMoldova1868Map' },
-                { id: 'moldova1771MapToggle', fnName: 'toggleMoldova1771Map' },
                 { id: 'moldovaWwiiMapToggle', fnName: 'toggleMoldovaWwiiMap' },
                 { id: 'polishTactical1933MapToggle', fnName: 'togglePolishTactical1933Map' },
                 { id: 'ww1MapToggle', fnName: 'toggleWw1Map' },
