@@ -75,7 +75,7 @@ console.log('  ✓ the photo is a mean, violet-washed backdrop underneath the co
 
 /* ── 3. Every historical sublayer row opts in, and every id resolves ───── */
 const tagged = [...html.matchAll(/data-preview-layer="([^"]+)"/g)].map(m => m[1]);
-assert(tagged.length === 29, 'all 29 historical sublayer rows carry a preview layer id (got ' + tagged.length + ')');
+assert(tagged.length === 28, 'all 28 remaining historical sublayer rows carry a preview layer id (got ' + tagged.length + ')');
 assert.deepStrictEqual(tagged, [...new Set(tagged)], 'no row is tagged twice');
 
 const fakeDocument = {
@@ -98,10 +98,13 @@ assert(sandboxWindow.DetectLabLayers, 'the shared registry loads before the row 
 vm.runInContext(moduleSource, sandbox, { filename: 'js/layer-panel-rows.js' });
 
 const api = sandboxWindow.DetectLabPanelRows;
-assert(api && typeof api.urlFor === 'function' && api.anchors, 'js/layer-panel-rows.js exports its API');
+assert(api && typeof api.urlFor === 'function' && typeof api.urlsFor === 'function' && api.anchors,
+    'js/layer-panel-rows.js exports its URL and fallback-candidate APIs');
 
 tagged.forEach(id => {
     assert(sandboxWindow.DetectLabLayers.get(id), 'unknown layer id on a row: ' + id);
+    const candidates = api.urlsFor(id);
+    assert(candidates.length > 0, 'no tile-photo candidates for the tagged row ' + id);
     const url = api.urlFor(id);
     assert(url, 'no tile-photo URL for the tagged row ' + id);
     assert(/^https:\/\//.test(url), 'the row photo is an https tile request: ' + id);
@@ -117,7 +120,7 @@ const unbounded = historical.filter(def => !def.bounds || def.bounds.length !== 
 unbounded.forEach(def => {
     assert(api.anchors[def.id], 'unbounded historical layer without an anchor: ' + def.id);
 });
-console.log('  ✓ 29 tagged rows resolve; ' + unbounded.length + ' unbounded layers are anchored');
+console.log('  ✓ ' + tagged.length + ' tagged rows resolve; ' + unbounded.length + ' unbounded layers are anchored');
 
 /* ── 4. The URL really is one of that layer's OWN tiles ────────────────── */
 const escapeLiteral = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -239,7 +242,7 @@ console.log('  ✓ previews load only for visible rows, once, and fail soft');
 }
 
 /* ── 6. Wiring: cache-busting, precache, shell version ─────────────────── */
-const TAG = '20261026-historical-previews';
+const TAG = '20261028-historical-tile-fallback';
 const STYLES_TAG = '20261028-uk-heritage-free-sublayers';
 assert(html.includes('js/layer-panel-rows.js?v=' + TAG), 'index.html loads the row chrome, versioned');
 assert(sw.includes("'js/layer-panel-rows.js?v=" + TAG + "'"), 'sw.js precaches the row chrome');

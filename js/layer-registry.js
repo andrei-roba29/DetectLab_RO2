@@ -830,16 +830,6 @@
             notes: 'Own tile store (Cloudflare R2).'
         },
         {
-            id: 'premium.moldova-1771', group: 'hist-premium', z: 650, kind: 'xyz',
-            title: { ro: 'Moldova 1771', en: 'Moldova 1771' },
-            url: 'https://pub-638f9319d3994d9ba6b7c4ce178867fd.r2.dev/Moldova_1771/{z}/{x}/{y}.jpg',
-            tileSize: 256, minZoom: 8, maxZoom: 20, maxNativeZoom: 15, opacity: 0.80,
-            attribution: '© Národní knihovna České republiky',
-            cors: 'unknown', proxy: 'auto',
-            ui: { toggle: 'moldova1771MapToggle', slider: 'moldova1771MapOpacitySlider', pct: 'moldova1771MapPct', fn: 'toggleMoldova1771Map', var2d: '_moldova1771MapLayer', parent: 'histPremiumToggle', maxNativeZoomGlobal: 'MOLDOVA1771_TILE_MAX_NATIVE_Z' },
-            notes: 'Own tile store (Cloudflare R2).'
-        },
-        {
             id: 'premium.moldova-wwii', group: 'hist-premium', z: 644, kind: 'xyz',
             title: { ro: 'Moldova WWII', en: 'Moldova WWII' },
             url: 'https://pub-638f9319d3994d9ba6b7c4ce178867fd.r2.dev/Galitzien_and_Bukovina-1861-1864/moldova-wwii/{z}/{x}/{y}.jpg',

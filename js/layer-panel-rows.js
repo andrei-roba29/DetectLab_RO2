@@ -44,10 +44,9 @@
         'hist.firing-plans':           { lat: 45.657, lng: 25.601 },   /* Brașov */
         'hist.soviet-1970':            { lat: 47.158, lng: 27.601 },   /* Iași */
         'premium.josephine':           { lat: 46.777, lng: 23.599 },   /* Cluj-Napoca */
-        'premium.bucovina':            { lat: 49.842, lng: 24.031 },   /* Lviv */
-        'premium.austro-hungarian':    { lat: 50.062, lng: 19.937 },   /* Kraków */
+        'premium.bucovina':            { lat: 47.986, lng: 24.260 },   /* within the Bucovina sheet */
+        'premium.austro-hungarian':    { lat: 48.000, lng: 24.200 },   /* within the shared Galicia–Bucovina sheet */
         'premium.moldova-1868':        { lat: 47.158, lng: 27.601 },   /* Iași */
-        'premium.moldova-1771':        { lat: 47.158, lng: 27.601 },   /* Iași */
         'premium.moldova-wwii':        { lat: 47.158, lng: 27.601 },   /* Iași */
         'premium.polish-tactical-1933': { lat: 49.842, lng: 24.031 },  /* Lviv */
         'premium.ww1':                 { lat: 49.783, lng: 22.768 },   /* Przemyśl */
@@ -117,30 +116,46 @@
     }
 
     /* ── the row photo URL ─────────────────────────────────────────────── */
-    function urlFor(id) {
+    function urlsFor(id) {
         var reg = registry();
-        if (!reg) return null;
+        if (!reg) return [];
         var def = reg.get(id);
-        if (!def || !HISTORICAL_GROUPS[def.group]) return null;
+        if (!def || !HISTORICAL_GROUPS[def.group]) return [];
         var centre = centreOf(def);
-        if (!centre || !def.url) return null;
+        if (!centre || !def.url) return [];
 
         if (def.kind === 'xyz' || def.kind === 'arcgis-image') {
             var z = zoomOf(def);
-            var x = tileX(centre.lng, z);
-            var y = tileY(centre.lat, z);
-            /* ArcGIS pyramids are {z}/{y}/{x}, XYZ are {z}/{x}/{y} — the
-               template decides, the replacement never reorders anything. */
-            return String(def.url).replace(/\{(z|x|y)\}/g, function (match, key) {
-                if (key === 'z') return z;
-                return key === 'x' ? x : y;
+            var cx = tileX(centre.lng, z);
+            var cy = tileY(centre.lat, z);
+            var candidates = [];
+            var bounds = def.bounds;
+            var minX = cx - 2, maxX = cx + 2, minY = cy - 2, maxY = cy + 2;
+            if (bounds && bounds.length === 2) {
+                minX = tileX(bounds[0][1], z);
+                maxX = tileX(bounds[1][1], z);
+                minY = tileY(bounds[1][0], z);
+                maxY = tileY(bounds[0][0], z);
+            }
+            for (var x = minX; x <= maxX; x++) {
+                for (var y = minY; y <= maxY; y++) {
+                    candidates.push({ x: x, y: y, distance: Math.abs(x - cx) + Math.abs(y - cy) });
+                }
+            }
+            /* Some historical sheets have ragged edges or imperfect catalogue
+               bounds. Probe the closest tiles first, then a few neighbours so
+               one missing/transparent center tile cannot leave the row blank. */
+            candidates.sort(function (a, b) { return a.distance - b.distance; });
+            candidates = candidates.slice(0, 25);
+            return candidates.map(function (tile) {
+                return String(def.url).replace(/\{(z|x|y)\}/g, function (match, key) {
+                    if (key === 'z') return z;
+                    return key === 'x' ? tile.x : tile.y;
+                });
             });
         }
 
         if (def.kind === 'wms') {
-            /* A WMS mosaic has no tiles, so a preview is a small GetMap over
-               the middle of the sheet — the same request the 2D map makes,
-               only 168x96 pixels of it. */
             var m = mercator(centre.lat, centre.lng);
             var half = SPAN_METERS / 2;
             var version = String(def.version || '1.1.1');
@@ -149,22 +164,22 @@
                 return n.toFixed(1);
             }).join(',');
             var params = [
-                'service=WMS',
-                'request=GetMap',
-                'version=' + version,
-                'layers=' + encodeURIComponent(def.layer || ''),
-                'styles=',
+                'service=WMS', 'request=GetMap', 'version=' + version,
+                'layers=' + encodeURIComponent(def.layer || ''), 'styles=',
                 'format=' + encodeURIComponent(def.format || 'image/png'),
                 'transparent=' + (def.transparent === false ? 'false' : 'true'),
-                axis + '=EPSG:3857',
-                'bbox=' + bbox,
-                'width=' + WMS_WIDTH,
-                'height=' + WMS_HEIGHT
+                axis + '=EPSG:3857', 'bbox=' + bbox,
+                'width=' + WMS_WIDTH, 'height=' + WMS_HEIGHT
             ];
-            return String(def.url) + (String(def.url).indexOf('?') === -1 ? '?' : '&') + params.join('&');
+            return [String(def.url) + (String(def.url).indexOf('?') === -1 ? '?' : '&') + params.join('&')];
         }
 
-        return null;
+        return [];
+    }
+
+    function urlFor(id) {
+        var urls = urlsFor(id);
+        return urls.length ? urls[0] : null;
     }
 
     /* ── DOM helpers ───────────────────────────────────────────────────── */
@@ -240,20 +255,16 @@
         row.setAttribute('data-row-preview-state', 'ok');
     }
 
-    function attach(row, url) {
-        /* The catalogue is re-rendered on every country change; the same sheet
-           then comes back as a brand-new row. A tile that already loaded is
-           painted without a second request, and a broken one is not retried. */
-        if (READY[url]) {
-            paint(row, url);
-            return;
-        }
-        if (BROKEN[url]) {
-            row.setAttribute('data-row-preview-state', 'failed');
+    function attach(row, urls) {
+        /* Retain candidates for a row: map-sheet edges are often ragged, so a
+           404 at the anchor tile should try nearby tiles from the same map. */
+        var first = urls[0];
+        if (READY[first]) {
+            paint(row, first);
             return;
         }
         row.setAttribute('data-row-preview-state', 'pending');
-        QUEUE.push({ row: row, url: url });
+        QUEUE.push({ row: row, urls: urls, index: 0 });
         pump();
     }
 
@@ -263,6 +274,17 @@
 
     function load(job) {
         var row = job.row;
+        while (job.index < job.urls.length && BROKEN[job.urls[job.index]]) job.index++;
+        var url = job.urls[job.index];
+        if (!url) {
+            row.setAttribute('data-row-preview-state', 'failed');
+            pump();
+            return;
+        }
+        if (READY[url]) {
+            paint(row, url);
+            return;
+        }
         var img = new root.Image();
         var released = false;
         IN_FLIGHT++;
@@ -276,16 +298,19 @@
         }
         img.onload = function () {
             release();
-            READY[job.url] = true;
-            paint(row, job.url);
+            READY[url] = true;
+            paint(row, url);
         };
         img.onerror = function () {
             release();
-            BROKEN[job.url] = true;
-            row.setAttribute('data-row-preview-state', 'failed');
+            BROKEN[url] = true;
+            job.index++;
+            if (job.index < job.urls.length) QUEUE.unshift(job);
+            else row.setAttribute('data-row-preview-state', 'failed');
+            pump();
         };
         PENDING.push(img);
-        img.src = job.url;
+        img.src = url;
     }
 
     function sweep() {
@@ -300,13 +325,13 @@
             if (!isVisible(row, host)) return;    /* collapsed accordion / hidden tab */
             var id = row.getAttribute('data-preview-layer');
             if (!id) id = 'cenagis.' + row.getAttribute('data-map-id');
-            var url = urlFor(id);
-            if (!url) {
+            var urls = urlsFor(id);
+            if (!urls.length) {
                 row.setAttribute('data-row-preview-state', 'unavailable');
                 return;
             }
             started++;
-            attach(row, url);
+            attach(row, urls);
         });
         return started;
     }
@@ -360,6 +385,7 @@
     root.DetectLabPanelRows = {
         anchors: ANCHORS,
         urlFor: urlFor,
+        urlsFor: urlsFor,
         markGlass: markGlass,
         sweep: sweep,
         tileZoom: TILE_ZOOM,
