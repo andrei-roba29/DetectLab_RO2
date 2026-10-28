@@ -146,8 +146,15 @@
 
     /* ── identifiers ──────────────────────────────────────────────────── */
     /* Records are addressed in the catalogue as nls/<viewerId>; the IIIF
-     * identifier used by map-view.nls.uk is <first five digits>/<viewerId>
-     * (e.g. 102345214 → 10234/102345214 → iiif/2/10234%2F102345214). */
+     * identifier used by map-view.nls.uk is <prefix>/<viewerId>, where the
+     * prefix is the viewer id with its last four digits removed (the sheet
+     * number).  A nine-digit id (228799835) therefore gives 22879/228799835,
+     * while an eight-digit town-plan id (74415150) gives 7441/74415150.
+     *
+     * Taking a fixed five digits — the shape every nine-digit sheet has —
+     * broke the eight-digit Ordnance Survey town plans: 74415150 was sent to
+     * /iiif/2/74415%2F74415150, which the service answers with a 404, so
+     * neither the preview nor the added sheet ever loaded. */
     function imageIdOf(record) {
         if (record == null) return '';
         if (typeof record === 'number') return String(record);
@@ -161,7 +168,8 @@
 
     function iiifPath(imageId) {
         var id = String(imageId);
-        return id.slice(0, 5) + '/' + id;
+        if (id.length <= 4) return id;
+        return id.slice(0, id.length - 4) + '/' + id;
     }
 
     function iiifBase(record) {

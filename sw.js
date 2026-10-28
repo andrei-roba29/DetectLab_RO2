@@ -804,7 +804,7 @@
 //   centred 3D bar, stepping above the country “Exit view” pill via the
 //   existing --country-exit-lift hook. Re-tags css/map3d-terrain.css.
 //   See PWA_3D_BUTTON_SIZE_CENTRE.md.
-const CACHE_NAME = 'detectlab-v290-danish-kulturarv-sublayers';
+const CACHE_NAME = 'detectlab-v291-other-maps-fix';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -932,13 +932,13 @@ const PRECACHE_URLS = [
   'js/hist-shift.js?v=20261020-hist-shift-docked-slider',
   'js/hist-shift.js?v=20261014-hist-shift',
   'css/hist-shift.css?v=20261014-hist-shift',
-  'js/other-maps-tiles.js?v=20261026-nls-find',
-  'js/other-maps-nls.js?v=20261026-nls-find',
-  'js/other-maps-overlay.js?v=20261026-nls-find',
-  'js/other-maps.js?v=20261026-nls-find',
-  'css/other-maps.css?v=20261026-nls-find',
+  'js/other-maps-tiles.js?v=20261028-other-maps-fix',
+  'js/other-maps-nls.js?v=20261028-other-maps-fix',
+  'js/other-maps-overlay.js?v=20261028-other-maps-fix',
+  'js/other-maps.js?v=20261028-other-maps-fix',
+  'css/other-maps.css?v=20261028-other-maps-fix',
   'data/other-maps-catalog.json?v=20261026-cluj-alba',
-  'data/other-maps-nls-catalog.json?v=20261026-nls-find',
+  'data/other-maps-nls-catalog.json?v=20261028-other-maps-fix',
   'js/translations.js?v=20261023-other-maps',
   'js/map3d-mirror.js?v=20261017-archeo-3d-projection',
   'js/map3d-mirror.js?v=20261021-lidar-canvas-tiles',

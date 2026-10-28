@@ -120,7 +120,10 @@
     display: none;
     position: fixed;
     inset: 0;
-    z-index: 3400;
+    /* Above the fullscreen map frame (.map-frame.is-fullscreen is 9999) and
+       the fullscreen controls it hosts, otherwise the "available maps"
+       window never shows while the map is fullscreen. */
+    z-index: 10004;
     background: rgba(3, 8, 18, 0.72);
     align-items: center;
     justify-content: center;
@@ -312,6 +315,12 @@
     box-sizing: border-box;
     padding: 7px 9px 8px;
     border-radius: var(--ctl-radius, 12px);
+    /* The panel sits over the map, so it uses a more translucent version of
+       the generic --ctl-bg glass than the rest of the controls.  The
+       variables are overridden here rather than in the fallback (they are
+       defined on :root, so a fallback would never apply). */
+    --ctl-bg: rgba(24, 19, 40, 0.28);
+    --ctl-blur: blur(20px) saturate(150%);
     background: var(--ctl-bg, rgba(24, 19, 40, 0.45));
     border: 1px solid var(--ctl-border, rgba(198, 180, 255, 0.20));
     -webkit-backdrop-filter: var(--ctl-blur, blur(18px) saturate(150%));

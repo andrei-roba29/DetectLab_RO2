@@ -243,7 +243,9 @@ function selfTest() {
         if (!condition) { console.error('✗ self-test: ' + message); process.exit(1); }
     };
     assert(record && record.id === 'nls/228799835', 'feature id maps to nls/<IMAGE>');
-    assert(record.path === '22879/228799835', 'IIIF path is <first five digits>/<IMAGE>');
+    assert(record.path === '22879/228799835', 'IIIF path is <id without its last four digits>/<IMAGE>');
+    assert(Nls.iiifPath('74415150') === '7441/74415150',
+        'an eight-digit town plan takes a four-digit IIIF prefix');
     assert(record.source === 'nls', 'the record is tagged with the nls source');
     assert(record.place === 'Accrington', 'place is read from the sheet title prefix');
     assert(record.year === 1851, 'year is parsed from the YEAR property');

@@ -96,7 +96,7 @@ console.log('  ✓ slimmer geometry verified for both web desktop and PWA');
 const TAGS = {
     'css/styles.css': '20261027-danish-row-style',
     'css/map3d-terrain.css': '20261026-pwa-3d-button-size',
-    'css/other-maps.css': '20261026-nls-find',
+    'css/other-maps.css': '20261028-other-maps-fix',
     'js/vertical-opacity-control.js': '20261026-flat-country-sections'
 };
 for (const asset of Object.keys(TAGS)) {
