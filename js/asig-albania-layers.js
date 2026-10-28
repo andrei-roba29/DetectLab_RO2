@@ -1179,6 +1179,28 @@
                 opacity: entry.opacity,
                 attribution: CONFIG.attribution,
                 parts: currentHeritageParts,
+                createFallback: function (parts, opacity, status) {
+                    var layer = new AsigWmsLayer({
+                        id: HERITAGE_ID,
+                        name: parts.filter(function (part) { return part.name && part.kind !== 'wmts'; })
+                            .map(function (part) { return part.name; }).join(','),
+                        url: CONFIG.wms.url,
+                        minZoom: 10,
+                        maxNativeZoom: 18
+                    }, {
+                        pane: PANE_ID, opacity: opacity, keepBuffer: 0,
+                        attribution: CONFIG.attribution
+                    });
+                    layer._dlDefId = 'albania.' + def.id;
+                    layer._detectlabNoGuard = true;
+                    layer.on('tileerror', function () {
+                        status('ASIG Heritage map unavailable. Try again later.', 'error');
+                    });
+                    layer.on('tileload', function () {
+                        status('Heritage · ASIG map (no feature markers).', 'info');
+                    });
+                    return layer;
+                },
                 status: function (message, kind) { setStatus(def.id, message, kind); }
             });
             heritageLayer._dlDefId = 'albania.' + def.id;

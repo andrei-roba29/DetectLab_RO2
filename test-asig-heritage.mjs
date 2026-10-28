@@ -82,7 +82,36 @@ pending = null;
 root.fetch = async () => new Response('<Exception/>', { status: 502 });
 await controller._load();
 assert.equal(statuses.at(-1).kind, 'error', 'unsupported WFS is explicit, not an empty success');
+// A failed first type must not suppress healthy later sources.
+let attempts = 0;
+root.fetch = async () => ++attempts === 1
+    ? new Response('unavailable', { status: 502 })
+    : Response.json({ type: 'FeatureCollection', features: [point(attempts)] });
+await controller._load();
+assert.equal(attempts, 8, 'all sources are attempted despite the first failure');
+assert.ok(markers.length > 0, 'healthy sources still render');
+let fallbackAdds = 0, fallbackRemoves = 0, fallbackOpacity, fallbackZ;
+const fallback = { setOpacity(v) { fallbackOpacity = v; }, setZIndex(v) { fallbackZ = v; } };
+map.addLayer = value => { assert.equal(value, fallback); fallbackAdds++; };
+map.removeLayer = value => { if (value === fallback) fallbackRemoves++; };
+controller.options.createFallback = (parts, opacity) => {
+    assert.equal(parts.length, 8);
+    assert.equal(opacity, 0.5);
+    return fallback;
+};
+controller.setZIndex(407);
+attempts = 0;
+await controller._load();
+assert.equal(fallbackAdds, 1, 'one composite map replaces incomplete feature results');
+assert.equal(markers.length, 0, 'no duplicate markers over fallback');
+assert.equal(fallbackZ, 407);
+controller.setOpacity(0.3);
+assert.equal(fallbackOpacity, 0.3);
+const before = attempts;
+await controller._load();
+assert.equal(attempts, before, 'fallback avoids repeated failing WFS requests on movement');
 controller.onRemove(map);
+assert.equal(fallbackRemoves, 1, 'fallback removed with the toggle');
 assert.equal(controller._map, null);
 assert.equal(controller._group, null);
 console.log('ASIG Heritage: proxy bounds, caps, byte limit, point reduction, clustering, cancellation, stale responses and failure handling passed (mock-only).');
