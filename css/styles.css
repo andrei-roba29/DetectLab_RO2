@@ -9385,3 +9385,147 @@ a.dl-gmaps-directions-btn {
 }
 
 .asig-heritage-cluster { background:#7354a3; color:#fff; border:2px solid #e6d7ff; border-radius:50%; text-align:center; line-height:28px; font-weight:bold; box-shadow:0 1px 5px #0008; }
+
+/* ── United Kingdom · Heritage (js/uk-heritage-layers.js) ───────────────────
+   A FREE group in the shape of every other country catalogue: one Romania-style
+   `.transp-layer-row` header (title, ⓘ, expand chevron, master switch, group
+   opacity slider) over a left-bordered `#ukHeritageSubLayers` column of one row
+   per register. Each row is the shared glass `.dl-sublayer-row` box with the
+   `.apm-toggle-switch` pill switch, the `.transp-layer-label` opacity line
+   (`.pct` badge + `.layer-info-btn`) and the shared `.transp-slider` — the same
+   material as Romania's sublayers, the Danish rows and the Finnish rows.
+
+   The registers are free layers, so the group and every row carry
+   data-category="free". The tabs gate `.transp-layer-row[data-category]`, which
+   covers the group; the `[data-category]` rules below extend that same gate to
+   the register rows, which are nested `.dl-sublayer-row`s rather than
+   top-level rows. Nothing in this family can therefore be listed under
+   Premium — the duplicate that used to appear there is gone. */
+.uk-heritage-group {
+    --uk-heritage-accent: #d9a441;
+}
+
+/* Country gate: the registers publish England + Wales only, so the group is
+   hidden outright whenever the selected country is not the United Kingdom
+   (js/uk-heritage-layers.js filter()). The ID in front of each selector keeps
+   the gate above the tab rules, which set display on both levels. */
+#transpPanel #ukHeritageRow.country-layer-unavailable,
+#transpPanel .uk-heritage-sublayer.country-layer-unavailable {
+    display: none !important;
+}
+
+.uk-heritage-sublayers {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.uk-heritage-sublayer[data-category] {
+    display: none !important;
+}
+
+.uk-heritage-sublayer[data-category].active {
+    display: flex !important;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.uk-heritage-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    color: rgba(245, 240, 235, 0.75);
+    margin-bottom: 5px;
+}
+
+.uk-heritage-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex: 1;
+    min-width: 0;
+}
+
+.uk-heritage-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.uk-heritage-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.uk-heritage-provider {
+    flex-shrink: 0;
+    font-size: 0.62rem;
+    font-style: italic;
+    opacity: 0.5;
+    white-space: nowrap;
+}
+
+.uk-heritage-sublayer.is-active .uk-heritage-title {
+    color: rgba(245, 240, 235, 0.98);
+}
+
+.uk-heritage-opacity-line {
+    margin-bottom: 5px;
+    margin-top: 2px;
+}
+
+.uk-heritage-slider {
+    margin-top: 0;
+}
+
+.uk-heritage-status {
+    display: none;
+    font-size: 0.66rem;
+    line-height: 1.3;
+    opacity: 0.7;
+    margin-top: 1px;
+}
+
+.uk-heritage-status.is-count,
+.uk-heritage-status.is-hint {
+    opacity: 0.6;
+}
+
+.uk-heritage-status.is-error {
+    color: #ffb4a2;
+    opacity: 1;
+}
+
+/* The shared pill switch hides its checkbox, so keyboard focus has to land on
+   the track that follows it; the ⓘ and the sliders keep their own ring. */
+#transpPanel .uk-heritage-sublayer .apm-toggle-switch input:focus-visible + .apm-toggle-track,
+#transpPanel .uk-heritage-group .apm-toggle-switch input:focus-visible + .apm-toggle-track,
+#transpPanel .uk-heritage-group button:focus-visible {
+    outline: 2px solid var(--uk-heritage-accent, #d9a441);
+    outline-offset: 1px;
+}
+
+.uk-heritage-sublayer .uk-heritage-slider:focus-visible,
+.uk-heritage-sublayer .layer-info-btn:focus-visible {
+    outline: 2px solid var(--uk-heritage-accent, #d9a441);
+    outline-offset: 1px;
+}
+
+/* 375 px: the register names are long, so the provider tag may wrap under the
+   title instead of pushing the switch off the row. */
+@media (max-width: 430px) {
+    .uk-heritage-title-wrap {
+        flex-wrap: wrap;
+        row-gap: 2px;
+    }
+
+    .uk-heritage-title {
+        white-space: normal;
+        line-height: 1.25;
+    }
+}

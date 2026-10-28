@@ -805,7 +805,18 @@
 //   existing --country-exit-lift hook. Re-tags css/map3d-terrain.css.
 //   See PWA_3D_BUTTON_SIZE_CENTRE.md.
 // v292: opt-in, image-only LiDAR photo effects in a 1 km prepared circle.
-const CACHE_NAME = 'detectlab-v292-lidar-photo-effects';
+// v293: the UK heritage registers (England + Wales) are a FREE country
+//   group in the shape of every other catalogue — one Romania-style
+//   `.transp-layer-row` header (title, ⓘ, chevron, master switch, group
+//   opacity slider) with one row per register (Historic England's NHLE
+//   and the RCAHMW / Heneb / Cadw services), each with its OWN on/off
+//   switch, its OWN opacity slider, its OWN percentage badge and its OWN
+//   ⓘ (licence, coverage, zoom limit). The group and every row are
+//   data-category="free", so the registers no longer leak into the
+//   Premium tab where they used to be listed a second time. Cache bumped
+//   so an installed PWA picks up the module, the stylesheet and the panel
+//   markup; see UK_HERITAGE_LAYERS.md.
+const CACHE_NAME = 'detectlab-v293-uk-heritage-free-sublayers';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1696,6 +1707,11 @@ const PRECACHE_URLS = [
   'js/danish-layers.config.js?v=20261027-danish-row-style',
   'js/danish-layers.js?v=20261027-danish-row-style',
   'js/asig-albania-layers.js?v=20261027-albania-row-style',
+  // v293: the UK heritage registers are a free country group whose rows each
+  //   carry their own switch/slider/ⓘ; the live group markup lives in
+  //   index.html and the live module + stylesheet URLs are below.
+  'css/styles.css?v=20261028-uk-heritage-free-sublayers',
+  'js/uk-heritage-layers.js?v=20261028-uk-heritage-free-sublayers',
   // v289: Albania's (free) Heritage block no longer leaks into the Premium
   //   tab — it is a data-category="free" transp-layer-row, the whole free
   //   country catalogue is tab-gated in CSS, and the module re-applies the
