@@ -419,8 +419,8 @@
     }
 
     /* ── WMS click identify (GetFeatureInfo) ───────────────────────────────
-     * The two kultur arv point layers are raster tiles: Leaflet cannot
-     * hit-test their dots, so a click is resolved server-side with a WMS
+     * The kultur arv rows are raster tiles: Leaflet cannot hit-test their
+     * dots, polygons or lines, so a click is resolved server-side with a WMS
      * GetFeatureInfo request against the very same agency GeoServer that
      * serves the tiles. The JSON answer opens a popup with the monument
      * record; when the host sends no CORS headers (the browser cannot read
@@ -526,7 +526,11 @@
 
     function openIdentifyPopup(layer, features, latlng, map) {
         var picked = nearestFeature(features, latlng, map);
-        var feature = picked.feature;
+        /* Points win when the answer carries point geometries (the two
+         * domestic point rows). Area/line answers only carry polygons, and
+         * the register's record is what the popup is about — fall back to
+         * the server's first hit and anchor it on the click. */
+        var feature = picked.feature || features[0];
         var props = (feature && feature.properties) || {};
         var anchor = latlng;
         if (feature && feature.geometry && feature.geometry.type === 'Point' &&

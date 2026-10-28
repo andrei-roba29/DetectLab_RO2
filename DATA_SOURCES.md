@@ -52,7 +52,9 @@ repeated panning costs the providers nothing new.
 | 6 | `danish.fortidsminder` | **Overlay** — protected ancient monuments & finds (`Fund og Fortidsminder`), GeoJSON | `kulturarv.dk/ffgeoserver/public/wfs` (`/api/geo/dk-heritage`) | `public:fundogfortidsminder_areal_fredet` | **CC0 1.0** | `Fund og Fortidsminder © Slots- og Kulturstyrelsen (CC0)` | none |
 | 7 | `danish.fortidsminder_punkt_fredet` | **Overlay** — protected ancient monuments as points (raster WMS) | `kulturarv.dk/ffgeoserver/public/wms` — called **directly** | `fundogfortidsminder_punkt_fredet` | **CC0 1.0** | `Fund og Fortidsminder © Slots- og Kulturstyrelsen (CC0)` | none |
 | 8 | `danish.fortidsminder_punkt_ikkefredet` | **Overlay** — *un*protected ancient monuments as points (raster WMS), z8+ | `kulturarv.dk/ffgeoserver/public/wms` — called **directly** | `fundogfortidsminder_punkt_ikkefredet` | **CC0 1.0** | `Fund og Fortidsminder © Slots- og Kulturstyrelsen (CC0)` | none |
-| 9 | `danish.lidar_dhm_surface_hillshade` | **Overlay** — DHM *overflade* (surface) hillshade, WMS twin of the WMTS mode | `api.dataforsyningen.dk/dhm_DAF` (`/api/geo/dk-dtk25`) | `dhm_overflade_skyggekort` | **CC BY 4.0** | `Danmarks Højdemodel © Klimadatastyrelsen` | `DATAFORSYNINGEN_TOKEN` |
+| 9 | `danish.fortidsminder_areal_alle` · `_adm` · `_ka` · `_beskyttelse` · `_marin`, `danish.fortidsminder_linie_alle` · `_linie_marin`, `danish.fortidsminder_linje_fredet`, `danish.fortidsminder_punkt_marin` | **Overlay** — the rest of the `Fund og Fortidsminder` register as WMS (areas, lines, marine points), Heritage sublayers | `kulturarv.dk/ffgeoserver/public/wms` — called **directly** | `fundogfortidsminder_areal_*`, `fundogfortidsminder_linie_*`, `fundogfortidsminder_linje_fredet`, `fundogfortidsminder_punkt_marin` | **CC0 1.0** | `Fund og Fortidsminder © Slots- og Kulturstyrelsen (CC0)` | none |
+| 10 | `danish.kulturarv_relief` | **Overlay** — the heritage service's Denmark-wide relief hillshade, Heritage sublayer | `kulturarv.dk/ffgeoserver/public/wms` — called **directly** | `relief` | **CC0 1.0** | `Relief © Slots- og Kulturstyrelsen (CC0)` | none |
+| 11 | `danish.lidar_dhm_surface_hillshade` | **Overlay** — DHM *overflade* (surface) hillshade, WMS twin of the WMTS mode | `api.dataforsyningen.dk/dhm_DAF` (`/api/geo/dk-dtk25`) | `dhm_overflade_skyggekort` | **CC BY 4.0** | `Danmarks Højdemodel © Klimadatastyrelsen` | `DATAFORSYNINGEN_TOKEN` |
 
 ### 1 · DTK25 topographic (`danish.dtk25`) — base, **on by default**
 
@@ -179,9 +181,20 @@ repeated panning costs the providers nothing new.
   popup on the nearest monument — type, dating, register numbers, and a link
   to the register's page. When the cross-origin JSON answer is CORS-blocked,
   the same request is asked as HTML and shown in a sandboxed iframe.
-* **Reported, not added**: the same service publishes `areal_beskyttelse`
-  (protection zones), `areal_ka` (heritage areas), `areal_adm`, `punkt_fredet`
-  and `linie_alle`. The brief asked for the area layer only.
+* **The whole WMS family is now implemented (2026-10-28).** The service's
+  GetCapabilities (updateSequence 526) publishes thirteen named layers; the
+  panel previously carried three of them (the WFS-protected areas row plus
+  the two point rows). The remaining **ten** are Heritage sublayers with the
+  same direct, tokenless, EPSG:3857, CC0 contract: `areal_alle`,
+  `areal_adm`, `areal_ka`, `areal_beskyttelse`, `areal_marin` (the polygon
+  views), `linie_alle`, `linje_fredet`, `linie_marin` (the line views — note
+  the service's `linje`/`linie` spelling), `punkt_marin` and the service's
+  own `relief` raster (native EPSG:3044 ImageMosaic, drawn in EPSG:3857).
+  The nine vector rows answer `GetFeatureInfo` clicks like the point rows —
+  a map-module fix makes a polygon/line answer open its record anchored on
+  the click — and the raster is not queryable. Layer names come from the
+  live capabilities document; `node tools/verify-danish-capabilities.mjs`
+  re-confirms them from a network that may reach the provider.
 
 ## Guard, caching and politeness
 
@@ -216,6 +229,7 @@ repeated panning costs the providers nothing new.
 | 4 | OpenStreetMap (base) | ✅ **working** | Public tiles; used as the fallback base and kept inside the tile-usage policy. |
 | 5 | WITX historic tiles (base) | ⏸ **disabled placeholder** | Licence unknown, no written permission — must not be hotlinked. Ships `enabled: false`; nothing requests `witx.dk`. |
 | 6 | Fund og Fortidsminder (overlay) | ✅ **working** | Official SLKS upstream (replaces the unrunnable witx mirror), CC0, verified live; queried per view, capped, debounced, zoom ≥ 13. |
+| 7 | Kulturarv WMS family — the ten sublayers added 2026-10-28 (five areas, three lines, marine points, `relief`) | ✅ **wired, names capability-verified** | Every name of the live GetCapabilities (updateSequence 526) is now a row; direct public CC0 WMS like the verified point siblings. Per-layer live GetMap re-check pending: `node tools/verify-danish-capabilities.mjs` from a network that may reach `kulturarv.dk`. |
 
 **One layer is on by default** — the DTK25 topographic base — and every other
 Danish entry is off until the visitor switches it on. Existing layers and the
@@ -245,6 +259,8 @@ are likewise added server-side as `username` and `password` query parameters.
 | `lidar_dhm_terrain_hillshade` | DHM terrain hillshade | overlay, default off, opacity 1 | `https://api.dataforsyningen.dk/dhm_DAF` / `dhm_terraen_skyggekort` | token | CC BY 4.0 (DHM, see `DENMARK_LIDAR_DATAFORSYNINGEN.md`) | capabilities verified 2026-10-19 with a deployment token; layer name + EPSG:3857 published |
 | `lidar_dhm_surface_hillshade` | DHM surface hillshade (overflade) | overlay, default off, opacity 1 | `https://api.dataforsyningen.dk/dhm_DAF` / `dhm_overflade_skyggekort` | token | CC BY 4.0 (DHM) | capabilities verified 2026-10-19: `dhm_overflade_skyggekort` present, EPSG:3857 offered |
 | `fortidsminder_punkt_fredet`, `fortidsminder_punkt_ikkefredet` | protected / unprotected ancient monuments as WMS points | overlay, default off, z7 / z8 | `https://www.kulturarv.dk/ffgeoserver/public/wms` / the same `fundogfortidsminder_punkt_*` names | none | CC0 1.0, © Slots- og Kulturstyrelsen | capabilities + EPSG:3857 GetMap verified 2026-10-19 (an image, not a GeoServer exception); click answered with WMS 1.1.1 `GetFeatureInfo` (EPSG:4326, JSON → popup, sandboxed-iframe HTML fallback) |
+| `fortidsminder_areal_alle`, `_adm`, `_ka`, `_beskyttelse`, `_marin`, `fortidsminder_linie_alle`, `fortidsminder_linje_fredet`, `fortidsminder_linie_marin`, `fortidsminder_punkt_marin` | the rest of the register: all/administrative/heritage/protection/marine areas, all/protected/marine lines, marine points | overlay (Heritage sublayers), default off, z8–z9 | `https://www.kulturarv.dk/ffgeoserver/public/wms` / the same `fundogfortidsminder_*` names | none | CC0 1.0, © Slots- og Kulturstyrelsen | layer names taken from the live GetCapabilities (updateSequence 526, 2026-10-28); EPSG:3857 GetMap follows the point rows' verified GeoServer behaviour — re-run `tools/verify-danish-capabilities.mjs` from an authorized network to re-confirm; clicks answer `GetFeatureInfo` like the point rows |
+| `kulturarv_relief` | the service's Denmark-wide relief hillshade | overlay (Heritage sublayer), default off, z6+ | `https://www.kulturarv.dk/ffgeoserver/public/wms` / `relief` | none | CC0 1.0, © Slots- og Kulturstyrelsen | name from the live GetCapabilities (updateSequence 526, 2026-10-28); native grid EPSG:3044 (ImageMosaic), drawn in EPSG:3857 like its siblings; upscaled beyond z14 until the native pixel size is confirmed; not queryable |
 | `hist_hoeje`, `hist_lave`, `hist_preussen` | Høje / Lave / Preussiske målebordsblade | mutually-exclusive base layers | Dataforsyningen `topo20_hoeje_maalebordsblade_DAF`, `topo20_lave_maalebordsblade_DAF`, `topo25_preussen_maalebordsblade_DAF` / respective `dtk_*_maalebordsblade` | token | expected CC BY 4.0; confirm source-page terms for each product | `topo20_hoeje_maalebordsblade_DAF` capabilities verified 2026-10-19 (`dtk_hoeje_maalebordsblade`, EPSG:3857); the other two follow the same pattern |
 | `topo4cm_1953_1976`, `topo4cm_1980_2001` | 4 cm map, 1953–1976 / 1980–2001 | mutually-exclusive base layers | Dataforsyningen `topo4cm_1953_1976_DAF`, `topo4cm_1980_2001_DAF` / respective same-name layer | token | expected CC BY 4.0; exact product terms not live-verified | blocked: no token; identifiers not capability-verified |
 | `dtk25` | DTK25 topographic map (existing) | base | `dtk_25_DAF` / `dtk25_2023` | token | CC BY 4.0, © Klimadatastyrelsen | existing proxy; live imagery not verified in this workspace |

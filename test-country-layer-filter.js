@@ -47,11 +47,11 @@ const CA_BBOX = [-141.0, 41.0, -52.0, 83.0];    // Canada (group availability fa
    ══════════════════════════════════════════════════════════════ */
 assert(/#transpPanel\.country-filter-active \.country-layer-unavailable\s*\{\s*display:\s*none\s*!important/.test(css),
     'styles.css hides rows marked country-layer-unavailable while the filter is active');
-assert(html.includes('css/styles.css?v=20261026-viewport-heritage'), 'index.html loads the re-versioned styles.css');
+assert(html.includes('css/styles.css?v=20261027-danish-row-style'), 'index.html loads the re-versioned styles.css');
 assert(html.includes('js/map-app.js?v=20261026-lidar-whole-or-disc'), 'index.html loads the single-row hillshade map-app.js');
 assert(html.includes('js/historical-eu-maps.js?v=20261013-flat-hist-maps'), 'index.html loads the country-attribution catalog');
 assert(html.includes('js/globe-country-picker.js?v=20261017-outline-zoom-settle'), 'index.html loads the re-versioned picker');
-['css/styles.css?v=20261026-viewport-heritage',
+['css/styles.css?v=20261027-danish-row-style',
  'js/map-app.js?v=20261026-lidar-whole-or-disc',
  'js/historical-eu-maps.js?v=20261013-flat-hist-maps',
  'js/globe-country-picker.js?v=20261017-outline-zoom-settle'].forEach(function (p) {
@@ -224,6 +224,26 @@ function setupPanel() {
         hasAvailableMaps() { return availableCatalogCount > 0; },
         toggleHistEuLayer() {}
     };
+    // Mirrors production js/danish-layers.js filterForCountry: the Danish
+    // group row, its generated sub-rows and the shared LiDAR mount
+    // (#danishLidarLayers, which replaced the old static #lidarDkLidarRow)
+    // are gated strictly by ISO. The rows themselves are generated at
+    // runtime, so only the static #danishRow / #danishLidarLayers are in
+    // this parsed tree — the mount carries the class only, like production.
+    window.DetectLabDanishLayers = {
+        filterForCountry(iso) {
+            const code = String(iso || '').toUpperCase();
+            const inCountry = !code || code === 'DK';
+            document.ids.forEach((el, id) => {
+                if (id !== 'danishRow' && id.indexOf('danishRow_') !== 0 &&
+                    id.indexOf('danishGroup_') !== 0) return;
+                el.classList.toggle(UNAVAILABLE, !inCountry);
+                el.setAttribute('aria-hidden', inCountry ? 'false' : 'true');
+            });
+            const mount = document.getElementById('danishLidarLayers');
+            if (mount) mount.classList.toggle(UNAVAILABLE, !inCountry);
+        }
+    };
     const frames = [];
     const context = vm.createContext({
         window, document,
@@ -294,7 +314,7 @@ function groupRowOf(document, iconId) {
     // National services of other countries must NEVER leak in — not even the
     // neighbours visible at the edges of the locked viewport whose published
     // boxes graze Italy's bbox (France's MNT, Switzerland's relief).
-    assert.equal(unavailable(document, 'lidarDkLidarRow'), true, 'Denmark LiDAR hidden for Italy');
+    assert.equal(unavailable(document, 'danishLidarLayers'), true, 'Denmark LiDAR mount hidden for Italy');
     assert.equal(unavailable(document, 'lidarSeLidarRow'), true, 'Sweden LiDAR hidden for Italy');
     assert.equal(unavailable(document, 'lidarNoLidarRow'), true, 'Norway LiDAR hidden for Italy');
     assert.equal(unavailable(document, 'lidarUkLidarRow'), true, 'UK LiDAR hidden for Italy');
@@ -342,11 +362,11 @@ function groupRowOf(document, iconId) {
     assert.equal(rowOfToggle(document, 'apmToggle').classList.contains(UNAVAILABLE), true, 'APM row hidden for Italy');
     // Panel carries the filter class and hidden rows are aria-hidden.
     assert(document.getElementById('transpPanel').classList.contains(FILTER_ACTIVE), 'panel marked country-filter-active');
-    assert.equal(document.getElementById('lidarDkLidarRow').getAttribute('aria-hidden'), 'true', 'hidden rows are aria-hidden');
+    assert.equal(document.getElementById('danishRow').getAttribute('aria-hidden'), 'true', 'hidden rows are aria-hidden');
 
     // Italy's real bounds come back with the exit: everything selectable again.
     window.unfilterLayersForCountry();
-    assert.equal(unavailable(document, 'lidarDkLidarRow'), false, 'Denmark LiDAR restored');
+    assert.equal(unavailable(document, 'danishLidarLayers'), false, 'Denmark LiDAR restored');
     assert.equal(unavailable(document, 'lidarFrLidarRow'), false, 'France LiDAR restored');
     assert.equal(unavailable(document, 'babelScroll'), false, 'Romania-only rows restored');
     ['lidarExpandIcon', 'histExpandIcon', 'histPremiumExpandIcon', 'vegfpExpandIcon', 'romanExpandIcon'].forEach(function (icon) {
@@ -366,7 +386,7 @@ function groupRowOf(document, iconId) {
     window._detectlabCountryBounds = DK_BBOX;
     window.filterLayersForCountry('DK');
 
-    assert.equal(unavailable(document, 'lidarDkLidarRow'), false, 'Denmark LiDAR available for Denmark');
+    assert.equal(unavailable(document, 'danishLidarLayers'), false, 'Denmark LiDAR available for Denmark');
     // The neighbours visible around Denmark's bbox must not leak in: Sweden's
     // and Poland's boxes clip the Danish bbox but their services have ZERO
     // data for Denmark.

@@ -684,11 +684,13 @@ const SIGNATURES = [
   {
     host: 'www.kulturarv.dk',
     provider: 'Slots- og Kulturstyrelsen (Fund og Fortidsminder)',
-    request: 'WMS 1.3.0 GetMap (CRS=EPSG:3857, uppercase KVP), fundogfortidsminder_punkt_fredet / ' +
-      '_punkt_ikkefredet, PNG + transparent',
+    request: 'WMS 1.3.0 GetMap (CRS=EPSG:3857, uppercase KVP) for the whole ' +
+      'fundogfortidsminder_* family (areas, lines, points) and relief, PNG + transparent',
     what: '200 + ServiceExceptionReport XML (GeoServer answers exceptions with 200) or an all-alpha tile. ' +
       'The capabilities advertise EPSG:25832 and CRS:84 while GetMap serves EPSG:3857 normally ' +
-      '(verified 2026-10-19) — judge by the tile, not by the capabilities. A renamed layer answers ' +
+      '(verified 2026-10-19 for the point layers; the ten rows added 2026-10-28 follow the same ' +
+      'GeoServer and their names come from the live GetCapabilities updateSequence 526) — judge by ' +
+      'the tile, not by the capabilities. A renamed layer answers ' +
       '"Could not find layer …" the same way',
     owner: 'external (the agency GeoServer)',
     app: 'no guard row: js/danish-layers.js owns the switch and prints its own status line ' +

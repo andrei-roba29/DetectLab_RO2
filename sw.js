@@ -804,7 +804,7 @@
 //   centred 3D bar, stepping above the country “Exit view” pill via the
 //   existing --country-exit-lift hook. Re-tags css/map3d-terrain.css.
 //   See PWA_3D_BUTTON_SIZE_CENTRE.md.
-const CACHE_NAME = 'detectlab-v289-albania-heritage-free-tab';
+const CACHE_NAME = 'detectlab-v290-danish-kulturarv-sublayers';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1691,10 +1691,19 @@ const PRECACHE_URLS = [
   'js/danish-layers.js?v=20261027-danish-row-style',
   'js/asig-albania-layers.js?v=20261027-albania-row-style',
   // v289: Albania's (free) Heritage block no longer leaks into the Premium
-  // tab — it is a data-category="free" transp-layer-row, the whole free
-  // country catalogue is tab-gated in CSS, and the module re-applies the
-  // current tab after every panel rebuild. The live module URL is:
-  'js/asig-albania-layers.js?v=20261027-albania-heritage-free-tab'
+  //   tab — it is a data-category="free" transp-layer-row, the whole free
+  //   country catalogue is tab-gated in CSS, and the module re-applies the
+  //   current tab after every panel rebuild. The live module URL is:
+  'js/asig-albania-layers.js?v=20261027-albania-heritage-free-tab',
+  // v290: the Danish Heritage section gains the rest of the official
+  //   Slots- og Kulturstyrelsen Kulturarv WMS family as sublayers — five
+  //   more area views (all / administrative / heritage / protection-zone /
+  //   marine), the three line views, the marine points and the service's
+  //   relief raster (ten new rows from the live GetCapabilities), and a
+  //   GetFeatureInfo fix so polygon/line answers open their record too.
+  //   The two URLs below are the live ones index.html requests.
+  'js/danish-layers.config.js?v=20261028-kulturarv-sublayers',
+  'js/danish-layers.js?v=20261028-kulturarv-sublayers'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──
