@@ -183,7 +183,32 @@ const TOKEN = 'test-token-not-a-credential';
     assert.ok(CONFIG.byId('fortidsminder_punkt_ikkefredet').minZoom >
         CONFIG.byId('fortidsminder_punkt_fredet').minZoom,
         'the dense unprotected-point layer starts one zoom later');
+    assert.strictEqual(CONFIG.byId('fortidsminder_punkt_fredet').minZoom, 7,
+        'the protected points are visible from the Denmark view zoom on');
+    assert.strictEqual(CONFIG.byId('fortidsminder_punkt_ikkefredet').minZoom, 8,
+        'the denser unprotected points join one zoom in');
     ok('heritage points: public CC0 WMS, EPSG:3857, no credential, sensible zoom gates');
+
+    /* The scheduled-monuments areas are bright neon orange now: the user asked
+       for an eye-catching colour, and the areas are the group's hero layer. */
+    assert.strictEqual(heritage.wfs.style.color, '#ff5e00', 'area outline is neon orange');
+    assert.strictEqual(heritage.wfs.style.fillColor, '#ff9e3d', 'area fill is neon orange');
+    assert.strictEqual(heritage.wfs.style.weight, 2);
+    assert.strictEqual(heritage.wfs.style.fillOpacity, 0.32);
+    ok('scheduled-monument areas are rendered in neon orange');
+
+    /* Both monument point layers identify on click: the user reported the
+       points were hard to hit, so the raster WMS layers answer
+       GetFeatureInfo and open a popup on the nearest monument. */
+    ['fortidsminder_punkt_fredet', 'fortidsminder_punkt_ikkefredet'].forEach((id) => {
+        const points = CONFIG.byId(id);
+        assert.ok(points.identify, id + ' identifies on click');
+        assert.ok(points.identify.fields.length >= 3, id + ' identifies with several fields');
+        assert.strictEqual(points.identify.linkField, 'url');
+        assert.ok(points.identify.linkLabel.en && points.identify.linkLabel.da,
+            id + ' names the Fund og Fortidsminder link in both languages');
+    });
+    ok('both monument point layers are clickable WMS layers');
 
     const surface = CONFIG.byId('lidar_dhm_surface_hillshade');
     assert.strictEqual(surface.group, 'overlay');
@@ -738,6 +763,88 @@ async function testMapModule() {
         'the row reports state (zoom hint or feature count)');
     ok('the heritage overlay is a styled GeoJSON group with its own status line');
 
+    /* The monument POINT layers are clickable: GetFeatureInfo answers on a
+       map click and a popup opens on the nearest monument. First the
+       candidates and the request shape. */
+    ['fortidsminder_punkt_fredet', 'fortidsminder_punkt_ikkefredet'].forEach((id) => {
+        API.activate(id);
+    });
+    assert.deepStrictEqual(API._test.identifyLayers().map((layer) => layer.id),
+        ['fortidsminder_punkt_fredet', 'fortidsminder_punkt_ikkefredet'],
+        'the activated monument layers are the click candidates');
+    const clickLatLng = [56.15, 10.2];
+    const infoUrl = API._test.identifyUrl(CONFIG.byId('fortidsminder_punkt_fredet'), map, clickLatLng);
+    assert.ok(infoUrl.indexOf('SERVICE=WMS&VERSION=1.1.1&REQUEST=GetFeatureInfo') !== -1,
+        'a WMS 1.1.1 GetFeatureInfo request');
+    assert.ok(infoUrl.indexOf('LAYERS=fundogfortidsminder_punkt_fredet') !== -1 &&
+        infoUrl.indexOf('QUERY_LAYERS=fundogfortidsminder_punkt_fredet') !== -1,
+        'the service layer is asked about');
+    assert.ok(infoUrl.indexOf('SRS=EPSG%3A4326') !== -1, 'the answer comes in degrees');
+    assert.ok(infoUrl.indexOf('BBOX=10.15,56.1,10.3,56.22') !== -1, 'the bbox is the map bounds');
+    assert.ok(infoUrl.indexOf('WIDTH=800&HEIGHT=600') !== -1, 'the viewport size is sent');
+    assert.ok(infoUrl.indexOf('X=1000&Y=1400') !== -1, 'X/Y are pixel offsets from the north-west corner');
+    assert.ok(infoUrl.indexOf('INFO_FORMAT=application%2Fjson') !== -1, 'a JSON answer is requested');
+    assert.ok(infoUrl.indexOf('FEATURE_COUNT=10') !== -1);
+    ok('a click on an activated monument issues a correct GetFeatureInfo');
+
+    /* The JSON answer opens a popup on the nearest monument — the configured
+       fields, the extra properties, and the Fund og Fortidsminder link. */
+    sandbox.fetch = () => Promise.resolve(new Response(JSON.stringify({
+        type: 'FeatureCollection',
+        features: [{
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [10.2, 56.15] },
+            properties: {
+                anlaegstype: 'runehus', datering: 'Vikingetiden', frednr: '1234', stednr: '5678',
+                url: 'https://www.kulturarv.dk/kid/vis.do?kid=1234'
+            }
+        }]
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    API._test.identifyOnClick({ latlng: clickLatLng });
+    await settle();
+    assert.strictEqual(leaflet.calls.popups.length, 1, 'one popup opens');
+    assert.strictEqual(leaflet.calls.popups[0].latlng.join(','), '56.15,10.2',
+        'the popup anchors on the monument, not on the click point');
+    const popupHtml = leaflet.calls.popups[0].content;
+    assert.ok(popupHtml.indexOf('runehus') !== -1, 'the type is shown');
+    assert.ok(popupHtml.indexOf('Vikingetiden') !== -1, 'the dating is shown');
+    assert.ok(popupHtml.indexOf('Åbn i Fund og Fortidsminder') !== -1 ||
+        popupHtml.indexOf('Open in Fund og Fortidsminder') !== -1, 'the link is named in both languages');
+    assert.ok(popupHtml.indexOf('https://www.kulturarv.dk/kid/vis.do') !== -1, 'the monument page is linked');
+    ok('a GetFeatureInfo answer opens a popup with the monument details');
+
+    /* No feature under the cursor: no popup, and the click does not break. */
+    sandbox.fetch = () => Promise.resolve(new Response(JSON.stringify({
+        type: 'FeatureCollection', features: []
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    API._test.identifyOnClick({ latlng: clickLatLng });
+    await settle();
+    assert.strictEqual(leaflet.calls.popups.length, 1, 'an empty answer leaves the popup closed');
+    ok('an empty GetFeatureInfo answer opens nothing');
+
+    /* The cross-origin JSON answer can be CORS-blocked: the request is then
+       asked as HTML and rendered in a sandboxed iframe, so the user still
+       sees the monument record (the Albania pattern). Both point layers are
+       active, so the iframe asks the topmost candidate about its layer. */
+    sandbox.fetch = () => Promise.reject(new Error('CORS'));
+    API._test.identifyOnClick({ latlng: clickLatLng });
+    await settle();
+    assert.strictEqual(leaflet.calls.popups.length, 2, 'the fallback opens a second popup');
+    const iframeHtml = leaflet.calls.popups[1].content;
+    assert.ok(iframeHtml.indexOf('<iframe') !== -1, 'the fallback is a sandboxed iframe');
+    assert.ok(iframeHtml.indexOf('INFO_FORMAT=text%2Fhtml') !== -1, 'the iframe asks for HTML');
+    assert.ok(iframeHtml.indexOf('LAYERS=fundogfortidsminder_punkt_ikkefredet') !== -1,
+        'the topmost candidate layer is asked about');
+    assert.ok(iframeHtml.indexOf('sandbox') !== -1, 'the iframe is sandboxed');
+    ok('a CORS-blocked answer falls back to a sandboxed HTML iframe');
+
+    /* The topmost candidate wins: with both point layers active the click
+       identifies on the layer switched on last. */
+    API.deactivate('fortidsminder_punkt_fredet');
+    assert.deepStrictEqual(API._test.identifyLayers().map((layer) => layer.id),
+        ['fortidsminder_punkt_ikkefredet'], 'deactivating drops the layer from the candidates');
+    ok('click candidates follow the activation state');
+
     /* Country filter: visible in Denmark only. The requested free groups hide
      * with the Danish parent outside DK and all their subrows return for DK. */
     const requestedPanelIds = CONFIG.panelGroups.reduce((ids, group) => ids.concat(group.layers), []);
@@ -952,7 +1059,7 @@ function buildDom() {
 }
 
 function buildLeaflet(dom) {
-    const calls = { tileLayer: [], tileLayerWms: [], geoJSON: [], opacity: [], addLayer: [], removeLayer: [] };
+    const calls = { tileLayer: [], tileLayerWms: [], geoJSON: [], opacity: [], addLayer: [], removeLayer: [], popups: [] };
     function baseLayer(options) {
         return {
             options,
@@ -987,7 +1094,21 @@ function buildLeaflet(dom) {
             group.eachLayer = function (fn) { this._layers.forEach(fn); };
             return group;
         },
-        latLngBounds() { return {}; }
+        latLngBounds() { return {}; },
+        popup(options) {
+            const popup = {
+                options,
+                latlng: null,
+                content: null,
+                setLatLng(latlng) { this.latlng = latlng; return this; },
+                setContent(content) { this.content = content; return this; },
+                openOn() {
+                    calls.popups.push({ latlng: this.latlng, content: this.content, options });
+                    return this;
+                }
+            };
+            return popup;
+        }
     };
     L.tileLayer.wms = function (url, options) {           /* guard-wrapped in production */
         calls.tileLayerWms.push({ url, options, via: 'factory' });
@@ -1010,7 +1131,23 @@ function buildMap() {
         on() { return this; },
         getZoom() { return 14; },
         getBounds() {
-            return { getWest: () => 10.15, getSouth: () => 56.10, getEast: () => 10.30, getNorth: () => 56.22 };
+            return {
+                getWest: () => 10.15, getSouth: () => 56.10, getEast: () => 10.30, getNorth: () => 56.22,
+                getNorthWest: () => ({ lat: 56.22, lng: 10.15 })
+            };
+        },
+        getSize() { return { x: 800, y: 600 }; },
+        project(latlng, zoom) {
+            let lat = latlng[0], lng = latlng[1];
+            if (!Array.isArray(latlng)) { lat = latlng.lat; lng = latlng.lng; }
+            /* Real Leaflet returns an L.Point: x/y plus distanceTo(). */
+            return {
+                x: (lng - 10.0) * 20000,
+                y: (56.4 - lat) * 20000,
+                distanceTo(other) {
+                    return Math.sqrt(Math.pow(this.x - other.x, 2) + Math.pow(this.y - other.y, 2));
+                }
+            };
         },
         setView() { return this; }
     };

@@ -122,7 +122,7 @@ a relative `import`/`require` that resolves outside `backend/`, and it runs the
 | `danish.naturtyper` | overlay | WMS 1.3.0 (direct) | no | — |
 | `danish.fortidsminder` | overlay | WFS 2.0.0 → GeoJSON | no | — |
 | `danish.fortidsminder_punkt_fredet` | overlay | WMS 1.3.0 (direct) | no | — |
-| `danish.fortidsminder_punkt_ikkefredet` | overlay | WMS 1.3.0 (direct, z10+) | no | — |
+| `danish.fortidsminder_punkt_ikkefredet` | overlay | WMS 1.3.0 (direct, z8+) | no | — |
 | `danish.lidar_dhm_surface_hillshade` | overlay | WMS 1.3.0 | no | `DATAFORSYNINGEN_TOKEN` |
 | `danish.historic-witx` | base | XYZ | **disabled** | written permission from witx.dk |
 | `danish.witx_fundogfortidsminder_areal`, `danish.witx_fundogfortidsminder` | overlay | WFS | **disabled placeholders** | written permission from witx.dk |
@@ -253,7 +253,23 @@ whose licence is unclear or non-commercial ships `enabled: false` with
 * **The heritage overlay starts at zoom 13** and shows at most 400 features per
   view (`maxFeatures`), debounced 450 ms after the map settles. That is
   deliberate: the register's terms forbid harvesting — we query per view, we do
-  not copy the dataset.
+  not copy the dataset. Its polygons are drawn in **neon orange**
+  (`#ff5e00` outline, `#ff9e3d` fill) so the scheduled monuments stand out over
+  any basemap.
+* **The two monument point layers draw from zoom 7 (protected) and zoom 8
+  (not protected).** The Denmark view lands at zoom ≈7–8, so a higher gate made
+  "switch on" look like nothing happened — the dots were simply not requested
+  at that zoom. Both layers are raster WMS read directly from the agency
+  GeoServer; the service answers `GetFeatureInfo` on a map click and the
+  browser opens a popup on the nearest monument (type, dating, register
+  numbers, link to the Fund og Fortidsminder page). If the cross-origin JSON
+  answer is CORS-blocked, the same request is asked as HTML and rendered in a
+  sandboxed iframe, so the record still shows.
+* **The kultur arv tile service answers failures with HTTP 200** — either a
+  `ServiceExceptionReport` XML document or all-alpha tiles, which look like an
+  empty layer until the tile is re-requested. `watchTiles` therefore re-issues
+  the tile layer once (2 s) when nothing has loaded yet, which clears the cold
+  cache on first switch-on.
 * **DTK25 2023 only.** The service also publishes `dtk25` (latest) and 2002–2023
   vintages, and the orthophoto service publishes one layer per year plus a faster
   WMTS twin; all of them are *reported* in `DATA_SOURCES.md` and none is enabled,

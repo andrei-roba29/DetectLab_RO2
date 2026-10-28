@@ -426,11 +426,13 @@
                      * fits this many features; the row explains it in the info
                      * popup instead of silently truncating. */
                     style: {
-                        color: '#ffd166',
-                        weight: 1.6,
+                        /* Eye-popping neon orange: the scheduled-monument
+                         * polygons must stand out over any basemap. */
+                        color: '#ff5e00',
+                        weight: 2,
                         opacity: 0.95,
-                        fillColor: '#ffb703',
-                        fillOpacity: 0.28
+                        fillColor: '#ff9e3d',
+                        fillOpacity: 0.32
                     },
                     popup: {
                         /* Which properties the click popup shows, in order. */
@@ -468,8 +470,10 @@
                 tileSize: 256,
                 version: '1.3.0',
                 /* Points stay readable from overview zoom: one symbol per
-                 * scheduled monument is what the layer is for. */
-                minZoom: 8,
+                 * scheduled monument is what the layer is for. The Denmark
+                 * view sits at zoom ~7, so the layer must draw from there —
+                 * otherwise turning the switch on looks like nothing happens. */
+                minZoom: 7,
                 maxZoom: 22,
                 maxNativeZoom: 19,
                 attribution: 'Fund og Fortidsminder © <a href="https://slks.dk/" target="_blank" ' +
@@ -487,8 +491,19 @@
                 bounds: [[54.42, 7.99], [57.78, 15.6]],
                 notes: 'WMS twin of the WFS areas layer (same service, same licence). ' +
                     'GetCapabilities lists fundogfortidsminder_punkt_fredet and ' +
-                    'fundogfortidsminder_punkt_ikkefredet (verified 2026-10-19). Use this raster ' +
-                    'overlay for the whole country; use the WFS row when you need clickable features.',
+                    'fundogfortidsminder_punkt_ikkefredet (verified 2026-10-19). The raster ' +
+                    'overlay covers the whole country and its dots answer GetFeatureInfo ' +
+                    'clicks through the `identify` block below.',
+                identify: {
+                    /* The raster carries no vector geometry, so a click is
+                     * resolved server-side with a WMS GetFeatureInfo (the same
+                     * agency GeoServer publishes the points). Fields match the
+                     * WFS areas popup; anything else the service returns still
+                     * shows in the popup. */
+                    fields: ['anlaegstype', 'datering', 'frednr', 'stednr'],
+                    linkField: 'url',
+                    linkLabel: { da: 'Åbn i Fund og Fortidsminder', en: 'Open in Fund og Fortidsminder' }
+                },
                 wfs: null,
                 permission: { required: false, note: '' }
             },
@@ -510,9 +525,11 @@
                 tiled: true,
                 tileSize: 256,
                 version: '1.3.0',
-                /* ~150 000 registrations: the density is unreadable below z10,
-                 * and the service would render every one of them per tile. */
-                minZoom: 10,
+                /* ~150 000 registrations: the density is heavy, but the
+                 * layer must still draw when its switch is on at the Denmark
+                 * view (zoom ~7-8), so the gate sits one level below the
+                 * protected-point layer, not at the overview zoom. */
+                minZoom: 8,
                 maxZoom: 22,
                 maxNativeZoom: 19,
                 attribution: 'Fund og Fortidsminder © <a href="https://slks.dk/" target="_blank" ' +
@@ -528,8 +545,15 @@
                 licenceUrl: 'https://creativecommons.org/publicdomain/zero/1.0/',
                 sourcePage: 'https://slks.dk/omraader/kulturarv/databaserne/til-udviklere/webservices',
                 bounds: [[54.42, 7.99], [57.78, 15.6]],
-                notes: 'The “not protected” companion of fortidsminder_punkt_fredet; zooms from ' +
-                    'z10 because the dataset is very dense. Same public GeoServer, no credentials.',
+                notes: 'The “not protected” companion of fortidsminder_punkt_fredet; draws from ' +
+                    'z8 so it is visible at the Denmark view. Same public GeoServer, no ' +
+                    'credentials, and its dots answer GetFeatureInfo clicks like the ' +
+                    'protected-point layer.',
+                identify: {
+                    fields: ['anlaegstype', 'datering', 'frednr', 'stednr'],
+                    linkField: 'url',
+                    linkLabel: { da: 'Åbn i Fund og Fortidsminder', en: 'Open in Fund og Fortidsminder' }
+                },
                 wfs: null,
                 permission: { required: false, note: '' }
             },
