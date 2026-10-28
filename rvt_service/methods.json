@@ -1,0 +1,199 @@
+{
+  "source": "rvt-py 2.2.3, rvt.default.DefaultValues.__init__; Apache-2.0. RVT defaults are in DEM pixels unless labelled metres. See RVT_LIDAR.md.",
+  "groups": {
+    "Light and slope": [
+      "hillshade",
+      "multi-hillshade",
+      "slope"
+    ],
+    "Relief models": [
+      "slrm",
+      "msrm",
+      "mstp"
+    ],
+    "Sky and openness": [
+      "svf",
+      "asvf",
+      "openness",
+      "local-dominance",
+      "sky-illumination"
+    ],
+    "Combinations": [
+      "vat",
+      "combined-vat",
+      "prismatic-openness",
+      "crim",
+      "e2mstp",
+      "e3mstp"
+    ]
+  },
+  "methods": {
+    "hillshade": {
+      "label": "Hillshade",
+      "unit": "intensity",
+      "stretch": [
+        0,
+        1
+      ],
+      "radiusPx": 1,
+      "description": "One-direction sun lighting; features parallel to light may be hidden."
+    },
+    "multi-hillshade": {
+      "label": "Multi-hillshade (multi-directional)",
+      "unit": "intensity",
+      "stretch": [
+        0,
+        1
+      ],
+      "radiusPx": 1,
+      "description": "Combines many illumination directions to reduce directional blind spots."
+    },
+    "slope": {
+      "label": "Slope",
+      "unit": "degrees",
+      "stretch": [
+        0,
+        51
+      ],
+      "radiusPx": 1,
+      "description": "Terrain steepness in degrees, independent of lighting."
+    },
+    "slrm": {
+      "label": "Simple local relief model",
+      "unit": "m",
+      "stretch": [
+        -2,
+        2
+      ],
+      "radiusPx": 20,
+      "measure": {
+        "smoothing": 20
+      },
+      "description": "Height minus the local terrain trend within the smoothing radius."
+    },
+    "msrm": {
+      "label": "Multi-scale relief model",
+      "unit": "m",
+      "stretch": [
+        -2.7,
+        2.7
+      ],
+      "radiusPx": 64,
+      "measure": {
+        "smallest": 0,
+        "largest": 20,
+        "scaling": 2
+      },
+      "displayRange": 2.5,
+      "description": "Highlights small ground features across a range of sizes by subtracting broad landscape trends."
+    },
+    "mstp": {
+      "label": "Multi-scale topographic position",
+      "unit": "RGB",
+      "stretch": [
+        0,
+        1
+      ],
+      "radiusPx": 2023,
+      "measure": {
+        "smallest": 3,
+        "largest": 2023,
+        "scaling": 2
+      },
+      "unavailable": "RVT default broad radius is 2023 DEM pixels; requires an offline precomputed RGB pyramid.",
+      "description": "Three-scale topographic position shown in colour. Requires offline processing."
+    },
+    "svf": {
+      "label": "Sky-view",
+      "unit": "factor",
+      "stretch": [
+        0.6375,
+        1
+      ],
+      "radiusPx": 10,
+      "description": "Visible proportion of the sky from each ground point."
+    },
+    "asvf": {
+      "label": "Anisotropic sky-view",
+      "unit": "factor",
+      "stretch": [
+        0.7,
+        0.9
+      ],
+      "radiusPx": 10,
+      "description": "Direction-weighted sky-view."
+    },
+    "local-dominance": {
+      "label": "Local dominance",
+      "unit": "index",
+      "stretch": [
+        0.5,
+        1.8
+      ],
+      "radiusPx": 20,
+      "description": "Local prominence seen from an observer just above the terrain."
+    },
+    "sky-illumination": {
+      "label": "Sky illumination",
+      "unit": "intensity",
+      "stretch": [
+        0,
+        1
+      ],
+      "radiusPx": 100,
+      "description": "Diffuse illumination from the sky dome."
+    },
+    "vat": {
+      "label": "VAT",
+      "unit": "RGB",
+      "unavailable": "Requires a separately validated RVT blending recipe and RGB float output."
+    },
+    "combined-vat": {
+      "label": "Combined VAT",
+      "unit": "RGB",
+      "unavailable": "Requires a separately validated RVT blending recipe and RGB float output."
+    },
+    "prismatic-openness": {
+      "label": "Prismatic openness",
+      "unit": "RGB",
+      "unavailable": "Requires a separately validated RVT blending recipe and RGB float output."
+    },
+    "openness": {
+      "label": "Openness",
+      "unit": "degrees",
+      "stretch": [
+        60,
+        95
+      ],
+      "radiusPx": 10,
+      "mode": "positive",
+      "description": "Positive highlights ridges; negative highlights hollows. Calculated from the DTM."
+    },
+    "crim": {
+      "label": "CRIM",
+      "unit": "RGB",
+      "unavailable": "No verified RVT recipe or RGB float pyramid; unavailable rather than faking this filter."
+    },
+    "e2mstp": {
+      "label": "e²MSTP",
+      "unit": "RGB",
+      "unavailable": "No verified RVT recipe or RGB float pyramid; unavailable rather than faking this filter."
+    },
+    "e3mstp": {
+      "label": "e³MSTP",
+      "unit": "RGB",
+      "unavailable": "No verified RVT recipe or RGB float pyramid; unavailable rather than faking this filter."
+    }
+  },
+  "lookingFor": {
+    "status": "needs verification — no authoritative feature-by-method very-suitable table located; no ratings asserted",
+    "features": {
+      "Banks and walls": [],
+      "Mounds": [],
+      "Ditches and hollow ways": [],
+      "Pits and hollows": [],
+      "Platforms": [],
+      "Terraces": []
+    }
+  }
+}
