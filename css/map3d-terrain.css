@@ -204,6 +204,10 @@ body.is-pwa.is-3d .m3d-toggle-group {
  * the corner across the map so it shares the row's safe-area offset. */
 body.is-pwa.is-3d #detectlab-map .leaflet-bottom.leaflet-left {
     width: 100%;
+    /* The regular PWA corner already adds the safe-area inset and bleed.
+       The row below is positioned relative to the wrapper and includes its
+       own inset; reset the corner or the basemap button is lifted twice. */
+    bottom: 0 !important;
     pointer-events: none;
 }
 body.is-pwa.is-3d #detectlab-map #arcgisBasemapCtrl {
@@ -212,6 +216,17 @@ body.is-pwa.is-3d #detectlab-map #arcgisBasemapCtrl {
     bottom: calc(98px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)) + var(--country-exit-lift, 0px));
     margin: 0 !important;
     pointer-events: auto;
+    display: flex;
+    flex-direction: column-reverse;
+}
+/* Keep the icon beside refresh when the list opens upwards. */
+body.is-pwa.is-3d #arcgisBasemapCtrl .arcgis-basemap-header {
+    width: 38px;
+    align-self: flex-start;
+}
+body.is-pwa.is-3d #arcgisBasemapCtrl .arcgis-basemap-list {
+    border-top: 0;
+    border-bottom: 1px solid rgba(184, 216, 240, 0.14);
 }
 
 /* The 2D/3D switch rides the same glass material as the map icons
@@ -548,6 +563,55 @@ body.is-pwa.is-3d #map3d-surface .maplibregl-ctrl-attrib {
 body.is-pwa.is-3d #map3d-bar .m3d-head,
 body.is-pwa.is-3d #map3d-bar .m3d-basemap-row { display: none; }
 body.is-pwa.is-3d #map3d-bar.collapsed .m3d-actions { display: flex; }
+
+/* Desktop web 3D: the same compact controls as the installed PWA. The
+ * existing Leaflet picker remains the single source of basemap state; only
+ * its position changes, and its list opens upwards from the icon. */
+body:not(.is-pwa).is-3d .m3d-toggle-group {
+    left: calc(50% - 22px);
+    bottom: calc(96px + var(--country-exit-lift, 0px));
+}
+body:not(.is-pwa).is-3d #map3d-toggle,
+body:not(.is-pwa).is-3d #map3d-refresh {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    min-height: 38px;
+    padding: 0;
+    gap: 3px;
+}
+body:not(.is-pwa).is-3d #map3d-refresh .m3d-refresh-count { display: none; }
+body:not(.is-pwa).is-3d #detectlab-map .leaflet-bottom.leaflet-left {
+    position: absolute !important;
+    width: 100%;
+    bottom: 0 !important;
+    pointer-events: none;
+}
+body:not(.is-pwa).is-3d #detectlab-map #arcgisBasemapCtrl {
+    position: absolute;
+    left: calc(50% + 25px);
+    bottom: calc(98px + var(--country-exit-lift, 0px));
+    margin: 0 !important;
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column-reverse;
+}
+body:not(.is-pwa).is-3d #arcgisBasemapCtrl .arcgis-basemap-header {
+    width: 38px;
+    align-self: flex-start;
+}
+body:not(.is-pwa).is-3d #arcgisBasemapCtrl .arcgis-basemap-list {
+    border-top: 0;
+    border-bottom: 1px solid rgba(184, 216, 240, 0.14);
+}
+body:not(.is-pwa).is-3d #map3d-bar {
+    bottom: calc(142px + var(--country-exit-lift, 0px));
+    width: 280px;
+    max-width: calc(100% - 100px);
+}
+body:not(.is-pwa).is-3d #map3d-bar .m3d-head,
+body:not(.is-pwa).is-3d #map3d-bar .m3d-basemap-row { display: none; }
+body:not(.is-pwa).is-3d #map3d-bar.collapsed .m3d-actions { display: flex; }
 
 /* ══════════════════════════════════════════════════════════════════════════
  * The LiDAR focus (js/lidar-3d-focus.js)

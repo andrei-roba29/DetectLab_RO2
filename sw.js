@@ -843,7 +843,7 @@
 //   keeps its natural proportions at every zoom. Re-tags js/other-maps-overlay.js
 //   and the cache name. See OTHER_MAPS.md §9.
 // v307: keep the PWA layers panel uniformly tinted through its bottom clearance.
-const CACHE_NAME = 'detectlab-v307-pwa-panel-uniform';
+const CACHE_NAME = 'detectlab-v311-web-3d-basemap-row';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -885,13 +885,13 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 // ── Static assets to pre-cache on install ──
 const PRECACHE_URLS = [
   // v301: Next-Gen APM (MANUAL) — see the header note above.
-  'css/next-gen-apm.css?v=20261029-apm-next-phase4',
+  'css/next-gen-apm.css?v=20261029-apm-layer',
   'js/apm-next/apm-core.js?v=20261029-apm-next-phase4',
   'js/apm-next/apm-raster.js?v=20261029-apm-next-phase4',
   'js/apm-next/apm-sites.js?v=20261029-apm-next-phase4',
   'js/apm-next/apm-providers.js?v=20261029-apm-next-phase4',
   'js/apm-next/apm-pipeline.js?v=20261029-apm-next-phase4',
-  'js/apm-next/apm-ui.js?v=20261029-apm-next-phase4',
+  'js/apm-next/apm-ui.js?v=20261029-apm-layer',
   'js/apm-next/apm-i18n.js?v=20261029-apm-next-phase4',
   'js/apm-next/apm-worker.js?v=20261029-apm-next-phase4',
   'js/apm-next/apm-worker.js',
@@ -1047,7 +1047,7 @@ const PRECACHE_URLS = [
   // v285: PWA 38×38 switch/refresh squares; the group centres in 3D.
   'css/map3d-terrain.css?v=20261029-no-cesium',
   'css/map3d-terrain.css?v=20261029-pwa-3d-clearance',
-  'css/map3d-terrain.css?v=20261029-pwa-3d-shortcuts',
+  'css/map3d-terrain.css?v=20261029-web-3d-basemap-row',
   'js/map3d-terrain.js?v=20261029-no-cesium',
   'js/map3d-terrain.js?v=20261029-3d-startup-repaint',
   'js/map-app.js?v=20261026-lidar-whole-or-disc',
@@ -1788,7 +1788,7 @@ const PRECACHE_URLS = [
   //   live ones index.html requests.
   'css/styles.css?v=20261029-romania-5m',
   'js/tile-perf.js?v=20261029-android-zoom-glass',
-  'js/map-app.js?v=20261029-live-location-zoom'
+  'js/map-app.js?v=20261029-other-maps-visibility'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──

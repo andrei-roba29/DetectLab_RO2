@@ -31,7 +31,7 @@
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
     <link rel="stylesheet" href="css/maplibre-gl.css?v=20261013-3d-terrain">
-    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261029-pwa-3d-shortcuts">
+    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261029-web-3d-basemap-row">
     <link rel="stylesheet" href="css/hist-shift.css?v=20261014-hist-shift">
     <!-- „Alte hărți / Other maps” — punctele verzi + suprapunerea liberă a
          hărților ne-georeferențiate (Hungaricana + NLS Map Finder). -->
@@ -41,7 +41,7 @@
     <link rel="stylesheet" href="css/library-of-babel.css?v=20260917-babel-epochs">
     <link rel="stylesheet" href="css/tutorial.css?v=20261025-layer-glass">
     <link rel="stylesheet" href="css/offline-maps.css?v=20261025-layer-glass">
-    <link rel="stylesheet" href="css/next-gen-apm.css?v=20261029-apm-next-phase4">
+    <link rel="stylesheet" href="css/next-gen-apm.css?v=20261029-apm-layer">
     <style>
         /* PWA Specific Styles */
         body.is-pwa .nav-links {
@@ -2087,7 +2087,7 @@
                             </div>
 
 
-<div id="otherMapsRow">
+                            <div id="otherMapsRow">
                                 <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
                                     <span style="display:flex;align-items:center;gap:5px;">
                                         <svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="#2ecc71" fill-opacity="0.45" stroke="#2ecc71" stroke-width="1" /></svg>
@@ -2112,7 +2112,7 @@
                                        min="0" max="100" value="80"
                                        oninput="setOtherMapsOpacity(this.value)">
                             </div>
-</div><!-- /histSubLayers -->
+                        </div><!-- /histSubLayers -->
                     </div><!-- /historical maps transp-layer-row -->
 
                     <div class="transp-divider active" data-category="free"></div>
@@ -4039,6 +4039,15 @@
                              controls here. -->
                     </div>
 
+                    <!-- Next-Gen APM is available in the same Premium layer list on desktop and PWA. -->
+                    <div class="transp-layer-row" data-category="premium" id="apmNextRow">
+                        <div class="transp-layer-label">
+                            <span>APM Next-Gen</span>
+                            <span class="apm-premium-badge">PREMIUM</span>
+                        </div>
+                        <button type="button" id="apmNextBtn" class="apm-layer-button" aria-expanded="false" aria-controls="apmNextPanel">Open APM</button>
+                    </div>
+
                     <!-- LIDAR Scanner — premium CSV point scan -->
                     <div class="transp-layer-row lidar-scanner-row" data-category="premium" id="lidarScannerRow">
                         <div class="transp-layer-label" style="margin-bottom:6px">
@@ -5247,7 +5256,7 @@
          See ROMAN_ROADS_PERFORMANCE.md. -->
     <script src="js/roman-roads-parser.js?v=20261015-roman-roads"></script>
     <script src="js/roman-roads.js?v=20261015-roman-roads"></script>
-    <script src="js/map-app.js?v=20261029-live-location-zoom"></script>
+    <script src="js/map-app.js?v=20261029-other-maps-visibility"></script>
     <link rel="stylesheet" href="css/rvt-panel.css?v=1">
     <script src="js/lidar-photo-filter.js?v=1" defer></script>
     <script src="js/rvt-panel.js?v=2" defer></script>
@@ -5331,7 +5340,7 @@
     <script src="js/apm-next/apm-providers.js?v=20261029-apm-next-phase4"></script>
     <script src="js/apm-next/apm-i18n.js?v=20261029-apm-next-phase4"></script>
     <script src="js/apm-next/apm-pipeline.js?v=20261029-apm-next-phase4"></script>
-    <script src="js/apm-next/apm-ui.js?v=20261029-apm-next-phase4"></script>
+    <script src="js/apm-next/apm-ui.js?v=20261029-apm-layer"></script>
     <script src="js/archeo-potential.js?v=20261020-3d-analysis-points"></script>
     <script src="js/lidar-geo.js?v=20260811-latlon"></script>
     <script src="js/lidar-scanner.js?v=20261020-3d-analysis-points"></script>

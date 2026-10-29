@@ -47,12 +47,12 @@ const CA_BBOX = [-141.0, 41.0, -52.0, 83.0];    // Canada (group availability fa
    ══════════════════════════════════════════════════════════════ */
 assert(/#transpPanel\.country-filter-active \.country-layer-unavailable\s*\{\s*display:\s*none\s*!important/.test(css),
     'styles.css hides rows marked country-layer-unavailable while the filter is active');
-assert(html.includes('css/styles.css?v=20261029-android-zoom-glass'), 'index.html loads the re-versioned styles.css');
-assert(html.includes('js/map-app.js?v=20261029-android-zoom-glass'), 'index.html loads the single-row hillshade map-app.js');
+assert(html.includes('css/styles.css?v=20261029-romania-5m'), 'index.html loads the re-versioned styles.css');
+assert(html.includes('js/map-app.js?v=20261029-other-maps-visibility'), 'index.html loads the single-row hillshade map-app.js');
 assert(html.includes('js/historical-eu-maps.js?v=20261013-flat-hist-maps'), 'index.html loads the country-attribution catalog');
 assert(html.includes('js/globe-country-picker.js?v=20261017-outline-zoom-settle'), 'index.html loads the re-versioned picker');
-['css/styles.css?v=20261029-android-zoom-glass',
- 'js/map-app.js?v=20261029-android-zoom-glass',
+['css/styles.css?v=20261029-romania-5m',
+ 'js/map-app.js?v=20261029-other-maps-visibility',
  'js/historical-eu-maps.js?v=20261013-flat-hist-maps',
  'js/globe-country-picker.js?v=20261017-outline-zoom-settle'].forEach(function (p) {
     assert(sw.includes("'" + p + "'"), 'sw.js precaches ' + p);
@@ -337,8 +337,8 @@ function groupRowOf(document, iconId) {
         'no per-country Hillshade LiDAR derivate rows are left in the panel');
     assert.equal(groupRowOf(document, 'lidarExpandIcon').classList.contains(UNAVAILABLE), false,
         'LiDAR group kept for Italy (generic Hillshade LiDAR derivate row)');
-    // ...and the Romania-only free historical group disappears entirely.
-    assert.equal(groupRowOf(document, 'histExpandIcon').classList.contains(UNAVAILABLE), true, 'historical group hidden for Italy');
+    assert.equal(unavailable(document, 'otherMapsRow'), false, 'Other maps remains available for Italy');
+    assert.equal(groupRowOf(document, 'histExpandIcon').classList.contains(UNAVAILABLE), false, 'free historical group kept for Other maps');
     // Premium historical maps: the Central-European series (Mitteleuropa,
     // Reymann, KDR…) substantially cover the Alps even though the curated
     // analysis never computed Italy → group stays, Romania-only sheets go.
@@ -398,7 +398,8 @@ function groupRowOf(document, iconId) {
     assert.equal(unavailable(document, 'lidarUkLidarRow'), true, 'UK LiDAR hidden for Denmark');
     assert.equal(unavailable(document, 'lidarNoLidarRow'), true, 'Norway LiDAR hidden for Denmark');
     assert.equal(groupRowOf(document, 'lidarExpandIcon').classList.contains(UNAVAILABLE), false, 'LiDAR group kept for Denmark');
-    assert.equal(groupRowOf(document, 'histExpandIcon').classList.contains(UNAVAILABLE), true, 'Romania historical group hidden for Denmark');
+    assert.equal(unavailable(document, 'otherMapsRow'), false, 'Other maps available for Denmark');
+    assert.equal(groupRowOf(document, 'histExpandIcon').classList.contains(UNAVAILABLE), false, 'free historical group kept for Other maps');
     assert.equal(groupRowOf(document, 'romanExpandIcon').classList.contains(UNAVAILABLE), false, 'Roman group kept for Denmark');
     assert.equal(groupRowOf(document, 'vegfpExpandIcon').classList.contains(UNAVAILABLE), true, 'vegetation group hidden for Denmark');
     // Premium historical sheets follow the curated CENAGIS coverage: sheets

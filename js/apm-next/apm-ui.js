@@ -194,6 +194,7 @@
         stopPick(true);
         state.centre = { lat: e.latlng.lat, lon: e.latlng.lng };
         onCentreChanged();
+        togglePanel(true);
     }
 
     function startPick() {
@@ -204,6 +205,10 @@
         map.on('click', onMapPick);
         if (map.getContainer) map.getContainer().style.cursor = 'crosshair';
         renderPickButton();
+        // Hide the window without cancelling the armed map click.
+        ui.panel.hidden = true;
+        document.body.classList.remove('apm-panel-open');
+        ui.btn.setAttribute('aria-expanded', 'false');
     }
 
     /* endAfterClick: called from inside the map click. The flag then stays set until that click has
@@ -981,17 +986,27 @@
     function init() {
         var needed = [root.DetectLabApmPipeline, root.DetectLabApmCore, root.DetectLabApmSites, root.DetectLabApmProviders, root.DetectLabApmI18n];
         if (needed.some(function (m) { return !m; })) return;     // a script is missing: stay silent
-        if (document.getElementById('apmNextBtn')) return;
+        if (ui.panel) return;
 
         try { state.enabled = root.localStorage.getItem(SWITCH_KEY) === 'on'; } catch (e) { state.enabled = false; }
 
         ui.panel = buildPanel();
-        ui.btn = h('button', {
-            type: 'button', id: 'apmNextBtn', class: 'apm-fab', 'aria-expanded': 'false',
-            'aria-controls': 'apmNextPanel', title: T('btn.title'), onclick: function () { togglePanel(); }
-        }, [h('span', { text: 'APM' }), h('span', { class: 'apm-fab-sub' })]);
+        ui.btn = document.getElementById('apmNextBtn');
+        if (!ui.btn) {
+            // Standalone embedding (outside the main layer list).
+            ui.btn = h('button', {
+                type: 'button', id: 'apmNextBtn', class: 'apm-fab', 'aria-expanded': 'false',
+                'aria-controls': 'apmNextPanel'
+            }, [h('span', { text: 'APM' }), h('span', { class: 'apm-fab-sub' })]);
+            document.body.appendChild(ui.btn);
+        }
+        ui.btn.title = T('btn.title');
+        ui.btn.addEventListener('click', function () {
+            var layers = document.getElementById('transpPanel');
+            if (layers && layers.classList.contains('open') && typeof root.toggleTranspPanel === 'function') root.toggleTranspPanel();
+            togglePanel();
+        });
         document.body.appendChild(ui.panel);
-        document.body.appendChild(ui.btn);
         document.addEventListener('detectlab:langchange', onLanguageChange);
         renderSwitch();
         updateGate();

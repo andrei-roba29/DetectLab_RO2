@@ -13703,7 +13703,10 @@
                 // Free historical sublayers
                 layerDefs.push({
                     key: 'otherMaps',
-                    bounds: { north: 85, south: -85, west: -180, east: 180 },
+                    // Catalogue locations are loaded dynamically; no fixed coverage
+                    // rectangle can describe all current and future sources.
+                    countryIndependent: true,
+                    viewportIndependent: true,
                     getRow: function() { return document.getElementById('otherMapsRow'); },
                     group: 'hist'
                 });
@@ -14063,7 +14066,7 @@
                     // resolving the same rows a second time.
                     var markedRows = [];
                     allDefs.forEach(function(def) {
-                        var visible = isIntersecting(mapBounds, def.bounds);
+                        var visible = def.viewportIndependent || isIntersecting(mapBounds, def.bounds);
                         var rowEl = null;
                         try { rowEl = def.getRow(); } catch(e) { rowEl = null; }
                         if (rowEl) {
