@@ -4069,6 +4069,24 @@
         return openNow();
     }
 
+    /* The surface has just changed from display:none. On mobile, its final
+     * dimensions and the GL canvas can settle after the constructor/styledata
+     * events. A zoom incidentally resizes/repaints and resyncs the deck; do
+     * that ourselves without moving the user's camera. Bound the retries and
+     * tie them to this particular opening so a rapid close/reopen is safe. */
+    function settleOpeningView(openedMap, generation) {
+        function settle() {
+            if (!state.open || generation !== openGeneration || map !== openedMap) return;
+            try { openedMap.resize(); } catch (e) { /* map may still be settling */ }
+            try { if (typeof openedMap.triggerRepaint === 'function') openedMap.triggerRepaint(); } catch (e) { /* ignore */ }
+            scheduleSync();
+        }
+        if (typeof root.requestAnimationFrame === 'function') root.requestAnimationFrame(settle);
+        else state.healthTimers.push(root.setTimeout(settle, 0));
+        state.healthTimers.push(root.setTimeout(settle, 300));
+        state.healthTimers.push(root.setTimeout(settle, 1200));
+    }
+
     function openNow() {
         if (state.open) return Promise.resolve(true);
         if (!wrapper()) {
@@ -4213,8 +4231,7 @@
                 if (terrainSource().missingKey) {
                     console.warn('[Map3D] Terrain provider needs an API key — running without terrain.');
                 }
-                collectMirror();
-                syncLayers();
+                runSync('initial');
                 startPanelWatcher();
             }
             map.on('styledata', function () { if (!state.firstSyncDone) { state.firstSyncDone = true; firstSync(); } });
@@ -4233,6 +4250,7 @@
                 }
                 pushError(message);
             });
+            settleOpeningView(map, generation);
             /* Safety: whatever happens to the DEM, the layers appear. */
             state.healthTimers.push(root.setTimeout(function () { if (state.open && map && !state.firstSyncDone) firstSync(); }, 2500));
             document.addEventListener('detectlab:langchange', refreshBarCopy);
@@ -4311,7 +4329,7 @@
      * canvas, the style and `state.rendered` all survive, so nothing ever asks
      * for those tiles again — the deck keeps what had arrived, which is
      * frequently the base map alone while the LiDAR source is still “open”.
-     * A resume is also the only moment a resize is due: iOS reports the new
+     * On resume a resize is also due: iOS reports the new
      * viewport a tick after `visibilitychange`, and MapLibre keeps rendering at
      * the old one until it is told.
      *
