@@ -47,7 +47,7 @@
     var MPP_MAX = 400;
     var DEFAULT_GROUND_WIDTH_M = 4000;   // last-resort ground size (no viewport)
     var FIT_FRACTION = 0.7;              // “Încadrează”: longest side over the smaller viewport edge
-    var MAX_SHARP_TILES = 16;            // tile-window budget for the sharp-level preference
+    var MAX_SHARP_TILES = 36;            // tile budget (viewport-sized, pan-independent) for the sharp-level preference
     var STALE_FALLBACK_MS = 6000;        // stand-in tiles are dropped after this even if no tile settles
     var SNAP_DEG = 1.5;                  // rotation snaps near 0/90/180/270
 
@@ -126,12 +126,18 @@
      * `mpp` is metres per NATURAL image pixel; the pyramid level is chosen so
      * that one level pixel lands as close as possible to one screen pixel.
      *
+     * STABILITY CONTRACT (see OTHER_MAPS.md §9): the level depends ONLY on the
+     * zoom, the sheet's scale and its natural size — never on where the sheet
+     * sits in the viewport or how it is rotated.  A sheet therefore looks the
+     * same at a given zoom wherever you pan it, and only changes when the zoom
+     * itself crosses a level boundary.
+     *
      * When `view` (anchor + viewport rectangle in layer pixels) is given, the
      * planner may step UP one level — the one that DOWNSCALES the sheet onto
      * the screen (k ≤ 1, crisp) instead of upscaling it (k > 1, soft) — but
-     * only while the tile window that implies stays within MAX_SHARP_TILES,
-     * so a whole-viewport crop of a 40 000 px sheet at native scale never
-     * means hundreds of requests.
+     * only while the tile budget for covering the VIEWPORT (its size, not its
+     * position) stays within MAX_SHARP_TILES, so a whole-viewport crop of a
+     * 40 000 px sheet at native scale never means hundreds of requests.
      */
     function planGeometry(o, view) {
         var res = resolutionAt(o.lat, o.zoom);
@@ -143,8 +149,7 @@
             var sharp = clamp(Math.ceil(base - 1e-9), 0, o.maxZoom);
             if (sharp > level) {
                 var fine = geometryAt(o, res, dW, dH, sharp);
-                var range = visibleTileRange(fine, view.anchor, view.rotation, view.topLeft, view.bottomRight);
-                if ((range.x1 - range.x0 + 1) * (range.y1 - range.y0 + 1) <= MAX_SHARP_TILES) {
+                if (viewportTileBudget(fine, view) <= MAX_SHARP_TILES) {
                     level = sharp;
                 }
             }
@@ -152,10 +157,16 @@
         return geometryAt(o, res, dW, dH, level);
     }
 
+    /* Level size is kept EXACT (fractional) — o.w·2^Δ × o.h·2^Δ — rather than
+     * rounded to whole pixels.  Rounding each axis separately made the painted
+     * grid's height (hL·k) disagree with the framed box (dH) by up to half a
+     * level pixel per axis, which moved with the pyramid level and so made an
+     * elongated sheet change shape as you zoomed.  With exact sizes the scale
+     * is one number, k = 2^(base−level), on both axes, at every zoom. */
     function geometryAt(o, res, dW, dH, level) {
         var factor = Math.pow(2, level - o.maxZoom);
-        var wL = Math.max(1, Math.round(o.w * factor));
-        var hL = Math.max(1, Math.round(o.h * factor));
+        var wL = o.w * factor;
+        var hL = o.h * factor;
         return {
             res: res,
             dW: dW,
@@ -167,6 +178,19 @@
             cols: Math.max(1, Math.ceil(wL / TILE)),
             rows: Math.max(1, Math.ceil(hL / TILE))
         };
+    }
+
+    /* How many tiles of `geom` could be needed to cover the viewport at any
+     * pan position and any rotation: the viewport's diagonal, measured in the
+     * level's own pixels, bounds the window on each axis (+2 for the edge
+     * tiles).  Depends on the viewport SIZE only. */
+    function viewportTileBudget(geom, view) {
+        var vw = Math.max(0, view.bottomRight.x - view.topLeft.x);
+        var vh = Math.max(0, view.bottomRight.y - view.topLeft.y);
+        var diag = Math.sqrt(vw * vw + vh * vh) / geom.k;
+        var nx = Math.min(geom.cols, Math.floor(diag / TILE) + 2);
+        var ny = Math.min(geom.rows, Math.floor(diag / TILE) + 2);
+        return nx * ny;
     }
 
     /**

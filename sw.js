@@ -836,7 +836,13 @@
 // css/next-gen-apm.css are precached so the panel and its worker work offline
 // once the shell is installed.
 // v305: preserve user zoom after the first live-location GPS fix and update the guide.
-const CACHE_NAME = 'detectlab-v305-live-location-zoom';
+// v306: “Alte hărți / Other maps” sheets keep one look at every zoom and pan.
+//   The pyramid level depends only on zoom and scale (never on where the sheet
+//   sits or its rotation, so panning no longer swaps tiles or sharpness), and
+//   level sizes stay exact instead of rounded per axis, so the painted sheet
+//   keeps its natural proportions at every zoom. Re-tags js/other-maps-overlay.js
+//   and the cache name. See OTHER_MAPS.md §9.
+const CACHE_NAME = 'detectlab-v306-other-maps-stable';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -988,7 +994,7 @@ const PRECACHE_URLS = [
   'css/hist-shift.css?v=20261014-hist-shift',
   'js/other-maps-tiles.js?v=20261028-other-maps-fix',
   'js/other-maps-nls.js?v=20261028-other-maps-fix',
-  'js/other-maps-overlay.js?v=20261028-other-maps-fix',
+  'js/other-maps-overlay.js?v=20261029-other-maps-stable',
   'js/other-maps.js?v=20261029-josephine-merge',
   'css/other-maps.css?v=20261028-other-maps-fix',
   'data/other-maps-catalog.json?v=20261026-cluj-alba',
