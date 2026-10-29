@@ -38,9 +38,9 @@ The tab row below the title uses the same tokens (idle `--ctl-bg`, hover
 material as the rows under them.
 
 In the installed PWA (`index.html`, `body.is-pwa .transp-panel`) the panel
-keeps its transparent bottom safe-area gutter, which cannot be blurred — so
-that rule stays `backdrop-filter: none !important` and carries a denser tint
-(`0.86 / 0.90`) plus the same violet wash instead.
+uses a uniform `rgba(20,14,34,0.86)` tint from top to bottom, including the
+safe-area clearance. Backdrop blur remains disabled for mobile performance,
+and the bottom padding still keeps the last controls above the system bar.
 
 ## 2. The rows
 

@@ -1,5 +1,5 @@
-// Regression test — the PWA layers window fills the screen, while a transparent
-// safe-area gutter keeps its last controls above the device's bottom system bar.
+// Regression test — the PWA layers window fills the screen with a uniform
+// tint, while safe-area padding keeps controls above the bottom system bar.
 //
 // What was broken
 // ---------------
@@ -8,17 +8,16 @@
 //   — but the installed PWA paints the map edge to edge (100dvh), and 560px on a
 //   ~900px phone is "the window stops after the lower half of the screen".
 // · Removing all bottom padding made the final layer rows/buttons run into the
-//   native PWA safe-area bar. The panel's dark gradient also painted that area,
-//   leaving the rgba(6, 14, 30) strip visible.
+//   native PWA safe-area bar. A later gradient fix faded the panel into the
+//   map near the bottom, making its tint and opacity uneven.
 // · Stretching the panel to the bottom can put floating controls over the last
 //   rows. Keep the live-location button at its bottom-right anchor, but hide it
 //   in place while the layers window is open; never teleport it over compass /
 //   Detect / nearby.
 //
 // The fix pins the panel with position:fixed to the true viewport edges, restores
-// a 44px-or-device-safe-area padding at the bottom, and clips the dark panel
-// background above that padding so the gutter stays transparent. Floating
-// controls are hidden in place while the panel is open.
+// a 44px-or-device-safe-area padding at the bottom, and paints a single tint
+// over the entire panel. Floating controls are hidden while it is open.
 //
 // Run: node test-pwa-layer-panel.js
 
@@ -50,8 +49,8 @@ assert(!/height:\s*560px/.test(panel), 'the old 560px cap must be gone');
 assert(/padding:\s*22px 16px 0/.test(panel),
     'the desktop panel keeps its compact zero-bottom-padding layout');
 
-/* 2. The PWA override reaches the viewport bottom while content clears the
-   native bar in transparent space (not a dark gradient strip). */
+/* 2. The PWA override reaches the viewport bottom with a uniform tint, while
+   content clears the native bar. */
 const flatHtml = html.replace(/\n\s*/g, ' ');
 const pwa = ruleOf(flatHtml, 'body.is-pwa .transp-panel');
 assert(/position:\s*fixed\s*!important/.test(pwa),
@@ -69,12 +68,12 @@ assert(/--pwa-panel-bottom-clearance:\s*max\(var\(--pwa-bottom-controls-clearanc
     'the bottom clearance is at least 44px and grows to the device safe-area when needed');
 assert(/padding-bottom:\s*var\(--pwa-panel-bottom-clearance\)\s*!important/.test(pwa),
     'the final layer rows and buttons receive the restored bottom clearance');
-assert(/background:[\s\S]*?calc\(100% - var\(--pwa-panel-bottom-clearance\)\)[\s\S]*?calc\(100% - var\(--pwa-panel-bottom-clearance\)\)/.test(pwa),
-    'both dark gradient layers stop above the clearance, leaving it transparent');
-assert(/background-color:\s*transparent\s*!important/.test(pwa)
-    && /backdrop-filter:\s*none\s*!important/.test(pwa)
-    && /border-bottom-color:\s*transparent\s*!important/.test(pwa),
-    'the safe-area gutter must not be painted or blurred by the dark panel');
+assert(/background:\s*rgba\(20,\s*14,\s*34,\s*0\.86\)\s*!important/.test(pwa),
+    'one violet tint paints the entire panel including the bottom clearance');
+assert(!/gradient\s*\(|background-(?:size|clip|image|color)\s*:|mask(?:-image)?\s*:/.test(pwa),
+    'no gradient, clipping, or mask can fade or truncate the panel background');
+assert(/backdrop-filter:\s*none\s*!important/.test(pwa),
+    'the full-height PWA panel avoids backdrop blur for mobile performance');
 assert(!/100% - var\(--pwa-bottom-controls-clearance/.test(pwa),
     'the panel height itself must not be shortened by the bottom-controls clearance');
 
@@ -102,10 +101,9 @@ assert(!/left:\s*max\(10px/.test(hideRule) && !/right:\s*auto/.test(hideRule),
 /* 5. Installed PWAs must actually receive it. */
 const sw = read('sw.js');
 const cacheName = (sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1];
-assert(Number(cacheName) >= 263, 'the SW cache must be bumped to v263+ (got v' + cacheName + ')');
-assert(/\/\/ v263: the PWA layer panel keeps its full-height viewport/.test(sw)
-    && /transparent: the dark rgba\(6,14,30\) panel gradients stop above it/.test(sw),
-    'the SW changelog must describe the transparent bottom clearance');
+assert(Number(cacheName) >= 307, 'the SW cache must be bumped to v307+ (got v' + cacheName + ')');
+assert(/\/\/ v307: keep the PWA layers panel uniformly tinted/.test(sw),
+    'the SW changelog must describe the uniform panel tint');
 assert(/['\"]index\.html['\"]/.test(sw), 'the current shell must remain in the service-worker precache');
 ['css/styles.css', 'js/map-app.js'].forEach(function (file) {
     const tag = (html.match(new RegExp('(?:src|href)="(' + file + '\\?v=[^"]+)"')) || [])[1];
@@ -114,6 +112,6 @@ assert(/['\"]index\.html['\"]/.test(sw), 'the current shell must remain in the s
 });
 
 console.log('✓ the layers window is anchored top→bottom (no 560px cap)');
-console.log('✓ the PWA panel restores a transparent safe-area gutter above the system bar');
+console.log('✓ the PWA panel is uniformly tinted through its safe-area clearance');
 console.log('✓ the panel hides floating controls in place and the updated shell is pre-cached');
-console.log('OK — the PWA layers panel reaches the screen edge without painting the dark bottom strip.');
+console.log('OK — the PWA layers panel reaches the screen edge without fading.');

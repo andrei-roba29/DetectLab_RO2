@@ -842,7 +842,8 @@
 //   level sizes stay exact instead of rounded per axis, so the painted sheet
 //   keeps its natural proportions at every zoom. Re-tags js/other-maps-overlay.js
 //   and the cache name. See OTHER_MAPS.md §9.
-const CACHE_NAME = 'detectlab-v306-other-maps-stable';
+// v307: keep the PWA layers panel uniformly tinted through its bottom clearance.
+const CACHE_NAME = 'detectlab-v307-pwa-panel-uniform';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
