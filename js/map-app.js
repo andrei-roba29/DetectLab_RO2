@@ -1451,11 +1451,9 @@
                 removeSearchMarker();
                 var icon = L.divIcon({
                     className: '',
-                    html: '<svg width="22" height="28" viewBox="0 0 22 28" fill="none">' +
-                        '<path d="M11 0C5 0 0 5 0 11c0 8 11 17 11 17S22 19 22 11C22 5 17 0 11 0z" fill="#6B3FA0"/>' +
-                        '<circle cx="11" cy="11" r="5" fill="white" opacity="0.9"/></svg>',
-                    iconSize: [22, 28],
-                    iconAnchor: [11, 28]
+                    html: '<div class="saved-location-marker"></div>',
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
                 });
                 searchMarker = L.marker(latlng, { icon: icon })
                     .bindTooltip(name, {
@@ -2185,8 +2183,9 @@
                     coordMarker = L.marker(e.latlng, {
                         icon: L.divIcon({
                             className: '',
-                            html: '<div style="width:10px;height:10px;background:#B8D8F0;border:2px solid #fff;border-radius:50%;box-shadow:0 0 6px rgba(0,0,0,0.6);margin-top:-5px;margin-left:-5px;"></div>',
-                            iconSize: [0, 0]
+                            html: '<div class="saved-location-marker"></div>',
+                            iconSize: [24, 24],
+                            iconAnchor: [12, 12]
                         }),
                         zIndexOffset: 900
                     }).addTo(map);
@@ -2428,6 +2427,27 @@
                     window._trackPath = { start: startTrackingPath, stop: stopTrackingPath };
                 })();
 
+                function pinText(key) {
+                    var lang = typeof window._currentLang === 'function' ? window._currentLang() : 'en';
+                    return (translations[lang] || translations.en)[key] || translations.en[key];
+                }
+
+                function translatePinPopup(content) {
+                    [['#coordTitleInput', 'pin_title'], ['#coordDescInput', 'pin_notes']].forEach(function (item) {
+                        var field = content.querySelector(item[0]);
+                        if (field) { field.placeholder = pinText(item[1]); field.setAttribute('aria-label', pinText(item[1])); }
+                    });
+                    [['.pin-create-event-btn', 'pin_create_event'], ['.coord-popup-delete', 'pin_delete']].forEach(function (item) {
+                        var button = content.querySelector(item[0]);
+                        if (button) button.textContent = pinText(item[1]);
+                    });
+                    var save = content.querySelector('.coord-popup-save:not(.saved):not(.error):not(:disabled) .coord-popup-save-label');
+                    if (save) save.textContent = pinText('pin_save');
+                }
+                document.addEventListener('detectlab:langchange', function () {
+                    document.querySelectorAll('.pin-popup').forEach(translatePinPopup);
+                });
+
                 function createCoordPopupContent(lat, lng) {
                     var pinId = 'pin_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
                     if (window._activeCoordMarker) { window._activeCoordMarker.pinId = pinId; window._activeCoordMarker._pinId = pinId; }
@@ -2446,24 +2466,24 @@
                     });
 
                     content.innerHTML =
-                        '<div class="coord-popup-title">📍 Coordonate / Pin</div>' +
+                        '<div class="coord-popup-title">Pin</div>' +
                         '<div class="coord-popup-row"><span class="coord-popup-label">Lat:</span><span class="coord-popup-val" title="Click pentru selecție">' + Number(lat).toFixed(6) + '</span></div>' +
                         '<div class="coord-popup-row"><span class="coord-popup-label">Lng:</span><span class="coord-popup-val" title="Click pentru selecție">' + Number(lng).toFixed(6) + '</span></div>' +
                         '<div style="margin-top: 6px; display: flex; flex-direction: column; gap: 4px;">' +
-                        '<input type="text" id="coordTitleInput" placeholder="Titlu pin (opțional)" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(184,216,240,0.25); border-radius: 4px; padding: 4px 6px; color: #F5F0EB; font-size: 0.76rem; font-family: \'Outfit\', sans-serif; width: 100%; box-sizing: border-box;" autocomplete="off">' +
-                        '<textarea id="coordDescInput" placeholder="Descriere / Note (opțional)" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(184,216,240,0.25); border-radius: 4px; padding: 4px 6px; color: #F5F0EB; font-size: 0.76rem; font-family: \'Outfit\', sans-serif; width: 100%; height: 40px; resize: none; box-sizing: border-box;" autocomplete="off"></textarea>' +
+                        '<input type="text" id="coordTitleInput" placeholder="Title" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(184,216,240,0.25); border-radius: 4px; padding: 4px 6px; color: #F5F0EB; font-size: 0.76rem; font-family: \'Outfit\', sans-serif; width: 100%; box-sizing: border-box;" autocomplete="off">' +
+                        '<textarea id="coordDescInput" placeholder="Notes" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(184,216,240,0.25); border-radius: 4px; padding: 4px 6px; color: #F5F0EB; font-size: 0.76rem; font-family: \'Outfit\', sans-serif; width: 100%; height: 40px; resize: none; box-sizing: border-box;" autocomplete="off"></textarea>' +
                         '</div>' +
                         '<div style="margin-top:8px; display:flex; flex-direction:column; gap:5px;">' +
                         '<button type="button" class="coord-popup-copy" style="width:100%;">Copiază coordonatele</button>' +
                         '<button type="button" class="coord-popup-save" style="width:100%;">' +
-                        '<svg class="coord-popup-save-icon" width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M2.25 1.5h9.1l2.4 2.4v10.6H2.25v-13Z" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/><path d="M5 1.5v4h6v-4M5 14.5V9h6v5.5" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/><circle cx="9.6" cy="3.5" r=".7" fill="currentColor"/></svg>' +
                         '<span class="coord-popup-save-label">Salvează Pin</span>' +
                         '</button>' +
-                        '<button type="button" class="pin-create-event-btn" data-pin-id="' + pinId + '" data-lat="' + lat + '" data-lng="' + lng + '" style="width:100%; background:rgba(107,63,160,0.35); border:1px solid rgba(196,160,240,0.6); border-radius:4px; color:#c4a0f0; font-size:0.75rem; font-family:\'Outfit\',sans-serif; padding:5px 0; cursor:pointer; font-weight:600;">📅 Create Event from this Pin</button>' +
-                        '<button type="button" class="delete-pin-btn pin-delete-btn coord-popup-delete" data-pin-id="' + pinId + '" style="width:100%; background:rgba(232,80,42,0.25); border:1px solid rgba(232,80,42,0.5); border-radius:4px; color:#FFB09F; font-size:0.72rem; font-family:\'Outfit\',sans-serif; padding:4px 0; cursor:pointer; font-weight:500;">🗑️ Delete Pin</button>' +
+                        '<button type="button" class="pin-create-event-btn" data-pin-id="' + pinId + '" data-lat="' + lat + '" data-lng="' + lng + '" style="width:100%; background:rgba(107,63,160,0.35); border:1px solid rgba(196,160,240,0.6); border-radius:4px; color:#c4a0f0; font-size:0.75rem; font-family:\'Outfit\',sans-serif; padding:5px 0; cursor:pointer; font-weight:600;">Create event</button>' +
+                        '<button type="button" class="delete-pin-btn pin-delete-btn coord-popup-delete" data-pin-id="' + pinId + '" style="width:100%; background:rgba(232,80,42,0.25); border:1px solid rgba(232,80,42,0.5); border-radius:4px; color:#FFB09F; font-size:0.72rem; font-family:\'Outfit\',sans-serif; padding:4px 0; cursor:pointer; font-weight:500;">Delete pin</button>' +
                         '</div>' +
                         '<div class="coord-popup-status" role="status" aria-live="polite"></div>';
 
+                    translatePinPopup(content);
                     var copyButton = content.querySelector('.coord-popup-copy');
                     var saveButton = content.querySelector('.coord-popup-save');
                     var titleInput = content.querySelector('#coordTitleInput');
@@ -2715,21 +2735,14 @@
 
                     var hasEvent = !!linkedEvent;
                     var markerClass = hasEvent ? 'saved-location-marker-wrap has-event' : 'saved-location-marker-wrap';
-                    var strokeColor = hasEvent ? '#FFD700' : 'currentColor';
 
                     var marker = L.marker([lat, lng], {
                         icon: L.divIcon({
                             className: markerClass,
-                            html: '<div class="saved-location-marker" title="' + title + '" style="' + (hasEvent ? 'border:2px solid #FFD700; box-shadow:0 0 10px rgba(255,215,0,0.8);' : '') + '">' +
-                                '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="' + strokeColor + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-                                '<path d="M12 21s7-5.1 7-11a7 7 0 1 0-14 0c0 5.9 7 11 7 11Z"/>' +
-                                '<circle cx="12" cy="10" r="2.3"/>' +
-                                '</svg>' +
-                                (hasEvent ? '<span style="position:absolute; top:-6px; right:-6px; background:#6B3FA0; border:1px solid #FFD700; border-radius:50%; font-size:10px; width:16px; height:16px; display:flex; align-items:center; justify-content:center; color:#fff;" title="Event linked">📅</span>' : '') +
-                                '</div>',
-                            iconSize: [28, 36],
-                            iconAnchor: [14, 34],
-                            popupAnchor: [0, -34]
+                            html: '<div class="saved-location-marker" title="' + title + '"></div>',
+                            iconSize: [24, 24],
+                            iconAnchor: [12, 12],
+                            popupAnchor: [0, -14]
                         }),
                         zIndexOffset: 850
                     });
@@ -2754,14 +2767,14 @@
                         html += '<p style="margin: 4px 0 6px 0; font-size:0.78rem; color:rgba(245,240,235,0.85); line-height:1.3;">' + desc.replace(/\n/g, '<br>') + '</p>';
                     }
                     if (hasEvent) {
-                        html += '<div style="background: rgba(107,63,160,0.35); border: 1px solid rgba(196,160,240,0.6); border-radius: 4px; padding: 4px 8px; margin: 6px 0; font-size: 0.72rem; color: #E8D0FF;">📅 <strong>Event:</strong> ' + escapeHtml(linkedEvent.title) + '</div>';
+                        html += '<div style="background: rgba(107,63,160,0.35); border: 1px solid rgba(196,160,240,0.6); border-radius: 4px; padding: 4px 8px; margin: 6px 0; font-size: 0.72rem; color: #E8D0FF;"><strong>Event:</strong> ' + escapeHtml(linkedEvent.title) + '</div>';
                     }
                     html += '<div style="font-size:0.72rem; color:rgba(184,216,240,0.6); margin-top:2px;">' +
                         lat.toFixed(6) + ', ' + lng.toFixed(6) +
                         (savedAt && !isNaN(savedAt.getTime()) ? '<br><small>' + savedAt.toLocaleString() + '</small>' : '') +
                         '</div>' +
                         '<div style="margin-top:8px; display:flex; flex-direction:column; gap:6px;">' +
-                        '<button type="button" class="pin-create-event-btn" data-pin-id="' + pinId + '" data-lat="' + lat + '" data-lng="' + lng + '" data-title="' + title + '" style="width:100%; background:rgba(107,63,160,0.35); border:1px solid rgba(196,160,240,0.6); border-radius:4px; color:#c4a0f0; font-size:0.75rem; font-family:\'Outfit\',sans-serif; padding:5px 0; cursor:pointer; font-weight:600;">📅 Create Event from this Pin</button>' +
+                        '<button type="button" class="pin-create-event-btn" data-pin-id="' + pinId + '" data-lat="' + lat + '" data-lng="' + lng + '" data-title="' + title + '" style="width:100%; background:rgba(107,63,160,0.35); border:1px solid rgba(196,160,240,0.6); border-radius:4px; color:#c4a0f0; font-size:0.75rem; font-family:\'Outfit\',sans-serif; padding:5px 0; cursor:pointer; font-weight:600;">Create event</button>' +
                         (function () {
                             // Traseu Google Maps: destinația e chiar coordonata
                             // pinului — pinurile nu au rază, centrul e pinul însuși.
@@ -2770,10 +2783,11 @@
                                 : '';
                             return dir ? dir : '';
                         })() +
-                        '<button type="button" class="delete-pin-btn pin-delete-btn coord-popup-delete" data-pin-id="' + pinId + '" style="width:100%; background:rgba(232,80,42,0.25); border:1px solid rgba(232,80,42,0.5); border-radius:4px; color:#FFB09F; font-size:0.72rem; font-family:\'Outfit\',sans-serif; padding:4px 0; cursor:pointer; font-weight:500;">🗑️ Șterge pinul / Delete Pin</button>' +
+                        '<button type="button" class="delete-pin-btn pin-delete-btn coord-popup-delete" data-pin-id="' + pinId + '" style="width:100%; background:rgba(232,80,42,0.25); border:1px solid rgba(232,80,42,0.5); border-radius:4px; color:#FFB09F; font-size:0.72rem; font-family:\'Outfit\',sans-serif; padding:4px 0; cursor:pointer; font-weight:500;">Delete pin</button>' +
                         '</div>';
 
                     popupContainer.innerHTML = html;
+                    translatePinPopup(popupContainer);
                     // ── FIX: Direct handlers for saved pin popup (same reason as coord popup)
                     (function() {
                         var ceBtn = popupContainer.querySelector('.pin-create-event-btn');

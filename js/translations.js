@@ -1,6 +1,12 @@
         // ── TRANSLATIONS ──
                                                         const translations = {
             en: {
+                pin_title: 'Title',
+                pin_notes: 'Notes',
+                pin_create_event: 'Create event',
+                pin_delete: 'Delete pin',
+                pin_save: 'Save pin',
+
                 danish_group_title: 'Denmark · Danish maps',
                 albania_group_title: 'Albania · ASIG geoportal',
                 finland_group_title: 'Finland · Finnish maps',
@@ -604,6 +610,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             ro: {
+                pin_title: 'Titlu',
+                pin_notes: 'Note',
+                pin_create_event: 'Creează eveniment',
+                pin_delete: 'Șterge pinul',
+                pin_save: 'Salvează pinul',
+
                 danish_group_title: 'Danemarca · hărți daneze',
                 albania_group_title: 'Albania · geoportalul ASIG',
                 finland_group_title: 'Finlanda · hărți finlandeze',
@@ -1207,6 +1219,12 @@
                 'arch_report_apm_class_4.5': 'verde — scor 4.5 (potențial ridicat)'
             },
             de: {
+                pin_title: 'Titel',
+                pin_notes: 'Notizen',
+                pin_create_event: 'Ereignis erstellen',
+                pin_delete: 'Pin löschen',
+                pin_save: 'Pin speichern',
+
                 nav_apm: 'Was ist APM',
                 nav_map: 'Karte erkunden',
                 nav_how: 'Wie es funktioniert',
@@ -1810,6 +1828,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             fr: {
+                pin_title: 'Titre',
+                pin_notes: 'Notes',
+                pin_create_event: 'Créer un événement',
+                pin_delete: 'Supprimer le repère',
+                pin_save: 'Enregistrer le repère',
+
                 nav_apm: 'Qu\'est-ce que l\'APM',
                 nav_map: 'Explorer la carte',
                 nav_how: 'Comment ça marche',
@@ -2413,6 +2437,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             it: {
+                pin_title: 'Titolo',
+                pin_notes: 'Note',
+                pin_create_event: 'Crea evento',
+                pin_delete: 'Elimina segnaposto',
+                pin_save: 'Salva segnaposto',
+
                 nav_apm: 'Cos\'è l\'APM',
                 nav_map: 'Esplora la mappa',
                 nav_how: 'Come funziona',
@@ -3016,6 +3046,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             es: {
+                pin_title: 'Título',
+                pin_notes: 'Notas',
+                pin_create_event: 'Crear evento',
+                pin_delete: 'Eliminar marcador',
+                pin_save: 'Guardar marcador',
+
                 nav_apm: 'Qué es el APM',
                 nav_map: 'Explorar el mapa',
                 nav_how: 'Cómo funciona',
@@ -3619,6 +3655,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             pl: {
+                pin_title: 'Tytuł',
+                pin_notes: 'Notatki',
+                pin_create_event: 'Utwórz wydarzenie',
+                pin_delete: 'Usuń pinezkę',
+                pin_save: 'Zapisz pinezkę',
+
                 nav_apm: 'Czym jest APM',
                 nav_map: 'Przeglądaj mapę',
                 nav_how: 'Jak to działa',
@@ -4222,6 +4264,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             uk: {
+                pin_title: 'Назва',
+                pin_notes: 'Нотатки',
+                pin_create_event: 'Створити подію',
+                pin_delete: 'Видалити мітку',
+                pin_save: 'Зберегти мітку',
+
                 nav_apm: 'Що таке APM',
                 nav_map: 'Дослідити карту',
                 nav_how: 'Як це працює',
@@ -4825,6 +4873,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             hu: {
+                pin_title: 'Cím',
+                pin_notes: 'Jegyzetek',
+                pin_create_event: 'Esemény létrehozása',
+                pin_delete: 'Jelölő törlése',
+                pin_save: 'Jelölő mentése',
+
                 nav_apm: 'Mi az az APM',
                 nav_map: 'Térkép felfedezése',
                 nav_how: 'Hogyan működik',
@@ -5428,6 +5482,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             cs: {
+                pin_title: 'Název',
+                pin_notes: 'Poznámky',
+                pin_create_event: 'Vytvořit událost',
+                pin_delete: 'Smazat značku',
+                pin_save: 'Uložit značku',
+
                 nav_apm: 'Co je APM',
                 nav_map: 'Prozkoumat mapu',
                 nav_how: 'Jak to funguje',
@@ -6031,6 +6091,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             sk: {
+                pin_title: 'Názov',
+                pin_notes: 'Poznámky',
+                pin_create_event: 'Vytvoriť udalosť',
+                pin_delete: 'Odstrániť značku',
+                pin_save: 'Uložiť značku',
+
                 nav_apm: 'Čo je APM',
                 nav_map: 'Preskúmať mapu',
                 nav_how: 'Ako to funguje',
@@ -6634,6 +6700,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             nl: {
+                pin_title: 'Titel',
+                pin_notes: 'Notities',
+                pin_create_event: 'Evenement maken',
+                pin_delete: 'Speld verwijderen',
+                pin_save: 'Speld opslaan',
+
                 nav_apm: 'Wat is APM',
                 nav_map: 'Kaart verkennen',
                 nav_how: 'Hoe het werkt',
@@ -7236,6 +7308,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             pt: {
+                pin_title: 'Título',
+                pin_notes: 'Notas',
+                pin_create_event: 'Criar evento',
+                pin_delete: 'Eliminar marcador',
+                pin_save: 'Guardar marcador',
+
                 nav_apm: 'O que é o APM',
                 nav_map: 'Explorar o mapa',
                 nav_how: 'Como funciona',
@@ -7838,6 +7916,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             ru: {
+                pin_title: 'Название',
+                pin_notes: 'Заметки',
+                pin_create_event: 'Создать событие',
+                pin_delete: 'Удалить метку',
+                pin_save: 'Сохранить метку',
+
                 nav_apm: 'Что такое APM',
                 nav_map: 'Исследовать карту',
                 nav_how: 'Как это работает',
@@ -8440,6 +8524,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             bg: {
+                pin_title: 'Заглавие',
+                pin_notes: 'Бележки',
+                pin_create_event: 'Създай събитие',
+                pin_delete: 'Изтрий маркера',
+                pin_save: 'Запази маркера',
+
                 nav_apm: 'Какво е APM',
                 nav_map: 'Разгледай картата',
                 nav_how: 'Как работи',
@@ -9042,6 +9132,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             hr: {
+                pin_title: 'Naslov',
+                pin_notes: 'Bilješke',
+                pin_create_event: 'Stvori događaj',
+                pin_delete: 'Izbriši oznaku',
+                pin_save: 'Spremi oznaku',
+
                 nav_apm: 'Što je APM',
                 nav_map: 'Istraži kartu',
                 nav_how: 'Kako to radi',
@@ -9645,6 +9741,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             sr: {
+                pin_title: 'Наслов',
+                pin_notes: 'Белешке',
+                pin_create_event: 'Креирај догађај',
+                pin_delete: 'Обриши ознаку',
+                pin_save: 'Сачувај ознаку',
+
                 nav_apm: 'Što je APM',
                 nav_map: 'Istraži kartu',
                 nav_how: 'Kako to radi',
@@ -10248,6 +10350,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             el: {
+                pin_title: 'Τίτλος',
+                pin_notes: 'Σημειώσεις',
+                pin_create_event: 'Δημιουργία εκδήλωσης',
+                pin_delete: 'Διαγραφή δείκτη',
+                pin_save: 'Αποθήκευση δείκτη',
+
                 nav_apm: 'Τι είναι το APM',
                 nav_map: 'Εξερεύνηση χάρτη',
                 nav_how: 'Πώς λειτουργεί',
@@ -10832,6 +10940,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             da: {
+                pin_title: 'Titel',
+                pin_notes: 'Noter',
+                pin_create_event: 'Opret begivenhed',
+                pin_delete: 'Slet markør',
+                pin_save: 'Gem markør',
+
                 danish_group_title: 'Danmark · danske kort',
                 albania_group_title: 'Albanien · ASIG-geoportalen',
                 finland_group_title: 'Finland · finske kort',
@@ -11427,6 +11541,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             sv: {
+                pin_title: 'Titel',
+                pin_notes: 'Anteckningar',
+                pin_create_event: 'Skapa evenemang',
+                pin_delete: 'Ta bort markör',
+                pin_save: 'Spara markör',
+
                 nav_apm: 'Vad är APM',
                 nav_map: 'Utforska kartan',
                 nav_how: 'Hur det fungerar',
@@ -12013,6 +12133,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             no: {
+                pin_title: 'Tittel',
+                pin_notes: 'Notater',
+                pin_create_event: 'Opprett arrangement',
+                pin_delete: 'Slett markør',
+                pin_save: 'Lagre markør',
+
                 nav_apm: 'Hva er APM',
                 nav_map: 'Utforsk kartet',
                 nav_how: 'Hvordan det fungerer',
@@ -12599,6 +12725,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             fi: {
+                pin_title: 'Otsikko',
+                pin_notes: 'Muistiinpanot',
+                pin_create_event: 'Luo tapahtuma',
+                pin_delete: 'Poista merkki',
+                pin_save: 'Tallenna merkki',
+
                 nav_apm: 'Mikä on APM',
                 nav_map: 'Tutki karttaa',
                 nav_how: 'Miten se toimii',
@@ -13185,6 +13317,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             lt: {
+                pin_title: 'Pavadinimas',
+                pin_notes: 'Pastabos',
+                pin_create_event: 'Sukurti renginį',
+                pin_delete: 'Ištrinti žymeklį',
+                pin_save: 'Išsaugoti žymeklį',
+
                 nav_apm: 'Kas yra APM',
                 nav_map: 'Tyrinėti žemėlapį',
                 nav_how: 'Kaip tai veikia',
@@ -13771,6 +13909,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             lv: {
+                pin_title: 'Nosaukums',
+                pin_notes: 'Piezīmes',
+                pin_create_event: 'Izveidot pasākumu',
+                pin_delete: 'Dzēst atzīmi',
+                pin_save: 'Saglabāt atzīmi',
+
                 nav_apm: 'Kas ir APM',
                 nav_map: 'Pētīt karti',
                 nav_how: 'Kā tas darbojas',
@@ -14357,6 +14501,12 @@
                 'arch_report_apm_class_4.5': 'green — score 4.5 (high potential)'
             },
             et: {
+                pin_title: 'Pealkiri',
+                pin_notes: 'Märkmed',
+                pin_create_event: 'Loo sündmus',
+                pin_delete: 'Kustuta marker',
+                pin_save: 'Salvesta marker',
+
                 nav_apm: 'Mis on APM',
                 nav_map: 'Uuri kaarti',
                 nav_how: 'Kuidas see töötab',
