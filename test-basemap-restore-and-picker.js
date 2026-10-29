@@ -49,7 +49,7 @@ const viewer = read('js/map3d-terrain.js');
 const indexHtml = read('index.html');
 const swJs = read('sw.js');
 
-const TAG = '20261026-lidar-whole-or-disc';
+const TAG = '20261029-android-zoom-glass';
 
 /* ══════════════════════════════════════════════════════════════════════════
  * A. The real basemap block, run end to end

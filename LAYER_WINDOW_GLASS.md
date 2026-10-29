@@ -146,3 +146,36 @@ the same pass (`test-map-control-spacing.js`, `test-map3d-terrain.js`,
 `test-3d-basemap-picker-lidar.js`, `test-3d-switch-base-layer-column.js`,
 `test-map3d-mobile.js`, `test-map3d-slider-layout.js`,
 `test-basemap-restore-and-picker.js`).
+
+## 6. Gestures defrost the glass — `body.map-gesturing`
+
+Every backdrop-filter in the window (and across the chrome) re-blurs its
+background on every composited frame. A map gesture animates the whole map —
+with the Sat60/WMS stacks on, hundreds of heavy tiles — under that glass, which
+is the GPU spike Android reported as "the screen starts glitching" (and the
+same surfaces are the ones that stop painting when the compositor gives out —
+"the panel goes fully transparent"). So for the duration of each gesture the
+glass is dropped, exactly like the LiDAR/Arch distance-drag block does for its
+drag:
+
+* `js/tile-perf.js` (§7a of the governor) toggles `body.map-gesturing` from
+  the shared `activity()` hook — every `zoomstart / movestart / zoomanim /
+  move / zoom / zoomend / moveend` re-arms it — and lifts it after
+  quiet window + CSS tile fade + margin through a self-healing timer (a cut
+  event chain cannot leave it stuck). Low-power devices by default:
+  `window.DLTILE_PERF = { gestureGlassOff: true|false }` overrides;
+* `css/styles.css`: `body.map-gesturing *` sets
+  `backdrop-filter: none !important` (covers the `--ctl-blur` consumers and
+  the hard-coded `blur()` rules alike), and `body.map-gesturing .transp-panel`
+  raises `--panel-top-alpha / --panel-bottom-alpha` to 0.92 / 0.94 with the
+  darker edge shadow — the pane stays readable without the blur instead of
+  turning into a sharp map overlay;
+* the installed-PWA rule in `index.html` (`body.is-pwa .transp-panel`) already
+  ships the panel without a backdrop filter, so there the gesture only defrosts
+  the surrounding chrome.
+
+The zoom transitions themselves are untouched: the animation is the feature,
+only its backdrop work is dropped. Shipped with shell
+`detectlab-v295-android-zoom-glass` (`?v=20261029-android-zoom-glass` on
+`css/styles.css`, `js/tile-perf.js`, `js/map-app.js`); covered by
+`test-tile-perf.js` §12 and the fail-open tests in `test-layer-visibility.js`.

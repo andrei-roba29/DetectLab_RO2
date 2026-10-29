@@ -94,7 +94,7 @@ console.log('  ✓ slimmer geometry verified for both web desktop and PWA');
 /* Each asset carries its own live tag — they moved on independently after
  * this change; index.html and sw.js must agree on the exact URL. */
 const TAGS = {
-    'css/styles.css': '20261028-uk-heritage-free-sublayers',
+    'css/styles.css': '20261029-android-zoom-glass',
     'css/map3d-terrain.css': '20261026-pwa-3d-button-size',
     'css/other-maps.css': '20261028-other-maps-fix',
     'js/vertical-opacity-control.js': '20261026-flat-country-sections'

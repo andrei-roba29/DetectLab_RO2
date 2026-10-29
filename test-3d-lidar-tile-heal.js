@@ -58,7 +58,8 @@ const swJs = read('sw.js');
 const mapApp = read('js/map-app.js');
 const viewerSource = read('js/map3d-terrain.js');
 
-const TAG = '20261026-lidar-whole-or-disc';
+const TAG = '20261029-android-zoom-glass';
+const VIEWER_TAG = '20261026-desktop-basemap';
 
 let passed = 0;
 function ok(label) { passed += 1; console.log('  ✓ ' + label); }
@@ -67,9 +68,9 @@ function ok(label) { passed += 1; console.log('  ✓ ' + label); }
  * 1. Static wiring
  * ════════════════════════════════════════════════════════════════════════ */
 {
-    assert(indexHtml.includes('js/map3d-terrain.js?v=' + TAG), 'index.html loads the healed viewer build');
+    assert(indexHtml.includes('js/map3d-terrain.js?v=' + VIEWER_TAG), 'index.html loads the healed viewer build');
     assert(indexHtml.includes('js/map-app.js?v=' + TAG), 'index.html loads the map-app.js build with the zoom-gate helper');
-    assert(swJs.includes("'js/map3d-terrain.js?v=" + TAG + "'"), 'sw.js pre-caches the healed viewer build');
+    assert(swJs.includes("'js/map3d-terrain.js?v=" + VIEWER_TAG + "'"), 'sw.js pre-caches the healed viewer build');
     assert(swJs.includes("'js/map-app.js?v=" + TAG + "'"), 'sw.js pre-caches the map-app.js build');
     const shellVersion = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
     assert(shellVersion >= 268, 'the shell cache is bumped so installed PWAs pick the fix up (v' + shellVersion + ')');

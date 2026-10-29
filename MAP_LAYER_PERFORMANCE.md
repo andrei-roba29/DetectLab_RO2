@@ -206,7 +206,65 @@ screen to protect there, so the repaint must go through at once.
 
 ---
 
-## 6. Notes / caveats
+## 6. Map gestures drop the glass — the Android zoom glitch (2026-10-29)
+
+Reported separately from the tile-crash fix: on Android, zooming in/out with
+very heavy layers on ("Satellite imagery 1960's" / CORONA + the historical
+stacks) glitched the whole screen, and sometimes the frontend came back
+haywire — the layer panel fully transparent, no rows inside, buttons gone.
+
+**Cause — the same per-frame cost the LiDAR distance drag already removes,
+but for every map gesture.** Every `backdrop-filter` surface (the panel,
+search bar, legend, dock, tooltips — ~30 rules) snapshots and re-blurs
+whatever is behind it on every *composited* frame. A pinch/wheel zoom
+animates the whole map — with those layers on, hundreds of heavy tiles in
+N separately composited panes (each Sat60 frame layer sits at
+`opacity: 0.85`, so each is its own layer) — under all of that glass at
+once. On the phone GPU that re-blur is the spike behind the glitching
+screen; when the compositor runs out of room the same glass surfaces are
+the ones that stop painting, which is what "the panel turns transparent"
+looks like while every row and button is still in the DOM.
+
+**The fix — `body.map-gesturing`, owned by the governor (§7a):**
+
+- `js/tile-perf.js` adds the class from the shared `activity()` hook, so
+  `zoomstart / movestart / zoomanim / move / zoom / zoomend / moveend`
+  all arm it (a Leaflet pinch fires that whole chain). It is lifted after
+  a self-healing timer: quiet window + the CSS tile fade + a margin —
+  the settle-window tile pop-in happens defrosted too, and a cut event
+  chain (the historical ReferenceError between `zoomend` and `moveend`)
+  cannot leave the class stuck.
+- `css/styles.css` drops **every** `backdrop-filter` (universal rule, so
+  the hard-coded `blur()` rules are covered as well as the `--ctl-blur`
+  ones) and raises the panel's two alpha stops to 0.92 / 0.94 for the
+  duration — same trade the distance drag makes: the window stays
+  readable without the blur, and nothing flashes back mid-gesture. The
+  zoom transitions themselves are left alone; only the backdrop work is
+  dropped.
+- Scope: **low-power devices by default** (`gestureGlassOff:
+  LOW_POWER` in `DEFAULT_CFG`), because that is where the GPU spike
+  bites. Live knobs: `window.DLTILE_PERF = { gestureGlassOff: true|false }`
+  (any new knob must be declared in `DEFAULT_CFG` — the merge only
+  honours known keys).
+
+**The empty-panel half of the report** was a separate DOM path, fixed in
+`js/map-app.js`: `checkLayerVisibility` now validates the viewport
+(`viewportBoundsUsable`: finite edges + a real `intersects()` method)
+and skips the pass when it is unusable — a NaN viewport from a collapsed
+pinch used to make `intersects()` false for *every* layer, so one
+completed pass hid all the rows and the sticky `viewport-filter-active`
+tag kept them hidden (fail-open now: previous visibility stands, the
+filter is never activated on bad bounds).
+
+**Tests**: `test-tile-perf.js` §12 (class rides/leaves the gesture, the
+cut chain self-heals, desktop stays frosted, the knob forces it, the CSS
+rules exist) and `test-layer-visibility.js` "a degenerate viewport fails
+open… / bounds without a real intersects() method fail open too / the
+validator is wired in". Shell bumped to `detectlab-v295-android-zoom-glass`.
+
+---
+
+## 7. Notes / caveats
 
 - **Visual effect on a phone**: on an *animated* gesture (pinch, wheel, double
   tap) the previous level stays on screen and is CSS-scaled. The new zoom starts

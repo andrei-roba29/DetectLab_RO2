@@ -344,3 +344,14 @@ catalogue-first outlines, KML fallback, red-rectangle opt-out, deploy-time
 snapshot). Shell: `index.html` loads `js/corona-coverage-layer.js` and
 `js/map-app.js` at `?v=20261008-corona-coverage`; `sw.js` is
 `detectlab-v166-corona-coverage`.
+
+**2026-10-29 follow-up — zooming with these layers glitches the screen /
+empties the panel.** Two more mitigations now sit on top of the four above,
+because the tab-crash fix did not cover the compositor: (5) `js/tile-perf.js`
+toggles `body.map-gesturing` for the duration of every map gesture, which
+drops all `backdrop-filters` (see `MAP_LAYER_PERFORMANCE.md` §6 /
+`LAYER_WINDOW_GLASS.md` §6) — the per-frame re-blur of ~30 glass surfaces over
+the animating Sat60/WMS panes was the Android GPU spike; (6) `checkLayerVisibility`
+fails open on an unusable (NaN / method-less) viewport instead of hiding every
+row, which is what left the layer panel "transparent with no layers inside".
+Shell `detectlab-v295-android-zoom-glass`.
