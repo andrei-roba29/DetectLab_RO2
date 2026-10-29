@@ -835,7 +835,8 @@
 // providers, pipeline, UI and the worker with its importScripts deps) and
 // css/next-gen-apm.css are precached so the panel and its worker work offline
 // once the shell is installed.
-const CACHE_NAME = 'detectlab-v304-apm-next-phase4';
+// v305: preserve user zoom after the first live-location GPS fix and update the guide.
+const CACHE_NAME = 'detectlab-v305-live-location-zoom';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -951,7 +952,7 @@ const PRECACHE_URLS = [
   // v283: Google-Earth-style two-finger twist deadband + pinch arbitration
   // (a two-finger zoom can no longer turn the map).
   'js/map-rotate.js?v=20261026-touch-rotate-deadband',
-  'js/tutorial.js?v=20261025-layer-glass',
+  'js/tutorial.js?v=20261029-live-location-guide',
   'js/layer-panel-rows.js?v=20261025-layer-glass',
   'js/layer-panel-rows.js?v=20261028-historical-tile-fallback',
   'css/styles.css?v=20261028-historical-tile-fallback',
@@ -1780,7 +1781,7 @@ const PRECACHE_URLS = [
   //   live ones index.html requests.
   'css/styles.css?v=20261029-romania-5m',
   'js/tile-perf.js?v=20261029-android-zoom-glass',
-  'js/map-app.js?v=20261029-romania-5m'
+  'js/map-app.js?v=20261029-live-location-zoom'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──

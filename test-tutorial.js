@@ -63,16 +63,22 @@ check('every targeted id exists in the shipped UI', missing.length === 0, 'missi
     check('tutorial copy mentions "' + snippet + '"', TUT_SRC.indexOf(snippet) !== -1);
 });
 
-/* The installed PWA has a separate bottom-right GPS action, but no account
-   menu there. The walkthrough must distinguish the two controls. */
+/* The installed PWA has separate bottom-right GPS and account controls. */
 ['în dreapta-jos', 'at the bottom-right'].forEach(function (snippet) {
     check('the live-location slide documents "' + snippet + '"', TUT_SRC.indexOf(snippet) !== -1);
 });
 ['nu deschide meniul contului', 'does not open the account menu'].forEach(function (snippet) {
     check('the account slide distinguishes live location: "' + snippet + '"', TUT_SRC.indexOf(snippet) !== -1);
 });
-check('the account slide points at the website nav pill, not the removed PWA account trigger',
+check('the account slide targets both the website and PWA account controls',
     /sel: \['#navUser', '#pwaUserItem'\]/.test(TUT_SRC));
+
+['La prima poziție', 'următoarele actualizări GPS', 'On the first fix',
+ 'zoom out or pan', 'below live location', 'sub locația live'].forEach(function (snippet) {
+    check('tutorial documents current live-location and account behavior: "' + snippet + '"', TUT_SRC.includes(snippet));
+});
+check('tutorial does not claim the PWA account menu is absent',
+    !TUT_SRC.includes('not available from the installed app') && !TUT_SRC.includes('a fost scos din dreapta-jos'));
 
 /* ── 5. Friends slide mechanics ────────────────────────────────────────── */
 check('the friends slide opens the real panel on the search tab',
