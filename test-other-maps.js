@@ -256,6 +256,10 @@ const Tiles = sandbox.DetectLabOtherMapsTiles;
 const Nls = sandbox.DetectLabOtherMapsNls;
 const Overlay = sandbox.DetectLabOtherMapsOverlay;
 const OtherMaps = sandbox.DetectLabOtherMaps;
+const JosephineTiles = Tiles.source('josephine');
+assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
+    typeof JosephineTiles.tileUrl === 'function',
+    'Josephine sheets register through the shared overlay tile adapter');
 
 /* ══ 1. tile hashes ═══════════════════════════════════════════════════ */
 (async function run() {
@@ -1158,7 +1162,26 @@ const OtherMaps = sandbox.DetectLabOtherMaps;
     ok(OtherMaps.state.panel && OtherMaps.state.panel.classList.contains('show'),
         'clicking the added map reopens the panel');
 
-    console.log('✓ other-maps: ' + checks + ' checks passed ' +
+    /* Josephine scans are folded into the same result/overlay record model.
+     * Each image's marker radius must enclose every indexed locality. */
+    const josephineDb = JSON.parse(fs.readFileSync(path.join(ROOT, 'iosfree_db.json'), 'utf8'));
+    const josephineRecords = OtherMaps.buildJosephineRecords(josephineDb);
+    ok(josephineRecords.length > 0, 'Josephine sheets are included in Other maps records');
+    josephineRecords.forEach((record) => {
+        ok(record.source === 'josephine' && record.path && record.josephineEntry,
+            'Josephine records use the shared image-source record contract');
+        const enclosing = record.josephinePlaces.every((p) => {
+            const dLat = (p.lat - record.lat) * Math.PI / 180;
+            const dLng = (p.lng - record.lng) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) ** 2 + Math.cos(record.lat * Math.PI / 180) *
+                Math.cos(p.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+            const metres = 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return metres <= record.coverageRadiusMeters;
+        });
+        ok(enclosing, 'Josephine coverage circles enclose all places assigned to each scan');
+    });
+
+    console.log('✓ other-maps: ' + checks + ' checks passed '+
         ('(' + catalog.maps.length + ' Hungaricana + ' + nlsCatalog.maps.length + ' NLS catalogue records, ' +
             locations.length + ' Hungaricana places)'));
 })().catch((err) => {

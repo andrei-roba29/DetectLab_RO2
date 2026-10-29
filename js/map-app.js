@@ -10224,6 +10224,9 @@
                     // de pe hartă, ci și starea vizuală a switch-ului, ca să nu rămână
                     // "aprins" degeaba.
                     if (!on) {
+                        var otherMapsToggleEl = document.getElementById('otherMapsToggle');
+                        if (otherMapsToggleEl) otherMapsToggleEl.checked = false;
+                        if (typeof window.toggleOtherMaps === 'function') window.toggleOtherMaps(false);
                         var iosfreeToggleEl = document.getElementById('iosfreeToggle');
                         if (iosfreeToggleEl) iosfreeToggleEl.checked = false;
                         var austrianToggleEl = document.getElementById('austrianMapToggle');
@@ -13690,9 +13693,9 @@
 
                 // Free historical sublayers
                 layerDefs.push({
-                    key: 'iosfree',
-                    bounds: ROMANIA_BOUNDS,
-                    getRow: function() { return document.getElementById('iosfreeRow'); },
+                    key: 'otherMaps',
+                    bounds: { north: 85, south: -85, west: -180, east: 180 },
+                    getRow: function() { return document.getElementById('otherMapsRow'); },
                     group: 'hist'
                 });
                 layerDefs.push({
@@ -13963,7 +13966,7 @@
 
                 // Group definitions: expand icon + sublayer keys
                 var groups = {
-                    hist: { expandIconId: 'histExpandIcon', sublayerKeys: ['iosfree','austrianMap','firingPlans','sovietMap'] },
+                    hist: { expandIconId: 'histExpandIcon', sublayerKeys: ['otherMaps','austrianMap','firingPlans','sovietMap'] },
                     lidar: { expandIconId: 'lidarExpandIcon', sublayerKeys: Object.keys(LIDAR_COUNTY_BOUNDS).map(function(k){ return 'lidar_' + k; }) },
                     roman: { expandIconId: 'romanExpandIcon', sublayerKeys: romanToggleIds.map(function(tid){ return 'roman_' + tid; }) },
                     histPremium: { expandIconId: 'histPremiumExpandIcon', sublayerKeys: premiumKeys.map(function(it){ return 'premium_' + it.key; }) },
@@ -15400,10 +15403,6 @@
                 { id: 'ukOs63k1955MapToggle', fnName: 'toggleUkOs63k1955Map' },
                 { id: 'ukOs1900sMapToggle', fnName: 'toggleUkOs1900sMap' },
                 { id: 'ukBaire1940MapToggle', fnName: 'toggleUkBaire1940Map' },
-                /* „Alte hărți / Other maps” — hărți NE-georeferențiate
-                 * (Hungaricana). Oprirea grupului oprește și punctele verzi
-                 * și orice hartă deja suprapusă. */
-                { id: 'otherMapsToggle', fnName: 'toggleOtherMaps' }
             ];
 
             window.toggleHistPremiumLayer = function (on) {

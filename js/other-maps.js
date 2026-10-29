@@ -17,7 +17,7 @@
  * sub-layer is on.
  *
  * This module brings those sheets onto the DetectLab map as a sub-layer of
- * the premium “Hărți istorice / Historical Maps” group:
+ * the free “Hărți istorice / Historical Maps” group:
  *
  *   1. every place that owns at least one sheet is painted as a
  *      semi-transparent green dot;
@@ -42,6 +42,69 @@
     var Tiles = root.DetectLabOtherMapsTiles;
     var Overlays = root.DetectLabOtherMapsOverlay;
 
+    /* Wikimedia scans are served through the same tile/overlay contract as
+     * the other non-georeferenced sources. Tiles are cropped from the public
+     * Commons image into the shared 512px image pyramid on demand. */
+    (function registerJosephineTiles() {
+        if (!Tiles || !Tiles.registerSource) return;
+        var metaCache = Object.create(null), imageCache = Object.create(null);
+        function filename(record) {
+            var entry = record && record.josephineEntry;
+            var m = entry && String(entry.l || '').match(/File:([^/?#]+)/i);
+            return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : '';
+        }
+        function info(record) {
+            var file = filename(record);
+            if (!file) return Promise.reject(new Error('Josephine file name missing'));
+            if (metaCache[file]) return Promise.resolve(metaCache[file]);
+            var url = 'https://en.wikipedia.org/w/api.php?action=query&titles=' +
+                encodeURIComponent('File:' + file) + '&prop=imageinfo&iiprop=url|size&iiurlwidth=320&format=json&origin=*';
+            return fetch(url).then(function (r) { return r.json(); }).then(function (data) {
+                var pages = data.query && data.query.pages;
+                var page = pages && Object.keys(pages).map(function (k) { return pages[k]; })[0];
+                var ii = page && page.imageinfo && page.imageinfo[0];
+                if (!ii || !ii.url || !ii.width || !ii.height) throw new Error('Wikimedia scan unavailable');
+                return (metaCache[file] = { file: file, url: ii.url, thumb: ii.thumburl || ii.url,
+                    w: Number(ii.width), h: Number(ii.height),
+                    maxZoom: Tiles.maxZoomFor(Number(ii.width), Number(ii.height)) });
+            });
+        }
+        function image(record) {
+            var file = filename(record);
+            if (imageCache[file]) return imageCache[file];
+            imageCache[file] = info(record).then(function (meta) {
+                return new Promise(function (resolve, reject) {
+                    var img = new Image(); img.crossOrigin = 'anonymous';
+                    img.onload = function () { resolve({ img: img, meta: meta }); };
+                    img.onerror = function () { reject(new Error('Wikimedia image failed to load')); };
+                    img.src = meta.url;
+                });
+            }).catch(function (e) { delete imageCache[file]; throw e; });
+            return imageCache[file];
+        }
+        Tiles.registerSource('josephine', {
+            resolve: function (record) { return info(record); },
+            recordUrl: function (record) { return 'https://commons.wikimedia.org/wiki/' + encodeURIComponent('File:' + filename(record)); },
+            thumbUrl: function (record) {
+                return 'https://commons.wikimedia.org/wiki/Special:FilePath/' +
+                    encodeURIComponent(filename(record)) + '?width=360';
+            },
+            tileUrl: function (record, x, y, level) {
+                return image(record).then(function (loaded) {
+                    var meta = loaded.meta, img = loaded.img;
+                    var scale = Math.pow(2, meta.maxZoom - level);
+                    var sx = x * 512 * scale, sy = y * 512 * scale;
+                    var sw = Math.min(512 * scale, meta.w - sx), sh = Math.min(512 * scale, meta.h - sy);
+                    var tw = Math.min(512, Math.ceil(sw / scale)), th = Math.min(512, Math.ceil(sh / scale));
+                    if (sw <= 0 || sh <= 0 || tw <= 0 || th <= 0) return '';
+                    var canvas = document.createElement('canvas'); canvas.width = tw; canvas.height = th;
+                    canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, tw, th);
+                    return canvas.toDataURL('image/jpeg', 0.88);
+                });
+            }
+        });
+    })();
+
     /* Two offline-built catalogues feed the same sub-layer: Hungaricana
      * (ECW pyramid, js/other-maps-tiles.js) and the National Library of
      * Scotland Map Finder (IIIF, js/other-maps-nls.js).  On top of its static
@@ -49,6 +112,7 @@
      * viewport while the layer is on. */
     var CATALOG_URL = 'data/other-maps-catalog.json?v=20261026-cluj-alba';
     var NLS_CATALOG_URL = 'data/other-maps-nls-catalog.json?v=20261028-other-maps-fix';
+    var JOSEPHINE_CATALOG_URL = 'iosfree_db.json?v=20261029-other-maps';
     var NLS_LIVE_MIN_ZOOM = 9;          // city scale: below this a finder query would return too many sheets
     var NLS_LIVE_DEBOUNCE_MS = 700;     // one finder query per settled view
     var NLS_LIVE_MAX_KEYS = 20;         // remembered viewport cells, so panning back does not refetch
@@ -268,7 +332,55 @@
             }
         }
         if (sourceId === 'nls') return t('om_source_nls_name');
+        if (sourceId === 'josephine') return 'Josephine Map · free sheets';
         return 'Hungaricana · Maps';
+    }
+
+    /* Collapse the free Josephine place database by scanned sheet.  A sheet
+     * can name many localities; its result marker is centred on their centroid
+     * and its green footprint radius reaches every listed locality. */
+    function buildJosephineRecords(db) {
+        var byImage = Object.create(null);
+        Object.keys(db || {}).forEach(function (key) {
+            var place = db[key];
+            var lat = Number(place && place.c && place.c.lat);
+            var lng = Number(place && place.c && place.c.lng);
+            if (!place || !place.l || !isFinite(lat) || !isFinite(lng)) return;
+            var match = place.l.match(/File:([^/?#]+)/i);
+            var file = match ? decodeURIComponent(match[1]).replace(/_/g, ' ') : place.l;
+            var bucket = byImage[file] || (byImage[file] = { file: file, places: [], first: place });
+            bucket.places.push({ name: place.d || key, lat: lat, lng: lng });
+        });
+        return Object.keys(byImage).map(function (file) {
+            var group = byImage[file], points = group.places;
+            var lat = points.reduce(function (sum, p) { return sum + p.lat; }, 0) / points.length;
+            var lng = points.reduce(function (sum, p) { return sum + p.lng; }, 0) / points.length;
+            var radius = points.reduce(function (max, p) {
+                var dLat = (p.lat - lat) * Math.PI / 180;
+                var dLng = (p.lng - lng) * Math.PI / 180;
+                var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                    Math.cos(lat * Math.PI / 180) * Math.cos(p.lat * Math.PI / 180) *
+                    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+                return Math.max(max, 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+            }, 0);
+            var bounds = points.reduce(function (b, p) {
+                b.south = Math.min(b.south, p.lat); b.north = Math.max(b.north, p.lat);
+                b.west = Math.min(b.west, p.lng); b.east = Math.max(b.east, p.lng);
+                return b;
+            }, { south: 90, north: -90, west: 180, east: -180 });
+            var first = group.first;
+            return {
+                id: 'josephine:' + encodeURIComponent(file), source: 'josephine',
+                path: 'josephine:' + file, title: 'Josephine Map — ' + file.replace(/_/g, ' '),
+                subject: points.map(function (p) { return p.name; }).join(', '),
+                place: points.length + ' localities', lat: lat, lng: lng,
+                coverageRadiusMeters: Math.max(radius + 100, 1200),
+                josephinePlaces: points, josephineEntry: first,
+                josephineBounds: [[bounds.south, bounds.west], [bounds.north, bounds.east]],
+                year: '1769–1773', provider: 'Österreichisches Staatsarchiv / Wikimedia Commons',
+                precision: 'sheet'
+            };
+        });
     }
 
     function loadCatalog() {
@@ -284,12 +396,21 @@
              * the whole sub-layer down, so its failure resolves to null. */
             fetch(NLS_CATALOG_URL, { cache: 'force-cache' })
                 .then(function (response) { return response.ok ? response.json() : null; })
+                .catch(function () { return null; }),
+            fetch(JOSEPHINE_CATALOG_URL, { cache: 'force-cache' })
+                .then(function (response) { return response.ok ? response.json() : null; })
                 .catch(function () { return null; })
         ]).then(function (pair) {
             var json = pair[0];
             var nls = pair[1];
+            var josephine = pair[2];
             state.catalog = json;
-            state.catalogs = nls ? [json, nls] : [json];
+            state.catalogs = [json];
+            if (nls) state.catalogs.push(nls);
+            if (josephine) state.catalogs.push({
+                sourceId: 'josephine',
+                source: { name: 'Josephine Map', attribution: '© Österreichisches Staatsarchiv · Wikimedia Commons' }
+            });
             if (Tiles && json) {
                 Tiles.configure({
                     tile: json.tileBase,
@@ -299,6 +420,7 @@
                 });
             }
             state.staticRecords = combineCatalogMaps(json, nls);
+            if (josephine) state.staticRecords = state.staticRecords.concat(buildJosephineRecords(josephine));
             state.liveRecords = [];
             rebuildRecords();
             return json;
@@ -357,7 +479,11 @@
                 precision: entry.precision,
                 w: entry.w,
                 h: entry.h,
-                radius: 7
+                radius: 7,
+                coverageRadiusMeters: Number(entry.coverageRadiusMeters) || 0,
+                josephinePlaces: entry.josephinePlaces || null,
+                josephineEntry: entry.josephineEntry || null,
+                josephineBounds: entry.josephineBounds || null
             });
         });
         state.records = records;
@@ -470,7 +596,10 @@
         var zoom = map.getZoom();
         var distanceKm = clusterer ? clusterer.getDistanceKm(zoom, config) : (zoom >= 11 ? 0 : 5);
         var bounds = map.getBounds();
-        var padM = distanceKm * 1000 + 1000;
+        var josephinePad = state.records.reduce(function (max, record) {
+            return Math.max(max, record.source === 'josephine' ? record.coverageRadiusMeters || 0 : 0);
+        }, 0);
+        var padM = Math.max(distanceKm * 1000 + 1000, josephinePad);
         var sw = clusterer ? clusterer.project(bounds.getSouth(), bounds.getWest())
             : { x: bounds.getWest(), y: bounds.getSouth() };
         var ne = clusterer ? clusterer.project(bounds.getNorth(), bounds.getEast())
@@ -488,6 +617,18 @@
                     location._clusterY >= minY && location._clusterY <= maxY;
             });
 
+        /* Josephine sheet footprints are meaningful only at neighbourhood
+         * scale: avoid clutter and unnecessary map-image results below z13. */
+        candidates = candidates.map(function (location) {
+            if (zoom >= 13) return location;
+            var visibleSheets = location.sheets.filter(function (r) { return r.source !== 'josephine'; });
+            if (!visibleSheets.length) return null;
+            if (visibleSheets.length === location.sheets.length) return location;
+            var copy = Object.assign({}, location);
+            copy.sheets = visibleSheets;
+            copy.count = visibleSheets.length;
+            return copy;
+        }).filter(Boolean);
         var clusters = clusterer
             ? clusterer.clusterRecords(candidates, zoom, state.index, config)
             : candidates.map(function (location) {
@@ -515,10 +656,25 @@
             var point = layerPointUnrounded(ll);
             var radius;
             var sheets = 0;
+            var josephineRadius = 0;
             for (var m = 0; m < cluster.members.length; m++) {
                 sheets += cluster.members[m].count || 1;
+                (cluster.members[m].sheets || []).forEach(function (sheet) {
+                    josephineRadius = Math.max(josephineRadius, sheet.coverageRadiusMeters || 0);
+                });
             }
-            if (cluster.members.length > 1) {
+            if (josephineRadius > 0 && zoom >= 13) {
+                var metersPerPixel = 40075016.686 * Math.cos(ll.lat * Math.PI / 180) /
+                    (256 * Math.pow(2, zoom));
+                radius = Math.max(18, josephineRadius / Math.max(metersPerPixel, 0.01));
+                ctx.beginPath();
+                ctx.fillStyle = DOT_FILL;
+                ctx.strokeStyle = DOT_STROKE;
+                ctx.lineWidth = 2;
+                ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            } else if (cluster.members.length > 1) {
                 // A geographic group of several places: one bigger bubble that
                 // says how many sheets live behind it.
                 radius = Math.min(22, 11 + Math.log(sheets) * 2);
@@ -822,8 +978,11 @@
 
         list.innerHTML = members.map(function (record) {
             var thumb = Tiles ? Tiles.thumbUrl(record) : '';
-            var recordUrl = Tiles ? Tiles.recordUrl(record) : '#';
-            var sourceButton = record.source === 'nls' ? t('om_source_nls') : t('om_source');
+            var recordUrl = record.source === 'josephine'
+                ? 'https://commons.wikimedia.org/wiki/' + encodeURIComponent('File:' + record.josephineEntry.l.split(/File:/i).pop())
+                : (Tiles ? Tiles.recordUrl(record) : '#');
+            var sourceButton = record.source === 'nls' ? t('om_source_nls') :
+                (record.source === 'josephine' ? 'Wikimedia Commons' : t('om_source'));
             var meta = [record.year, record.collection, record.provider].filter(Boolean).join(' · ');
             return '<div class="om-card" data-om-id="' + escapeHtml(record.id) + '">' +
                 '<a class="om-thumb" href="' + escapeHtml(recordUrl) + '" target="_blank" rel="noopener">' +
@@ -844,6 +1003,7 @@
 
         Array.prototype.forEach.call(list.querySelectorAll('[data-om-add]'), function (button) {
             button.addEventListener('click', function () {
+                var record = findRecord(button.getAttribute('data-om-add'));
                 addMapById(button.getAttribute('data-om-add'), latlng);
             });
         });
@@ -1193,10 +1353,10 @@
         if (row) row.style.opacity = state.enabled ? '1' : '0.45';
 
         if (state.enabled) {
-            var parent = document.getElementById('histPremiumToggle');
+            var parent = document.getElementById('histToggle');
             if (parent && !parent.checked) {
                 parent.checked = true;
-                if (typeof root.toggleHistPremiumLayer === 'function') root.toggleHistPremiumLayer(true);
+                if (typeof root.toggleHistLayer === 'function') root.toggleHistLayer(true);
             }
             loadCatalog().then(function () {
                 if (!state.enabled) return;
@@ -1354,6 +1514,7 @@
         formatMeters: formatMeters,
         georefOptionsHtml: georefOptionsHtml,
         combineCatalogMaps: combineCatalogMaps,
+        buildJosephineRecords: buildJosephineRecords,
         sourceLabel: sourceLabel,
         mergeLiveRecords: mergeLiveRecords,
         rebuildRecords: rebuildRecords,
