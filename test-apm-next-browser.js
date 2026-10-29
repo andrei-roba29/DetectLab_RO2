@@ -228,6 +228,23 @@ test('Terrarium-only note is shown as a plain note, not a warning, and the statu
     await page.close();
 });
 
+test('a free account stays gated, with no developer banner or override', async (ctx) => {
+    // localStorage is not reachable from this harness (about:blank origin), so this checks the gate
+    // only through _dlIsPremium. The absence of the old localStorage switch is checked by test-apm-next.js.
+    const { page } = await openHarness(ctx.browser, 1280, 800);
+    await page.evaluate(() => {
+        window._dlIsPremium = () => false;                      // a free account
+        window.DetectLabApmUi.setEnabled(true);
+        window.DetectLabApmUi.open();
+    });
+    const r = await page.evaluate(() => ({ runDisabled: document.querySelector('.apm-primary').disabled,
+        gateHidden: document.querySelector('.apm-gate').hidden, banner: !!document.querySelector('.apm-dev-banner') }));
+    assert.strictEqual(r.runDisabled, true, 'Run stays disabled for a free account');
+    assert.strictEqual(r.gateHidden, false, 'the premium gate message is shown');
+    assert.strictEqual(r.banner, false, 'no developer banner element');
+    await page.close();
+});
+
 async function main() {
     if (!process.env.PUPPETEER_MODULE_DIR) {
         console.log('Browser checks skipped (set PUPPETEER_MODULE_DIR to enable).');

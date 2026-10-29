@@ -36,7 +36,7 @@ Defined in `js/subscriptions.js` as `window._dlIsPremium = isPremium`. `isPremiu
 
 It always returns a boolean. The panel reads it through a wrapper that also returns `false` when the function is missing or throws.
 
-**Developer override (remove before release).** The block is marked `DEV-OVERRIDE-BEGIN` / `DEV-OVERRIDE-END` in `js/apm-next/apm-ui.js`. With `?apmDevPremium=1` in the URL, or `localStorage.apmDevPremium = '1'`, the gate opens and a yellow banner says so. Also remove the `.apm-dev-banner` CSS rule and the `devBanner` lines. Note that the override only changes the panel's own gate; it does not change any account.
+**Developer override: removed in phase 4.** The `?apmDevPremium=1` / `localStorage.apmDevPremium` switch, its banner, its CSS and its translation keys are gone. The gate now follows only `_dlIsPremium()`. To test as premium, use a premium account.
 
 ## Point picking and other map tools
 
@@ -123,7 +123,7 @@ The proxy is not built, and no request is changed until a user enables it.
 - **Debug mode** (panel → *Debug log*, or `?apmDebug=1`) prints every record to the console as `[APM] {…}`.
 - Records are always kept in memory (last 500). Each request record has: step (dem / water), method, URL, HTTP status, duration, content type, response size in bytes, reason on failure, and whether it went through the proxy.
 - Each source decision is a `step` record: the provider, its endpoint, `used` / `failed` / `skipped`, the reason (for example *outside EEA-39 coverage* or *an earlier source was used*), and the duration. Capability reads are `caps` records (coverages, formats, CRS, limits, layer list).
-- **Download diagnostics** exports a JSON bundle: the record list, app version, user agent, page path, point, radius, settings (weights, thresholds, minimum area and slope, water classes, drainage, Strahler map, proxy switch, debug and override flags) and the last result's provenance and warnings.
+- **Download diagnostics** exports a JSON bundle: the record list, app version, user agent, page path, point, radius, settings (weights, thresholds, minimum area and slope, water classes, drainage, Strahler map, proxy switch, debug flag) and the last result's provenance and warnings.
 
 ## TRAIN input
 
@@ -175,24 +175,25 @@ Notes:
 | `js/apm-next/apm-providers.js` | DEM candidates, GetCapabilities parsing, water sources, Strahler map, proxy switch, step and request log. |
 | `js/apm-next/apm-pipeline.js` | `runManual`, `runTrain`, DEM and water decisions, keyed warnings, site-count status. |
 | `js/apm-next/apm-i18n.js` | Romanian and English strings (152 keys each). |
-| `js/apm-next/apm-ui.js` | Panel, pick on map, switch, premium gate, dev override, legend, curves, TRAIN CSV, results, diagnostics. |
+| `js/apm-next/apm-ui.js` | Panel, pick on map, switch, premium gate, legend, curves, TRAIN CSV, results, diagnostics. |
 | `css/next-gen-apm.css` | `.apm-*` styles. |
 | `samples/apm-next-SYNTHETIC-sample-sites.csv` | Synthetic TRAIN sample (36 rows). |
-| `test-apm-next.js` | Node test suite: `node test-apm-next.js` (59 tests). |
-| `test-apm-next-browser.js` | Browser checks (8), run with `PUPPETEER_MODULE_DIR` set. |
+| `test-apm-next.js` | Node test suite: `node test-apm-next.js` (60 tests). |
+| `test-apm-next-browser.js` | Browser checks (9), run with `PUPPETEER_MODULE_DIR` set. |
 | `LIVE_TEST.md` | Steps for the first live test and what to send back. |
 
 Wiring: `index.html` loads the stylesheet and seven scripts (versioned `?v=20261029-apm-next-phase4`). `sw.js` precaches the same files under `detectlab-v304-apm-next-phase4`.
 
 ## Verification status
 
-- `node test-apm-next.js`: **59 tests pass.** (Browser checks: see below.) They cover terrain numerics (including the cos-latitude slope test at 65°N), distance transform, water distance (brute force at 10 km and 50 km, and the haversine error bounds), curves, logistic recovery, AUC and Kvamme, thresholds, the MANUAL score, polygonisation, CSV parsing (including BCE and the sample file), TRAIN thresholds (blocked below 10, before any download), provider parsers on fixtures (EU-Hydro layer list, Overpass, GetCapabilities), DEM candidate order, every failure reason, the fallback warnings (v1.1 → v1.0, and 25 m → Terrarium), the Strahler map, the drainage default, the proxy default, debug logging, translation key coverage (EN and RO), and the synthetic TRAIN recovery.
-- **Browser checks (`test-apm-next-browser.js`, headless Chromium 131, real Leaflet and panel, pipeline stubbed):** 8 checks, all pass. They cover: APM off (a normal map click reaches the handler); a pick click goes to APM only and the flag clears after it; a handler registered during a pick is also blocked; closing the panel cancels a pick; the legend and the panel do not overlap at 390 px with a result, the legend returns when the panel closes, and the legend is visible at 1280 px; and the Terrarium-only note is shown as an info note with status *Done*. Run with `PUPPETEER_MODULE_DIR=<dir with puppeteer-core and @sparticuz/chromium>/ node test-apm-next-browser.js`; without the variable it is skipped.
+- `node test-apm-next.js`: **60 tests pass.** (Browser checks: see below.) They cover terrain numerics (including the cos-latitude slope test at 65°N), distance transform, water distance (brute force at 10 km and 50 km, and the haversine error bounds), curves, logistic recovery, AUC and Kvamme, thresholds, the MANUAL score, polygonisation, CSV parsing (including BCE and the sample file), TRAIN thresholds (blocked below 10, before any download), provider parsers on fixtures (EU-Hydro layer list, Overpass, GetCapabilities), DEM candidate order, every failure reason, the fallback warnings (v1.1 → v1.0, and 25 m → Terrarium), the Strahler map, the drainage default, the proxy default, debug logging, translation key coverage (EN and RO), and the synthetic TRAIN recovery.
+- **Browser checks (`test-apm-next-browser.js`, headless Chromium 131, real Leaflet and panel, pipeline stubbed):** 9 checks, all pass. They cover: APM off (a normal map click reaches the handler); a pick click goes to APM only and the flag clears after it; a handler registered during a pick is also blocked; closing the panel cancels a pick; the legend and the panel do not overlap at 390 px with a result, the legend returns when the panel closes, and the legend is visible at 1280 px; and the Terrarium-only note is shown as an info note with status *Done*; and a free account stays gated, with no developer banner. Run with `PUPPETEER_MODULE_DIR=<dir with puppeteer-core and @sparticuz/chromium>/ node test-apm-next-browser.js`; without the variable it is skipped.
 - **Browser check limits:** the pipeline's `runManual` is stubbed, so no real DEM or water request is made. The map is a bare Leaflet map: the app's own click handlers (map-app.js etc.) are not loaded, because the full page needs login, Supabase and CDN scripts that the sandbox cannot reach. Their guard lines are checked by source in `test-apm-next.js`.
 - **Not verified:** all live endpoints, their CORS headers, and the appearance on the real app map.
 
 ## Resolved in phase 4
 
+0. **Developer premium override removed** (`?apmDevPremium=1` and its banner). Checked by a source test and a browser test: a free account stays gated even with the old localStorage key set.
 1. **Map-pick click conflict.** Fixed with the shared `window.dlApmPicking` flag (see *Point picking and other map tools*). Checked by a source test for each handler and by the browser checks. Not yet checked in the real app.
 2. **Legend overlapped the panel on phones.** Fixed: the map legend is hidden on narrow screens while the panel is open (see *Phone layout*). Measured in the browser at 390 px: before the fix the legend (x 213–380, y 741–834) overlapped the panel (x 12–352, y 183–774) by 139 × 33 px, about 4,600 px². After the fix there is no overlap.
 

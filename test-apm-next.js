@@ -456,7 +456,7 @@ test('every translation key used by the pipeline, providers, core and sites exis
     const I18N = require('./js/apm-next/apm-i18n.js');
     const en = new Set(Object.keys(I18N.STRINGS.en)), ro = new Set(Object.keys(I18N.STRINGS.ro));
     const files = ['apm-pipeline.js', 'apm-providers.js', 'apm-core.js', 'apm-sites.js'];
-    const prefix = /^(err|warn|info|reason|prog|skip|diag|dev|result|train|water|status)\./;
+    const prefix = /^(err|warn|info|reason|prog|skip|diag|result|train|water|status)\./;
     const used = new Set();
     files.forEach((f) => {
         const src = fs.readFileSync(path.join(ROOT, 'js', 'apm-next', f), 'utf8');
@@ -1028,6 +1028,17 @@ testAsync('Terrarium is the only source outside Europe: an info note, no warning
         global.GeoTIFF = realGeo; global.createImageBitmap = realBmp; global.OffscreenCanvas = realOff;
         prov.setFetch(null);
     }
+});
+
+test('no developer premium override is shipped: the gate follows only the app entitlement', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'js', 'apm-next', 'apm-ui.js'), 'utf8');
+    const css = fs.readFileSync(path.join(ROOT, 'css', 'next-gen-apm.css'), 'utf8');
+    const i18n = fs.readFileSync(path.join(ROOT, 'js', 'apm-next', 'apm-i18n.js'), 'utf8');
+    for (const bad of ['apmDevPremium', 'DEV-OVERRIDE', 'devPremiumOverride', 'devBanner', 'apm-dev-banner', 'dev.banner']) {
+        assert.ok(!src.includes(bad) && !css.includes(bad) && !i18n.includes(bad), 'still present: ' + bad);
+    }
+    assert.ok(/function isPremium\(\) \{\s*try \{ return typeof root\._dlIsPremium === 'function' \? !!root\._dlIsPremium\(\) : false; \}/.test(src),
+        'isPremium only asks the app entitlement function');
 });
 
 /* ── Summary ─────────────────────────────────────────────────────────────── */

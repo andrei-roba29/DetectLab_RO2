@@ -77,19 +77,7 @@
         return e && e.message ? e.message : String(e);
     }
 
-    /* DEV-OVERRIDE-BEGIN — developer-only premium override. REMOVE BEFORE RELEASE (this block and the
-     * `devPremiumOverride()` call inside isPremium()). Enable with ?apmDevPremium=1 in the URL or
-     * localStorage.apmDevPremium = '1'. The panel shows a banner while it is active. */
-    function devPremiumOverride() {
-        try {
-            if (root.location && /[?&]apmDevPremium=1\b/.test(root.location.search)) return true;
-            return !!root.localStorage && root.localStorage.getItem('apmDevPremium') === '1';
-        } catch (e) { return false; }
-    }
-    /* DEV-OVERRIDE-END */
-
     function isPremium() {
-        if (devPremiumOverride()) return true;          // DEV-OVERRIDE (remove before release)
         try { return typeof root._dlIsPremium === 'function' ? !!root._dlIsPremium() : false; }
         catch (e) { return false; }
     }
@@ -180,7 +168,6 @@
         var premium = isPremium();
         var on = state.enabled;
         els.gate.hidden = premium && on;
-        if (els.devBanner) els.devBanner.hidden = !devPremiumOverride();   // DEV-OVERRIDE (remove before release)
         els.gate.textContent = !premium ? T('gate.premium') : T('gate.off');
         var canRunNow = premium && on && !state.busy;
         var trainBlocked = state.mode === 'train' && (!state.records || (state.siteCount != null && state.siteCount < 10));
@@ -694,7 +681,7 @@
         var out = { mode: state.mode, radiusKm: state.radiusKm, period: state.period, smoothDem: chk(els.smooth),
             includeDrainage: chk(els.drainage), waterClasses: null, weights: null, minSlopeDeg: num(els.minSlope),
             minAreaM2: num(els.minArea), thresholdsPct: null, strahlerMap: null,
-            demProxyEnabled: prov().CONFIG.proxy.enabled, debugMode: prov().isDebug(), devPremiumOverride: devPremiumOverride() };
+            demProxyEnabled: prov().CONFIG.proxy.enabled, debugMode: prov().isDebug() };
         try { out.waterClasses = core().WATER_CLASSES.filter(function (c) { return els.water[c].checked; }); } catch (e) { /* ignore */ }
         try { out.weights = { relief: num(els.wRelief), water: num(els.wWater), soil: num(els.wSoil) }; } catch (e) { /* ignore */ }
         try { out.thresholdsPct = { medium: num(els.tMed), high: num(els.tHigh), veryhigh: num(els.tVery) }; } catch (e) { /* ignore */ }
@@ -932,14 +919,11 @@
             els.debugList
         ]);
 
-        els.devBanner = h('div', { class: 'apm-dev-banner', hidden: true });   // DEV-OVERRIDE (remove before release)
-        bind(els.devBanner, 'dev.banner');
         var panel = h('section', { class: 'apm-panel', id: 'apmNextPanel', hidden: true, 'aria-label': 'Next-Gen APM' }, [
             h('header', { class: 'apm-head' }, [
                 h('h3', { key: 'panel.title' }),
                 h('div', { class: 'apm-head-right' }, [els.switch, close])
             ]),
-            els.devBanner,
             els.gate,
             els.controls,
             h('div', { class: 'apm-actions' }, [els.run, els.cancel, els.exportBtn, els.clearBtn]),

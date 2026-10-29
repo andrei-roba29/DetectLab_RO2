@@ -1,12 +1,12 @@
 # Next-Gen APM: first live test
 
 Goal: check that the elevation and water sources answer from your browser, and send back the log if they do not.
-Time: about 10 minutes. You need a premium account (or the developer override, see step 2).
+Time: about 10 minutes. You need a premium account.
 
 ## Steps
 
 1. Open the site in Chrome or Edge on a desktop. Open DevTools (F12) → Network tab, and keep it open.
-2. Add `?apmDebug=1` to the URL and reload. For premium, add `&apmDevPremium=1` only on a test copy of the site (this override must be removed before release).
+2. Add `?apmDebug=1` to the URL and reload. You need a premium account (the developer override has been removed).
 3. Click **APM** (bottom-left). Turn the switch **on**.
 4. Click **Pick point on map**, then click a point inside Europe (for example near Marlow, England). Leave the radius at **5 km**. Keep MANUAL, leave weights at their defaults.
 5. Click **Run**. Wait for it to finish (or fail).
