@@ -339,6 +339,30 @@ păstrat în `localStorage`. Pe lîngă catalogul static, stratul face oricum o 
 WFS live pentru fereastra curentă (§2.1), deci extinderea acoperirii nu necesită niciun
 release.
 
+## 8.1 Stabilitatea la zoom și la deplasare (v306)
+
+O foaie este o imagine fixă pe teren: la orice zoom trebuie să arate la fel,
+doar mai mare sau mai mică. Trei lucruri făceau să nu fie așa:
+
+* **nivelul piramidei depindea de poziția foii în cadru.** Dacă tile-ul
+  „mai fin” era acceptat sau nu depindea de fereastra de tile-uri vizibilă, deci
+  același zoom arăta altfel după ce mutai foaia. Acum bugetul de tile-uri se
+  calculează din **dimensiunea** viewport-ului (diagonala, în pixelii nivelului),
+  nu din poziția lui: nivelul depinde doar de zoom, de scară și de dimensiunea
+  naturală a foii (`planGeometry`, `viewportTileBudget`, `MAX_SHARP_TILES = 36`).
+* **dimensiunile nivelului erau rotunjite pe fiecare axă.** Grila desenată avea
+  înălțimea `hL·k` care nu coincidea cu caseta `dH`, cu o eroare de pînă la o
+  jumătate de pixel de nivel pe axă, care se schimba cu nivelul. Acum
+  `wL = w·2^Δ` și `hL = h·2^Δ` sînt exacte, iar scara e un singur număr `k` pe
+  ambele axe, la orice zoom.
+* **testul** verifică acum că grila umple exact caseta la fiecare zoom (4–18,
+  șase dimensiuni de foaie, inclusiv una foarte alungită), că fiecare pas de zoom
+  dublează dimensiunea pe ecran și că nivelul nu depinde de pan sau de rotație.
+  Înainte, eroarea de proporție ajungea la 0,9 %.
+
+Versiunea: `js/other-maps-overlay.js?v=20261029-other-maps-stable`, cache
+`detectlab-v306-other-maps-stable`.
+
 ## 8. Regresie
 
 ```bash

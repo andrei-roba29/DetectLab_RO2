@@ -426,6 +426,42 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
     const offscreen = Overlay.visibleTileRange(small, { x: 60000, y: 40000 }, 0, viewport.topLeft, viewport.bottomRight);
     ok(offscreen.x0 >= 0 && offscreen.x1 < small.cols, 'a sheet far outside the view still yields a legal window');
 
+    /* ── stability across zoom and pan (OTHER_MAPS.md §9) ─────────────────
+     * A sheet is one fixed picture on the ground.  Whatever the zoom, the
+     * painted grid must fill exactly the framed box (no shape drift from
+     * integer level sizes), each zoom step must double its on-screen size,
+     * and the pyramid level must not depend on where the sheet sits in the
+     * viewport or how it is rotated (no look change while panning). */
+    const stableSizes = [[4000, 3000], [10000, 7000], [6123, 8517], [2600, 900], [30000, 21000], [8001, 333]];
+    const stableView = { topLeft: { x: 0, y: 0 }, bottomRight: { x: 1280, y: 800 } };
+    let worstAspect = 0;
+    let worstDouble = 0;
+    let panLevelDrift = 0;
+    for (const [w, h] of stableSizes) {
+        const maxZoom = Tiles.maxZoomFor(w, h);
+        const mpp = 0.7 * 900 * Overlay.resolutionAt(47, 12) / Math.max(w, h);
+        for (let z = 4; z <= 18; z++) {
+            const g = Overlay.planGeometry({ lat: 47, zoom: z, w, h, mpp, maxZoom });
+            worstAspect = Math.max(worstAspect,
+                Math.abs(g.hL * g.k / g.dH - 1), Math.abs(g.wL * g.k / g.dW - 1));
+            const next = Overlay.planGeometry({ lat: 47, zoom: z + 1, w, h, mpp, maxZoom });
+            const screenNow = g.dW, screenNext = next.dW;
+            worstDouble = Math.max(worstDouble, Math.abs(screenNext / screenNow - 2) * (screenNow > 0 ? 1 : 0));
+            const levels = new Set();
+            [[0, 0], [640, 400], [-3000, 200], [5000, 5000], [-120, 9000]].forEach(([x, y]) => {
+                [0, 37, 90, -128].forEach((rot) => {
+                    const at = Overlay.planGeometry({ lat: 47, zoom: z, w, h, mpp, maxZoom },
+                        { anchor: { x, y }, rotation: rot, topLeft: stableView.topLeft, bottomRight: stableView.bottomRight });
+                    levels.add(at.level);
+                });
+            });
+            if (levels.size > 1) panLevelDrift++;
+        }
+    }
+    ok(worstAspect < 1e-9, `the painted grid fills the framed box exactly at every zoom (worst ${worstAspect.toExponential(2)})`);
+    ok(worstDouble < 1e-9, `each zoom step exactly doubles the on-screen size (worst ${worstDouble.toExponential(2)})`);
+    eq(panLevelDrift, 0, 'the pyramid level never depends on pan position or rotation');
+
     /* ══ 3. the catalogue ═════════════════════════════════════════════ */
     const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, 'data/other-maps-catalog.json'), 'utf8'));
     ok(Array.isArray(catalog.maps) && catalog.maps.length > 0, 'the catalogue has records');
