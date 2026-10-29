@@ -1775,12 +1775,16 @@
                         liveBtn.classList.add('active');
                         liveBtn.title = 'Stop tracking';
                     }
+                    // Center only on the first fix of each tracking session. Later GPS
+                    // updates must not override a zoom or pan chosen by the user.
+                    var firstFix = true;
                     watchId = navigator.geolocation.watchPosition(
                         function (pos) {
                             var lat = pos.coords.latitude;
                             var lng = pos.coords.longitude;
                             var acc = pos.coords.accuracy;
-                            showLiveLocation(lat, lng, acc, true);
+                            showLiveLocation(lat, lng, acc, firstFix);
+                            firstFix = false;
                             // Share coordinates with detection system so it can fire immediately
                             // even if the user activates detection after live location is already on
                             _detLat = lat;

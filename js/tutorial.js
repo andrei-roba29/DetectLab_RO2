@@ -70,8 +70,8 @@
                     sel: '#btnLiveLocation',
                     title: { ro: 'Locația mea', en: 'My location' },
                     desc: {
-                        ro: 'Pornește / oprește urmărirea GPS în timp real și centrează harta pe poziția ta. Pe site, butonul stă în coloana din stânga; în aplicația instalată îl găsești separat, în dreapta-jos. Nu mai există meniul de cont din bara de jos. Locația live poate porni și din comutatorul Detectare sau din lupa „Detectoriști din zonă”.',
-                        en: 'Start / stop real-time GPS tracking and centre the map on your position. On the website, the button is in the left-hand column; in the installed app it appears separately at the bottom-right. The account menu is no longer in a bottom bar. Live location can also start from the Detect switch or the "Detectorists nearby" magnifier.'
+                        ro: 'Pornește / oprește urmărirea GPS în timp real. La prima poziție, harta se centrează și mărește dacă este nevoie; apoi poți micșora sau deplasa harta fără ca următoarele actualizări GPS să o readucă. Pe site, butonul stă în coloana din stânga; în aplicația instalată îl găsești în dreapta-jos, deasupra contului. Locația live poate porni și din comutatorul Detectare sau din lupa „Detectoriști din zonă”.',
+                        en: 'Start / stop real-time GPS tracking. On the first fix, the map centres on you and zooms in if needed; afterwards you can zoom out or pan without later GPS updates moving the map back. On the website, the button is in the left-hand column; in the installed app it is at the bottom-right, above the account button. Live location can also start from the Detect switch or the "Detectorists nearby" magnifier.'
                     }
                 },
                 {
@@ -163,15 +163,13 @@
                     }
                 },
                 {
-                    // The account menu used to be the "AN" / initials button of
-                    // the removed PWA bottom bar (#pwaUserItem). It now only
-                    // exists in the website's top nav, so the guide points at
-                    // that pill and is skipped inside the installed app.
+                    // The installed app has a separate account control beneath
+                    // live location; pick whichever account control is visible.
                     sel: ['#navUser', '#pwaUserItem'],
                     title: { ro: 'Contul tău', en: 'Your account' },
                     desc: {
-                        ro: 'Autentificare, administrarea contului și a abonamentului, evenimente și delogare, plus Limbă (română / engleză), Stocare (pin-uri, trasee și hărți salvate) și intrarea spre Prieteni (căutare, cereri, chat). Meniul contului stă în bara de sus a site-ului; în aplicația instalată a fost scos din dreapta-jos. Butonul 🎯 din dreapta-jos pornește doar locația live, nu deschide meniul contului.',
-                        en: 'Log in, manage your account and subscription, events and log out, plus Language (Romanian / English), Storage (pins, trails and saved maps) and the entry to Friends (search, requests, chat). The account menu lives in the website\'s top bar and is not available from the installed app. Its bottom-right 🎯 button controls live location only; it does not open the account menu.'
+                        ro: 'Autentificare, administrarea contului și a abonamentului, evenimente și delogare, plus Limbă (română / engleză), Stocare (pin-uri, trasee și hărți salvate) și intrarea spre Prieteni (căutare, cereri, chat). Meniul contului stă în bara de sus a site-ului; în aplicația instalată, butonul contului este în dreapta-jos, sub locația live. Butonul 🎯 pornește doar locația live, nu deschide meniul contului.',
+                        en: 'Log in, manage your account and subscription, events and log out, plus Language (Romanian / English), Storage (pins, trails and saved maps) and the entry to Friends (search, requests, chat). The account menu lives in the website\'s top bar; in the installed app, its button is at the bottom-right, below live location. The 🎯 button controls live location only; it does not open the account menu.'
                     }
                 },
                 {
