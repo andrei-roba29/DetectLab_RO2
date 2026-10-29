@@ -116,12 +116,14 @@ test('APM picking: the pick click goes to APM only; the app handler is blocked; 
     await page.evaluate(() => window.DetectLabApmUi.open());
     await clickButtonByText(page, '.apm-panel button', 'Pick point on map');
     assert.strictEqual(await page.evaluate(() => !!window.dlApmPicking), true, 'flag set while picking');
+    assert.strictEqual(await page.evaluate(() => document.getElementById('apmNextPanel').hidden), true, 'window hides while picking');
     await mapClick(page, 900, 300);
     const after = await page.evaluate(() => ({
         centre: window.DetectLabApmUi.state().centre, picking: window.DetectLabApmUi.state().picking,
         calls: window._t.calls.length, flag: !!window.dlApmPicking
     }));
     assert.ok(after.centre, 'APM took the point');
+    assert.strictEqual(await page.evaluate(() => document.getElementById('apmNextPanel').hidden), false, 'window reopens after picking');
     assert.strictEqual(after.picking, false, 'pick ends after one click');
     assert.strictEqual(after.calls, 0, 'app handler did not fire on the pick click');
     assert.strictEqual(after.flag, false, 'flag cleared once the click has finished');
