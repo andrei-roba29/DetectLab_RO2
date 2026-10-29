@@ -934,7 +934,7 @@
             L.GridLayer.prototype.onAdd.call(this, map);
             this.on('tileunload', this._onTileUnload, this);
             var self = this;
-            this._identifyHandler = function (event) { self._identify(event); };
+            this._identifyHandler = function (event) { if (window.dlApmPicking) return; /* APM picking owns this click */ self._identify(event); };
             map.on('click', this._identifyHandler, this);
         },
         onRemove: function (map) {
@@ -2105,6 +2105,7 @@
     function wireMap(map) {
         map.on('moveend zoomend', function () { ensureActiveOnMap(); onMoveEnd(); });
         map.on('click', function (event) {
+            if (window.dlApmPicking) return;   // APM point picking owns this map click
             sykeIdentify(event);
             alandIdentify(event);
         });

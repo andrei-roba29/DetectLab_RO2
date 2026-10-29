@@ -12,7 +12,7 @@
 (function (root) {
     'use strict';
 
-    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261029-apm-next-phase3';
+    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261029-apm-next-phase4';
     var SWITCH_KEY = 'detectlab_apm_next';         // 'on' | 'off' (default off)
     var DEBUG_KEY = 'apmDebug';                    // shared with apm-providers.js
     var TRAIN_AREA_KM = 50;
@@ -77,19 +77,7 @@
         return e && e.message ? e.message : String(e);
     }
 
-    /* DEV-OVERRIDE-BEGIN — developer-only premium override. REMOVE BEFORE RELEASE (this block and the
-     * `devPremiumOverride()` call inside isPremium()). Enable with ?apmDevPremium=1 in the URL or
-     * localStorage.apmDevPremium = '1'. The panel shows a banner while it is active. */
-    function devPremiumOverride() {
-        try {
-            if (root.location && /[?&]apmDevPremium=1\b/.test(root.location.search)) return true;
-            return !!root.localStorage && root.localStorage.getItem('apmDevPremium') === '1';
-        } catch (e) { return false; }
-    }
-    /* DEV-OVERRIDE-END */
-
     function isPremium() {
-        if (devPremiumOverride()) return true;          // DEV-OVERRIDE (remove before release)
         try { return typeof root._dlIsPremium === 'function' ? !!root._dlIsPremium() : false; }
         catch (e) { return false; }
     }
@@ -180,7 +168,6 @@
         var premium = isPremium();
         var on = state.enabled;
         els.gate.hidden = premium && on;
-        if (els.devBanner) els.devBanner.hidden = !devPremiumOverride();   // DEV-OVERRIDE (remove before release)
         els.gate.textContent = !premium ? T('gate.premium') : T('gate.off');
         var canRunNow = premium && on && !state.busy;
         var trainBlocked = state.mode === 'train' && (!state.records || (state.siteCount != null && state.siteCount < 10));
@@ -197,11 +184,14 @@
 
     /* ── point selection on the map ──────────────────────────────────────── */
 
+    /* Shared flag: while a point is being picked, every other map click handler in the app returns early
+     * (they check window.dlApmPicking). The flag is set by startPick and cleared by stopPick. */
+
     function onMapPick(e) {
         if (!state.picking) return;
         if (e && e.originalEvent && e.originalEvent.target && e.originalEvent.target.closest &&
             e.originalEvent.target.closest('.apm-panel, .apm-fab')) return;     // clicks on the panel never pick
-        stopPick();
+        stopPick(true);
         state.centre = { lat: e.latlng.lat, lon: e.latlng.lng };
         onCentreChanged();
     }
@@ -210,16 +200,21 @@
         map = getMap();
         if (!map) { setStatus(T('status.noMap'), 'error'); return; }
         state.picking = true;
+        root.dlApmPicking = true;
         map.on('click', onMapPick);
         if (map.getContainer) map.getContainer().style.cursor = 'crosshair';
         renderPickButton();
     }
 
-    function stopPick() {
+    /* endAfterClick: called from inside the map click. The flag then stays set until that click has
+     * reached every handler (Leaflet runs them in one pass), so handlers registered later still see it. */
+    function stopPick(endAfterClick) {
         if (!state.picking) return;
         state.picking = false;
         var m = getMap();
         if (m) { m.off('click', onMapPick); if (m.getContainer) m.getContainer().style.cursor = ''; }
+        if (endAfterClick) setTimeout(function () { if (!state.picking) root.dlApmPicking = false; }, 0);
+        else root.dlApmPicking = false;
         renderPickButton();
     }
 
@@ -473,7 +468,7 @@
             if (!state.token || state.token.cancelled) return;
             state.result = res;
             drawResult(res);
-            setStatus((res.warnings && res.warnings.length) ? T('status.doneWarn') : T('status.done'), 'ok');
+            setStatus(hasWarnings(res) ? T('status.doneWarn') : T('status.done'), 'ok');
         }).catch(function (err) {
             if (pipe().isCancelled(err)) { setStatus(T('status.cancelled')); return; }
             setStatus(T('status.error', { msg: errText(err) }), 'error');
@@ -538,7 +533,7 @@
     function renderLegend() {
         var m = getMap();
         if (!legendEl) {
-            legendEl = h('div', { class: 'apm-legend' });
+            legendEl = h('div', { class: 'apm-legend apm-map-legend' });
         }
         legendEl.textContent = '';
         legendEl.appendChild(h('div', { class: 'apm-legend-title', text: T('result.legend') }));
@@ -561,6 +556,10 @@
         }
     }
 
+    /* Keys starting with "info." are plain notes (shown in the same list, not counted as warnings). */
+    function isInfoNote(m) { return !!m && typeof m.key === 'string' && m.key.indexOf('info.') === 0; }
+    function hasWarnings(res) { return (res.warnings || []).some(function (w) { return !isInfoNote(w); }); }
+
     function renderResult(res) {
         var C = core();
         els.resultRows.textContent = '';
@@ -581,7 +580,10 @@
         els.provenance.textContent = parts.join(' · ');
 
         els.warnings.textContent = '';
-        (res.warnings || []).forEach(function (w) { els.warnings.appendChild(h('li', { text: tm(w) })); });
+        (res.warnings || []).forEach(function (w) {
+            var info = isInfoNote(w);
+            els.warnings.appendChild(h('li', { class: info ? 'apm-info-note' : null, text: tm(w) }));
+        });
         els.warnings.hidden = !(res.warnings && res.warnings.length);
 
         els.diag.textContent = '';
@@ -679,7 +681,7 @@
         var out = { mode: state.mode, radiusKm: state.radiusKm, period: state.period, smoothDem: chk(els.smooth),
             includeDrainage: chk(els.drainage), waterClasses: null, weights: null, minSlopeDeg: num(els.minSlope),
             minAreaM2: num(els.minArea), thresholdsPct: null, strahlerMap: null,
-            demProxyEnabled: prov().CONFIG.proxy.enabled, debugMode: prov().isDebug(), devPremiumOverride: devPremiumOverride() };
+            demProxyEnabled: prov().CONFIG.proxy.enabled, debugMode: prov().isDebug() };
         try { out.waterClasses = core().WATER_CLASSES.filter(function (c) { return els.water[c].checked; }); } catch (e) { /* ignore */ }
         try { out.weights = { relief: num(els.wRelief), water: num(els.wWater), soil: num(els.wSoil) }; } catch (e) { /* ignore */ }
         try { out.thresholdsPct = { medium: num(els.tMed), high: num(els.tHigh), veryhigh: num(els.tVery) }; } catch (e) { /* ignore */ }
@@ -917,14 +919,11 @@
             els.debugList
         ]);
 
-        els.devBanner = h('div', { class: 'apm-dev-banner', hidden: true });   // DEV-OVERRIDE (remove before release)
-        bind(els.devBanner, 'dev.banner');
         var panel = h('section', { class: 'apm-panel', id: 'apmNextPanel', hidden: true, 'aria-label': 'Next-Gen APM' }, [
             h('header', { class: 'apm-head' }, [
                 h('h3', { key: 'panel.title' }),
                 h('div', { class: 'apm-head-right' }, [els.switch, close])
             ]),
-            els.devBanner,
             els.gate,
             els.controls,
             h('div', { class: 'apm-actions' }, [els.run, els.cancel, els.exportBtn, els.clearBtn]),
@@ -970,6 +969,9 @@
     function togglePanel(force) {
         var open = typeof force === 'boolean' ? force : ui.panel.hidden;
         ui.panel.hidden = !open;
+        // On phones the map legend steps aside while the panel is open (the panel lists the same classes).
+        document.body.classList.toggle('apm-panel-open', open);
+        if (!open) stopPick();                       // a pick armed with the panel closed would block other map tools
         if (open) { updateGate(); renderDebugLog(); }
         ui.btn.setAttribute('aria-expanded', String(open));
     }

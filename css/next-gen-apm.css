@@ -85,6 +85,7 @@
 .apm-provenance { font-size: 11px; opacity: 0.75; margin-top: 6px; }
 .apm-warnings { margin: 6px 0 0; padding-left: 18px; font-size: 11px; color: #ffd27f; }
 .apm-warnings[hidden] { display: none; }
+.apm-info-note { list-style: none; margin-left: -18px; color: #cfe8ff; font-style: italic; }
 .apm-note { font-size: 11px; opacity: 0.6; margin-top: 10px; }
 .apm-popup { font: 12px/1.4 'Outfit', system-ui, sans-serif; }
 
@@ -161,7 +162,10 @@
 .apm-strahler { display: grid; gap: 4px; margin-top: 8px; }
 .apm-strahler-input { width: 100%; box-sizing: border-box; font-size: 12px; padding: 3px 6px; }
 .apm-drain { margin-bottom: 8px; }
-/* DEV-OVERRIDE: developer-only premium banner. Remove with the override (see apm-ui.js). */
-.apm-dev-banner { background: #fff3cd; color: #5c4400; border: 1px solid #e0b400; border-radius: 4px; padding: 4px 8px; font-size: 12px; margin: 4px 0; }
+/* Phone layout: the map legend (bottom-right) would sit under the panel (bottom-left, 340 px wide).
+   While the panel is open on a narrow screen the map legend is hidden; the panel shows the same classes. */
+@media (max-width: 600px) {
+    body.apm-panel-open .apm-map-legend { display: none; }
+}
 /* Phase 3 layout fix: number inputs must not overflow narrow (phone) panels. */
 .apm-field input { max-width: 100%; box-sizing: border-box; min-width: 0; }

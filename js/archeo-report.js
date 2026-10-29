@@ -2737,6 +2737,7 @@
     }
 
     function onMapClick(e) {
+        if (window.dlApmPicking) return;   // APM point picking owns this map click
         if (!_state.active || _state.running) return;
         // taps belong to the offline polygon while that is being drawn
         try { if (window._dlOfflineDrawActive) return; } catch (err) {}

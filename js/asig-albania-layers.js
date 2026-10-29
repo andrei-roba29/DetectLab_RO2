@@ -1825,6 +1825,7 @@
         syncUI();
         renderActive();
         map.on('click', function (event) {
+            if (window.dlApmPicking) return;   // APM point picking owns this map click
             if (!event || !canQueryAt(event.latlng)) return;
             openFeatureInfo(event.latlng);
         });

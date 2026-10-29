@@ -380,7 +380,7 @@
     }
     if (!map.getPane('rvt-profile-pane')) { map.createPane('rvt-profile-pane'); map.getPane('rvt-profile-pane').style.zIndex = 710; }
     map.on('click', event => {
-        if (!profileOn || body.hidden || isPhoto() || blocked(method)) return;
+        if (window.dlApmPicking || !profileOn || body.hidden || isPhoto() || blocked(method)) return;   // APM point picking owns this map click
         if (profilePoints.length === 2) profilePoints = [];
         profilePoints.push(event.latlng);
         if (profileLine) { map.removeLayer(profileLine); profileLine = null; }

@@ -2002,6 +2002,7 @@
                 }
 
                 function onMapClick(e) {
+                    if (window.dlApmPicking) return;   // APM point picking owns this map click
                     L.DomEvent.stopPropagation(e);
                     var latlng = e.latlng;
                     measurePoints.push(latlng);
@@ -2175,6 +2176,7 @@
                 }
 
                 function onCoordClick(e) {
+                    if (window.dlApmPicking) return;   // APM point picking owns this map click
                     L.DomEvent.stopPropagation(e);
                     var lat = e.latlng.lat.toFixed(6);
                     var lng = e.latlng.lng.toFixed(6);
@@ -4230,6 +4232,7 @@
             // which matches the previous stacking order (markers were drawn under this
             // canvas, but were the intended click target).
             map.on('click', function (e) {
+                if (window.dlApmPicking) return;   // APM point picking owns this map click
                 if (!map.hasLayer(patrimoniuLayer)) return;   // heritage layer switched off
                 if (!e.latlng || !e.containerPoint) return;
 
@@ -6853,6 +6856,7 @@
             // ignores the click that ends a pan.
             var _norwayIdentifyPopup = null;
             function _norwayIdentifyClick(e) {
+                if (window.dlApmPicking) return;   // APM point picking owns this map click
                 var cfg = LIDAR_SUB_LAYERS.noLidar;
                 if (!cfg || !window.Hoydedata || !window.Hoydedata.CONFIG.IDENTIFY.ENABLED) return;
                 if (!cfg.leafletLayer || !_lidarGroup.hasLayer(cfg.leafletLayer)) return;
@@ -11419,6 +11423,7 @@
                 }
 
                 function _iosBldMapClickForSuggest(e) {
+                    if (window.dlApmPicking) return;   // APM point picking owns this map click
                     var isFirst = _suggestPoints.length === 0;
                     _suggestPoints.push(e.latlng);
                     _iosBldAddSuggestVertexMarker(e.latlng, isFirst);
