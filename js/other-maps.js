@@ -886,6 +886,7 @@
     }
 
     function onMapClick(e) {
+        if (window.dlApmPicking) return;   // APM point picking owns this map click
         if (!state.enabled || !e.latlng || !e.containerPoint) return;
         if (typeof state.map._draggableMoved === 'function' && state.map._draggableMoved(state.map)) return;
         var point = e.layerPoint || state.map.containerPointToLayerPoint(e.containerPoint);

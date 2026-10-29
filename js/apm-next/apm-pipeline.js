@@ -157,7 +157,11 @@
                     'Elevation source "' + first.label + '" failed; used ' + dem.label + ' instead.'));
             }
             if (dem.tier === 'fallback') {
-                warnings.push(M('warn.demTerrarium', { res: dem.nominalResM }, 'Elevation is Terrarium.'));
+                // Terrarium as the only possible source (outside EU-DEM coverage) is information, not a warning.
+                // Terrarium after an EU-DEM candidate failed inside Europe is still a warning.
+                var euDemPossible = plan.some(function (x) { return x.use && x.provider.id !== 'terrarium'; });
+                if (euDemPossible) warnings.push(M('warn.demTerrarium', { res: dem.nominalResM }, 'Elevation is Terrarium.'));
+                else warnings.push(M('info.demTerrariumOnly', { res: dem.nominalResM }, 'Terrarium is the only elevation source here.'));
             }
             if (dem.version === '1.0') warnings.push(M('warn.demOlder', {}, 'Elevation is EU-DEM v1.0.'));
             return { provider: dem, decision: decision };

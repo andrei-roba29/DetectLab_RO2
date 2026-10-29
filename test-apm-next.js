@@ -456,7 +456,7 @@ test('every translation key used by the pipeline, providers, core and sites exis
     const I18N = require('./js/apm-next/apm-i18n.js');
     const en = new Set(Object.keys(I18N.STRINGS.en)), ro = new Set(Object.keys(I18N.STRINGS.ro));
     const files = ['apm-pipeline.js', 'apm-providers.js', 'apm-core.js', 'apm-sites.js'];
-    const prefix = /^(err|warn|reason|prog|skip|diag|dev|result|train|water|status)\./;
+    const prefix = /^(err|warn|info|reason|prog|skip|diag|dev|result|train|water|status)\./;
     const used = new Set();
     files.forEach((f) => {
         const src = fs.readFileSync(path.join(ROOT, 'js', 'apm-next', f), 'utf8');
@@ -956,6 +956,78 @@ test('colours follow the spec: medium = orange, high = green, very high = baby b
         assert.ok(I.STRINGS.en['cls.' + c.id], 'legend label (en) for ' + c.id);
         assert.ok(I.STRINGS.ro['cls.' + c.id], 'legend label (ro) for ' + c.id);
     });
+});
+
+/* ── Shared picking flag: every app map click handler respects window.dlApmPicking ── */
+test('every map click handler in the app returns early while APM is picking (window.dlApmPicking)', () => {
+    // [file, start of the handler, how far after the start the guard must appear]
+    const handlers = [
+        ['js/map-app.js', /function onMapClick\(e\) \{/, 200],          // measure tool
+        ['js/map-app.js', /function onCoordClick\(e\) \{/, 200],        // coordinate tool
+        ['js/map-app.js', /map\.on\('click', function \(e\) \{/, 200],   // heritage hit test (first such registration in the file)
+        ['js/map-app.js', /function _norwayIdentifyClick\(e\) \{/, 200],
+        ['js/map-app.js', /function _iosBldMapClickForSuggest\(e\) \{/, 200],
+        ['js/archeo-potential.js', /function onMapClick\(e\) \{/, 200],
+        ['js/archeo-report.js', /function onMapClick\(e\) \{/, 200],
+        ['js/asig-albania-layers.js', /map\.on\('click', function \(event\) \{/, 200],
+        ['js/danish-layers.js', /identifyHandler = function \(event\) \{/, 200],
+        ['js/finland-layers.js', /_identifyHandler = function \(event\) \{/, 200],
+        ['js/finland-layers.js', /map\.on\('click', function \(event\) \{\s*\n\s*if \(window\.dlApmPicking\)|map\.on\('click', function \(event\) \{\s*\n\s*sykeIdentify/, 200],
+        ['js/lidar-3d-focus.js', /picking\.clickHandler = function \(event\) \{/, 200],
+        ['js/lidar-photo-filter.js', /const click=event=>\{/, 300],
+        ['js/lidar-scanner.js', /function onMapClick\(e\)\{/, 100],
+        ['js/offline-maps.js', /function onDrawClick\(event\) \{/, 200],
+        ['js/other-maps.js', /function onMapClick\(e\) \{/, 200],
+        ['js/rvt-panel.js', /map\.on\('click', event => \{/, 200]
+    ];
+    const missing = [];
+    handlers.forEach(([rel, re, span]) => {
+        const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+        const m = re.exec(src);
+        if (!m) { missing.push(rel + ' (handler not found: ' + re + ')'); return; }
+        const body = src.slice(m.index, m.index + span);
+        if (!body.includes('dlApmPicking')) missing.push(rel + ' (' + re.source.slice(0, 50) + ')');
+    });
+    assert.deepStrictEqual(missing, [], 'handlers without the picking guard');
+});
+
+test('APM sets and clears the shared picking flag around a pick (source check)', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'js', 'apm-next', 'apm-ui.js'), 'utf8');
+    assert.ok(/root\.dlApmPicking = true;/.test(src), 'flag set in startPick');
+    assert.ok(/root\.dlApmPicking = false;/.test(src), 'flag cleared in stopPick');
+    assert.ok(/setTimeout\(function \(\) \{ if \(!state\.picking\) root\.dlApmPicking = false; \}, 0\)/.test(src), 'flag clears after the click finishes');
+});
+
+/* ── Terrarium only (outside Europe): an info note, not a warning ───────── */
+testAsync('Terrarium is the only source outside Europe: an info note, no warning', async () => {
+    const realGeo = global.GeoTIFF, realBmp = global.createImageBitmap, realOff = global.OffscreenCanvas;
+    global.createImageBitmap = async () => ({ width: 256, height: 256 });
+    global.OffscreenCanvas = class { constructor(w, h) { this.w = w; this.h = h; }
+        getContext() { return { drawImage() {}, getImageData: (x, y, w, h) => {
+            const d = new Uint8ClampedArray(w * h * 4);
+            for (let i = 0; i < w * h; i++) { d[i * 4] = 128; d[i * 4 + 3] = 255; }
+            return { data: d };
+        } }; } };
+    const urls = [];
+    prov.setFetch(async (url) => {
+        urls.push(url);
+        if (url.includes('elevation-tiles-prod')) return { ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(8), headers: { get: () => 'image/png' } };
+        throw new Error('unexpected URL in test: ' + url);
+    });
+    try {
+        const warnings = [];
+        const pick = await pipeline.pickDemProvider({ lat: -33.87, lon: 151.21 }, null, warnings);   // Sydney
+        assert.strictEqual(pick.provider.id, 'terrarium');
+        assert.ok(urls.every((u) => u.includes('elevation-tiles-prod')), 'no EEA request outside Europe: ' + urls.join(' '));
+        assert.ok(warnings.some((w) => w.key === 'info.demTerrariumOnly' && w.vars.res === 30), 'info note with the resolution');
+        assert.ok(!warnings.some((w) => w.key.startsWith('warn.')), 'no warning: ' + JSON.stringify(warnings.map((w) => w.key)));
+        const I = require('./js/apm-next/apm-i18n.js');
+        assert.ok(I.t('info.demTerrariumOnly', 'en', { res: 30 }).includes('30 m'), 'English text is filled in');
+        assert.ok(I.t('info.demTerrariumOnly', 'ro', { res: 30 }).includes('30 m'), 'Romanian text is filled in');
+    } finally {
+        global.GeoTIFF = realGeo; global.createImageBitmap = realBmp; global.OffscreenCanvas = realOff;
+        prov.setFetch(null);
+    }
 });
 
 /* ── Summary ─────────────────────────────────────────────────────────────── */

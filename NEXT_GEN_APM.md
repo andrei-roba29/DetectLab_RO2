@@ -1,7 +1,7 @@
 # Next-Gen APM (archaeological potential model)
 
 Status: **MANUAL and TRAIN are implemented in the panel. Live data endpoints are not verified from a browser.**
-Premium-only, behind an on/off switch. Cache: `detectlab-v303-apm-next-phase3`.
+Premium-only, behind an on/off switch. Cache: `detectlab-v304-apm-next-phase4`.
 
 ## What it does
 
@@ -38,6 +38,12 @@ It always returns a boolean. The panel reads it through a wrapper that also retu
 
 **Developer override (remove before release).** The block is marked `DEV-OVERRIDE-BEGIN` / `DEV-OVERRIDE-END` in `js/apm-next/apm-ui.js`. With `?apmDevPremium=1` in the URL, or `localStorage.apmDevPremium = '1'`, the gate opens and a yellow banner says so. Also remove the `.apm-dev-banner` CSS rule and the `devBanner` lines. Note that the override only changes the panel's own gate; it does not change any account.
 
+## Point picking and other map tools
+
+While **Pick point on map** is armed, `window.dlApmPicking` is `true`. Every app click handler on the Leaflet map (measure, coordinates, heritage hit test, Norway elevation, iOS building suggest, archeo points, Albania, Denmark, Finland, LiDAR focus and photo filter, LiDAR scanner, offline draw, other maps, RVT profile) returns early while it is set, so the pick click only sets the APM point. The flag is set when picking starts and cleared after the pick click has reached every handler. Closing the APM panel cancels a pick armed in it. Map clicks work normally when APM is off (the flag is then `false`).
+
+Not covered: click handlers on other map objects (the ArcGIS views, the MapLibre 3D layer click in `map3d-terrain.js`), and one dead handler in `map-app.js` that returns on its first line. A pick armed while a marker is clicked stays armed until a click reaches the map; the Pick button shows that it is active.
+
 ## Data sources
 
 Order is chosen by location. The EEA39 test is a coarse bounding approximation (`inEea39Approx`).
@@ -61,7 +67,7 @@ The former `copernicus.discomap` candidate has been removed: its GetCapabilities
 - `no EU-DEM coverage listed (found …)`;
 - `mostly no-data at this location`.
 
-**Fallbacks are always visible.** When an EU-DEM candidate fails, the result shows *Elevation source "EU-DEM v1.1 (EEA, 25 m)" failed (<reason>); used <source> instead*. When Terrarium is used, a second warning gives its resolution and says that terrain values are less precise than 25 m. The provenance line always shows the source, version and cell size actually used.
+**Fallbacks are always visible.** When an EU-DEM candidate fails, the result shows *Elevation source "EU-DEM v1.1 (EEA, 25 m)" failed (<reason>); used <source> instead*. When Terrarium is used after an EU-DEM candidate failed (inside Europe), a second warning gives its resolution and says that terrain values are less precise than 25 m. When Terrarium is the only possible source (outside EU-DEM coverage, Europe only), the result shows a plain note instead ("Outside EU-DEM coverage … Terrarium is the only elevation source"), not a warning. Keys starting with `info.` are notes: they are shown in the warnings list in italics and do not change the status to *Done with warnings*. The provenance line always shows the source, version and cell size actually used.
 
 **Not verified:** none of the three endpoints has been called from a browser. The sandbox cannot reach the EEA host. The GioLandPublic path is the one the user supplied; its existence is not confirmed here.
 
@@ -172,22 +178,27 @@ Notes:
 | `js/apm-next/apm-ui.js` | Panel, pick on map, switch, premium gate, dev override, legend, curves, TRAIN CSV, results, diagnostics. |
 | `css/next-gen-apm.css` | `.apm-*` styles. |
 | `samples/apm-next-SYNTHETIC-sample-sites.csv` | Synthetic TRAIN sample (36 rows). |
-| `test-apm-next.js` | Node test suite: `node test-apm-next.js` (56 tests). |
+| `test-apm-next.js` | Node test suite: `node test-apm-next.js` (59 tests). |
+| `test-apm-next-browser.js` | Browser checks (8), run with `PUPPETEER_MODULE_DIR` set. |
 | `LIVE_TEST.md` | Steps for the first live test and what to send back. |
 
-Wiring: `index.html` loads the stylesheet and seven scripts (versioned `?v=20261029-apm-next-phase3`). `sw.js` precaches the same files under `detectlab-v303-apm-next-phase3`.
+Wiring: `index.html` loads the stylesheet and seven scripts (versioned `?v=20261029-apm-next-phase4`). `sw.js` precaches the same files under `detectlab-v304-apm-next-phase4`.
 
 ## Verification status
 
-- `node test-apm-next.js`: **56 tests pass.** They cover terrain numerics (including the cos-latitude slope test at 65°N), distance transform, water distance (brute force at 10 km and 50 km, and the haversine error bounds), curves, logistic recovery, AUC and Kvamme, thresholds, the MANUAL score, polygonisation, CSV parsing (including BCE and the sample file), TRAIN thresholds (blocked below 10, before any download), provider parsers on fixtures (EU-Hydro layer list, Overpass, GetCapabilities), DEM candidate order, every failure reason, the fallback warnings (v1.1 → v1.0, and 25 m → Terrarium), the Strahler map, the drainage default, the proxy default, debug logging, translation key coverage (EN and RO), and the synthetic TRAIN recovery.
-- **Browser check (headless Chromium 131, Puppeteer, stubbed pipeline):** 21 of 21 checks pass. They cover: the switch; the panel at desktop 1280×800 and mobile 390×844; radius default and bounds; drainage off by default; Strahler defaults; a map click sets the point; translated warnings in English and Romanian; the three-colour legend; the provenance line; the diagnostics bundle; the 1–10 km refusal; the free-user gate; the developer banner; and the TRAIN thresholds in the browser. No console errors. Screenshots are in the sandbox, not the repo.
-- **Browser check limits:** the pipeline's `runManual` was stubbed, so no real DEM or water request was made. The map was a bare Leaflet map, not the app's map. Overlap was checked only against the stand-in control and the legend.
+- `node test-apm-next.js`: **59 tests pass.** (Browser checks: see below.) They cover terrain numerics (including the cos-latitude slope test at 65°N), distance transform, water distance (brute force at 10 km and 50 km, and the haversine error bounds), curves, logistic recovery, AUC and Kvamme, thresholds, the MANUAL score, polygonisation, CSV parsing (including BCE and the sample file), TRAIN thresholds (blocked below 10, before any download), provider parsers on fixtures (EU-Hydro layer list, Overpass, GetCapabilities), DEM candidate order, every failure reason, the fallback warnings (v1.1 → v1.0, and 25 m → Terrarium), the Strahler map, the drainage default, the proxy default, debug logging, translation key coverage (EN and RO), and the synthetic TRAIN recovery.
+- **Browser checks (`test-apm-next-browser.js`, headless Chromium 131, real Leaflet and panel, pipeline stubbed):** 8 checks, all pass. They cover: APM off (a normal map click reaches the handler); a pick click goes to APM only and the flag clears after it; a handler registered during a pick is also blocked; closing the panel cancels a pick; the legend and the panel do not overlap at 390 px with a result, the legend returns when the panel closes, and the legend is visible at 1280 px; and the Terrarium-only note is shown as an info note with status *Done*. Run with `PUPPETEER_MODULE_DIR=<dir with puppeteer-core and @sparticuz/chromium>/ node test-apm-next-browser.js`; without the variable it is skipped.
+- **Browser check limits:** the pipeline's `runManual` is stubbed, so no real DEM or water request is made. The map is a bare Leaflet map: the app's own click handlers (map-app.js etc.) are not loaded, because the full page needs login, Supabase and CDN scripts that the sandbox cannot reach. Their guard lines are checked by source in `test-apm-next.js`.
 - **Not verified:** all live endpoints, their CORS headers, and the appearance on the real app map.
 
-## Open issues found by the browser check
+## Resolved in phase 4
 
-1. **Map-pick click conflict.** While picking, the APM handler and the existing app handler both run on the same click. `js/map-app.js` registers at least eight `map.on('click', …)` handlers (for example `onMapClick` at line ~1977, the coordinate tool at ~2161, and handlers at ~4232 and ~5408). Whether the pick click also triggers an app action depends on which are active. Needs a check in the real app; a fix would be a flag that those handlers respect while APM is picking.
-2. **Legend overlaps the panel on phones.** With the panel open at 390 px wide, the bottom-right legend overlaps the panel's lower-right corner by about 6,900 px². Options: smaller legend on narrow screens, or placing it at the top when the panel is open.
+1. **Map-pick click conflict.** Fixed with the shared `window.dlApmPicking` flag (see *Point picking and other map tools*). Checked by a source test for each handler and by the browser checks. Not yet checked in the real app.
+2. **Legend overlapped the panel on phones.** Fixed: the map legend is hidden on narrow screens while the panel is open (see *Phone layout*). Measured in the browser at 390 px: before the fix the legend (x 213–380, y 741–834) overlapped the panel (x 12–352, y 183–774) by 139 × 33 px, about 4,600 px². After the fix there is no overlap.
+
+## Phone layout (legend)
+
+On screens up to 600 px wide the map legend (bottom-right) is hidden while the APM panel is open, because the panel (bottom-left, 340 px) would cover it. The panel lists the same three classes with their swatches and areas, so nothing is lost. The legend returns when the panel closes. Desktop widths are unchanged (checked at 1280 px).
 
 ## Known limitations
 

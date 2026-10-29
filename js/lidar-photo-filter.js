@@ -265,6 +265,7 @@
         announce('Tap the centre of a LiDAR-covered area on the map (1 km radius)');
         const click=event=>{
             map.off('click',click); pendingClick=null; selecting=false; map.getContainer().style.cursor='';
+            if(window.dlApmPicking) return;   // APM point picking owns this map click (selection already cleared above)
             prepare(key,event.latlng,method,values).catch(err=>announce(err.message));
         };
         pendingClick=click; map.once('click',click);

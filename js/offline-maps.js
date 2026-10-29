@@ -913,6 +913,7 @@
     }
 
     function onDrawClick(event) {
+        if (window.dlApmPicking) return;   // APM point picking owns this map click
         if (!state.mode || state.drawState !== 'drawing') return;
         var next = event.latlng;
         var last = state.points[state.points.length - 1];

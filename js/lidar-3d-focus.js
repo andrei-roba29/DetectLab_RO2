@@ -733,7 +733,7 @@
             previewAt(event.latlng);
         };
         picking.clickHandler = function (event) {
-            if (!picking.active) return;
+            if (!picking.active || window.dlApmPicking) return;   // APM point picking owns this map click
             var latlng = event && event.latlng;
             if (!latlng) return;
             var onPick = picking.onPick;

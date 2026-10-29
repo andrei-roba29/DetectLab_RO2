@@ -563,6 +563,7 @@
         var map = runtime.map;
         if (!map || typeof map.on !== 'function' || identifyHandler) return;
         identifyHandler = function (event) {
+            if (window.dlApmPicking) return;   // APM point picking owns this map click
             identifyOnClick(event);
         };
         map.on('click', identifyHandler);

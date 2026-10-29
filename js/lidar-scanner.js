@@ -725,7 +725,7 @@
        window._dlLidarFocusPicking): acolo tap-ul aparține dialogului. */
     function offlineDrawing(){ try { return !!window._dlOfflineDrawActive; } catch (e) { return false; } }
     function lidarFocusPicking(){ try { return !!window._dlLidarFocusPicking; } catch (e) { return false; } }
-    function onMapClick(e){ if(active&&!scanning&&!offlineDrawing()&&!lidarFocusPicking())drawSelection(e.latlng); }
+    function onMapClick(e){ if(window.dlApmPicking) return; if(active&&!scanning&&!offlineDrawing()&&!lidarFocusPicking())drawSelection(e.latlng); }
     function load() {
         if (pointsPromise) return pointsPromise;
         setStatus('Loading points / Se încarcă punctele…');
