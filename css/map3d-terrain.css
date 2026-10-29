@@ -187,16 +187,31 @@ body:not(.is-pwa) .m3d-toggle-group {
  * bottom-left control column and centre on the lower edge, directly under the
  * centred 3D bar — the website keeps this group centred all the time, and the
  * PWA now matches it once the second button (refresh) joins the group. The
- * offset is the historical PWA 3D slot (64px + the home-indicator inset).
+ * offset leaves room for the LiDAR pill and the phone navigation area.
  * While the country “Exit view” pill is showing, js/country-dock.js publishes
  * --country-exit-lift (46px, PWA only) and the group steps above that pill,
  * exactly as the centred switch did before it moved into the column. In 2D
  * the group stays in the column: the base body.is-pwa rule below keeps the
  * measured anchor because this selector only matches with .is-3d. */
 body.is-pwa.is-3d .m3d-toggle-group {
-    bottom: calc(64px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)) + var(--country-exit-lift, 0px));
-    left: 50%;
+    bottom: calc(96px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)) + var(--country-exit-lift, 0px));
+    left: calc(50% - 22px);
     transform: translateX(-50%);
+}
+
+/* In the installed 3D view the basemap control joins the 2D/refresh row.
+ * Keep it in Leaflet's corner (and its existing event handlers), but position
+ * the corner across the map so it shares the row's safe-area offset. */
+body.is-pwa.is-3d #detectlab-map .leaflet-bottom.leaflet-left {
+    width: 100%;
+    pointer-events: none;
+}
+body.is-pwa.is-3d #detectlab-map #arcgisBasemapCtrl {
+    position: absolute;
+    left: calc(50% + 25px);
+    bottom: calc(98px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)) + var(--country-exit-lift, 0px));
+    margin: 0 !important;
+    pointer-events: auto;
 }
 
 /* The 2D/3D switch rides the same glass material as the map icons
@@ -313,17 +328,17 @@ body.is-pwa #map3d-refresh .m3d-refresh-count { display: none; }
     overflow-y: auto;
 }
 
-/* Installed PWA: bar rides above the column switch, centred over it. The
- * switch's own top edge (--m3d-stack-top) is measured by js/map3d-terrain.js. */
+/* Installed PWA: keep the bar above the centred controls, including the
+ * extra lift when the country exit pill is visible. */
 body.is-pwa.is-3d #map3d-bar {
     top: auto;
     right: auto;
     left: 50%;
     transform: translateX(-50%);
-    bottom: calc(var(--m3d-stack-top, calc(190px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)))) + 8px);
+    bottom: calc(142px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)) + var(--country-exit-lift, 0px));
     width: 280px;
     max-width: calc(100% - 100px);
-    max-height: calc(100% - var(--m3d-stack-top, calc(190px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)))) - 72px);
+    max-height: calc(100% - 214px - var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)) - var(--country-exit-lift, 0px));
     overflow-y: auto;
     scrollbar-width: thin;
 }
@@ -527,15 +542,11 @@ body.is-pwa.is-3d #map3d-surface .maplibregl-ctrl-attrib {
     overflow-wrap: anywhere;
 }
 
-/* Installed PWA: keep the basemap picker and reset/north/flat actions.
- * The exaggeration / pitch / bearing rows this block used to hide no longer
- * exist in the bar at all (they were already hidden here because changing the
- * DEM exaggeration could crash the installed PWA); only the extra collapse
- * button is still PWA-suppressed. */
-body.is-pwa.is-3d #map3d-bar .m3d-head { display: none; }
-
-/* Keep safe controls visible even if the bar was collapsed before entering PWA. */
-body.is-pwa.is-3d #map3d-bar.collapsed .m3d-row,
+/* In the installed PWA the separate layer button already provides the
+ * basemap picker. Keep only the camera shortcuts in this bar, even if it was
+ * collapsed before entering the PWA. The website keeps its own picker. */
+body.is-pwa.is-3d #map3d-bar .m3d-head,
+body.is-pwa.is-3d #map3d-bar .m3d-basemap-row { display: none; }
 body.is-pwa.is-3d #map3d-bar.collapsed .m3d-actions { display: flex; }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -998,4 +1009,13 @@ body:not(.is-3d) #map3d-focus.is-minimized { display: none; }
         padding: 10px 11px 12px;
     }
     #map3d-focus .m3d-focus-layers { max-height: 88px; }
+}
+
+/* Leave room for the phone's navigation/home indicator even on devices that
+ * report a zero safe-area inset. Applies to both the card and its folded pill. */
+body.is-pwa #map3d-focus {
+    padding-bottom: calc(30px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
+}
+body.is-pwa #map3d-focus .m3d-focus-card {
+    max-height: min(76vh, 620px, calc(100% - 40px - var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px))));
 }

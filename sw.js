@@ -829,7 +829,7 @@
 //   the panel transparent and empty. Re-tags css/styles.css,
 //   js/tile-perf.js and js/map-app.js; see MAP_LAYER_PERFORMANCE.md and
 //   LAYER_WINDOW_GLASS.md.
-const CACHE_NAME = 'detectlab-v297-romania-5m';
+const CACHE_NAME = 'detectlab-v300-3d-startup-repaint';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1009,7 +1009,10 @@ const PRECACHE_URLS = [
   'js/map3d-terrain.js?v=20261026-lidar-whole-or-disc',
   // v285: PWA 38×38 switch/refresh squares; the group centres in 3D.
   'css/map3d-terrain.css?v=20261029-no-cesium',
+  'css/map3d-terrain.css?v=20261029-pwa-3d-clearance',
+  'css/map3d-terrain.css?v=20261029-pwa-3d-shortcuts',
   'js/map3d-terrain.js?v=20261029-no-cesium',
+  'js/map3d-terrain.js?v=20261029-3d-startup-repaint',
   'js/map-app.js?v=20261026-lidar-whole-or-disc',
   'js/lidar-3d-focus.js?v=20261026-lidar-whole-or-disc',
   'js/map3d-terrain.js?v=20261024-gesture-only-camera',

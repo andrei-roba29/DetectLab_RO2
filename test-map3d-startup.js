@@ -48,7 +48,7 @@ async function testCountryRace() {
         webglProbe: () => ({ webgl2: true }), loadMapLibre: () => sdk,
         registerProtocols: noop, REGISTRY: { config: () => ({}) },
         focusCamera: x => x, cameraFrom2D: noop, deviceProfile: () => ({}),
-        buildMapOptions: noop, watchContextLoss: noop, watchResume: noop, refreshBarCopy: noop, root: { setTimeout: () => 1 },
+        buildMapOptions: noop, watchContextLoss: noop, watchResume: noop, settleOpeningView: noop, refreshBarCopy: noop, root: { setTimeout: () => 1 },
         fail3D() { failures++; }, console });
     const start = source.indexOf('    function openNow()');
     vm.runInContext(source.slice(start, source.indexOf('\n    /**', start)), ctx);
@@ -67,10 +67,42 @@ async function testCountryRace() {
     assert.strictEqual(constructions, 1, 'only the current country creates a map');
     assert.strictEqual(failures, 0);
 }
+function testOpeningSettle() {
+    const frames = [], timers = [], calls = [];
+    const map = { resize() { calls.push('resize'); }, triggerRepaint() { calls.push('paint'); } };
+    const state = { open: true, healthTimers: [] };
+    const ctx = vm.createContext({ state, map, openGeneration: 1,
+        root: { requestAnimationFrame: fn => frames.push(fn),
+            setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; } },
+        scheduleSync: () => calls.push('sync') });
+    const start = source.indexOf('    function settleOpeningView(');
+    vm.runInContext(source.slice(start, source.indexOf('    function openNow()', start)), ctx);
+    ctx.settleOpeningView(map, 1);
+    assert.deepStrictEqual(timers.map(t => t.ms), [300, 1200]);
+    frames[0]();
+    assert.deepStrictEqual(calls, ['resize', 'paint', 'sync']);
+    timers[0].fn();
+    assert.strictEqual(calls.length, 6, 'settles again after mobile layout changes');
+    ctx.openGeneration = 2;
+    timers[1].fn();
+    assert.strictEqual(calls.length, 6, 'stale opening cannot touch the new view');
+    ctx.openGeneration = 1;
+    state.open = false;
+    frames[0]();
+    assert.strictEqual(calls.length, 6, 'closed view is not touched');
+    state.open = true;
+    ctx.map = {};
+    frames[0]();
+    assert.strictEqual(calls.length, 6, 'replacement map is not touched');
+    assert(source.includes('settleOpeningView(map, generation);'));
+    assert(fs.readFileSync('index.html', 'utf8').includes('js/map3d-terrain.js?v=20261029-3d-startup-repaint'));
+    assert(fs.readFileSync('sw.js', 'utf8').includes('js/map3d-terrain.js?v=20261029-3d-startup-repaint'));
+}
 (async () => {
     await testLoader(0);
     await testLoader(1);
     await testLoader(2);
     await testCountryRace();
+    testOpeningSettle();
     console.log('PASS: SDK retries, cleanup, shared downloads and country-switch race');
 })().catch(error => { console.error(error); process.exitCode = 1; });

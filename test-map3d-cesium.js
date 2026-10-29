@@ -13,8 +13,12 @@ for (const key of ['imagery', 'topographic', 'terrain']) {
 }
 assert(viewer.includes('root.setArcgisBasemap(basemapSelect.value)'), 'basemap choices still use the shared setter');
 assert(viewer.includes("engine: 'maplibre'"), 'MapLibre 3D remains available');
-for (const asset of ['js/map3d-terrain.js', 'js/layer-registry.js', 'css/map3d-terrain.css']) {
-    const url = asset + '?v=20261029-no-cesium';
+for (const [asset, tag] of Object.entries({
+    'js/map3d-terrain.js': '20261029-3d-startup-repaint',
+    'js/layer-registry.js': '20261029-no-cesium',
+    'css/map3d-terrain.css': '20261029-pwa-3d-shortcuts'
+})) {
+    const url = asset + '?v=' + tag;
     assert(html.includes(url) && sw.includes(url), url + ' is updated in the page and service worker');
 }
 console.log('Cesium removal regression checks passed.');
