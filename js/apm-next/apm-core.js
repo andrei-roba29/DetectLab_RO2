@@ -592,8 +592,8 @@
 
     function validateManualThresholds(t) {
         var m = Number(t.medium), h = Number(t.high), v = Number(t.veryhigh);
-        if (![m, h, v].every(isFinite)) throw new Error('Thresholds must be numbers.');
-        if (!(0 <= m && m < h && h < v && v <= 1)) throw new Error('Thresholds must satisfy 0 ≤ medium < high < very high ≤ 1.');
+        if (![m, h, v].every(isFinite)) throw keyedError('err.thresholdsNumber', {}, 'Thresholds must be numbers.');
+        if (!(0 <= m && m < h && h < v && v <= 1)) throw keyedError('err.thresholdsOrder', {}, 'Thresholds must satisfy 0 ≤ medium < high < very high ≤ 1.');
         return { medium: m, high: h, veryhigh: v, source: 'manual' };
     }
 
@@ -669,11 +669,22 @@
     /* ── User input validation (MANUAL / TRAIN UI) ─────────────────────────── */
     var RADIUS_KM = { min: 1, max: 10, def: 5 };
 
-    /** Search radius: 1–10 km. Returns the number or throws a user-readable error. */
+    /** Keyed message: the UI translates `key` with `vars`; `text` is the English fallback. */
+    function msg(key, vars, text) { return { key: key, vars: vars || {}, text: text }; }
+
+    /** Error carrying a keyed message (`e.key`, `e.vars`) and an English `message`. */
+    function keyedError(key, vars, text) {
+        var e = new Error(text);
+        e.key = key; e.vars = vars || {};
+        return e;
+    }
+
+    /** Search radius: 1–10 km. Returns the number or throws a keyed error. */
     function validateRadiusKm(v) {
         var n = typeof v === 'string' ? parseFloat(v) : v;
         if (!(typeof n === 'number' && isFinite(n) && n >= RADIUS_KM.min && n <= RADIUS_KM.max)) {
-            throw new Error('Radius must be between ' + RADIUS_KM.min + ' and ' + RADIUS_KM.max + ' km.');
+            throw keyedError('err.radius', { min: RADIUS_KM.min, max: RADIUS_KM.max },
+                'Radius must be between ' + RADIUS_KM.min + ' and ' + RADIUS_KM.max + ' km.');
         }
         return n;
     }
@@ -701,7 +712,7 @@
             if (!line) return;
             var parts = line.split(/[,;\s]+/).filter(Boolean);
             var x = Number(parts[0]), y = Number(parts[1]);
-            if (parts.length !== 2 || !isFinite(x) || !isFinite(y)) errors.push('line ' + (idx + 1) + ': expected "x, y"');
+            if (parts.length !== 2 || !isFinite(x) || !isFinite(y)) errors.push(msg('err.curveLine', { n: idx + 1 }, 'line ' + (idx + 1) + ': expected "x, y"'));
             else points.push([x, y]);
         });
         return { points: points, errors: errors };
@@ -710,13 +721,13 @@
     /** Check one curve: at least two points, x strictly ascending within the spec range, y in [0, 1]. */
     function validateCurve(points, spec) {
         var errs = [];
-        if (!Array.isArray(points) || points.length < 2) return ['needs at least two points'];
+        if (!Array.isArray(points) || points.length < 2) return [msg('err.curveFew', {}, 'needs at least two points')];
         for (var i = 0; i < points.length; i++) {
             var p = points[i];
-            if (!(Array.isArray(p) && p.length === 2 && isFinite(p[0]) && isFinite(p[1]))) { errs.push('point ' + (i + 1) + ' is not a number pair'); continue; }
-            if (spec && (p[0] < spec.xMin || p[0] > spec.xMax)) errs.push('x=' + p[0] + ' is outside ' + spec.xMin + '–' + spec.xMax);
-            if (p[1] < 0 || p[1] > 1) errs.push('y=' + p[1] + ' must be between 0 and 1');
-            if (i > 0 && !(p[0] > points[i - 1][0])) errs.push('x must increase (point ' + (i + 1) + ')');
+            if (!(Array.isArray(p) && p.length === 2 && isFinite(p[0]) && isFinite(p[1]))) { errs.push(msg('err.curvePair', { n: i + 1 }, 'point ' + (i + 1) + ' is not a number pair')); continue; }
+            if (spec && (p[0] < spec.xMin || p[0] > spec.xMax)) errs.push(msg('err.curveRange', { x: p[0], lo: spec.xMin, hi: spec.xMax }, 'x=' + p[0] + ' is outside ' + spec.xMin + '–' + spec.xMax));
+            if (p[1] < 0 || p[1] > 1) errs.push(msg('err.curveY', { y: p[1] }, 'y=' + p[1] + ' must be between 0 and 1'));
+            if (i > 0 && !(p[0] > points[i - 1][0])) errs.push(msg('err.curveIncrease', { n: i + 1 }, 'x must increase (point ' + (i + 1) + ')'));
         }
         return errs;
     }
@@ -745,6 +756,8 @@
 
     return {
         CLASSES: CLASSES,
+        msg: msg,
+        keyedError: keyedError,
         RADIUS_KM: RADIUS_KM,
         CURVE_SPECS: CURVE_SPECS,
         validateRadiusKm: validateRadiusKm,

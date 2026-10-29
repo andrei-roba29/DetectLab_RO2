@@ -97,60 +97,126 @@
         return elev.length ? n / elev.length : 0;
     }
 
+    /** Keyed message helper (translated by the UI; `text` is the English fallback). */
+    var M = core.msg;
+
+    /** Build a step-log record for a source decision and write it to the diagnostics log. */
+    function stepRecord(step, item, outcome, reason, ms) {
+        var rec = {
+            step: step, provider: item.provider.id, label: item.provider.label,
+            endpoint: item.provider.endpoint || null, outcome: outcome,
+            reason: reason || null, ms: ms == null ? null : ms
+        };
+        if (item.provider.version) rec.version = item.provider.version;
+        prov.logStep(rec);
+        return rec;
+    }
+
     /**
-     * Pick the first DEM provider in the chain that returns real terrain at the centre.
-     * Probes a small window so an unavailable service fails fast.
+     * Pick the first DEM provider in the plan that returns real terrain at the centre.
+     * Probes a small window so an unavailable service fails fast. Resolves { provider, decision }.
+     * Warnings (fallbacks, Terrarium, older version) are pushed into `warnings` as keyed messages.
      */
-    function pickDemProvider(centre, token) {
-        var chain = prov.demChain(centre.lat, centre.lon);
+    function pickDemProvider(centre, token, warnings) {
+        var plan = prov.demPlan(centre.lat, centre.lon);
         var attempts = [];
-        return chain.reduce(function (p, dem) {
+        return plan.reduce(function (p, item) {
             return p.then(function (found) {
-                if (found) return found;
+                if (found) { attempts.push(stepRecord('dem', item, 'skipped', M('skip.earlierUsed', {}, 'an earlier source was used'))); return found; }
+                if (!item.use) { attempts.push(stepRecord('dem', item, 'skipped', item.skipReason)); return null; }
                 checkToken(token);
-                var probeM = 300;
-                var bb = core.circleBBox(centre.lat, centre.lon, probeM);
-                var g = raster.gridForBBox(bb, dem.nominalResM);
-                return dem.fetchBlock(g).then(function (elev) {
+                var bb = core.circleBBox(centre.lat, centre.lon, 300);
+                var g = raster.gridForBBox(bb, item.provider.nominalResM);
+                var t0 = Date.now();
+                return item.provider.fetchBlock(g).then(function (elev) {
                     var f = validFraction(elev);
-                    if (f < 0.5) throw new Error('mostly no-data');
-                    return { provider: dem };
+                    if (f < 0.5) throw prov.failure('reason.noData', {}, 'mostly no-data at this location');
+                    attempts.push(stepRecord('dem', item, 'used', null, Date.now() - t0));
+                    return { provider: item.provider };
                 }).catch(function (e) {
-                    attempts.push(dem.id + ': ' + (e && e.message));
+                    if (isCancelled(e)) throw e;
+                    var reason = (e && e.reason) || M('reason.error', { msg: e && e.message }, String(e && e.message));
+                    attempts.push(stepRecord('dem', item, 'failed', reason, Date.now() - t0));
                     return null;
                 });
             });
         }, Promise.resolve(null)).then(function (found) {
-            if (!found) throw new Error('No elevation source responded for this location. Tried ' + attempts.join('; ') + '.');
-            return found.provider;
+            if (!found) {
+                var tried = attempts.filter(function (a) { return a.outcome === 'failed'; })
+                    .map(function (a) { return a.label + ' (' + a.reason.key + ')'; }).join('; ') || 'none';
+                throw core.keyedError('err.noDem', { tried: tried },
+                    'No elevation source responded for this location. Tried: ' + tried + '.');
+            }
+            var dem = found.provider;
+            var failed = attempts.filter(function (a) { return a.outcome === 'failed'; });
+            var decision = { chosen: { id: dem.id, label: dem.label, version: dem.version || null, tier: dem.tier, resM: dem.nominalResM, endpoint: dem.endpoint }, attempts: attempts };
+            if (failed.length) {
+                // Name the first failed source, its reason, and what was used instead.
+                var first = failed[0];
+                warnings.push(M('warn.demFallback', { from: first.label, reason: first.reason, to: dem.label },
+                    'Elevation source "' + first.label + '" failed; used ' + dem.label + ' instead.'));
+            }
+            if (dem.tier === 'fallback') {
+                warnings.push(M('warn.demTerrarium', { res: dem.nominalResM }, 'Elevation is Terrarium.'));
+            }
+            if (dem.version === '1.0') warnings.push(M('warn.demOlder', {}, 'Elevation is EU-DEM v1.0.'));
+            return { provider: dem, decision: decision };
         });
     }
 
-    /** Water for a bbox: first available provider; failure is non-fatal (returns empty + warning). */
-    function fetchWaterChain(centre, bbox, token, warnings) {
-        var chain = prov.waterChain(centre.lat, centre.lon);
-        return chain.reduce(function (p, wp) {
+    /** Water options passed to every water provider (Strahler map, drainage switch). */
+    function waterOptions(params) {
+        return { strahlerMap: params.strahlerMap || prov.defaultStrahlerMap(), includeDrainage: !!params.includeDrainage };
+    }
+
+    /**
+     * Water for a bbox: first available provider in the plan. A failure is non-fatal: the next provider is
+     * tried and the failures are reported as warnings. Resolves { water, provider, attempts }.
+     */
+    function fetchWaterChain(centre, bbox, token, warnings, opts) {
+        var plan = prov.waterPlan(centre.lat, centre.lon);
+        var attempts = [], failed = [];
+        return plan.reduce(function (p, item) {
             return p.then(function (found) {
-                if (found) return found;
+                if (found) { attempts.push(stepRecord('water', item, 'skipped', M('skip.earlierUsed', {}, 'an earlier source was used'))); return found; }
+                if (!item.use) { attempts.push(stepRecord('water', item, 'skipped', item.skipReason)); return null; }
                 checkToken(token);
-                return wp.fetchWater(bbox, {}).then(function (res) {
-                    return { water: res, provider: wp };
+                var t0 = Date.now();
+                return item.provider.fetchWater(bbox, opts).then(function (res) {
+                    attempts.push(stepRecord('water', item, 'used', null, Date.now() - t0));
+                    return { water: res, provider: item.provider };
                 }).catch(function (e) {
-                    warnings.push('Water source "' + wp.label + '" unavailable: ' + (e && e.message) + '. Water is excluded from this result.');
+                    if (isCancelled(e)) throw e;
+                    var reason = (e && e.reason) || M('reason.error', { msg: e && e.message }, String(e && e.message));
+                    attempts.push(stepRecord('water', item, 'failed', reason, Date.now() - t0));
+                    failed.push({ label: item.provider.label, reason: reason });
                     return null;
                 });
             });
         }, Promise.resolve(null)).then(function (found) {
-            if (!found) return { water: { lines: [], polygons: [] }, provider: null };
+            if (!found) {
+                failed.forEach(function (f) { warnings.push(M('warn.waterUnavailable', { src: f.label, reason: f.reason }, 'Water source unavailable.')); });
+                warnings.push(M('warn.noWater', {}, 'No water data: the water weight has no effect.'));
+                return { water: { lines: [], polygons: [] }, provider: null, attempts: attempts };
+            }
+            if (failed.length) {
+                warnings.push(M('warn.waterFallback', { from: failed[0].label, reason: failed[0].reason, to: found.provider.label }, 'Water source fallback.'));
+            }
+            if (found.water.meta && found.water.meta.drainage) warnings.push(M('warn.drainageIncluded', {}, 'Drainage network included.'));
+            found.attempts = attempts;
             return found;
         });
     }
 
-    function provenanceFor(dem, grid, water, waterProvider) {
+    function provenanceFor(dem, grid, water, waterProvider, decision) {
         var resM = prov.gridResM(grid);
         return {
-            dem: { id: dem.id, label: dem.label, source: dem.source, cellM: Math.round(resM * 10) / 10 },
-            water: waterProvider ? { id: waterProvider.id, label: waterProvider.label, source: waterProvider.source } : null
+            dem: {
+                id: dem.id, label: dem.label, source: dem.source, version: dem.version || null, tier: dem.tier,
+                nominalResM: dem.nominalResM, cellM: Math.round(resM * 10) / 10, endpoint: dem.endpoint || null
+            },
+            demDecision: decision || null,
+            water: waterProvider ? { id: waterProvider.id, label: waterProvider.label, source: waterProvider.source, endpoint: waterProvider.endpoint || null } : null
         };
     }
 
@@ -163,24 +229,26 @@
     function runManual(session, params) {
         var warnings = [];
         var radiusM = params.radiusKm * 1000;
-        var key = [params.centre.lat.toFixed(5), params.centre.lon.toFixed(5), params.radiusKm, params.smoothDem ? 's' : 'r'].join('|');
+        var key = [params.centre.lat.toFixed(5), params.centre.lon.toFixed(5), params.radiusKm, params.smoothDem ? 's' : 'r',
+            params.includeDrainage ? 'd' : '-', JSON.stringify(params.strahlerMap || null)].join('|');
         var progress = params.onProgress || function () {};
         var prepare = Promise.resolve();
 
         if (session.analysisKey !== key || !session.worker) {
             prepare = (function () {
-                progress('Choosing elevation source…', 5);
-                return pickDemProvider(params.centre, params.token).then(function (dem) {
+                progress('prog.chooseDem', 5);
+                return pickDemProvider(params.centre, params.token, warnings).then(function (pick) {
+                    var dem = pick.provider;
                     checkToken(params.token);
                     var bbox = core.circleBBox(params.centre.lat, params.centre.lon, radiusM + BUFFER_M);
                     var grid = raster.gridForBBox(bbox, dem.nominalResM);
-                    progress('Downloading elevation (' + dem.label + ')…', 15);
+                    progress('prog.downloadDem', 15, { label: dem.label });
                     return prov.loadDemGrid(dem, grid, dem.tilePx || 1000).then(function (elev) {
                         checkToken(params.token);
-                        progress('Downloading water features…', 40);
-                        return fetchWaterChain(params.centre, bbox, params.token, warnings).then(function (wr) {
+                        progress('prog.water', 40);
+                        return fetchWaterChain(params.centre, bbox, params.token, warnings, waterOptions(params)).then(function (wr) {
                             checkToken(params.token);
-                            progress('Computing terrain and water distance…', 60);
+                            progress('prog.terrain', 60);
                             var masks = rasteriseWater(wr.water, grid);
                             if (session.worker) session.worker.terminate();
                             session.worker = createWorkerClient(params.workerUrl);
@@ -191,10 +259,9 @@
                                 waterMasks: masks, altRef: null, soilRef: null
                             }).then(function (res) {
                                 session.analysisKey = key;
-                                session.provenance = provenanceFor(dem, grid, wr.water, wr.provider);
+                                session.provenance = provenanceFor(dem, grid, wr.water, wr.provider, pick.decision);
                                 session.stats = res.stats;
                                 session.waterClasses = Object.keys(masks);
-                                if (!wr.provider) warnings.push('No water data: water weight has no effect.');
                             });
                         });
                     });
@@ -204,7 +271,7 @@
 
         return prepare.then(function () {
             checkToken(params.token);
-            progress('Scoring…', 85);
+            progress('prog.scoring', 85);
             var enabled = params.waterClasses.filter(function (c) { return session.waterClasses.indexOf(c) >= 0; });
             return session.worker.call('score', {
                 mode: 'manual',
@@ -217,7 +284,7 @@
                 minAreaM2: params.minAreaM2,
                 smoothIters: 1
             }).then(function (res) {
-                progress('Done', 100);
+                progress('prog.done', 100);
                 return {
                     geojson: res.geojson,
                     areaKm2: res.areaKm2,
@@ -297,6 +364,18 @@
     }
 
     /**
+     * Site-count status for TRAIN: 'block' below minSites (run refused), 'warn' below warnSites, else 'ok'.
+     * Shared by the UI and the tests so the thresholds live in one place.
+     */
+    function trainSiteStatus(n, minSites, warnSites) {
+        minSites = minSites == null ? 10 : minSites;
+        warnSites = warnSites == null ? 30 : warnSites;
+        if (!(n >= minSites)) return { status: 'block', n: n, min: minSites, rec: warnSites };
+        if (n < warnSites) return { status: 'warn', n: n, min: minSites, rec: warnSites };
+        return { status: 'ok', n: n, min: minSites, rec: warnSites };
+    }
+
+    /**
      * params: { centre, records, period:{start,end}, radiusKm, curves?, waterClasses,
      *           bgCount=5000, minSlopeDeg, smoothDem, thresholds? , minAreaM2, minSites=10, warnSites=30,
      *           onProgress, token, workerUrl, rnd }
@@ -310,12 +389,13 @@
         var sel = sites.filterSites(params.records, { center: centre, radiusKm: TRAIN_AREA_KM, period: params.period });
         var nSites = sel.sites.length;
         var minSites = params.minSites || 10, warnSites = params.warnSites || 30;
-        if (nSites < minSites) {
-            var err = new Error('Only ' + nSites + ' usable known sites for this period (minimum ' + minSites + '). Choose a different period, upload more sites, or use MANUAL mode.');
+        if (trainSiteStatus(nSites, minSites, warnSites).status === 'block') {
+            var err = core.keyedError('err.tooFewSites', { n: nSites, min: minSites },
+                'Only ' + nSites + ' usable known sites for this period (minimum ' + minSites + ').');
             err.code = 'too_few_sites';
             return Promise.reject(err);
         }
-        if (nSites < warnSites) warnings.push('Only ' + nSites + ' sites: the model is unreliable (recommended ≥ ' + warnSites + ').');
+        if (nSites < warnSites) warnings.push(M('warn.fewSites', { n: nSites, rec: warnSites }, 'Only ' + nSites + ' sites.'));
 
         var bg = sampleBackground(centre, areaM, params.bgCount || 5000, sel.sites, BG_EXCLUDE_M, params.rnd);
         var pts = sel.sites.map(function (s) {
@@ -324,12 +404,13 @@
         }).concat(bg.map(function (b) { return { lat: b.lat, lon: b.lon, x: b.x, y: b.y, isSite: false }; }));
 
         var bbox = core.circleBBox(centre.lat, centre.lon, areaM + 1000);
-        var dem, grid, water = { water: null, provider: null }, classes = [];
-        return pickDemProvider(centre, params.token).then(function (d) {
-            dem = d;
+        var dem, demDecision = null, grid, water = { water: null, provider: null }, classes = [];
+        return pickDemProvider(centre, params.token, warnings).then(function (pick) {
+            dem = pick.provider;
+            demDecision = pick.decision;
             grid = raster.gridForBBox(bbox, dem.nominalResM);
-            progress('Downloading water features (50 km)…', 8);
-            return fetchWaterChain(centre, bbox, params.token, warnings);
+            progress('prog.waterTrain', 8);
+            return fetchWaterChain(centre, bbox, params.token, warnings, waterOptions(params));
         }).then(function (wr) {
             water = wr;
             var segs = waterSegments(wr.water);
@@ -353,7 +434,7 @@
             var results = new Array(pts.length);
             var keys = Array.from(tileOf.keys());
             var done = 0;
-            progress('Sampling elevation tiles…', 15);
+            progress('prog.sampling', 15, { pct: 0 });
             return keys.reduce(function (pr, key) {
                 return pr.then(function () {
                     checkToken(params.token);
@@ -380,7 +461,7 @@
                                 };
                             });
                             done += idxs.length;
-                            progress('Sampling elevation tiles… (' + Math.round(100 * done / pts.length) + '%)', 15 + Math.round(45 * done / pts.length));
+                            progress('prog.sampling', 15 + Math.round(45 * done / pts.length), { pct: Math.round(100 * done / pts.length) });
                         });
                     });
                 });
@@ -393,12 +474,13 @@
                     minSlopeDeg: params.minSlopeDeg, radiusM: areaM, folds: 5, waterClasses: params.waterClasses.filter(function (c) { return classes.indexOf(c) >= 0; })
                 });
                 if (built.counts.sites < minSites) {
-                    var e2 = new Error('After terrain sampling only ' + built.counts.sites + ' sites had valid terrain (minimum ' + minSites + ').');
+                    var e2 = core.keyedError('err.tooFewTerrain', { n: built.counts.sites, min: minSites },
+                        'After terrain sampling only ' + built.counts.sites + ' sites had valid terrain (minimum ' + minSites + ').');
                     e2.code = 'too_few_sites';
                     throw e2;
                 }
                 checkToken(params.token);
-                progress('Training model (cross-validation)…', 65);
+                progress('prog.train', 65);
                 return session.worker.call('train', {
                     S: built.S, waterClasses: built.waterClasses,
                     minSlopeDeg: params.minSlopeDeg, folds: 5
@@ -409,7 +491,7 @@
         }).then(function (t) {
             checkToken(params.token);
             // Prediction window (search circle + buffer) with the same DEM provider.
-            progress('Loading prediction window…', 80);
+            progress('prog.window', 80);
             var wb = core.circleBBox(centre.lat, centre.lon, radiusM + BUFFER_M);
             var wgrid = raster.gridForBBox(wb, dem.nominalResM);
             return prov.loadDemGrid(dem, wgrid, dem.tilePx || 1000).then(function (elev) {
@@ -421,7 +503,7 @@
                     altRef: t.built.altRef, soilRef: t.built.soilRef
                 }).then(function (res) {
                     session.analysisKey = null;
-                    session.provenance = provenanceFor(dem, wgrid, water.water, water.provider);
+                    session.provenance = provenanceFor(dem, wgrid, water.water, water.provider, demDecision);
                     session.stats = res.stats;
                     session.waterClasses = Object.keys(masks);
                     return t;
@@ -429,14 +511,14 @@
             });
         }).then(function (t) {
             checkToken(params.token);
-            progress('Scoring…', 90);
+            progress('prog.scoring', 90);
             var tr = t.train;
             var thr = tr.thresholds;
             return session.worker.call('score', {
                 mode: 'train', model: tr.model, waterClasses: t.built.waterClasses,
                 thresholds: thr, minAreaM2: params.minAreaM2, smoothIters: 1
             }).then(function (res) {
-                progress('Done', 100);
+                progress('prog.done', 100);
                 var periodCount = sel.sites.length;
                 return {
                     mode: 'train',
@@ -476,8 +558,11 @@
         sampleBackground: sampleBackground,
         buildSampleSet: buildSampleSet,
         sitePool: sitePool,
+        trainSiteStatus: trainSiteStatus,
         runManual: runManual,
         runTrain: runTrain,
-        pickDemProvider: pickDemProvider
+        pickDemProvider: pickDemProvider,
+        fetchWaterChain: fetchWaterChain,
+        waterOptions: waterOptions
     };
 });

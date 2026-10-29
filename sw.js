@@ -835,7 +835,7 @@
 // providers, pipeline, UI and the worker with its importScripts deps) and
 // css/next-gen-apm.css are precached so the panel and its worker work offline
 // once the shell is installed.
-const CACHE_NAME = 'detectlab-v302-apm-next-phase2';
+const CACHE_NAME = 'detectlab-v303-apm-next-phase3';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -877,15 +877,15 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 // ── Static assets to pre-cache on install ──
 const PRECACHE_URLS = [
   // v301: Next-Gen APM (MANUAL) — see the header note above.
-  'css/next-gen-apm.css?v=20261029-apm-next-phase2',
-  'js/apm-next/apm-core.js?v=20261029-apm-next-phase2',
-  'js/apm-next/apm-raster.js?v=20261029-apm-next-phase2',
-  'js/apm-next/apm-sites.js?v=20261029-apm-next-phase2',
-  'js/apm-next/apm-providers.js?v=20261029-apm-next-phase2',
-  'js/apm-next/apm-pipeline.js?v=20261029-apm-next-phase2',
-  'js/apm-next/apm-ui.js?v=20261029-apm-next-phase2',
-  'js/apm-next/apm-i18n.js?v=20261029-apm-next-phase2',
-  'js/apm-next/apm-worker.js?v=20261029-apm-next-phase2',
+  'css/next-gen-apm.css?v=20261029-apm-next-phase3',
+  'js/apm-next/apm-core.js?v=20261029-apm-next-phase3',
+  'js/apm-next/apm-raster.js?v=20261029-apm-next-phase3',
+  'js/apm-next/apm-sites.js?v=20261029-apm-next-phase3',
+  'js/apm-next/apm-providers.js?v=20261029-apm-next-phase3',
+  'js/apm-next/apm-pipeline.js?v=20261029-apm-next-phase3',
+  'js/apm-next/apm-ui.js?v=20261029-apm-next-phase3',
+  'js/apm-next/apm-i18n.js?v=20261029-apm-next-phase3',
+  'js/apm-next/apm-worker.js?v=20261029-apm-next-phase3',
   'js/apm-next/apm-worker.js',
   'js/apm-next/apm-polygonise.js',
   'js/apm-next/apm-core.js',

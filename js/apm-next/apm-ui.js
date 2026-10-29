@@ -12,7 +12,7 @@
 (function (root) {
     'use strict';
 
-    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261029-apm-next-phase2';
+    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261029-apm-next-phase3';
     var SWITCH_KEY = 'detectlab_apm_next';         // 'on' | 'off' (default off)
     var DEBUG_KEY = 'apmDebug';                    // shared with apm-providers.js
     var TRAIN_AREA_KM = 50;
@@ -60,7 +60,36 @@
 
     function T(key, vars) { return I18N().t(key, lang(), vars); }
 
+    /** Translate a keyed message { key, vars }; nested keyed messages (e.g. a reason) are translated too. */
+    function tm(m) {
+        if (m == null) return '';
+        if (typeof m === 'string') return m;
+        var vars = {};
+        Object.keys(m.vars || {}).forEach(function (k) {
+            var v = m.vars[k];
+            vars[k] = (v && typeof v === 'object' && v.key) ? tm(v) : v;
+        });
+        return T(m.key, vars);
+    }
+    /** Text for an error thrown by the pipeline or core (keyed) or by plain code (message). */
+    function errText(e) {
+        if (e && e.key) return tm({ key: e.key, vars: e.vars });
+        return e && e.message ? e.message : String(e);
+    }
+
+    /* DEV-OVERRIDE-BEGIN — developer-only premium override. REMOVE BEFORE RELEASE (this block and the
+     * `devPremiumOverride()` call inside isPremium()). Enable with ?apmDevPremium=1 in the URL or
+     * localStorage.apmDevPremium = '1'. The panel shows a banner while it is active. */
+    function devPremiumOverride() {
+        try {
+            if (root.location && /[?&]apmDevPremium=1\b/.test(root.location.search)) return true;
+            return !!root.localStorage && root.localStorage.getItem('apmDevPremium') === '1';
+        } catch (e) { return false; }
+    }
+    /* DEV-OVERRIDE-END */
+
     function isPremium() {
+        if (devPremiumOverride()) return true;          // DEV-OVERRIDE (remove before release)
         try { return typeof root._dlIsPremium === 'function' ? !!root._dlIsPremium() : false; }
         catch (e) { return false; }
     }
@@ -151,9 +180,11 @@
         var premium = isPremium();
         var on = state.enabled;
         els.gate.hidden = premium && on;
+        if (els.devBanner) els.devBanner.hidden = !devPremiumOverride();   // DEV-OVERRIDE (remove before release)
         els.gate.textContent = !premium ? T('gate.premium') : T('gate.off');
         var canRunNow = premium && on && !state.busy;
-        els.run.disabled = !canRunNow || !state.centre || (state.mode === 'train' && !state.records);
+        var trainBlocked = state.mode === 'train' && (!state.records || (state.siteCount != null && state.siteCount < 10));
+        els.run.disabled = !canRunNow || !state.centre || trainBlocked;
         els.run.textContent = state.mode === 'train' ? T('run.train') : T('run.manual');
         els.pickBtn.disabled = !premium || !on || state.busy;
         els.controls.classList.toggle('apm-disabled', !(premium && on));
@@ -168,6 +199,8 @@
 
     function onMapPick(e) {
         if (!state.picking) return;
+        if (e && e.originalEvent && e.originalEvent.target && e.originalEvent.target.closest &&
+            e.originalEvent.target.closest('.apm-panel, .apm-fab')) return;     // clicks on the panel never pick
         stopPick();
         state.centre = { lat: e.latlng.lat, lon: e.latlng.lng };
         onCentreChanged();
@@ -242,18 +275,18 @@
         var errors = [];
         ['slope', 'altitude', 'aspectDeviation', 'soil'].forEach(function (name) {
             var p = C.parseCurveText(state.curveText[name]);
-            if (p.errors.length) errors.push(name + ': ' + p.errors.join('; '));
+            if (p.errors.length) errors.push(name + ': ' + p.errors.map(tm).join('; '));
             raw[name] = p.points;
         });
         C.WATER_CLASSES.forEach(function (cls) {
             var p = C.parseCurveText(state.curveText['water_' + cls]);
-            if (p.errors.length) errors.push('water ' + cls + ': ' + p.errors.join('; '));
+            if (p.errors.length) errors.push('water ' + cls + ': ' + p.errors.map(tm).join('; '));
             raw.water[cls] = p.points;
         });
         if (errors.length) throw new Error(errors.join(' | '));
         var checked = C.validateCurves(raw);
         var parts = [];
-        Object.keys(checked.errors).forEach(function (k) { parts.push(k + ': ' + checked.errors[k].join('; ')); });
+        Object.keys(checked.errors).forEach(function (k) { parts.push(k + ': ' + checked.errors[k].map(tm).join('; ')); });
         if (parts.length) throw new Error(parts.join(' | '));
         return checked.curves;
     }
@@ -270,11 +303,13 @@
             medium: parseFloat(els.tMed.value) / 100, high: parseFloat(els.tHigh.value) / 100, veryhigh: parseFloat(els.tVery.value) / 100
         });
         var minArea = parseFloat(els.minArea.value);
-        if (!(minArea >= 0)) throw new Error('Minimum polygon area must be zero or positive.');
+        if (!(minArea >= 0)) throw core().keyedError('err.minArea', {}, 'Minimum polygon area must be zero or positive.');
         return {
             centre: state.centre,
             radiusKm: radiusKm,
             smoothDem: !!els.smooth.checked,
+            includeDrainage: !!els.drainage.checked,
+            strahlerMap: readStrahlerMap(),
             curves: readCurves(),
             weights: { relief: wRelief, water: wWater, soil: wSoil },
             minSlopeDeg: parseFloat(els.minSlope.value),
@@ -286,7 +321,44 @@
         };
     }
 
+    /** Strahler → size class map from the advanced panel. Throws a keyed error when invalid. */
+    function readStrahlerMap() {
+        var out = { small: [], medium: [], large: [] }, seen = {}, ok = true;
+        core().WATER_CLASSES.forEach(function (c) {
+            if (!out[c]) return;
+            var raw = String(els.strahler[c].value || '').split(',');
+            raw.forEach(function (t) {
+                t = t.trim();
+                if (!t) return;
+                var n = Number(t);
+                if (!(/^\d+$/.test(t) && n >= 1 && n <= 20)) { ok = false; return; }
+                if (seen[n]) { ok = false; return; }
+                seen[n] = true;
+                out[c].push(n);
+            });
+        });
+        if (!ok) throw core().keyedError('err.strahler', {}, 'Strahler orders must be whole numbers from 1 to 20, each in at most one class.');
+        return out;
+    }
+
     /* ── TRAIN: CSV and periods ──────────────────────────────────────────── */
+
+    /** Site count for the chosen centre and period, with the warning / block thresholds (TRAIN). */
+    function renderSiteCount() {
+        if (!els.countNote) return;
+        if (!state.records || !state.centre) { els.countNote.textContent = ''; els.countNote.className = 'apm-note'; state.siteCount = null; return; }
+        var pool = sites().filterSites(state.records, { center: state.centre, radiusKm: 50, period: state.period });
+        var n = pool.sites.length;
+        state.siteCount = n;
+        var st = pipe().trainSiteStatus(n, 10, 30);
+        var cls = 'apm-note', text;
+        if (n === 0) { text = T('train.noSites'); cls = 'apm-note apm-count-block'; }
+        else if (st.status === 'block') { text = T('train.countBlock', { n: n, min: st.min }); cls = 'apm-note apm-count-block'; }
+        else if (st.status === 'warn') { text = T('train.countWarn', { n: n, rec: st.rec }); cls = 'apm-note apm-count-warn'; }
+        else { text = T('train.countOk', { n: n }); cls = 'apm-note apm-count-ok'; }
+        els.countNote.textContent = text;
+        els.countNote.className = cls;
+    }
 
     function onCsvChosen(ev) {
         var file = ev.target.files && ev.target.files[0];
@@ -306,7 +378,7 @@
                 state.records = null;
                 state.periods = [];
                 renderPeriods();
-                setStatus(T('train.csvError', { msg: e.message }), 'error');
+                setStatus(T('train.csvError', { msg: errText(e) }), 'error');
                 updateGate();
             }
         };
@@ -323,6 +395,7 @@
             if (!keep) state.period = null;
         }
         renderPeriods();
+        renderSiteCount();
     }
 
     function renderPeriods() {
@@ -351,6 +424,7 @@
             var g = state.periods[Number(v)];
             state.period = g ? { start: g.start, end: g.end } : null;
         }
+        renderSiteCount();
     }
 
     /* ── run / cancel ────────────────────────────────────────────────────── */
@@ -363,6 +437,7 @@
             if (mode === 'train') {
                 if (!state.centre) throw new Error(T('status.noPoint'));
                 if (!state.records) throw new Error(T('train.noPoint'));
+                if (state.siteCount != null && state.siteCount < 10) throw new Error(T('train.countBlock', { n: state.siteCount, min: 10 }));
                 params = {
                     centre: state.centre,
                     records: state.records,
@@ -370,6 +445,8 @@
                     radiusKm: TRAIN_AREA_KM,
                     minSlopeDeg: parseFloat(els.minSlope.value),
                     smoothDem: !!els.smooth.checked,
+                    includeDrainage: !!els.drainage.checked,
+                    strahlerMap: readStrahlerMap(),
                     waterClasses: core().WATER_CLASSES.filter(function (c) { return els.water[c].checked; }),
                     workerUrl: WORKER_URL
                 };
@@ -377,7 +454,7 @@
                 params = readManualParams();
             }
         } catch (e) {
-            setStatus(e.message, 'error');
+            setStatus(errText(e), 'error');
             return;
         }
 
@@ -386,7 +463,9 @@
         state.busy = true;
         setBusyUi(true);
         setProgress(T('status.starting'), 2);
-        params.onProgress = function (text, pct) { if (state.token && !state.token.cancelled) setProgress(text, pct); };
+        params.onProgress = function (key, pct, vars) {
+            if (state.token && !state.token.cancelled) setProgress(T(key, vars), pct);
+        };
         var session = mode === 'train' ? state.trainSession : state.manualSession;
         var job = mode === 'train' ? pipe().runTrain(session, params) : pipe().runManual(session, params);
 
@@ -397,7 +476,7 @@
             setStatus((res.warnings && res.warnings.length) ? T('status.doneWarn') : T('status.done'), 'ok');
         }).catch(function (err) {
             if (pipe().isCancelled(err)) { setStatus(T('status.cancelled')); return; }
-            setStatus(T('status.error', { msg: err && err.message ? err.message : String(err) }), 'error');
+            setStatus(T('status.error', { msg: errText(err) }), 'error');
         }).then(function () {
             state.token = null;
             state.busy = false;
@@ -495,13 +574,14 @@
         });
         var prov = res.provenance || {};
         var parts = [];
-        if (prov.dem) parts.push(T('result.dem') + ': ' + prov.dem.label + ' (' + prov.dem.cellM + ' m)');
+        if (prov.dem) parts.push(T('result.dem') + ': ' + prov.dem.label + ' · ' + prov.dem.cellM + ' m' +
+            (prov.dem.version ? ' · v' + prov.dem.version : '') + (prov.dem.tier === 'fallback' ? ' · ' + T('result.fallback') : ''));
         parts.push(T('result.water') + ': ' + (prov.water ? prov.water.label : T('result.waterNone')));
         parts.push(T('result.mode') + ': ' + (res.mode === 'train' ? T('mode.train') : T('mode.manual')));
         els.provenance.textContent = parts.join(' · ');
 
         els.warnings.textContent = '';
-        (res.warnings || []).forEach(function (w) { els.warnings.appendChild(h('li', { text: w })); });
+        (res.warnings || []).forEach(function (w) { els.warnings.appendChild(h('li', { text: tm(w) })); });
         els.warnings.hidden = !(res.warnings && res.warnings.length);
 
         els.diag.textContent = '';
@@ -568,12 +648,59 @@
     }
 
     function debugRow(rec) {
-        return h('div', { class: 'apm-debug-row' + (rec.status == null || rec.status >= 400 ? ' apm-debug-bad' : '') }, [
+        if (rec.kind === 'step') {
+            var why = rec.reason ? ' — ' + tm(rec.reason) : '';
+            return h('div', { class: 'apm-debug-row' + (rec.outcome === 'failed' ? ' apm-debug-bad' : '') }, [
+                h('span', { class: 'apm-debug-code', text: String(rec.step).toUpperCase() }),
+                h('span', { class: 'apm-debug-ms', text: rec.ms != null ? rec.ms + ' ms' : '' }),
+                h('span', { class: 'apm-debug-url', text: rec.label + ' → ' + rec.outcome + why, title: rec.endpoint || '' })
+            ]);
+        }
+        if (rec.kind === 'caps') {
+            return h('div', { class: 'apm-debug-row' }, [
+                h('span', { class: 'apm-debug-code', text: 'CAPS' }),
+                h('span', { class: 'apm-debug-url', text: (rec.endpoint || '') + ' · ' + (rec.coverageId || (rec.layers || []).length + ' layers'), title: rec.endpoint || '' })
+            ]);
+        }
+        var bad = rec.status == null || rec.status >= 400;
+        var extra = [rec.contentType, rec.bytes != null ? rec.bytes + ' B' : null, rec.step, rec.reason ? tm(rec.reason) : null].filter(Boolean).join(' · ');
+        return h('div', { class: 'apm-debug-row' + (bad ? ' apm-debug-bad' : '') }, [
             h('span', { class: 'apm-debug-code', text: rec.status != null ? String(rec.status) : 'ERR' }),
             h('span', { class: 'apm-debug-ms', text: rec.ms + ' ms' }),
-            h('span', { class: 'apm-debug-url', text: rec.method + ' ' + rec.url, title: rec.url }),
-            rec.hint ? h('span', { class: 'apm-debug-hint', text: rec.hint }) : null
+            h('span', { class: 'apm-debug-url', text: rec.method + ' ' + rec.url + (rec.proxied ? ' (proxy)' : ''), title: rec.url }),
+            extra ? h('span', { class: 'apm-debug-hint', text: extra }) : null
         ]);
+    }
+
+    /** Settings snapshot for the diagnostics export. Never throws. */
+    function collectSettings() {
+        function num(el) { return el ? Number(el.value) : null; }
+        function chk(el) { return el ? !!el.checked : null; }
+        var out = { mode: state.mode, radiusKm: state.radiusKm, period: state.period, smoothDem: chk(els.smooth),
+            includeDrainage: chk(els.drainage), waterClasses: null, weights: null, minSlopeDeg: num(els.minSlope),
+            minAreaM2: num(els.minArea), thresholdsPct: null, strahlerMap: null,
+            demProxyEnabled: prov().CONFIG.proxy.enabled, debugMode: prov().isDebug(), devPremiumOverride: devPremiumOverride() };
+        try { out.waterClasses = core().WATER_CLASSES.filter(function (c) { return els.water[c].checked; }); } catch (e) { /* ignore */ }
+        try { out.weights = { relief: num(els.wRelief), water: num(els.wWater), soil: num(els.wSoil) }; } catch (e) { /* ignore */ }
+        try { out.thresholdsPct = { medium: num(els.tMed), high: num(els.tHigh), veryhigh: num(els.tVery) }; } catch (e) { /* ignore */ }
+        try { out.strahlerMap = readStrahlerMap(); } catch (e) { out.strahlerMap = 'invalid: ' + errText(e); }
+        return out;
+    }
+
+    /** Diagnostics bundle: request/step log, app version, user agent, point, radius and settings. */
+    function diagnosticsBundle() {
+        var res = state.result || null;
+        return {
+            generated: new Date().toISOString(),
+            appVersion: prov().APP_VERSION,
+            userAgent: root.navigator ? root.navigator.userAgent : null,
+            page: root.location ? root.location.pathname : null,
+            point: state.centre,
+            radiusKm: state.mode === 'train' ? TRAIN_AREA_KM : state.radiusKm,
+            settings: collectSettings(),
+            lastResult: res ? { mode: res.mode, provenance: res.provenance, warnings: res.warnings } : null,
+            log: prov().getDebugLog()
+        };
     }
 
     function renderDebugLog() {
@@ -656,6 +783,21 @@
             return cb.row;
         });
         var waterGroup = h('fieldset', { class: 'apm-group' }, [h('legend', { key: 'water.title' }), h('div', { class: 'apm-checks' }, waterRows)]);
+        // EU-Hydro Drainage Network: advanced, off by default (modelled, not a mapped river)
+        var drain = checkbox('water.drainage', false);
+        els.drainage = drain.cb;
+        var drainBox = h('div', { class: 'apm-drain' }, [drain.row, h('div', { class: 'apm-note', key: 'water.drainageNote' })]);
+        var strahlerDefaults = prov().defaultStrahlerMap();
+        els.strahler = {};
+        var strahlerRows = core().WATER_CLASSES.filter(function (c) { return strahlerDefaults[c]; }).map(function (c) {
+            var input = h('input', { type: 'text', class: 'apm-strahler-input', value: strahlerDefaults[c].join(', '), spellcheck: 'false' });
+            els.strahler[c] = input;
+            return h('label', { class: 'apm-field' }, [h('span', { key: 'water.' + c }), input]);
+        });
+        var strahlerBox = h('div', { class: 'apm-strahler' }, [h('span', { class: 'apm-note', key: 'water.strahler' })]
+            .concat(strahlerRows, [h('div', { class: 'apm-note', key: 'water.strahlerNote' })]));
+        var waterAdv = h('details', { class: 'apm-group' }, [h('summary', { key: 'water.advanced' }), drainBox, strahlerBox]);
+        waterGroup.appendChild(waterAdv);
         var smooth = checkbox('smooth.label', false);
         els.smooth = smooth.cb;
 
@@ -693,9 +835,10 @@
         els.period = h('select', { class: 'apm-select', onchange: function () { onPeriodChanged(); updateGate(); } });
         els.periodRow = h('label', { class: 'apm-field' }, [h('span', { key: 'train.period' }), els.period]);
         els.periodRow.hidden = true;
+        els.countNote = h('div', { class: 'apm-note', role: 'status' });
         els.trainBox = h('div', { class: 'apm-train' }, [
             h('div', { class: 'apm-file-row' }, [bind(h('span', { class: 'apm-btn apm-small apm-file-btn' }), 'train.chooseFile'), els.csvInput]),
-            els.csvName, els.csvCount, els.periodRow,
+            els.csvName, els.csvCount, els.periodRow, els.countNote,
             h('div', { class: 'apm-note', key: 'train.area' })
         ]);
 
@@ -726,10 +869,10 @@
         els.debugCb.addEventListener('change', function () { setDebugMode(els.debugCb.checked); });
         els.debugList = h('div', { class: 'apm-debug-list' });
         var dlBtn = h('button', { type: 'button', class: 'apm-btn apm-small', onclick: function () {
-            downloadBlob(JSON.stringify({ generated: new Date().toISOString(), requests: prov().getDebugLog() }, null, 2),
-                'application/json', 'apm-debug-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json');
+            downloadBlob(JSON.stringify(diagnosticsBundle(), null, 2),
+                'application/json', 'apm-diagnostics-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json');
         } });
-        bind(dlBtn, 'debug.download');
+        bind(dlBtn, 'diag.download');
         var clBtn = h('button', { type: 'button', class: 'apm-btn apm-small', onclick: function () { prov().clearDebugLog(); renderDebugLog(); } });
         bind(clBtn, 'debug.clear');
         prov().onDebug(function () { renderDebugLog(); });
@@ -774,11 +917,14 @@
             els.debugList
         ]);
 
+        els.devBanner = h('div', { class: 'apm-dev-banner', hidden: true });   // DEV-OVERRIDE (remove before release)
+        bind(els.devBanner, 'dev.banner');
         var panel = h('section', { class: 'apm-panel', id: 'apmNextPanel', hidden: true, 'aria-label': 'Next-Gen APM' }, [
             h('header', { class: 'apm-head' }, [
                 h('h3', { key: 'panel.title' }),
                 h('div', { class: 'apm-head-right' }, [els.switch, close])
             ]),
+            els.devBanner,
             els.gate,
             els.controls,
             h('div', { class: 'apm-actions' }, [els.run, els.cancel, els.exportBtn, els.clearBtn]),
@@ -850,6 +996,8 @@
     }
 
     root.DetectLabApmUi = {
+        tm: tm,
+        diagnosticsBundle: diagnosticsBundle,
         init: init,
         open: function () { togglePanel(true); },
         close: function () { togglePanel(false); },

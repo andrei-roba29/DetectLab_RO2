@@ -165,6 +165,73 @@ test('rbush point-to-water distance matches brute force', () => {
     }
 });
 
+test('brute-force water distance at 50 km: per-point latitude scaling, tolerance 0.5 m + 0.2 %', () => {
+    // Same reference as the 10 km test above (equirectangular at the QUERY latitude), over a 50 km disc.
+    const r = rng(53);
+    const centre = { lat: 52.0, lon: 13.0 };
+    const segs = [];
+    const span = 0.7;                       // ±0.7° covers a 50 km disc plus margin
+    for (let k = 0; k < 60; k++) {
+        const la = centre.lat + (r() - 0.5) * 2 * span, lo = centre.lon + (r() - 0.5) * 2 * span;
+        segs.push(lo, la, lo + (r() - 0.5) * 0.03, la + (r() - 0.5) * 0.03);
+    }
+    const idx = raster.buildSegmentIndex(RBush, Float64Array.from(segs));
+    for (let t = 0; t < 20; t++) {
+        const th = r() * 2 * Math.PI, rr = 50000 * Math.sqrt(r());
+        const mpdQ0 = core.metresPerDegree(centre.lat);
+        const lat = centre.lat + rr * Math.sin(th) / mpdQ0.lat, lon = centre.lon + rr * Math.cos(th) / mpdQ0.lon;
+        const mpdQ = core.metresPerDegree(lat);   // per-point latitude scaling, as the implementation
+        let best = Infinity;
+        for (let k = 0; k < segs.length; k += 4) {
+            for (let s2 = 0; s2 <= 400; s2++) {
+                const u = s2 / 400;
+                const x = segs[k] + u * (segs[k + 2] - segs[k]), y = segs[k + 1] + u * (segs[k + 3] - segs[k + 1]);
+                best = Math.min(best, Math.hypot((x - lon) * mpdQ.lon, (y - lat) * mpdQ.lat));
+            }
+        }
+        const got = raster.nearestWaterM(idx, lon, lat);
+        assert.ok(Math.abs(got - best) < 0.5 + best * 0.002, `50 km point ${t}: got ${got} vs brute ${best}`);
+    }
+});
+
+test('approximation error vs exact haversine, measured: 5 km < 10 m, 10 km < 30 m, 50 km < 150 m; relative < 1 % (dist ≥ 100 m)', () => {
+    // MEASURED (this fixture, 300 points per radius): max abs 5.1 m (5 km), 21.6 m (10 km), 130.7 m (50 km);
+    // max relative 0.56 % at all radii (points ≥ 100 m from water); mean relative ≈ 0.22–0.26 %.
+    // The bounds below are the measured values plus margin. Relative error is stated only for distances
+    // ≥ 100 m, because near-zero distances make the ratio meaningless. See NEXT_GEN_APM.md.
+    const limits = { 5: 10, 10: 30, 50: 150 };
+    for (const radiusKm of [5, 10, 50]) {
+        const r = rng(101 + radiusKm);
+        const C = { lat: 52, lon: 13 };
+        const R = radiusKm / 111.2;
+        const span = R * 1.3, segs = [];
+        for (let k = 0; k < 60; k++) {
+            const la = C.lat + (r() - 0.5) * 2 * span, lo = C.lon + (r() - 0.5) * 2 * span / Math.cos(C.lat * Math.PI / 180);
+            segs.push(lo, la, lo + (r() - 0.5) * 0.03, la + (r() - 0.5) * 0.03);
+        }
+        const idx = raster.buildSegmentIndex(RBush, Float64Array.from(segs));
+        let maxAbs = 0, maxRel = 0;
+        for (let t = 0; t < 300; t++) {
+            const th = r() * 2 * Math.PI, rr = R * Math.sqrt(r());
+            const lat = C.lat + rr * Math.sin(th), lon = C.lon + rr * Math.cos(th) / Math.cos(C.lat * Math.PI / 180);
+            const got = raster.nearestWaterM(idx, lon, lat);
+            let ex = Infinity;
+            for (let k = 0; k < segs.length; k += 4) {
+                for (let s2 = 0; s2 <= 600; s2++) {
+                    const u = s2 / 600;
+                    const x = segs[k] + u * (segs[k + 2] - segs[k]), y = segs[k + 1] + u * (segs[k + 3] - segs[k + 1]);
+                    ex = Math.min(ex, core.haversineM(lat, lon, y, x));
+                }
+            }
+            const abs = Math.abs(got - ex);
+            maxAbs = Math.max(maxAbs, abs);
+            if (ex >= 100) maxRel = Math.max(maxRel, abs / ex);
+        }
+        assert.ok(maxAbs < limits[radiusKm], `${radiusKm} km: max abs error ${maxAbs.toFixed(2)} m`);
+        assert.ok(maxRel < 0.01, `${radiusKm} km: max relative error ${(100 * maxRel).toFixed(3)} %`);
+    }
+});
+
 test('rasterised polygon fill covers its interior and not the outside', () => {
     const g = { w: 40, h: 40, west: 0, north: 1, dLon: 0.01, dLat: 0.01 };
     const ring = [[0.1, 0.9], [0.3, 0.9], [0.3, 0.7], [0.1, 0.7], [0.1, 0.9]];
@@ -338,6 +405,67 @@ test('TRAIN filters: type, accuracy threshold, de-duplication, distance, period 
     assert.ok(!undated.sites.some((s) => s.id === 's7'), 'undated records are not used for a period');
 });
 
+test('TRAIN sample CSV: 36 synthetic rows parse cleanly; BCE years are astronomical; extra columns ignored', () => {
+    const file = path.join(ROOT, 'samples', 'apm-next-SYNTHETIC-sample-sites.csv');
+    const parsed = sites.parseSitesCsv(fs.readFileSync(file, 'utf8'), 'sample');
+    assert.strictEqual(parsed.records.length, 36);
+    assert.deepStrictEqual(parsed.report.errors, []);
+    assert.strictEqual(parsed.report.missingCoords, 0);
+    const byId = Object.fromEntries(parsed.records.map((r) => [r.id, r]));
+    assert.strictEqual(byId['SYN-009'].periodStart, -2199, '"2200 BC" is astronomical year -2199');
+    assert.strictEqual(byId['SYN-009'].periodEnd, -1799, '"1800 BC" is astronomical year -1799');
+    assert.strictEqual(byId['SYN-001'].periodStart, -3999, '"4000 BC" is astronomical year -3999');
+    assert.strictEqual(sites.parseYear('1 BC'), 0, '1 BC is year 0');
+    assert.strictEqual(sites.parseYear('43'), 43);
+    assert.ok(!('notes' in byId['SYN-001']), 'the notes column is ignored');
+});
+
+test('TRAIN site thresholds: blocked below 10, warned below 30, ok from 30', () => {
+    const T = pipeline.trainSiteStatus;
+    assert.strictEqual(T(0).status, 'block');
+    assert.strictEqual(T(9).status, 'block');
+    assert.strictEqual(T(10).status, 'warn');
+    assert.strictEqual(T(29).status, 'warn');
+    assert.strictEqual(T(30).status, 'ok');
+});
+
+testAsync('TRAIN refuses a run below 10 usable sites, before any download', async () => {
+    const file = path.join(ROOT, 'samples', 'apm-next-SYNTHETIC-sample-sites.csv');
+    const all = sites.parseSitesCsv(fs.readFileSync(file, 'utf8'), 'sample').records;
+    const centre = { lat: 51.57, lon: -0.78 };
+    // Nine records that pass the TRAIN filters (type, accuracy, distance); the 1000 m row is not among them.
+    const nine = sites.filterSites(all, { center: centre, radiusKm: 50, period: null }).sites.slice(0, 9);
+    const usable = sites.filterSites(nine, { center: centre, radiusKm: 50, period: null }).sites.length;
+    assert.strictEqual(usable, 9, 'nine usable sites');
+    let fetched = false;
+    prov.setFetch(async () => { fetched = true; throw new Error('no network in this test'); });
+    await assert.rejects(pipeline.runTrain({ worker: null, analysisKey: null }, {
+        centre, records: nine, period: null, radiusKm: 50, minSlopeDeg: 0.5, waterClasses: ['medium'],
+        workerUrl: 'unused', token: null
+    }), (e) => {
+        assert.strictEqual(e.key, 'err.tooFewSites');
+        assert.strictEqual(e.vars.n, 9);
+        assert.strictEqual(e.vars.min, 10);
+        return true;
+    });
+    assert.strictEqual(fetched, false, 'the run is refused before any DEM or water request');
+    prov.setFetch(null);
+});
+
+test('every translation key used by the pipeline, providers, core and sites exists in English and Romanian', () => {
+    const I18N = require('./js/apm-next/apm-i18n.js');
+    const en = new Set(Object.keys(I18N.STRINGS.en)), ro = new Set(Object.keys(I18N.STRINGS.ro));
+    const files = ['apm-pipeline.js', 'apm-providers.js', 'apm-core.js', 'apm-sites.js'];
+    const prefix = /^(err|warn|reason|prog|skip|diag|dev|result|train|water|status)\./;
+    const used = new Set();
+    files.forEach((f) => {
+        const src = fs.readFileSync(path.join(ROOT, 'js', 'apm-next', f), 'utf8');
+        for (const m of src.matchAll(/'([a-z][A-Za-z]*\.[A-Za-z][A-Za-z0-9_.]*)'/g)) if (prefix.test(m[1])) used.add(m[1]);
+    });
+    const missing = [...used].filter((k) => !en.has(k) || !ro.has(k));
+    assert.deepStrictEqual(missing, [], 'keys missing from one language');
+});
+
 test('period picker groups counts and ranges', () => {
     const { records } = sites.parseSitesCsv(CSV, 'test');
     const groups = sites.groupPeriods(records);
@@ -374,7 +502,9 @@ test('EU-Hydro layer resolution uses the real service layer list, one layer per 
     const ls = prov.resolveEuHydroLayers(fixture);
     const ids = ls.map((l) => l.id);
     // Each scale-duplicate is dropped (lowest id kept): InlandWater 2 (not 3), Strahler 6–9 from group 4 (ids 10–13, not 15–18).
-    assert.deepStrictEqual(ids, [2, 5, 6, 7, 8, 9, 10, 11, 12, 13, 19]);
+    // The Drainage Network is now resolved too, with role 'drainage': fetchWater leaves it out unless the user enables it.
+    assert.deepStrictEqual(ids, [2, 5, 6, 7, 8, 9, 10, 11, 12, 13, 19, 20]);
+    assert.strictEqual(ls.find((l) => l.id === 20).role, 'drainage');
     const byId = Object.fromEntries(ls.map((l) => [l.id, l]));
     assert.strictEqual(byId[5].cls, 'small');    // Strahler 1
     assert.strictEqual(byId[6].cls, 'small');    // Strahler 2
@@ -383,23 +513,123 @@ test('EU-Hydro layer resolution uses the real service layer list, one layer per 
     assert.strictEqual(byId[9].cls, 'large');    // Strahler 5
     assert.strictEqual(byId[19].cls, 'large');   // River_Net_polygon
     assert.strictEqual(byId[2].role, 'inland');
-    assert.ok(!ls.some((l) => /coastal|transit|drainage/i.test(l.name)), 'sea, transitional and drainage layers are excluded');
+    assert.ok(!ls.some((l) => /coastal|transit/i.test(l.name)), 'sea and transitional layers are excluded');
+    assert.ok(ls.filter((l) => /drain/i.test(l.name)).every((l) => l.role === 'drainage'), 'drainage is resolved only as role drainage (off by default)');
 });
 
-testAsync('EU-DEM WCS: candidate endpoints are tried in order; the first that lists an EU-DEM coverage wins', async () => {
-    const calls = [];
-    const xml = '<wcs:Capabilities xmlns:wcs="http://www.opengis.net/wcs/2.0"><wcs:Contents><wcs:CoverageSummary><wcs:CoverageId>DEM_v11_Masked2</wcs:CoverageId></wcs:CoverageSummary></wcs:Contents></wcs:Capabilities>';
+const WCS_OK = '<wcs:Capabilities xmlns:wcs="http://www.opengis.net/wcs/2.0" xmlns:ows="http://www.opengis.net/ows/2.0">' +
+    '<wcs:ServiceMetadata><wcs:formatSupported>image/tiff</wcs:formatSupported><wcs:formatSupported>application/gml+xml</wcs:formatSupported>' +
+    '<wcs:Extension><wcs:crsSupported>http://www.opengis.net/def/crs/EPSG/0/4326</wcs:crsSupported><wcs:crsSupported>http://www.opengis.net/def/crs/EPSG/0/3035</wcs:crsSupported></wcs:Extension>' +
+    '<wcs:MaxPixels>4000000</wcs:MaxPixels></wcs:ServiceMetadata>' +
+    '<wcs:Contents><wcs:CoverageSummary><wcs:CoverageId>DEM_v11_Masked2</wcs:CoverageId></wcs:CoverageSummary></wcs:Contents></wcs:Capabilities>';
+
+test('EU-DEM candidates: v1.1 primary, v1.0 second, no copernicus guess; Terrarium only after them', () => {
+    const ids = prov.CONFIG.euDem.candidates.map((c) => c.id);
+    assert.deepStrictEqual(ids, ['eudem-v11', 'eudem-v10']);
+    assert.strictEqual(prov.CONFIG.euDem.candidates[0].endpoint, 'https://image.discomap.eea.europa.eu/arcgis/services/Elevation/EUElev_DEM_V11/MapServer/WCSServer');
+    assert.strictEqual(prov.CONFIG.euDem.candidates[1].endpoint, 'https://image.discomap.eea.europa.eu/arcgis/services/GioLandPublic/DEM/MapServer/WCSServer');
+    assert.ok(!JSON.stringify(prov.CONFIG).includes('copernicus'), 'the copernicus candidate is removed');
+    const plan = prov.demPlan(50, 13).map((x) => x.provider.id);
+    assert.deepStrictEqual(plan, ['eudem-v11', 'eudem-v10', 'terrarium']);
+    assert.strictEqual(prov.demPlan(-33, 151).filter((x) => x.use).length, 1, 'outside Europe only Terrarium is used');
+});
+
+testAsync('EU-DEM GetCapabilities: coverage, formats, CRS and pixel limit are read at runtime', async () => {
+    prov.setFetch(async () => ({ ok: true, status: 200, text: async () => WCS_OK, headers: { get: () => 'text/xml' } }));
+    const cand = prov.CONFIG.euDem.candidates[0];
+    const caps = await prov.createEuDemProvider(cand).discover();
+    assert.strictEqual(caps.id, 'DEM_v11_Masked2');
+    assert.deepStrictEqual(caps.formats, ['image/tiff', 'application/gml+xml']);
+    assert.ok(caps.crs.includes('http://www.opengis.net/def/crs/EPSG/0/4326'));
+    assert.strictEqual(caps.maxPx, 4000000);
+    const logged = prov.getDebugLog().find((r) => r.kind === 'caps' && r.coverageId === 'DEM_v11_Masked2');
+    assert.ok(logged, 'the capabilities read is written to the diagnostics log');
+    prov.setFetch(null);
+});
+
+testAsync('EU-DEM failure reasons: HTTP status, empty body, wrong format, no coverage', async () => {
+    const cand = prov.CONFIG.euDem.candidates[0];
+    const cases = [
+        [{ ok: false, status: 503, text: async () => '', headers: { get: () => null } }, 'reason.http', 503],
+        [{ ok: true, status: 200, text: async () => '   ', headers: { get: () => 'text/xml' } }, 'reason.emptyBody'],
+        [{ ok: true, status: 200, text: async () => '{"a":1}', headers: { get: () => 'application/json' } }, 'reason.wrongFormat'],
+        [{ ok: true, status: 200, text: async () => WCS_OK.replace('DEM_v11_Masked2', 'Landcover'), headers: { get: () => 'text/xml' } }, 'reason.noCoverage']
+    ];
+    for (const [res, key, status] of cases) {
+        prov.setFetch(async () => res);
+        const cand2 = Object.assign({}, cand, { endpoint: cand.endpoint + '?case=' + key + Math.random() });
+        await assert.rejects(prov.createEuDemProvider(cand2).discover(), (e) => {
+            assert.strictEqual(e.reason.key, key, key);
+            if (status) assert.strictEqual(e.reason.vars.status, status);
+            return true;
+        });
+    }
+    prov.setFetch(null);
+});
+
+testAsync('DEM fallback: v1.1 returns 503 → v1.0 is used, with a visible fallback warning and an older-version note', async () => {
+    // Minimal GeoTIFF decoder stub: 14×14 cells of 100 m, so the 300 m probe and the grid are valid.
+    const realGeo = global.GeoTIFF;
+    global.GeoTIFF = { fromArrayBuffer: async () => ({ getImage: async () => ({
+        getWidth: () => 40, getHeight: () => 40, getGDALNoData: () => null,
+        readRasters: async () => { const a = new Float32Array(40 * 40).fill(100); return a; }
+    }) }) };
     prov.setFetch(async (url) => {
-        calls.push(url);
-        if (url.startsWith(prov.CONFIG.euDem.wcsEndpoints[0])) return { ok: true, status: 503, text: async () => '', headers: { get: () => null } };
-        return { ok: true, status: 200, text: async () => xml, headers: { get: () => 'text/xml' } };
+        if (url.includes('EUElev_DEM_V11')) return { ok: false, status: 503, text: async () => '', headers: { get: () => null } };
+        if (url.includes('GioLandPublic')) {
+            return url.includes('GetCapabilities')
+                ? { ok: true, status: 200, text: async () => WCS_OK.replace('DEM_v11_Masked2', 'DEM_v10'), headers: { get: () => 'text/xml' } }
+                : { ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(8), headers: { get: () => 'image/tiff' } };
+        }
+        throw new Error('unexpected URL in test: ' + url);
     });
-    const dem = prov.createEuDemProvider();
-    const cov = await dem.discover();
-    assert.strictEqual(cov.id, 'DEM_v11_Masked2');
-    assert.strictEqual(cov.endpoint, prov.CONFIG.euDem.wcsEndpoints[1]);
-    assert.ok(calls[0].startsWith(prov.CONFIG.euDem.wcsEndpoints[0]), 'first candidate is tried first');
-    assert.ok(!JSON.stringify(prov.CONFIG).includes('GioLandPublic'), 'the unverified GioLandPublic path is gone');
+    const warnings = [];
+    const pick = await pipeline.pickDemProvider({ lat: 50, lon: 13 }, null, warnings);
+    assert.strictEqual(pick.provider.id, 'eudem-v10');
+    assert.strictEqual(pick.decision.attempts.find((a) => a.provider === 'eudem-v11').outcome, 'failed');
+    const fb = warnings.find((w) => w.key === 'warn.demFallback');
+    assert.ok(fb, 'a fallback warning is emitted');
+    assert.strictEqual(fb.vars.from, 'EU-DEM v1.1 (EEA, 25 m)');
+    assert.strictEqual(fb.vars.reason.key, 'reason.http');
+    assert.strictEqual(fb.vars.reason.vars.status, 503);
+    assert.ok(warnings.some((w) => w.key === 'warn.demOlder'), 'v1.0 is flagged as older');
+    assert.ok(!warnings.some((w) => w.key === 'warn.demTerrarium'), 'no Terrarium warning when an EU-DEM source is used');
+    global.GeoTIFF = realGeo;
+    prov.setFetch(null);
+});
+
+testAsync('DEM fallback to Terrarium: 25 m source failing produces a visible 25 m → Terrarium warning', async () => {
+    const realGeo = global.GeoTIFF, realBmp = global.createImageBitmap, realOff = global.OffscreenCanvas;
+    // Terrarium pixel: R=128, G=0, B=0 → height 0 m. The stub returns that for every pixel.
+    global.createImageBitmap = async () => ({ width: 256, height: 256 });
+    global.OffscreenCanvas = class { constructor(w, h) { this.w = w; this.h = h; }
+        getContext() { return { drawImage() {}, getImageData: (x, y, w, h) => {
+            const d = new Uint8ClampedArray(w * h * 4);
+            for (let i = 0; i < w * h; i++) { d[i * 4] = 128; d[i * 4 + 3] = 255; }
+            return { data: d };
+        } }; } };
+    prov.setFetch(async (url) => {
+        if (url.includes('discomap')) return { ok: false, status: 503, text: async () => '', headers: { get: () => null } };
+        if (url.includes('elevation-tiles-prod')) return { ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(8), headers: { get: () => 'image/png' } };
+        throw new Error('unexpected URL in test: ' + url);
+    });
+    const warnings = [];
+    const pick = await pipeline.pickDemProvider({ lat: 50, lon: 13 }, null, warnings);
+    assert.strictEqual(pick.provider.id, 'terrarium');
+    assert.strictEqual(pick.decision.chosen.resM, 30);
+    assert.ok(warnings.some((w) => w.key === 'warn.demFallback' && w.vars.from === 'EU-DEM v1.1 (EEA, 25 m)' && w.vars.to.startsWith('Terrarium')), 'fallback warning names 25 m source and Terrarium');
+    assert.ok(warnings.some((w) => w.key === 'warn.demTerrarium' && w.vars.res === 30), 'Terrarium resolution warning');
+    global.GeoTIFF = realGeo; global.createImageBitmap = realBmp; global.OffscreenCanvas = realOff;
+    prov.setFetch(null);
+});
+
+testAsync('no DEM source at all: keyed error lists every attempt with its reason', async () => {
+    prov.setFetch(async () => ({ ok: false, status: 503, text: async () => '', headers: { get: () => null } }));
+    await assert.rejects(pipeline.pickDemProvider({ lat: 50, lon: 13 }, null, []), (e) => {
+        assert.strictEqual(e.key, 'err.noDem');
+        assert.ok(/reason\.http/.test(e.vars.tried) && /EU-DEM v1\.0/.test(e.vars.tried), e.vars.tried);
+        return true;
+    });
     prov.setFetch(null);
 });
 
@@ -424,6 +654,23 @@ testAsync('debug mode records every request: URL, status, timing; CORS/network f
     assert.ok(failed && /CORS/.test(failed.hint), 'network/CORS failure is labelled');
     prov.setFetch(null);
     prov.setDebug(false);
+});
+
+test('Strahler size map is configurable; unlisted orders are skipped; defaults are the documented assumption', () => {
+    const d = prov.defaultStrahlerMap();
+    assert.deepStrictEqual(d, { small: [1, 2], medium: [3, 4], large: [5, 6, 7, 8, 9] });
+    assert.strictEqual(prov.strahlerToClass(2, d), 'small');
+    assert.strictEqual(prov.strahlerToClass(4, d), 'medium');
+    assert.strictEqual(prov.strahlerToClass(9, d), 'large');
+    assert.strictEqual(prov.strahlerToClass(3, { small: [1, 2, 3], medium: [], large: [] }), 'small', 'a custom map changes the class');
+    assert.strictEqual(prov.strahlerToClass(4, { small: [1, 2], medium: [3], large: [5] }), null, 'order 4 unlisted → skipped');
+    assert.strictEqual(prov.CONFIG.water.drainageDefault, false, 'drainage is off by default');
+});
+
+test('CORS proxy is a disabled switch: no request is routed through it by default', () => {
+    assert.strictEqual(prov.CONFIG.proxy.enabled, false);
+    assert.ok(prov.CONFIG.proxy.prefix.startsWith('/.netlify/functions/'));
+    assert.ok(prov.CONFIG.proxy.hosts.includes('image.discomap.eea.europa.eu'));
 });
 
 test('ArcGIS query URL: envelope, GeoJSON, simplification, paging parameters', () => {
@@ -475,7 +722,7 @@ test('EU-DEM coverage id is discovered from GetCapabilities XML, not assumed', (
 test('provider chains: EEA first inside Europe, global fallback outside', () => {
     assert.ok(prov.inEea39Approx(50, 13));
     assert.ok(!prov.inEea39Approx(-33, 151));
-    assert.strictEqual(prov.demChain(50, 13)[0].id, 'eu-dem');
+    assert.strictEqual(prov.demChain(50, 13)[0].id, 'eudem-v11');   // EU-DEM v1.1 is primary (was 'eu-dem')
     assert.strictEqual(prov.demChain(-33, 151)[0].id, 'terrarium');
     assert.strictEqual(prov.waterChain(-33, 151)[0].id, 'osm-overpass');
 });
@@ -659,17 +906,20 @@ test('curve text: "x, y" lines, comments ignored, malformed lines reported with 
     const p = core.parseCurveText('0, 1\n# comment\n5 1\n10;0.5\nbad line\n20, 2, 3');
     assert.deepStrictEqual(p.points, [[0, 1], [5, 1], [10, 0.5]]);
     assert.strictEqual(p.errors.length, 2);
-    assert.ok(p.errors[0].startsWith('line 5'));
-    assert.ok(p.errors[1].startsWith('line 6'));
+    // Errors are keyed messages: { key, vars, text } (translated by the UI; text is the English fallback).
+    assert.strictEqual(p.errors[0].key, 'err.curveLine');
+    assert.strictEqual(p.errors[0].vars.n, 5);
+    assert.strictEqual(p.errors[1].vars.n, 6);
+    assert.ok(p.errors[0].text.startsWith('line 5'));
 });
 
 test('curve validation: at least two points, x strictly increasing, y in [0,1], x inside the curve range', () => {
     const slopeSpec = core.CURVE_SPECS.slope;
     assert.deepStrictEqual(core.validateCurve([[0, 1], [5, 1], [20, 0]], slopeSpec), []);
     assert.ok(core.validateCurve([[0, 1]], slopeSpec).length > 0, 'one point is not a curve');
-    assert.ok(core.validateCurve([[5, 1], [5, 0]], slopeSpec).some((e) => /must increase/.test(e)), 'x must increase');
-    assert.ok(core.validateCurve([[0, 1], [5, 1.2]], slopeSpec).some((e) => /between 0 and 1/.test(e)), 'y ≤ 1');
-    assert.ok(core.validateCurve([[0, 1], [95, 0]], slopeSpec).some((e) => /outside/.test(e)), 'slope x ≤ 90');
+    assert.ok(core.validateCurve([[5, 1], [5, 0]], slopeSpec).some((e) => e.key === 'err.curveIncrease'), 'x must increase');
+    assert.ok(core.validateCurve([[0, 1], [5, 1.2]], slopeSpec).some((e) => e.key === 'err.curveY'), 'y ≤ 1');
+    assert.ok(core.validateCurve([[0, 1], [95, 0]], slopeSpec).some((e) => e.key === 'err.curveRange'), 'slope x ≤ 90');
 });
 
 test('the default curves pass validation as a set; an invalid edit is reported per curve', () => {

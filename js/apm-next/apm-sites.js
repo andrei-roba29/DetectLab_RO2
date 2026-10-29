@@ -79,7 +79,9 @@
         var bce = /\s*(bc|bce|v\.chr)$/i.test(s);
         var n = parseInt(s.replace(/[^0-9-]/g, ''), 10);
         if (!isFinite(n)) return null;
-        return bce ? -Math.abs(n) : n;
+        // Astronomical year numbering: 1 BC = year 0, 2 BC = year -1, so "N BC" → 1 − N.
+        // A plain negative number is taken as already astronomical and is left unchanged.
+        return bce ? 1 - Math.abs(n) : n;
     }
 
     /**
@@ -139,7 +141,7 @@
     }
 
     function periodLabelFromYears(a, b) {
-        var f = function (y) { return y < 0 ? (-y) + ' BC' : y + ' AD'; };
+        var f = function (y) { return y <= 0 ? (1 - y) + ' BC' : y + ' AD'; };
         return a === b ? f(a) : f(a) + ' – ' + f(b);
     }
 

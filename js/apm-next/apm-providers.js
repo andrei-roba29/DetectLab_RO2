@@ -23,15 +23,23 @@
     'use strict';
 
     /* ── Configuration (edit here; nothing else needs changing to swap a source) ─ */
+    var APP_VERSION = 'apm-next phase 2 (UI r3)';
+
     var CONFIG = {
+        // DEM candidates in preference order. EU-DEM WCS is primary; Terrarium (last, in code) is the
+        // only fallback. Each candidate's GetCapabilities is read at runtime (coverage id, formats, CRS,
+        // advertised request limits). None of these endpoints is verified from the sandbox: check the
+        // log in debug mode.
         euDem: {
-            // EU-DEM v1.1 (EEA, 25 m). The service path is verified from EEA's catalogue: the WMS
-            // endpoint .../Elevation/EUElev_DEM_V11/MapServer/WMSServer exposes layer DEM_v11_Masked2,
-            // and the WCS sits on the same service. The WCS endpoint itself is NOT verified from here:
-            // the code tries each candidate in order and logs the outcome in debug mode.
-            wcsEndpoints: [
-                'https://image.discomap.eea.europa.eu/arcgis/services/Elevation/EUElev_DEM_V11/MapServer/WCSServer',
-                'https://copernicus.discomap.eea.europa.eu/arcgis/services/Elevation/EUElev_DEM_V11/MapServer/WCSServer'
+            candidates: [
+                {
+                    id: 'eudem-v11', version: '1.1', tier: 'primary',
+                    endpoint: 'https://image.discomap.eea.europa.eu/arcgis/services/Elevation/EUElev_DEM_V11/MapServer/WCSServer'
+                },
+                {
+                    id: 'eudem-v10', version: '1.0', tier: 'secondary',
+                    endpoint: 'https://image.discomap.eea.europa.eu/arcgis/services/GioLandPublic/DEM/MapServer/WCSServer'
+                }
             ],
             coverageMatch: /dem/i,      // coverage id is discovered from GetCapabilities, not guessed
             nominalResM: 25,
@@ -42,6 +50,11 @@
             maxRecordsPerQuery: 1000,           // service cap quoted in the brief; paging/quadtree handles overflow
             maxQuadDepth: 6
         },
+        // Strahler order → size class. Defaults are UNTESTED ASSUMPTIONS (see NEXT_GEN_APM.md).
+        water: {
+            defaultStrahlerMap: { small: [1, 2], medium: [3, 4], large: [5, 6, 7, 8, 9] },
+            drainageDefault: false              // EU-Hydro Drainage Network is off unless the user enables it
+        },
         terrarium: {
             urlTemplate: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
             maxZoom: 15,
@@ -51,8 +64,13 @@
             url: 'https://overpass-api.de/api/interpreter',
             timeoutS: 60
         },
-        // Optional same-origin proxy prefix for CORS-blocked sources (empty = direct requests only).
-        proxyPrefix: ''
+        // CORS proxy switch. DISABLED. Requests to these hosts go direct unless `enabled` is set.
+        // The proxy itself is not built; see LIVE_TEST.md / NEXT_GEN_APM.md for the design.
+        proxy: {
+            enabled: false,
+            prefix: '/.netlify/functions/apm-proxy?url=',
+            hosts: ['image.discomap.eea.europa.eu', 'overpass-api.de', 's3.amazonaws.com']
+        }
     };
 
     /* ── Europe (EEA39), coarse approximation — used only to choose the first DEM/hydro source ─ */
@@ -136,7 +154,9 @@
         }).catch(function () {});
     }
 
-    /* ── Debug mode: one record per request (URL, status, timing) ───────── */
+    /* ── Diagnostics log: one record per request and one per source decision ─
+     * Records are always kept (bounded). The console output and the visible panel depend on debug mode.
+     * Debug is switched on with ?apmDebug=1 in the page URL or localStorage.apmDebug = '1'. */
     var debugOn = false, debugLog = [], debugListeners = [];
     var DEBUG_LOG_MAX = 500;
     function setDebug(on) { debugOn = !!on; return debugOn; }
@@ -144,47 +164,69 @@
     function onDebug(fn) { if (typeof fn === 'function') debugListeners.push(fn); }
     function getDebugLog() { return debugLog.slice(); }
     function clearDebugLog() { debugLog = []; }
-    function logRequest(rec) {
-        if (!debugOn) return;
+    function logRecord(rec) {
+        rec.time = rec.time || new Date().toISOString();
         debugLog.push(rec);
         if (debugLog.length > DEBUG_LOG_MAX) debugLog.shift();
-        if (typeof console !== 'undefined' && console.debug) {
-            console.debug('[APM] ' + rec.method + ' ' + rec.url + ' → ' +
-                (rec.status != null ? rec.status : rec.error) + ' (' + rec.ms + ' ms)' +
-                (rec.hint ? ' — ' + rec.hint : ''));
+        if (debugOn && typeof console !== 'undefined' && console.debug) {
+            console.debug('[APM] ' + JSON.stringify(rec));
         }
         debugListeners.forEach(function (fn) { try { fn(rec); } catch (e) { /* listener errors must not break fetches */ } });
     }
-    // Debug is switched on with ?apmDebug=1 in the page URL or localStorage.apmDebug = '1'.
+    /** Source decision for one step: outcome 'used' | 'failed' | 'skipped', with the reason. */
+    function logStep(rec) { rec.kind = 'step'; logRecord(rec); }
     try {
         if (typeof location !== 'undefined' && /[?&]apmDebug=1\b/.test(location.search)) debugOn = true;
         if (typeof localStorage !== 'undefined' && localStorage.getItem('apmDebug') === '1') debugOn = true;
     } catch (e) { /* storage may be blocked */ }
 
     function nowMs() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
+    function hostOf(url) { try { return new URL(url).host; } catch (e) { return 'local'; } }
 
-    /** Cached, rate-limited GET/POST. Returns Response-like result; throws on HTTP error. */
+    /** Error with a keyed reason (`e.reason` = { key, vars, text }) for the UI and the log. */
+    function failure(key, vars, text) {
+        var e = new Error(text);
+        e.reason = core.msg(key, vars, text);
+        return e;
+    }
+    /** Record the response body size on the request record of a fetched response. */
+    function noteBytes(res, n) { if (res && res.__apmRec) res.__apmRec.bytes = n; }
+
+    /** Cached, rate-limited GET/POST. Resolves the Response; rejects with a keyed `reason` on failure. */
     function httpFetch(url, init, opts) {
         opts = opts || {};
         var method = (init && init.method) || 'GET';
-        var host = (function () { try { return new URL(url).host; } catch (e) { return 'local'; } })();
-        var target = CONFIG.proxyPrefix && opts.viaProxy ? CONFIG.proxyPrefix + encodeURIComponent(url) : url;
+        var host = hostOf(url);
+        var viaProxy = CONFIG.proxy.enabled && (opts.viaProxy || CONFIG.proxy.hosts.indexOf(host) >= 0);
+        var target = viaProxy ? CONFIG.proxy.prefix + encodeURIComponent(url) : url;
         return schedule(host, function () {
-            if (!fetchImpl) throw new Error('fetch is not available in this environment.');
+            if (!fetchImpl) throw failure('reason.error', { msg: 'fetch unavailable' }, 'fetch is not available in this environment.');
             var t0 = nowMs();
+            var rec = { kind: 'request', step: opts.step || null, method: method, url: target, endpoint: opts.endpoint || null,
+                proxied: !!viaProxy, status: null, ok: null, ms: null, contentType: null, bytes: null };
             return fetchImpl(target, init).then(function (res) {
-                var ms = Math.round(nowMs() - t0);
-                logRequest({ time: new Date().toISOString(), method: method, url: target, status: res.status, ok: res.ok, ms: ms,
-                    contentType: res.headers && res.headers.get ? res.headers.get('content-type') : null });
-                if (!res.ok) throw new Error('HTTP ' + res.status + ' from ' + host);
+                rec.ms = Math.round(nowMs() - t0);
+                rec.status = res.status;
+                rec.ok = res.ok;
+                rec.contentType = res.headers && res.headers.get ? res.headers.get('content-type') : null;
+                logRecord(rec);
+                if (!res.ok) {
+                    var e = failure('reason.http', { status: res.status }, 'HTTP ' + res.status + ' from ' + host);
+                    e.httpStatus = res.status;
+                    throw e;
+                }
+                res.__apmRec = rec;
                 return res;
             }, function (err) {
                 // Browsers report CORS failures and network errors as a bare TypeError with no detail.
-                var ms = Math.round(nowMs() - t0);
-                logRequest({ time: new Date().toISOString(), method: method, url: target, status: null, ok: false, ms: ms,
-                    error: (err && err.name) + ': ' + (err && err.message),
-                    hint: 'no HTTP response: network failure or CORS block (see the browser Network tab)' });
-                throw err;
+                rec.ms = Math.round(nowMs() - t0);
+                rec.error = (err && err.name) + ': ' + (err && err.message);
+                rec.reason = core.msg('reason.network', {}, 'no HTTP response (network failure or CORS block)');
+                rec.hint = 'no HTTP response: network failure or CORS block (see the browser Network tab)';
+                logRecord(rec);
+                var e = failure('reason.network', {}, 'no HTTP response (network failure or CORS block)');
+                e.cause = err;
+                throw e;
             });
         }, opts.rate);
     }
@@ -245,62 +287,103 @@
         }).then(function () { return out; });
     }
 
-    /* ── DEM: EU-DEM v1.1 via WCS (coverage discovered at runtime) ───────── */
-    var euDemCoverage = null;
+    /* ── DEM: EU-DEM via WCS (one provider per candidate, capabilities read at runtime) ── */
+    /** Parse a WCS GetCapabilities document. Pure. Regex-based so it runs in Node and in browsers. */
+    function parseWcsCapabilities(xmlText) {
+        var xml = String(xmlText || '');
+        var caps = { coverageIds: [], formats: [], crs: [], maxRequestSize: null, exception: null };
+        if (/<(?:\w+:)?ExceptionReport\b/.test(xml)) {
+            var ex = /<(?:\w+:)?ExceptionText>([^<]*)</.exec(xml);
+            caps.exception = ex ? ex[1].trim() : 'ExceptionReport';
+        }
+        caps.coverageIds = parseWcsCoverageIds(xml);
+        function all(re) {
+            var out = [], m;
+            while ((m = re.exec(xml))) { var v = m[1].trim(); if (v && out.indexOf(v) < 0) out.push(v); }
+            return out;
+        }
+        caps.formats = all(/<(?:\w+:)?formatSupported>([^<]+)</g);
+        caps.crs = all(/<(?:\w+:)?(?:crsSupported|SupportedCRS)>([^<]+)</g);
+        var mr = /<((?:\w+:)?[A-Za-z]*(?:MaxSize|MaxRequest|MaximumSize|MaxPixels|MaxRecords)[A-Za-z]*)>([^<]+)</i.exec(xml);
+        if (mr) caps.maxRequestSize = { element: mr[1].replace(/^\w+:/, ''), value: mr[2].trim() };
+        return caps;
+    }
+
+    /** Pixel cap from the advertised limit, when the element is clearly a pixel count. */
+    function maxPixelsFrom(maxRequestSize) {
+        if (!maxRequestSize || !/pixel/i.test(maxRequestSize.element)) return null;
+        var n = parseInt(maxRequestSize.value, 10);
+        return isFinite(n) && n > 0 ? n : null;
+    }
 
     function parseWcsCoverageIds(xmlText) {
         var ids = [];
-        var doc = typeof DOMParser !== 'undefined' ? new DOMParser().parseFromString(xmlText, 'text/xml') : null;
-        if (doc) {
-            var nodes = doc.getElementsByTagNameNS('*', 'CoverageId');
-            for (var i = 0; i < nodes.length; i++) ids.push(nodes[i].textContent.trim());
-            if (!ids.length) {
-                var offs = doc.getElementsByTagNameNS('*', 'CoverageOfferingBrief');
-                for (i = 0; i < offs.length; i++) {
-                    var nm = offs[i].getElementsByTagNameNS('*', 'name')[0];
-                    if (nm) ids.push(nm.textContent.trim());
-                }
-            }
-        } else {
-            var re = /<(?:\w+:)?CoverageId>([^<]+)<\/(?:\w+:)?CoverageId>/g, m;
-            while ((m = re.exec(xmlText))) ids.push(m[1].trim());
+        var xml = String(xmlText || '');
+        var re = /<(?:\w+:)?CoverageId>([^<]+)<\/(?:\w+:)?CoverageId>/g, m;
+        while ((m = re.exec(xml))) ids.push(m[1].trim());
+        if (!ids.length) {
+            var re2 = /<(?:\w+:)?CoverageOfferingBrief[\s\S]*?<(?:\w+:)?name>([^<]+)<\/(?:\w+:)?name>/g;
+            while ((m = re2.exec(xml))) ids.push(m[1].trim());
         }
         return ids;
     }
 
-    function createEuDemProvider() {
-        return {
-            id: 'eu-dem',
-            label: 'EU-DEM v1.1 (EEA, 25 m)',
-            source: 'Copernicus Land Monitoring Service / EEA — EU-DEM v1.1',
+    /** Cached capabilities per endpoint (only successful reads are cached). */
+    var demCaps = {};
+
+    /** One EU-DEM WCS candidate. Discovers coverage/format/CRS/limits from GetCapabilities. */
+    function createEuDemProvider(cand) {
+        var p = {
+            id: cand.id,
+            version: cand.version,
+            tier: cand.tier,
+            label: 'EU-DEM v' + cand.version + ' (EEA, 25 m' + (cand.tier === 'secondary' ? ', older, lower quality' : '') + ')',
+            source: 'Copernicus Land Monitoring Service / EEA — EU-DEM v' + cand.version,
+            endpoint: cand.endpoint,
             nominalResM: CONFIG.euDem.nominalResM,
             coversLonLat: inEea39Approx,
+            get tilePx() {
+                var c = demCaps[cand.endpoint];
+                var px = c ? maxPixelsFrom(c.maxRequestSize) : null;
+                return px ? Math.max(64, Math.min(CONFIG.euDem.tilePx, Math.floor(Math.sqrt(px)))) : CONFIG.euDem.tilePx;
+            },
             discover: function () {
-                if (euDemCoverage) return Promise.resolve(euDemCoverage);
-                // Try each candidate endpoint in order; keep the first that lists an EU-DEM coverage.
-                var errors = [];
-                return CONFIG.euDem.wcsEndpoints.reduce(function (p, endpoint) {
-                    return p.then(function (found) {
-                        if (found) return found;
-                        var url = endpoint + '?service=WCS&version=2.0.1&request=GetCapabilities';
-                        return httpFetch(url, {}, { rate: { concurrency: 1, minIntervalMs: 500 } })
-                            .then(function (r) { return r.text(); })
-                            .then(function (xml) {
-                                var ids = parseWcsCoverageIds(xml).filter(function (id) { return CONFIG.euDem.coverageMatch.test(id); });
-                                if (!ids.length) throw new Error('no EU-DEM coverage in GetCapabilities');
-                                return { id: ids[0], all: ids, endpoint: endpoint };
-                            })
-                            .catch(function (e) { errors.push(endpoint + ' — ' + e.message); return null; });
+                if (demCaps[cand.endpoint]) return Promise.resolve(demCaps[cand.endpoint]);
+                var url = cand.endpoint + '?service=WCS&version=2.0.1&request=GetCapabilities';
+                return httpFetch(url, {}, { rate: { concurrency: 1, minIntervalMs: 500 }, step: 'dem', endpoint: cand.endpoint })
+                    .then(function (r) {
+                        return r.text().then(function (text) {
+                            noteBytes(r, text.length);
+                            var ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
+                            if (!text.trim()) throw failure('reason.emptyBody', {}, 'empty response body');
+                            if (!/xml/i.test(ct) && text.trim().charAt(0) !== '<') {
+                                throw failure('reason.wrongFormat', { got: ct || 'unknown', expected: 'WCS XML' }, 'wrong format');
+                            }
+                            var caps = parseWcsCapabilities(text);
+                            if (caps.exception) throw failure('reason.error', { msg: caps.exception }, 'server exception: ' + caps.exception);
+                            var ids = caps.coverageIds.filter(function (id) { return CONFIG.euDem.coverageMatch.test(id); });
+                            if (!ids.length) {
+                                throw failure('reason.noCoverage', { found: caps.coverageIds.slice(0, 5).join(', ') || 'none' },
+                                    'no EU-DEM coverage in GetCapabilities');
+                            }
+                            if (caps.formats.length && !caps.formats.some(function (f) { return /tiff/i.test(f); })) {
+                                throw failure('reason.wrongFormat', { got: caps.formats.join(', '), expected: 'image/tiff' },
+                                    'no GeoTIFF output format');
+                            }
+                            var found = {
+                                id: ids[0], all: ids, endpoint: cand.endpoint, version: cand.version,
+                                formats: caps.formats, crs: caps.crs, maxRequestSize: caps.maxRequestSize,
+                                maxPx: maxPixelsFrom(caps.maxRequestSize)
+                            };
+                            demCaps[cand.endpoint] = found;
+                            logRecord({ kind: 'caps', step: 'dem', endpoint: cand.endpoint, coverageId: found.id,
+                                coverages: ids, formats: caps.formats, crs: caps.crs, maxRequestSize: caps.maxRequestSize });
+                            return found;
+                        });
                     });
-                }, Promise.resolve(null)).then(function (found) {
-                    if (!found) throw new Error('EU-DEM WCS unavailable. Tried: ' + errors.join('; '));
-                    euDemCoverage = found;
-                    return found;
-                });
             },
             fetchBlock: function (grid) {
-                var self = this;
-                return self.discover().then(function (cov) {
+                return p.discover().then(function (cov) {
                     var n = grid.north, s = grid.north - grid.h * grid.dLat;
                     var w = grid.west, e = grid.west + grid.w * grid.dLon;
                     var q = [
@@ -313,17 +396,31 @@
                         'subset=' + encodeURIComponent('Long(' + w + ',' + e + ')'),
                         'scalesize=' + encodeURIComponent('i(' + grid.w + '),j(' + grid.h + ')')
                     ];
-                    return httpFetch(cov.endpoint + '?' + q.join('&'), {}, { rate: { concurrency: 2, minIntervalMs: 300 } })
-                        .then(function (r) { return r.arrayBuffer(); })
-                        .then(decodeGeoTiffFloat);
+                    return httpFetch(cov.endpoint + '?' + q.join('&'), {},
+                        { rate: { concurrency: 2, minIntervalMs: 300 }, step: 'dem', endpoint: cov.endpoint })
+                        .then(function (r) {
+                            return r.arrayBuffer().then(function (buf) {
+                                noteBytes(r, buf.byteLength);
+                                var ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
+                                if (!buf.byteLength) throw failure('reason.emptyBody', {}, 'empty response body');
+                                if (ct && !/tiff|octet-stream|image\//i.test(ct)) {
+                                    throw failure('reason.wrongFormat', { got: ct, expected: 'image/tiff' }, 'wrong format');
+                                }
+                                return decodeGeoTiffFloat(buf).catch(function (err) {
+                                    if (/geotiff\.js/.test(String(err && err.message))) throw err;
+                                    throw failure('reason.wrongFormat', { got: 'undecodable body', expected: 'image/tiff' }, 'undecodable GeoTIFF');
+                                });
+                            });
+                        });
                 });
             }
         };
+        return p;
     }
 
     /** Decode a single-band GeoTIFF into Float32Array (uses vendored geotiff.js global). */
     function decodeGeoTiffFloat(buf) {
-        if (typeof GeoTIFF === 'undefined') return Promise.reject(new Error('geotiff.js is not loaded.'));
+        if (typeof GeoTIFF === 'undefined') return Promise.reject(new Error('geotiff.js is not loaded (setup problem).'));
         return GeoTIFF.fromArrayBuffer(buf).then(function (tiff) {
             return tiff.getImage().then(function (img) {
                 return img.readRasters({ interleave: true }).then(function (rasters) {
@@ -375,6 +472,9 @@
         var tileCache = new Map();
         return {
             id: 'terrarium',
+            tier: 'fallback',
+            version: null,
+            endpoint: CONFIG.terrarium.urlTemplate,
             label: 'Terrarium elevation tiles (global, mixed sources)',
             source: 'Mapzen / AWS Open Data elevation tiles (Terrarium); underlying SRTM, NED, ETOPO, etc.',
             nominalResM: CONFIG.terrarium.nominalResM,
@@ -407,7 +507,7 @@
                         if (tileCache.has(key)) { pix.set(key, tileCache.get(key)); return; }
                         return cacheGet('terrarium|' + key).then(function (cachedBuf) {
                             if (cachedBuf) return decodePng(new Blob([cachedBuf], { type: 'image/png' }));
-                            return httpFetch(url, {}, { rate: { concurrency: 4, minIntervalMs: 20 } })
+                            return httpFetch(url, {}, { rate: { concurrency: 4, minIntervalMs: 20 }, step: 'dem', endpoint: 'terrarium' })
                                 .then(function (r) { return r.arrayBuffer().then(function (ab) { return cacheSet('terrarium|' + key, ab).then(function () { return decodePng(new Blob([ab], { type: 'image/png' })); }); }); });
                         }).then(function (rgba) { tileCache.set(key, rgba); pix.set(key, rgba); });
                     });
@@ -424,17 +524,27 @@
     }
 
     /* ── Water: EU-Hydro (ArcGIS REST, /query with envelope + GeoJSON) ───── */
-    /** Map Strahler order to a size class (see apm-core WATER_CLASSES). */
-    function strahlerToClass(order) {
+    /** Default Strahler → class mapping (copied, so callers cannot change the defaults). */
+    function defaultStrahlerMap() {
+        var d = CONFIG.water.defaultStrahlerMap;
+        return { small: d.small.slice(), medium: d.medium.slice(), large: d.large.slice() };
+    }
+
+    /** Map a Strahler order to a size class with a configurable map. Unlisted orders → null (skipped). */
+    function strahlerToClass(order, map) {
         if (order == null || !isFinite(order)) return null;
-        if (order <= 2) return 'small';
-        if (order <= 4) return 'medium';
-        return 'large';
+        var m = map || CONFIG.water.defaultStrahlerMap;
+        var classes = ['small', 'medium', 'large'];
+        for (var c = 0; c < classes.length; c++) {
+            if ((m[classes[c]] || []).indexOf(Number(order)) >= 0) return classes[c];
+        }
+        return null;
     }
 
     /**
      * Resolve EU-Hydro leaf layers from the service JSON (names and ids are read, not guessed).
-     * Returns [{ id, name, cls, role }]; role = 'lines' | 'polygon' | 'inland' | 'drainage'.
+     * Returns [{ id, name, role, order, cls }]; role = 'lines' | 'polygon' | 'inland' | 'drainage'.
+     * `cls` is the default-map class; fetchWater re-maps Strahler layers with the user's map.
      */
     function resolveEuHydroLayers(serviceJson) {
         var layers = ((serviceJson && serviceJson.layers) || []).slice().sort(function (a, b) { return a.id - b.id; });
@@ -445,21 +555,26 @@
             if (subs.length) return;                                    // group layer: its leaves are handled below
             // EU-Hydro publishes the same names at two scale ranges (e.g. "Strahler 6" as ids 10 and 15,
             // "InlandWater" as ids 2 and 3). Querying both would double-count, so keep the lowest id per name.
-            var key = name.toLowerCase();
+            var isDrain = /drain/i.test(name);
+            var key = (isDrain ? 'drainage|' : 'main|') + name.toLowerCase();
             if (seen[key]) return;
-            var order = (name.match(/^strahler\s*(\d+)$/i) || [])[1];
+            var order = (name.match(/strahler\D*(\d+)/i) || [])[1];
             if (order != null) {
                 seen[key] = true;
-                out.push({ id: l.id, name: name, cls: strahlerToClass(Number(order)), order: Number(order), role: 'lines' });
+                out.push({ id: l.id, name: name, order: Number(order), cls: strahlerToClass(Number(order)),
+                    role: isDrain ? 'drainage' : 'lines' });
+            } else if (isDrain) {
+                // A drainage leaf without a Strahler order cannot be classed; it is logged and left out.
+                seen[key] = true;
+                out.push({ id: l.id, name: name, order: null, cls: null, role: 'drainage' });
             } else if (/^river_?net_?polygon$/i.test(name)) {
                 seen[key] = true;
-                out.push({ id: l.id, name: name, cls: 'large', role: 'polygon' });
+                out.push({ id: l.id, name: name, order: null, cls: 'large', role: 'polygon' });
             } else if (/^inlandwater$/i.test(name)) {
                 seen[key] = true;
-                out.push({ id: l.id, name: name, cls: 'large', role: 'inland' });
+                out.push({ id: l.id, name: name, order: null, cls: 'large', role: 'inland' });
             }
-            // Coastal_polygon (sea), Transit_polygon (transitional waters) and the Drainage Network
-            // (public beta, catchment model) are not inland-water inputs and are left out.
+            // Coastal_polygon (sea) and Transit_polygon (transitional waters) are not inland-water inputs.
         });
         return out;
     }
@@ -515,7 +630,7 @@
     /** Query one layer over bbox. Pages with resultOffset when allowed, otherwise subdivides. */
     function queryLayerAll(base, layer, bbox, depth, acc, simplifyDeg) {
         var url = buildEsriQuery(base, layer.id, bbox, { maxAllowableOffsetDeg: simplifyDeg });
-        return httpFetch(url, {}, { rate: { concurrency: 2, minIntervalMs: 250 } })
+        return httpFetch(url, {}, { rate: { concurrency: 2, minIntervalMs: 250 }, step: 'water', endpoint: 'eu-hydro' })
             .then(function (r) { return r.json(); })
             .then(function (json) {
                 if (json.error) throw new Error('EU-Hydro query error: ' + (json.error.message || json.error.code));
@@ -536,11 +651,15 @@
         var layersPromise = null;
         function layers() {
             if (!layersPromise) {
-                layersPromise = httpFetch(CONFIG.euHydro.base + '?f=json', {}, { rate: { concurrency: 1, minIntervalMs: 500 } })
-                    .then(function (r) { return r.json(); })
-                    .then(function (j) {
+                layersPromise = httpFetch(CONFIG.euHydro.base + '?f=json', {}, { rate: { concurrency: 1, minIntervalMs: 500 }, step: 'water', endpoint: 'eu-hydro layers' })
+                    .then(function (r) { return r.text(); })
+                    .then(function (text) {
+                        var j;
+                        try { j = JSON.parse(text); } catch (e) { throw failure('reason.wrongFormat', { got: 'non-JSON', expected: 'ArcGIS JSON' }, 'wrong format'); }
                         var ls = resolveEuHydroLayers(j);
-                        if (!ls.length) throw new Error('No River_Net / InlandWater layers found in EU-Hydro service JSON.');
+                        logRecord({ kind: 'caps', step: 'water', endpoint: CONFIG.euHydro.base,
+                            layers: ls.map(function (l) { return l.name + '#' + l.id + ' (' + l.role + (l.cls ? ', ' + l.cls : '') + ')'; }) });
+                        if (!ls.length) throw failure('reason.noCoverage', { found: 'no River_Net / InlandWater layers' }, 'no EU-Hydro river layers in service JSON');
                         return ls;
                     })
                     .catch(function (e) { layersPromise = null; throw e; });
@@ -549,22 +668,34 @@
         }
         return {
             id: 'eu-hydro',
+            tier: 'primary',
             label: 'EU-Hydro (EEA)',
             source: 'EEA — EU-Hydro River Network Database (EEA39)',
+            endpoint: CONFIG.euHydro.base,
             coversLonLat: inEea39Approx,
             layers: layers,
             fetchWater: function (bbox, opts) {
                 opts = opts || {};
                 var simplify = opts.simplifyDeg == null ? 0.0001 : opts.simplifyDeg;
+                var map = opts.strahlerMap || CONFIG.water.defaultStrahlerMap;
+                var includeDrainage = !!opts.includeDrainage;
                 return layers().then(function (ls) {
                     var acc = { lines: [], rings: [] };
-                    var use = ls.filter(function (l) { return l.role !== 'drainage' || opts.includeDrainage; });
+                    var skipped = [];
+                    var use = [];
+                    ls.forEach(function (l) {
+                        if (l.role === 'drainage' && !includeDrainage) return;
+                        var cls = l.order != null ? strahlerToClass(l.order, map) : l.cls;
+                        if (!cls) { skipped.push(l.name + ' (no size class in the map)'); return; }
+                        use.push({ id: l.id, name: l.name, role: l.role, cls: cls });
+                    });
                     return use.reduce(function (p, layer) {
                         return p.then(function () { return queryLayerAll(CONFIG.euHydro.base, layer, bbox, 0, acc, simplify); });
                     }, Promise.resolve()).then(function () {
                         return {
                             lines: acc.lines, polygons: acc.rings,
-                            meta: { provider: 'eu-hydro', layers: use.map(function (l) { return l.name; }), incompleteTiles: acc.incomplete || 0 }
+                            meta: { provider: 'eu-hydro', layers: use.map(function (l) { return l.name; }),
+                                drainage: includeDrainage, skippedLayers: skipped, incompleteTiles: acc.incomplete || 0 }
                         };
                     });
                 });
@@ -614,6 +745,8 @@
     function createOverpassWaterProvider() {
         return {
             id: 'osm-overpass',
+            tier: 'fallback',
+            endpoint: CONFIG.overpass.url,
             label: 'OpenStreetMap waterways (Overpass)',
             source: '© OpenStreetMap contributors (ODbL)',
             coversLonLat: function () { return true; },
@@ -626,7 +759,7 @@
                         method: 'POST',
                         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                         body: body
-                    }, { rate: { concurrency: 1, minIntervalMs: 1500 } })
+                    }, { rate: { concurrency: 1, minIntervalMs: 1500 }, step: 'water', endpoint: 'overpass' })
                         .then(function (r) { return r.json(); })
                         .then(function (json) {
                             var parsed = parseOverpass(json);
@@ -668,31 +801,54 @@
     }
 
     /* ── Provider chooser ────────────────────────────────────────────────── */
-    /** DEM providers in preference order for a centre; the pipeline falls through on failure. */
+    /**
+     * DEM plan for a centre: every candidate in order, with `use` and the reason it is skipped.
+     * Terrarium is always last and is the only fallback after the EU-DEM candidates.
+     */
+    function demPlan(lat, lon) {
+        var plan = CONFIG.euDem.candidates.map(function (c) {
+            var p = createEuDemProvider(c);
+            var ok = p.coversLonLat(lat, lon);
+            return { provider: p, use: ok, skipReason: ok ? null : core.msg('skip.outsideEea', {}, 'outside EEA-39 coverage (approximate test)') };
+        });
+        plan.push({ provider: createTerrariumProvider(), use: true, skipReason: null });
+        return plan;
+    }
+
+    /** Water plan: EU-Hydro (EEA-39 only) then Overpass. */
+    function waterPlan(lat, lon) {
+        var eh = createEuHydroProvider();
+        var ok = inEea39Approx(lat, lon);
+        return [
+            { provider: eh, use: ok, skipReason: ok ? null : core.msg('skip.outsideEea', {}, 'outside EEA-39 coverage (approximate test)') },
+            { provider: createOverpassWaterProvider(), use: true, skipReason: null }
+        ];
+    }
+
+    /** DEM providers in preference order for a centre (skipped candidates omitted). */
     function demChain(lat, lon) {
-        var chain = [];
-        var eu = createEuDemProvider();
-        if (eu.coversLonLat(lat, lon)) chain.push(eu);
-        chain.push(createTerrariumProvider());
-        return chain;
+        return demPlan(lat, lon).filter(function (x) { return x.use; }).map(function (x) { return x.provider; });
     }
 
     function waterChain(lat, lon) {
-        var chain = [];
-        if (inEea39Approx(lat, lon)) chain.push(createEuHydroProvider());
-        chain.push(createOverpassWaterProvider());
-        return chain;
+        return waterPlan(lat, lon).filter(function (x) { return x.use; }).map(function (x) { return x.provider; });
     }
 
     return {
         CONFIG: CONFIG,
         setFetch: function (fn) { fetchImpl = fn; },
+        APP_VERSION: APP_VERSION,
         setDebug: setDebug,
+        logStep: logStep,
+        defaultStrahlerMap: defaultStrahlerMap,
+        maxPixelsFrom: maxPixelsFrom,
+        demPlan: demPlan,
+        waterPlan: waterPlan,
         isDebug: isDebug,
         onDebug: onDebug,
         getDebugLog: getDebugLog,
         clearDebugLog: clearDebugLog,
-        getDemEndpoint: function () { return euDemCoverage ? euDemCoverage.endpoint : null; },
+        getDemCapabilities: function () { return Object.keys(demCaps).map(function (k) { return demCaps[k]; }); },
         inEea39Approx: inEea39Approx,
         cacheGet: cacheGet,
         cacheSet: cacheSet,
@@ -706,12 +862,14 @@
         terrariumZoomFor: terrariumZoomFor,
         terrariumHeight: terrariumHeight,
         strahlerToClass: strahlerToClass,
+        failure: failure,
         resolveEuHydroLayers: resolveEuHydroLayers,
         buildEsriQuery: buildEsriQuery,
         parseEsriGeoJson: parseEsriGeoJson,
         buildOverpassQuery: buildOverpassQuery,
         parseOverpass: parseOverpass,
         createEuDemProvider: createEuDemProvider,
+        parseWcsCapabilities: parseWcsCapabilities,
         createTerrariumProvider: createTerrariumProvider,
         createEuHydroProvider: createEuHydroProvider,
         createOverpassWaterProvider: createOverpassWaterProvider,
