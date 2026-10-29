@@ -63,25 +63,6 @@ body.is-3d #detectlab-map #arcgisBasemapCtrl {
 
 body.is-3d #map3d-surface { display: block; }
 
-/* ── the “Cesium” alternative engine (js/map3d-terrain.js) ─────────────────
- * The CesiumJS globe lives in its own container inside the same surface, so
- * the 3D bar, veil and attribution keep working unchanged. It covers the
- * MapLibre canvas while active; picking an ArcGIS basemap destroys it. */
-#map3d-cesium {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    background: #060E1E;
-}
-#map3d-cesium .cesium-viewer,
-#map3d-cesium .cesium-widget,
-#map3d-cesium canvas {
-    width: 100%;
-    height: 100%;
-    display: block;
-}
-#map3d-surface.is-cesium .maplibregl-canvas-container { visibility: hidden; }
-
 body.is-3d .map-wrapper.is-fullscreen #map3d-surface,
 body.is-pwa.is-3d #map3d-surface {
     border-radius: 0;
