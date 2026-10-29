@@ -1,0 +1,167 @@
+/* DetectLab — Next-Gen APM (MANUAL, Phase 1). Scoped under .apm-* classes. */
+
+.apm-fab {
+    position: fixed;
+    left: 12px;
+    bottom: 12px;
+    z-index: 1200;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 56px;
+    padding: 8px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 14px;
+    background: rgba(18, 24, 32, 0.82);
+    color: #fff;
+    font: 600 13px/1.1 'Outfit', system-ui, sans-serif;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+}
+.apm-fab[aria-expanded="true"] { background: rgba(46, 158, 79, 0.9); }
+.apm-fab-sub { font-size: 10px; font-weight: 400; opacity: 0.8; text-transform: lowercase; }
+
+.apm-panel {
+    position: fixed;
+    left: 12px;
+    bottom: 70px;
+    z-index: 1199;
+    width: min(340px, calc(100vw - 24px));
+    max-height: min(70vh, 640px);
+    overflow-y: auto;
+    padding: 12px 14px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 14px;
+    background: rgba(18, 24, 32, 0.92);
+    color: #f2f4f7;
+    font: 13px/1.4 'Outfit', system-ui, sans-serif;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+}
+.apm-panel[hidden] { display: none; }
+.apm-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.apm-head h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.apm-close {
+    border: 0; background: transparent; color: inherit; font-size: 16px; cursor: pointer;
+    width: 32px; height: 32px; border-radius: 8px;
+}
+.apm-close:focus-visible, .apm-btn:focus-visible, .apm-fab:focus-visible { outline: 2px solid #89cff0; outline-offset: 2px; }
+.apm-intro { margin: 6px 0 10px; opacity: 0.8; font-size: 12px; }
+.apm-group { border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; margin: 8px 0; padding: 8px 10px; }
+.apm-group legend, .apm-group summary { font-weight: 600; font-size: 12px; padding: 0 4px; cursor: pointer; }
+.apm-field { display: grid; grid-template-columns: 1fr 64px; align-items: center; gap: 6px; margin: 6px 0; font-size: 12px; }
+.apm-field span { grid-column: 1 / -1; opacity: 0.9; }
+.apm-field input[type="range"] { grid-column: 1; width: 100%; }
+.apm-field output { text-align: right; font-variant-numeric: tabular-nums; }
+.apm-field input[type="number"] {
+    grid-column: 2; width: 100%; padding: 4px 6px; border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.06); color: inherit;
+}
+.apm-check { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 12px; }
+.apm-checks { display: grid; gap: 2px; }
+.apm-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.apm-btn {
+    padding: 7px 10px; border-radius: 9px; border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.08); color: inherit; font: inherit; cursor: pointer;
+}
+.apm-btn:disabled { opacity: 0.45; cursor: default; }
+.apm-btn.apm-primary { background: #2e9e4f; border-color: #2e9e4f; color: #fff; font-weight: 600; }
+.apm-progress { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); margin-top: 10px; overflow: hidden; }
+.apm-progress[hidden] { display: none; }
+.apm-progress-bar { height: 100%; width: 0; background: #89cff0; transition: width 0.3s ease; }
+.apm-status { min-height: 1.2em; margin-top: 8px; font-size: 12px; }
+.apm-status-error { color: #ff8a80; }
+.apm-status-ok { color: #8ee2a4; }
+.apm-status-busy { opacity: 0.85; }
+.apm-results h4 { margin: 10px 0 4px; font-size: 12px; }
+.apm-results[hidden] { display: none; }
+.apm-row { display: grid; grid-template-columns: 14px 1fr auto; gap: 8px; align-items: center; font-size: 12px; margin: 3px 0; }
+.apm-swatch { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+.apm-row-value { font-variant-numeric: tabular-nums; }
+.apm-provenance { font-size: 11px; opacity: 0.75; margin-top: 6px; }
+.apm-warnings { margin: 6px 0 0; padding-left: 18px; font-size: 11px; color: #ffd27f; }
+.apm-warnings[hidden] { display: none; }
+.apm-note { font-size: 11px; opacity: 0.6; margin-top: 10px; }
+.apm-popup { font: 12px/1.4 'Outfit', system-ui, sans-serif; }
+
+/* ── Phase 1 additions: switch, gate, mode tabs, point, curves, TRAIN, legend, diagnostics, debug ── */
+.apm-panel [hidden] { display: none !important; }
+.apm-fab-off { opacity: 0.6; }
+.apm-head-right { display: flex; align-items: center; gap: 6px; }
+.apm-switch {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 4px;
+    border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.06);
+    color: inherit; font: inherit; font-size: 12px; cursor: pointer;
+}
+.apm-switch-knob {
+    position: relative; width: 30px; height: 16px; border-radius: 999px; background: rgba(255, 255, 255, 0.25);
+    transition: background 0.2s ease;
+}
+.apm-switch-knob::after {
+    content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%;
+    background: #fff; transition: transform 0.2s ease;
+}
+.apm-switch[aria-checked="true"] .apm-switch-knob { background: #2e9e4f; }
+.apm-switch[aria-checked="true"] .apm-switch-knob::after { transform: translateX(14px); }
+.apm-gate {
+    margin: 8px 0; padding: 8px 10px; border-radius: 10px; font-size: 12px;
+    background: rgba(255, 165, 0, 0.14); border: 1px solid rgba(255, 165, 0, 0.45);
+}
+.apm-controls.apm-disabled { opacity: 0.5; pointer-events: none; }
+.apm-tabs { display: flex; gap: 6px; margin: 6px 0; }
+.apm-tab {
+    flex: 1; padding: 6px 8px; border-radius: 9px; border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.06); color: inherit; font: inherit; font-weight: 600; cursor: pointer;
+}
+.apm-tab[aria-pressed="true"] { background: #89cff0; border-color: #89cff0; color: #0d1620; }
+.apm-group-title { font-weight: 600; font-size: 12px; margin: 4px 0; }
+.apm-point { font-size: 12px; margin: 6px 0; opacity: 0.9; }
+.apm-btn.apm-wide { width: 100%; }
+.apm-btn.apm-small { padding: 4px 8px; font-size: 12px; }
+.apm-btn[aria-pressed="true"] { background: #89cff0; color: #0d1620; border-color: #89cff0; }
+.apm-curves { font-size: 12px; }
+.apm-curve-block { margin: 8px 0; }
+.apm-curve-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 4px; }
+.apm-curve {
+    width: 100%; box-sizing: border-box; font: 12px/1.35 ui-monospace, Menlo, Consolas, monospace;
+    padding: 6px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.05); color: inherit; resize: vertical;
+}
+.apm-curve:disabled { opacity: 0.5; }
+.apm-note { font-size: 11px; opacity: 0.7; margin: 4px 0; }
+.apm-file-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.apm-file { font-size: 11px; max-width: 100%; }
+.apm-file-btn { cursor: pointer; }
+.apm-select {
+    grid-column: 2; width: 100%; padding: 4px 6px; border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(18, 24, 32, 0.9); color: inherit;
+}
+.apm-legend {
+    background: rgba(18, 24, 32, 0.88); color: #f2f4f7; padding: 8px 10px; border-radius: 10px;
+    font: 12px/1.4 'Outfit', system-ui, sans-serif; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+.apm-legend-title { font-weight: 600; margin-bottom: 4px; }
+.apm-legend-row { display: flex; align-items: center; gap: 8px; margin: 2px 0; }
+.apm-row-diag { grid-template-columns: 1fr auto; }
+.apm-diag h4 { margin: 10px 0 4px; font-size: 12px; }
+.apm-debug-list { max-height: 180px; overflow: auto; margin-top: 6px; font: 11px/1.3 ui-monospace, Menlo, Consolas, monospace; }
+.apm-debug-row { display: grid; grid-template-columns: 40px 56px 1fr; gap: 6px; padding: 2px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.apm-debug-bad { color: #ff8a80; }
+.apm-debug-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; grid-column: 3; }
+.apm-debug-hint { grid-column: 1 / -1; opacity: 0.85; }
+
+/* ── Phase 3: TRAIN site counts, Strahler map, drainage option, developer banner ─ */
+.apm-count-ok { color: #2e9e4f; font-weight: 600; }
+.apm-count-warn { color: #b26a00; font-weight: 600; }
+.apm-count-block { color: #b3261e; font-weight: 600; }
+.apm-strahler { display: grid; gap: 4px; margin-top: 8px; }
+.apm-strahler-input { width: 100%; box-sizing: border-box; font-size: 12px; padding: 3px 6px; }
+.apm-drain { margin-bottom: 8px; }
+/* DEV-OVERRIDE: developer-only premium banner. Remove with the override (see apm-ui.js). */
+.apm-dev-banner { background: #fff3cd; color: #5c4400; border: 1px solid #e0b400; border-radius: 4px; padding: 4px 8px; font-size: 12px; margin: 4px 0; }
+/* Phase 3 layout fix: number inputs must not overflow narrow (phone) panels. */
+.apm-field input { max-width: 100%; box-sizing: border-box; min-width: 0; }

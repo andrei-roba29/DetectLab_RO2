@@ -1,0 +1,37 @@
+id,lat,lon,period,start_year,end_year,type,accuracy_m,notes
+SYN-001,51.58346,-0.94465,Neolithic,4000 BC,3500 BC,settlement,50,synthetic
+SYN-002,51.55408,-0.97134,Neolithic,4000 BC,3500 BC,settlement,75,synthetic
+SYN-003,51.76208,-0.82554,Neolithic,4000 BC,3500 BC,settlement,10,synthetic
+SYN-004,51.68281,-0.66226,Neolithic,4000 BC,3500 BC,settlement,25,synthetic
+SYN-005,51.53945,-0.55570,Neolithic,4000 BC,3500 BC,settlement,25,synthetic
+SYN-006,51.72097,-0.99955,Neolithic,4000 BC,3500 BC,settlement,1000,synthetic
+SYN-007,51.73796,-0.72890,Neolithic,4000 BC,3500 BC,settlement,10,synthetic
+SYN-008,51.67936,-1.02922,Neolithic,4000 BC,3500 BC,settlement,50,synthetic
+SYN-009,51.44815,-0.84227,Bronze Age,2200 BC,1800 BC,settlement,25,synthetic
+SYN-010,51.57926,-1.00682,Bronze Age,2200 BC,1800 BC,settlement,10,synthetic
+SYN-011,51.44458,-1.01891,Bronze Age,2200 BC,1800 BC,settlement,75,synthetic
+SYN-012,51.48674,-0.50705,Bronze Age,2200 BC,1800 BC,settlement,25,synthetic
+SYN-013,51.58640,-0.82551,Bronze Age,2200 BC,1800 BC,settlement,250,synthetic
+SYN-014,51.54949,-0.70730,Bronze Age,2200 BC,1800 BC,settlement,75,synthetic
+SYN-015,51.53884,-0.61382,Bronze Age,2200 BC,1800 BC,settlement,75,synthetic
+SYN-016,51.70099,-0.72145,Bronze Age,2200 BC,1800 BC,settlement,10,synthetic
+SYN-017,51.74326,-0.72308,Iron Age,800 BC,50 BC,settlement,50,synthetic
+SYN-018,51.70446,-0.82667,Iron Age,800 BC,50 BC,settlement,50,synthetic
+SYN-019,51.42065,-0.81532,Iron Age,800 BC,50 BC,settlement,50,synthetic
+SYN-020,51.66487,-0.97868,Iron Age,800 BC,50 BC,settlement,50,synthetic
+SYN-021,51.65044,-0.61663,Iron Age,800 BC,50 BC,settlement,50,synthetic
+SYN-022,51.76796,-0.92434,Iron Age,800 BC,50 BC,settlement,75,synthetic
+SYN-023,51.54394,-0.72842,Iron Age,800 BC,50 BC,settlement,50,synthetic
+SYN-024,51.62557,-0.50655,Iron Age,800 BC,50 BC,settlement,250,synthetic
+SYN-025,51.48815,-1.07380,Roman,43,410,settlement,75,synthetic
+SYN-026,51.45895,-0.71543,Roman,43,410,settlement,50,synthetic
+SYN-027,51.50614,-0.98964,Roman,43,410,settlement,250,synthetic
+SYN-028,51.75623,-0.93896,Roman,43,410,settlement,75,synthetic
+SYN-029,51.59415,-0.56854,Roman,43,410,settlement,25,synthetic
+SYN-030,51.56708,-0.50917,Roman,43,410,settlement,10,synthetic
+SYN-031,51.59725,-0.54668,Roman,43,410,cemetery,10,synthetic
+SYN-032,51.67166,-0.50838,Roman,43,410,cemetery,25,synthetic
+SYN-033,51.41122,-0.60392,Roman,43,410,cemetery,25,synthetic
+SYN-034,51.71690,-0.70690,Early Medieval,500,1000,villa,10,synthetic
+SYN-035,51.73920,-0.54660,Early Medieval,500,1000,villa,75,synthetic
+SYN-036,51.62830,-0.66633,Early Medieval,500,1000,villa,50,synthetic

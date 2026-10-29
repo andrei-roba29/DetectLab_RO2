@@ -41,6 +41,7 @@
     <link rel="stylesheet" href="css/library-of-babel.css?v=20260917-babel-epochs">
     <link rel="stylesheet" href="css/tutorial.css?v=20261025-layer-glass">
     <link rel="stylesheet" href="css/offline-maps.css?v=20261025-layer-glass">
+    <link rel="stylesheet" href="css/next-gen-apm.css?v=20261029-apm-next-phase3">
     <style>
         /* PWA Specific Styles */
         body.is-pwa .nav-links {
@@ -5333,6 +5334,16 @@
          „Archeological Potential Sites": heatmap-ul de acolo e propriul raster de
          scoruri ancorat geografic, ca să nu alunece la zoom. -->
     <script src="js/leaflet-heat.js?v=20260916-analysis-dock"></script>
+    <!-- Next-Gen APM (MANUAL + TRAIN, Premium): js/apm-next/ holds the scoring core,
+         raster/polygon helpers, providers and the pipeline; apm-ui.js adds its
+         own floating button and panel. Independent of the legacy archeo layer. -->
+    <script src="js/apm-next/apm-core.js?v=20261029-apm-next-phase3"></script>
+    <script src="js/apm-next/apm-raster.js?v=20261029-apm-next-phase3"></script>
+    <script src="js/apm-next/apm-sites.js?v=20261029-apm-next-phase3"></script>
+    <script src="js/apm-next/apm-providers.js?v=20261029-apm-next-phase3"></script>
+    <script src="js/apm-next/apm-i18n.js?v=20261029-apm-next-phase3"></script>
+    <script src="js/apm-next/apm-pipeline.js?v=20261029-apm-next-phase3"></script>
+    <script src="js/apm-next/apm-ui.js?v=20261029-apm-next-phase3"></script>
     <script src="js/archeo-potential.js?v=20261020-3d-analysis-points"></script>
     <script src="js/lidar-geo.js?v=20260811-latlon"></script>
     <script src="js/lidar-scanner.js?v=20261020-3d-analysis-points"></script>
