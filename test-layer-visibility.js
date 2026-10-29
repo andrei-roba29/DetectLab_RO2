@@ -467,6 +467,57 @@ test('viewport filtering hides unavailable rows, removes decorative layer icons 
     assert.match(source, /mapBounds, def\.bounds/);
 });
 
+test('a degenerate viewport fails open instead of emptying the panel', () => {
+    // On Android a pinch could hand checkLayerVisibility bounds whose edges
+    // are NaN: intersects() is then false for EVERY layer, one completed
+    // pass hides all the rows, and the sticky viewport-filter-active tag
+    // keeps them hidden — the reported "layer panel fully transparent with
+    // no layers inside". Unusable bounds must abort the pass untouched.
+    // (setup() runs one pass itself, so the "fresh" map ships degenerate.)
+    const h = setup({ local: new MapMock(BANAT) });
+    assert.equal(highlighted(h, 'bucovinaRow'), false, 'a good pass hides rows outside BANAT');
+    assert.equal(highlighted(h, 'banatRow'), true, 'a good pass keeps rows inside BANAT');
+
+    h.local.bounds = { south: NaN, west: NaN, north: NaN, east: NaN, intersects: () => false };
+    assert.doesNotThrow(h.check, 'an unusable viewport never throws');
+    assert.equal(highlighted(h, 'bucovinaRow'), false,
+        'a broken pass never resurrects rows the last good pass hid');
+    assert.equal(highlighted(h, 'banatRow'), true,
+        'a broken pass hides nothing new — the previous visibility stands');
+
+    // The FIRST pass ever run against a broken viewport must leave the panel
+    // exactly as it shipped: rows visible, the filter never activated.
+    const broken = new MapMock(BANAT);
+    broken.bounds = { south: NaN, west: NaN, north: NaN, east: NaN, intersects: () => false };
+    const fresh = setup({ local: broken });
+    assert.equal(highlighted(fresh, 'bucovinaRow'), true,
+        'the first broken pass leaves every row visible');
+    assert.equal(fresh.row('transpPanel').classList.contains('viewport-filter-active'), false,
+        'the filter is never activated for an unusable viewport');
+});
+
+test('viewport bounds without a real intersects() method fail open too', () => {
+    // A restored PWA can expose a replacement _dlMap whose getBounds() is a
+    // lighter object: mapBounds.intersects throws inside every row check and
+    // isIntersecting()'s catch hid the panel one row at a time.
+    const broken = new MapMock(BANAT);
+    broken.getBounds = () => ({});
+    const h = setup({ local: broken });
+    assert.equal(highlighted(h, 'bucovinaRow'), true, 'no row is hidden without a real intersection method');
+    assert.equal(h.row('transpPanel').classList.contains('viewport-filter-active'), false,
+        'the filter stays off until a usable viewport arrives');
+    // ...and the next usable viewport filters normally again.
+    delete h.local.getBounds; // back to the real MapMock.getBounds
+    h.local.bounds = latLngBounds(BANAT);
+    h.check();
+    assert.equal(highlighted(h, 'bucovinaRow'), false, 'a later good pass filters as usual');
+});
+
+test('checkLayerVisibility validates the viewport before filtering anything', () => {
+    assert.match(source, /function viewportBoundsUsable\(b\)/);
+    assert.match(source, /if \(!viewportBoundsUsable\(mapBounds\)\) return;/);
+});
+
 test('PWA asset URLs are versioned together and pre-cached under a refreshed cache name', () => {
     const cssURL = html.match(/href="(css\/styles\.css\?v=[^"]+)"/)[1];
     const jsURL = html.match(/src="(js\/map-app\.js\?v=[^"]+)"/)[1];

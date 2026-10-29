@@ -816,7 +816,20 @@
 //   Premium tab where they used to be listed a second time. Cache bumped
 //   so an installed PWA picks up the module, the stylesheet and the panel
 //   markup; see UK_HERITAGE_LAYERS.md.
-const CACHE_NAME = 'detectlab-v294-historical-tile-fallback';
+// v295: Android zoom glitch + emptied layer panel. (1) Every map gesture
+//   (zoomstart/movestart/move/zoom/zoomend/moveend) toggles
+//   body.map-gesturing, which drops ALL backdrop-filters (and thickens the
+//   panel's two alpha stops to near-solid) for the gesture + settle window:
+//   each glass surface re-blurs its background on every composited frame,
+//   and a pinch animates hundreds of Sat60/WMS tiles under the glass UI at
+//   once — that per-frame re-blur was the GPU spike behind the reported
+//   screen glitching. (2) checkLayerVisibility validates the viewport
+//   bounds (finite edges, real intersects()) and skips the pass when they
+//   are unusable, so a NaN viewport can no longer hide every row and leave
+//   the panel transparent and empty. Re-tags css/styles.css,
+//   js/tile-perf.js and js/map-app.js; see MAP_LAYER_PERFORMANCE.md and
+//   LAYER_WINDOW_GLASS.md.
+const CACHE_NAME = 'detectlab-v295-android-zoom-glass';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1725,7 +1738,17 @@ const PRECACHE_URLS = [
   //   GetFeatureInfo fix so polygon/line answers open their record too.
   //   The two URLs below are the live ones index.html requests.
   'js/danish-layers.config.js?v=20261028-kulturarv-sublayers',
-  'js/danish-layers.js?v=20261028-kulturarv-sublayers'
+  'js/danish-layers.js?v=20261028-kulturarv-sublayers',
+  // v295: map gestures (zoom / pan / pinch) defrost every backdrop-filter
+  //   for the gesture + settle window (body.map-gesturing, toggled by
+  //   js/tile-perf.js) so the compositor stops re-blurring the whole glass
+  //   UI over the animating Sat60/WMS tile stacks on Android, and
+  //   checkLayerVisibility now fails open on an unusable viewport instead
+  //   of hiding every row of the layer panel. The three URLs below are the
+  //   live ones index.html requests.
+  'css/styles.css?v=20261029-android-zoom-glass',
+  'js/tile-perf.js?v=20261029-android-zoom-glass',
+  'js/map-app.js?v=20261029-android-zoom-glass'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──

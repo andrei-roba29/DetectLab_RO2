@@ -6339,6 +6339,39 @@
             transition: none !important;
         }
 
+        /* ── Map gesture performance (zoom / pan / pinch) ──
+           Exactly the cost the block above removes during the distance drag,
+           but for every map gesture: each backdrop-filter surface snapshots
+           and re-blurs its background on every composited frame, and a pinch
+           animates the whole map — with the Sat60/WMS stacks on, hundreds of
+           heavy tiles — under ~30 of those glass surfaces at once. On Android
+           that per-frame re-blur over the animating tiles is the GPU spike
+           behind the reported "whole screen starts glitching", and when the
+           compositor runs out of room the same surfaces are the ones that
+           stop painting — the layer panel turns "fully transparent" while
+           its rows and buttons are still in the DOM. js/tile-perf.js toggles
+           body.map-gesturing from the map's own gesture events and lifts it
+           after the settle window, so the glass is only plain for the frames
+           that matter; the two panel alpha stops go near-solid the same way
+           the distance drag does, keeping the window readable without the
+           blur. The universal rule also covers the hard-coded blur() rules
+           (search bar, legend, tooltip, dock …) that do not read
+           --ctl-blur. The zoom TRANSITIONS themselves are left alone: the
+           animation is the feature, only its backdrop work is dropped. */
+        body.map-gesturing .transp-panel {
+            --panel-top-alpha: 0.92;
+            --panel-bottom-alpha: 0.94;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            box-shadow: -10px 0 40px rgba(0,0,0,0.55) !important;
+        }
+        body.map-gesturing *,
+        body.map-gesturing *::before,
+        body.map-gesturing *::after {
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+        }
+
         /* The distance slider lives inside the vertically scrollable layer
            panel. With the default touch-action the browser has to wait and see
            whether a touch that starts on the thumb is going to become a panel

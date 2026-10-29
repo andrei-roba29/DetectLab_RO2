@@ -158,7 +158,16 @@
         // must stay out.
         fadeAnimation: LOW_POWER ? false : null,
         // Show the one-time "too many layers" notice in conservation mode.
-        notice: true
+        notice: true,
+        // Defrost every backdrop-filter for the duration of a map gesture
+        // (§7a). Each glass surface snapshots and re-blurs whatever is behind
+        // it on EVERY composited frame, and a pinch/wheel zoom animates the
+        // whole map — hundreds of heavy tiles — under the whole glass UI at
+        // once. That per-frame re-blur is the GPU spike Android reported as
+        // "the screen starts glitching" while the Sat60/WMS layers are on.
+        // Low-power devices only by default; override with
+        // window.DLTILE_PERF = { gestureGlassOff: true|false }.
+        gestureGlassOff: LOW_POWER
     };
 
     var CFG = {};
@@ -194,7 +203,10 @@
         conservation: false,
         noticeShown: false,
         stats: null,
-        tick: null
+        tick: null,
+        // body.map-gesturing is currently applied / the timer that lifts it.
+        glassAdded: false,
+        glassTimer: null
     };
 
     function now() {
@@ -675,6 +687,58 @@
         }, 7000);
     }
 
+    /* ── 7a. Map gestures drop the glass (see § header) ───────────────────── */
+
+    // How long the surfaces stay defrosted after the LAST map event: the
+    // settle window (quietMs) + the CSS tile fade (fadeMs) + a margin, so
+    // the settle-window tile pop-in also happens without a re-blur burst.
+    function glassGraceMs() {
+        return (CFG.quietMs || 0) + (CFG.fadeMs || 0) + 120;
+    }
+
+    // The check runs slightly AFTER the staleness threshold, so a timer that
+    // fires a hair early still lifts the class instead of re-arming.
+    function glassArmMs() {
+        return glassGraceMs() + 60;
+    }
+
+    // Called from activity() on every gesture event (zoomstart / movestart /
+    // zoomanim / move / zoom / zoomend / moveend — a pinch fires them all).
+    function glassGestureEvent() {
+        if (!CFG.gestureGlassOff) return;
+        if (!STATE.glassAdded) {
+            try {
+                if (!document.body || !document.body.classList) return;
+                document.body.classList.add('map-gesturing');
+                STATE.glassAdded = true;
+            } catch (err) {
+                // No body / no classList: the glass simply stays frosted.
+                STATE.glassAdded = false;
+                return;
+            }
+        }
+        // Self-healing timer: it is re-armed by every event, so if the
+        // event chain is ever cut short (the historical ReferenceError
+        // between zoomend and moveend) the class still lifts on its own.
+        if (STATE.glassTimer) clearTimeout(STATE.glassTimer);
+        STATE.glassTimer = setTimeout(glassGestureCheck, glassArmMs());
+    }
+
+    function glassGestureCheck() {
+        STATE.glassTimer = null;
+        if (!STATE.glassAdded) return;
+        if (now() - STATE.lastGestureAt < glassGraceMs()) {
+            STATE.glassTimer = setTimeout(glassGestureCheck, glassArmMs());
+            return;
+        }
+        try {
+            if (document.body && document.body.classList) {
+                document.body.classList.remove('map-gesturing');
+            }
+        } catch (err) { /* cosmetic */ }
+        STATE.glassAdded = false;
+    }
+
     /* ── 7. Map wiring ────────────────────────────────────────────────────── */
 
     function attach(map) {
@@ -682,7 +746,7 @@
         map._dltilePerfAttached = true;
         STATE.map = map;
 
-        function activity() { STATE.lastGestureAt = now(); }
+        function activity() { STATE.lastGestureAt = now(); glassGestureEvent(); }
 
         map.on('zoomstart', function () {
             STATE.zooming = true;
@@ -754,7 +818,7 @@
     /* ── 8. Public API ────────────────────────────────────────────────────── */
 
     var api = {
-        version: '20260918-tile-seamless',
+        version: '20261029-android-zoom-glass',
         config: CFG,
         conservationLimits: CONSERVATION,
         isLowPowerDevice: function () { return !!CFG.lowPower; },

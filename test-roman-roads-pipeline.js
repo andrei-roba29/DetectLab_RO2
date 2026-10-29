@@ -42,7 +42,7 @@ const workerSrc = read('js/roman-roads-worker.js');
 /* The roads' own assets were last touched by the roads work; map-app.js was
  * re-tagged since — most recently by the collapsible ArcGIS base-map list. */
 const VERSION_TAG = '20261015-roman-roads';
-const MAP_APP_TAG = '20261026-lidar-whole-or-disc';
+const MAP_APP_TAG = '20261029-android-zoom-glass';
 console.log('[Test] Roman roads — worker parser, canvas layer, no per-segment DOM...');
 
 /* ── 1. wiring ─────────────────────────────────────────────────────────────

@@ -13950,6 +13950,25 @@
                     }
                 }
 
+                // A viewport whose edges are not finite (a pinch that collapsed
+                // into NaN coordinates, a map mid-teardown) makes intersects()
+                // return false for EVERY layer: one completed pass would hide
+                // every row, tag the panel viewport-filter-active, and the
+                // "no usable bounds" early returns below would then keep it
+                // that way — the panel the user sees emptied out. Bounds with
+                // no usable intersection method at all (a replacement _dlMap
+                // exposing a lighter object) failed the same way, one row at a
+                // time through isIntersecting()'s catch. Such bounds are
+                // UNUSABLE: skip the pass untouched (fail open) and keep the
+                // last known visibility instead of emptying the window.
+                function viewportBoundsUsable(b) {
+                    if (!b || typeof b.intersects !== 'function') return false;
+                    try {
+                        return isFinite(boundsEdge(b, 'south')) && isFinite(boundsEdge(b, 'north')) &&
+                            isFinite(boundsEdge(b, 'west')) && isFinite(boundsEdge(b, 'east'));
+                    } catch (e) { return false; }
+                }
+
                 function setViewportAvailability(row, available) {
                     if (!row) return;
                     row.classList.toggle('viewport-layer-unavailable', !available);
@@ -13981,6 +14000,7 @@
                     var mapBounds;
                     try { mapBounds = activeMap.getBounds(); } catch(e) { return; }
                     if (!mapBounds) return;
+                    if (!viewportBoundsUsable(mapBounds)) return;
 
                     var allDefs = layerDefs.concat(internationalLayerDefs);
                     var groupVisible = { hist: false, lidar: false, roman: false, histPremium: false, vegfp: false };

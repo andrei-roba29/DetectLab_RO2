@@ -233,8 +233,20 @@ function makeSandbox(opts) {
 
     const created = [];
     const bodyChildren = [];
+    const bodyClasses = new Set();
     const documentStub = {
         body: {
+            // body.map-gesturing (§12) needs a real classList to observe.
+            classList: {
+                add: function (name) { bodyClasses.add(name); },
+                remove: function (name) { bodyClasses.delete(name); },
+                contains: function (name) { return bodyClasses.has(name); },
+                toggle: function (name, on) {
+                    if (on === undefined) on = !bodyClasses.has(name);
+                    if (on) bodyClasses.add(name); else bodyClasses.delete(name);
+                    return on;
+                }
+            },
             appendChild: function (el) { bodyChildren.push(el); el.parentNode = documentStub.body; },
             removeChild: function (el) { const i = bodyChildren.indexOf(el); if (i !== -1) bodyChildren.splice(i, 1); }
         },
@@ -671,6 +683,62 @@ check('a touch device with little memory is detected without any override',
     fl._tileReady({ x: 2, y: 2, z: 13 }, new Error('404'), brokenEl);
     check('a failed tile still goes through Leaflet\'s own path',
         fl._tiles['2:2:13'].active === true && (fl.tileErrors || 0) === 1);
+
+    /* ══════════════════════════════════════════════════════════════════════
+     * 12. Map gestures defrost the glass (Android zoom glitch)
+     * ══════════════════════════════════════════════════════════════════════ */
+    console.log('\n[12] Gestures drop every backdrop-filter for the gesture + settle');
+
+    check('the governor owns the gesture class (arm + lift)',
+        /gestureGlassOff:\s*LOW_POWER/.test(tilePerfSrc) &&
+        /classList\.add\('map-gesturing'\)/.test(tilePerfSrc) &&
+        /classList\.remove\('map-gesturing'\)/.test(tilePerfSrc));
+    check('every map event arms it through the shared activity() hook',
+        /function activity\(\) \{ STATE\.lastGestureAt = now\(\); glassGestureEvent\(\); \}/.test(tilePerfSrc));
+    check('the lift timer self-heals when the event chain is cut',
+        /now\(\) - STATE\.lastGestureAt < glassGraceMs\(\)/.test(tilePerfSrc));
+    check('styles.css defrosts every glass surface while the gesture runs',
+        /body\.map-gesturing \*[\s\S]{0,160}backdrop-filter:\s*none\s*!important/.test(stylesCss) &&
+        /body\.map-gesturing \*::after[\s\S]{0,120}-webkit-backdrop-filter:\s*none\s*!important/.test(stylesCss));
+    check('the panel thickens its two alpha stops instead (readable without the blur)',
+        /body\.map-gesturing \.transp-panel\s*\{[^}]*--panel-top-alpha:\s*0\.92[^}]*--panel-bottom-alpha:\s*0\.94/s
+            .test(stylesCss));
+
+    // A low-power (Android-class) device: the class rides the gesture and
+    // lifts itself once the settle window is over.
+    const glass = makeSandbox({ lowPower: true });
+    glass.sandbox.window.DLTilePerf.attach(glass.map);
+    glass.map.fire('zoomstart');
+    check('a zoom defrosts the glass on a low-power device',
+        glass.documentStub.body.classList.contains('map-gesturing'));
+    glass.map.fire('zoomend');
+    glass.map.fire('moveend');
+    await wait(650); // grace = quiet 40 + fade 180 + margin, + slack
+    check('the glass comes back after the settle window',
+        !glass.documentStub.body.classList.contains('map-gesturing'));
+
+    // A gesture whose end events never arrive (the historical cut chain)
+    // still lifts the class on its own.
+    const cut = makeSandbox({ lowPower: true });
+    cut.sandbox.window.DLTilePerf.attach(cut.map);
+    cut.map.fire('movestart');
+    check('a pan defrosts the glass too',
+        cut.documentStub.body.classList.contains('map-gesturing'));
+    await wait(650);
+    check('a cut event chain still lifts the class by itself',
+        !cut.documentStub.body.classList.contains('map-gesturing'));
+
+    // Desktop keeps its frosted glass unless the knob asks for it.
+    const frosted = makeSandbox({ lowPower: false });
+    frosted.sandbox.window.DLTilePerf.attach(frosted.map);
+    frosted.map.fire('zoomstart');
+    check('desktop keeps its glass frosted during gestures',
+        !frosted.documentStub.body.classList.contains('map-gesturing'));
+    const forced = makeSandbox({ lowPower: false, perf: { gestureGlassOff: true } });
+    forced.sandbox.window.DLTilePerf.attach(forced.map);
+    forced.map.fire('zoomstart');
+    check('...but DLTILE_PERF.gestureGlassOff can force it on anywhere',
+        forced.documentStub.body.classList.contains('map-gesturing'));
 
     /* ══════════════════════════════════════════════════════════════════════ */
     console.log('\n' + (checks - failures) + '/' + checks + ' checks passed');
