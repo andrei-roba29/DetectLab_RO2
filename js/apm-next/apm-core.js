@@ -666,8 +666,91 @@
         return { relief: r, water: wa, soil: s };
     }
 
+    /* ── User input validation (MANUAL / TRAIN UI) ─────────────────────────── */
+    var RADIUS_KM = { min: 1, max: 10, def: 5 };
+
+    /** Search radius: 1–10 km. Returns the number or throws a user-readable error. */
+    function validateRadiusKm(v) {
+        var n = typeof v === 'string' ? parseFloat(v) : v;
+        if (!(typeof n === 'number' && isFinite(n) && n >= RADIUS_KM.min && n <= RADIUS_KM.max)) {
+            throw new Error('Radius must be between ' + RADIUS_KM.min + ' and ' + RADIUS_KM.max + ' km.');
+        }
+        return n;
+    }
+
+    /** Valid x-range and label key for each curve the user can edit. */
+    var CURVE_SPECS = {
+        slope:          { xMin: 0, xMax: 90,   xLabel: 'degrees' },
+        altitude:       { xMin: 0, xMax: 1,    xLabel: 'percentile' },
+        aspectDeviation:{ xMin: 0, xMax: 180,  xLabel: 'degrees' },
+        soil:           { xMin: 0, xMax: 1,    xLabel: 'percentile' },
+        water_small:    { xMin: 0, xMax: 1e5,  xLabel: 'metres' },
+        water_medium:   { xMin: 0, xMax: 1e5,  xLabel: 'metres' },
+        water_large:    { xMin: 0, xMax: 1e5,  xLabel: 'metres' },
+        water_artificial: { xMin: 0, xMax: 1e5, xLabel: 'metres' }
+    };
+
+    /**
+     * Parse "x, y" lines (comma, semicolon or whitespace separated; '#' starts a comment).
+     * Returns { points, errors } — points is [[x,y],…] for the valid lines, errors lists line numbers.
+     */
+    function parseCurveText(text) {
+        var points = [], errors = [];
+        String(text || '').split(/\r?\n/).forEach(function (raw, idx) {
+            var line = raw.replace(/#.*$/, '').trim();
+            if (!line) return;
+            var parts = line.split(/[,;\s]+/).filter(Boolean);
+            var x = Number(parts[0]), y = Number(parts[1]);
+            if (parts.length !== 2 || !isFinite(x) || !isFinite(y)) errors.push('line ' + (idx + 1) + ': expected "x, y"');
+            else points.push([x, y]);
+        });
+        return { points: points, errors: errors };
+    }
+
+    /** Check one curve: at least two points, x strictly ascending within the spec range, y in [0, 1]. */
+    function validateCurve(points, spec) {
+        var errs = [];
+        if (!Array.isArray(points) || points.length < 2) return ['needs at least two points'];
+        for (var i = 0; i < points.length; i++) {
+            var p = points[i];
+            if (!(Array.isArray(p) && p.length === 2 && isFinite(p[0]) && isFinite(p[1]))) { errs.push('point ' + (i + 1) + ' is not a number pair'); continue; }
+            if (spec && (p[0] < spec.xMin || p[0] > spec.xMax)) errs.push('x=' + p[0] + ' is outside ' + spec.xMin + '–' + spec.xMax);
+            if (p[1] < 0 || p[1] > 1) errs.push('y=' + p[1] + ' must be between 0 and 1');
+            if (i > 0 && !(p[0] > points[i - 1][0])) errs.push('x must increase (point ' + (i + 1) + ')');
+        }
+        return errs;
+    }
+
+    /** Validate a full curve set (same shape as DEFAULT_CURVES). Returns { curves, errors:{name:[msgs]} }. */
+    function validateCurves(curves) {
+        var errors = {}, ok = true;
+        function check(name, pts) {
+            var e = validateCurve(pts, CURVE_SPECS[name]);
+            if (e.length) { errors[name] = e; ok = false; }
+        }
+        check('slope', curves.slope);
+        check('altitude', curves.altitude);
+        check('aspectDeviation', curves.aspectDeviation);
+        check('soil', curves.soil);
+        WATER_CLASSES.forEach(function (c) { check('water_' + c, curves.water && curves.water[c]); });
+        if (!ok) return { curves: null, errors: errors };
+        return {
+            curves: {
+                slope: curves.slope, altitude: curves.altitude, aspectDeviation: curves.aspectDeviation, soil: curves.soil,
+                water: WATER_CLASSES.reduce(function (acc, c) { acc[c] = curves.water[c]; return acc; }, {})
+            },
+            errors: {}
+        };
+    }
+
     return {
         CLASSES: CLASSES,
+        RADIUS_KM: RADIUS_KM,
+        CURVE_SPECS: CURVE_SPECS,
+        validateRadiusKm: validateRadiusKm,
+        parseCurveText: parseCurveText,
+        validateCurve: validateCurve,
+        validateCurves: validateCurves,
         MANUAL_THRESHOLDS: MANUAL_THRESHOLDS,
         WATER_CLASSES: WATER_CLASSES,
         DEFAULT_CURVES: DEFAULT_CURVES,

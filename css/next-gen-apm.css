@@ -87,3 +87,69 @@
 .apm-warnings[hidden] { display: none; }
 .apm-note { font-size: 11px; opacity: 0.6; margin-top: 10px; }
 .apm-popup { font: 12px/1.4 'Outfit', system-ui, sans-serif; }
+
+/* ── Phase 1 additions: switch, gate, mode tabs, point, curves, TRAIN, legend, diagnostics, debug ── */
+.apm-panel [hidden] { display: none !important; }
+.apm-fab-off { opacity: 0.6; }
+.apm-head-right { display: flex; align-items: center; gap: 6px; }
+.apm-switch {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 4px;
+    border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.06);
+    color: inherit; font: inherit; font-size: 12px; cursor: pointer;
+}
+.apm-switch-knob {
+    position: relative; width: 30px; height: 16px; border-radius: 999px; background: rgba(255, 255, 255, 0.25);
+    transition: background 0.2s ease;
+}
+.apm-switch-knob::after {
+    content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%;
+    background: #fff; transition: transform 0.2s ease;
+}
+.apm-switch[aria-checked="true"] .apm-switch-knob { background: #2e9e4f; }
+.apm-switch[aria-checked="true"] .apm-switch-knob::after { transform: translateX(14px); }
+.apm-gate {
+    margin: 8px 0; padding: 8px 10px; border-radius: 10px; font-size: 12px;
+    background: rgba(255, 165, 0, 0.14); border: 1px solid rgba(255, 165, 0, 0.45);
+}
+.apm-controls.apm-disabled { opacity: 0.5; pointer-events: none; }
+.apm-tabs { display: flex; gap: 6px; margin: 6px 0; }
+.apm-tab {
+    flex: 1; padding: 6px 8px; border-radius: 9px; border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.06); color: inherit; font: inherit; font-weight: 600; cursor: pointer;
+}
+.apm-tab[aria-pressed="true"] { background: #89cff0; border-color: #89cff0; color: #0d1620; }
+.apm-group-title { font-weight: 600; font-size: 12px; margin: 4px 0; }
+.apm-point { font-size: 12px; margin: 6px 0; opacity: 0.9; }
+.apm-btn.apm-wide { width: 100%; }
+.apm-btn.apm-small { padding: 4px 8px; font-size: 12px; }
+.apm-btn[aria-pressed="true"] { background: #89cff0; color: #0d1620; border-color: #89cff0; }
+.apm-curves { font-size: 12px; }
+.apm-curve-block { margin: 8px 0; }
+.apm-curve-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 4px; }
+.apm-curve {
+    width: 100%; box-sizing: border-box; font: 12px/1.35 ui-monospace, Menlo, Consolas, monospace;
+    padding: 6px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.05); color: inherit; resize: vertical;
+}
+.apm-curve:disabled { opacity: 0.5; }
+.apm-note { font-size: 11px; opacity: 0.7; margin: 4px 0; }
+.apm-file-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.apm-file { font-size: 11px; max-width: 100%; }
+.apm-file-btn { cursor: pointer; }
+.apm-select {
+    grid-column: 2; width: 100%; padding: 4px 6px; border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(18, 24, 32, 0.9); color: inherit;
+}
+.apm-legend {
+    background: rgba(18, 24, 32, 0.88); color: #f2f4f7; padding: 8px 10px; border-radius: 10px;
+    font: 12px/1.4 'Outfit', system-ui, sans-serif; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+.apm-legend-title { font-weight: 600; margin-bottom: 4px; }
+.apm-legend-row { display: flex; align-items: center; gap: 8px; margin: 2px 0; }
+.apm-row-diag { grid-template-columns: 1fr auto; }
+.apm-diag h4 { margin: 10px 0 4px; font-size: 12px; }
+.apm-debug-list { max-height: 180px; overflow: auto; margin-top: 6px; font: 11px/1.3 ui-monospace, Menlo, Consolas, monospace; }
+.apm-debug-row { display: grid; grid-template-columns: 40px 56px 1fr; gap: 6px; padding: 2px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.apm-debug-bad { color: #ff8a80; }
+.apm-debug-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; grid-column: 3; }
+.apm-debug-hint { grid-column: 1 / -1; opacity: 0.85; }

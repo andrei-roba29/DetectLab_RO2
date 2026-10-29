@@ -25,9 +25,14 @@
     /* ── Configuration (edit here; nothing else needs changing to swap a source) ─ */
     var CONFIG = {
         euDem: {
-            // Service root as given in the brief. ArcGIS publishes WCS under <service>/WCSServer.
-            // Candidate, not verified: https://image.discomap.eea.europa.eu/arcgis/services/GioLandPublic/DEM/MapServer/WCSServer
-            wcsEndpoint: 'https://image.discomap.eea.europa.eu/arcgis/services/GioLandPublic/DEM/MapServer/WCSServer',
+            // EU-DEM v1.1 (EEA, 25 m). The service path is verified from EEA's catalogue: the WMS
+            // endpoint .../Elevation/EUElev_DEM_V11/MapServer/WMSServer exposes layer DEM_v11_Masked2,
+            // and the WCS sits on the same service. The WCS endpoint itself is NOT verified from here:
+            // the code tries each candidate in order and logs the outcome in debug mode.
+            wcsEndpoints: [
+                'https://image.discomap.eea.europa.eu/arcgis/services/Elevation/EUElev_DEM_V11/MapServer/WCSServer',
+                'https://copernicus.discomap.eea.europa.eu/arcgis/services/Elevation/EUElev_DEM_V11/MapServer/WCSServer'
+            ],
             coverageMatch: /dem/i,      // coverage id is discovered from GetCapabilities, not guessed
             nominalResM: 25,
             tilePx: 1000
@@ -131,16 +136,55 @@
         }).catch(function () {});
     }
 
+    /* ── Debug mode: one record per request (URL, status, timing) ───────── */
+    var debugOn = false, debugLog = [], debugListeners = [];
+    var DEBUG_LOG_MAX = 500;
+    function setDebug(on) { debugOn = !!on; return debugOn; }
+    function isDebug() { return debugOn; }
+    function onDebug(fn) { if (typeof fn === 'function') debugListeners.push(fn); }
+    function getDebugLog() { return debugLog.slice(); }
+    function clearDebugLog() { debugLog = []; }
+    function logRequest(rec) {
+        if (!debugOn) return;
+        debugLog.push(rec);
+        if (debugLog.length > DEBUG_LOG_MAX) debugLog.shift();
+        if (typeof console !== 'undefined' && console.debug) {
+            console.debug('[APM] ' + rec.method + ' ' + rec.url + ' → ' +
+                (rec.status != null ? rec.status : rec.error) + ' (' + rec.ms + ' ms)' +
+                (rec.hint ? ' — ' + rec.hint : ''));
+        }
+        debugListeners.forEach(function (fn) { try { fn(rec); } catch (e) { /* listener errors must not break fetches */ } });
+    }
+    // Debug is switched on with ?apmDebug=1 in the page URL or localStorage.apmDebug = '1'.
+    try {
+        if (typeof location !== 'undefined' && /[?&]apmDebug=1\b/.test(location.search)) debugOn = true;
+        if (typeof localStorage !== 'undefined' && localStorage.getItem('apmDebug') === '1') debugOn = true;
+    } catch (e) { /* storage may be blocked */ }
+
+    function nowMs() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
+
     /** Cached, rate-limited GET/POST. Returns Response-like result; throws on HTTP error. */
     function httpFetch(url, init, opts) {
         opts = opts || {};
+        var method = (init && init.method) || 'GET';
         var host = (function () { try { return new URL(url).host; } catch (e) { return 'local'; } })();
         var target = CONFIG.proxyPrefix && opts.viaProxy ? CONFIG.proxyPrefix + encodeURIComponent(url) : url;
         return schedule(host, function () {
             if (!fetchImpl) throw new Error('fetch is not available in this environment.');
+            var t0 = nowMs();
             return fetchImpl(target, init).then(function (res) {
+                var ms = Math.round(nowMs() - t0);
+                logRequest({ time: new Date().toISOString(), method: method, url: target, status: res.status, ok: res.ok, ms: ms,
+                    contentType: res.headers && res.headers.get ? res.headers.get('content-type') : null });
                 if (!res.ok) throw new Error('HTTP ' + res.status + ' from ' + host);
                 return res;
+            }, function (err) {
+                // Browsers report CORS failures and network errors as a bare TypeError with no detail.
+                var ms = Math.round(nowMs() - t0);
+                logRequest({ time: new Date().toISOString(), method: method, url: target, status: null, ok: false, ms: ms,
+                    error: (err && err.name) + ': ' + (err && err.message),
+                    hint: 'no HTTP response: network failure or CORS block (see the browser Network tab)' });
+                throw err;
             });
         }, opts.rate);
     }
@@ -233,15 +277,26 @@
             coversLonLat: inEea39Approx,
             discover: function () {
                 if (euDemCoverage) return Promise.resolve(euDemCoverage);
-                var url = CONFIG.euDem.wcsEndpoint + '?service=WCS&version=2.0.1&request=GetCapabilities';
-                return httpFetch(url, {}, { rate: { concurrency: 1, minIntervalMs: 500 } })
-                    .then(function (r) { return r.text(); })
-                    .then(function (xml) {
-                        var ids = parseWcsCoverageIds(xml).filter(function (id) { return CONFIG.euDem.coverageMatch.test(id); });
-                        if (!ids.length) throw new Error('EU-DEM coverage not found in WCS GetCapabilities.');
-                        euDemCoverage = { id: ids[0], all: ids };
-                        return euDemCoverage;
+                // Try each candidate endpoint in order; keep the first that lists an EU-DEM coverage.
+                var errors = [];
+                return CONFIG.euDem.wcsEndpoints.reduce(function (p, endpoint) {
+                    return p.then(function (found) {
+                        if (found) return found;
+                        var url = endpoint + '?service=WCS&version=2.0.1&request=GetCapabilities';
+                        return httpFetch(url, {}, { rate: { concurrency: 1, minIntervalMs: 500 } })
+                            .then(function (r) { return r.text(); })
+                            .then(function (xml) {
+                                var ids = parseWcsCoverageIds(xml).filter(function (id) { return CONFIG.euDem.coverageMatch.test(id); });
+                                if (!ids.length) throw new Error('no EU-DEM coverage in GetCapabilities');
+                                return { id: ids[0], all: ids, endpoint: endpoint };
+                            })
+                            .catch(function (e) { errors.push(endpoint + ' — ' + e.message); return null; });
                     });
+                }, Promise.resolve(null)).then(function (found) {
+                    if (!found) throw new Error('EU-DEM WCS unavailable. Tried: ' + errors.join('; '));
+                    euDemCoverage = found;
+                    return found;
+                });
             },
             fetchBlock: function (grid) {
                 var self = this;
@@ -258,7 +313,7 @@
                         'subset=' + encodeURIComponent('Long(' + w + ',' + e + ')'),
                         'scalesize=' + encodeURIComponent('i(' + grid.w + '),j(' + grid.h + ')')
                     ];
-                    return httpFetch(CONFIG.euDem.wcsEndpoint + '?' + q.join('&'), {}, { rate: { concurrency: 2, minIntervalMs: 300 } })
+                    return httpFetch(cov.endpoint + '?' + q.join('&'), {}, { rate: { concurrency: 2, minIntervalMs: 300 } })
                         .then(function (r) { return r.arrayBuffer(); })
                         .then(decodeGeoTiffFloat);
                 });
@@ -382,21 +437,29 @@
      * Returns [{ id, name, cls, role }]; role = 'lines' | 'polygon' | 'inland' | 'drainage'.
      */
     function resolveEuHydroLayers(serviceJson) {
-        var layers = (serviceJson && serviceJson.layers) || [];
-        var out = [];
+        var layers = ((serviceJson && serviceJson.layers) || []).slice().sort(function (a, b) { return a.id - b.id; });
+        var out = [], seen = {};
         layers.forEach(function (l) {
             var name = String(l.name || '');
             var subs = l.subLayerIds || [];
-            if (/drainage/i.test(name)) { out.push({ id: l.id, name: name, cls: null, role: 'drainage', group: subs.length > 0 }); return; }
             if (subs.length) return;                                    // group layer: its leaves are handled below
-            var order = (name.match(/strahler\D*(\d+)/i) || [])[1];
-            if (/river_?net_?lines?/i.test(name) || (l.parentLayerId >= 0 && /strahler/i.test(name))) {
-                out.push({ id: l.id, name: name, cls: strahlerToClass(order ? Number(order) : null), order: order ? Number(order) : null, role: 'lines' });
-            } else if (/river_?net_?polygon/i.test(name)) {
+            // EU-Hydro publishes the same names at two scale ranges (e.g. "Strahler 6" as ids 10 and 15,
+            // "InlandWater" as ids 2 and 3). Querying both would double-count, so keep the lowest id per name.
+            var key = name.toLowerCase();
+            if (seen[key]) return;
+            var order = (name.match(/^strahler\s*(\d+)$/i) || [])[1];
+            if (order != null) {
+                seen[key] = true;
+                out.push({ id: l.id, name: name, cls: strahlerToClass(Number(order)), order: Number(order), role: 'lines' });
+            } else if (/^river_?net_?polygon$/i.test(name)) {
+                seen[key] = true;
                 out.push({ id: l.id, name: name, cls: 'large', role: 'polygon' });
-            } else if (/inland.?water/i.test(name)) {
+            } else if (/^inlandwater$/i.test(name)) {
+                seen[key] = true;
                 out.push({ id: l.id, name: name, cls: 'large', role: 'inland' });
             }
+            // Coastal_polygon (sea), Transit_polygon (transitional waters) and the Drainage Network
+            // (public beta, catchment model) are not inland-water inputs and are left out.
         });
         return out;
     }
@@ -623,6 +686,13 @@
 
     return {
         CONFIG: CONFIG,
+        setFetch: function (fn) { fetchImpl = fn; },
+        setDebug: setDebug,
+        isDebug: isDebug,
+        onDebug: onDebug,
+        getDebugLog: getDebugLog,
+        clearDebugLog: clearDebugLog,
+        getDemEndpoint: function () { return euDemCoverage ? euDemCoverage.endpoint : null; },
         inEea39Approx: inEea39Approx,
         cacheGet: cacheGet,
         cacheSet: cacheSet,

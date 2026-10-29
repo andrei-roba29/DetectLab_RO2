@@ -23,16 +23,25 @@ const RBush = require('./js/rbush.min.js');
 
 let passed = 0, failed = 0;
 const failures = [];
+// Async tests run one after another (they share the providers' fetch stub and scheduler); the
+// summary waits for the queue to drain.
+let asyncChain = Promise.resolve();
 function test(name, fn) {
     try {
         const r = fn();
         if (r && typeof r.then === 'function') {
-            return r.then(() => { passed++; console.log('  ok  ' + name); }, (e) => { failed++; failures.push(name); console.log('  FAIL ' + name + '\n       ' + e.message); });
+            asyncChain = asyncChain.then(() => r).then(() => { passed++; console.log('  ok  ' + name); }, (e) => { failed++; failures.push(name); console.log('  FAIL ' + name + '\n       ' + e.message); });
+            return;
         }
         passed++; console.log('  ok  ' + name);
     } catch (e) {
         failed++; failures.push(name); console.log('  FAIL ' + name + '\n       ' + e.message);
     }
+}
+
+// Deferred: the body runs only when every earlier async test has finished.
+function testAsync(name, fn) {
+    asyncChain = asyncChain.then(() => fn()).then(() => { passed++; console.log('  ok  ' + name); }, (e) => { failed++; failures.push(name); console.log('  FAIL ' + name + '\n       ' + e.message); });
 }
 
 function rng(seed) {                       // mulberry32
@@ -347,27 +356,74 @@ test('CSV without coordinates is rejected with a clear error', () => {
 /* ── 6. Providers: parsing and URL building (no network) ────────────────── */
 console.log('Providers (parsers and query builders; live endpoints not exercised)');
 
-test('EU-Hydro layer resolution reads names and ids from service JSON (fixture)', () => {
-    // FIXTURE: a synthetic layer list shaped like an ArcGIS MapServer ?f=json response.
+test('EU-Hydro layer resolution uses the real service layer list, one layer per name', () => {
+    // FIXTURE: layer list copied from the live EU-Hydro MapServer ?f=json response
+    // (https://image.discomap.eea.europa.eu/arcgis/rest/services/EUHydro/EUHydro_RiverNetworkDatabase/MapServer).
+    const L = (id, name, parentLayerId, subLayerIds) => ({ id, name, parentLayerId, subLayerIds: subLayerIds || null });
     const fixture = {
         layers: [
-            { id: 0, name: 'River_Net_lines', parentLayerId: -1, subLayerIds: [1, 2, 3] },
-            { id: 1, name: 'Strahler 1', parentLayerId: 0, subLayerIds: null },
-            { id: 2, name: 'Strahler 3', parentLayerId: 0, subLayerIds: null },
-            { id: 3, name: 'Strahler 6', parentLayerId: 0, subLayerIds: null },
-            { id: 4, name: 'River_Net_polygon', parentLayerId: -1, subLayerIds: null },
-            { id: 5, name: 'InlandWater', parentLayerId: -1, subLayerIds: null },
-            { id: 6, name: 'Drainage Network (Public Beta)', parentLayerId: -1, subLayerIds: null }
+            L(0, 'Coastal_polygon', -1), L(1, 'Transit_polygon', -1), L(2, 'InlandWater', -1), L(3, 'InlandWater', -1),
+            L(4, 'River_Net_lines', -1, [5, 6, 7, 8, 9, 10, 11, 12, 13]),
+            L(5, 'Strahler 1', 4), L(6, 'Strahler 2', 4), L(7, 'Strahler 3', 4), L(8, 'Strahler 4', 4), L(9, 'Strahler 5', 4),
+            L(10, 'Strahler 6', 4), L(11, 'Strahler 7', 4), L(12, 'Strahler 8', 4), L(13, 'Strahler 9', 4),
+            L(14, 'River_Net_lines', -1, [15, 16, 17, 18]),
+            L(15, 'Strahler 6', 14), L(16, 'Strahler 7', 14), L(17, 'Strahler 8', 14), L(18, 'Strahler 9', 14),
+            L(19, 'River_Net_polygon', -1), L(20, 'Drainage Network - Public Beta', -1)
         ]
     };
     const ls = prov.resolveEuHydroLayers(fixture);
-    const byName = Object.fromEntries(ls.map((l) => [l.name, l]));
-    assert.strictEqual(byName['Strahler 1'].cls, 'small');
-    assert.strictEqual(byName['Strahler 3'].cls, 'medium');
-    assert.strictEqual(byName['Strahler 6'].cls, 'large');
-    assert.strictEqual(byName['River_Net_polygon'].cls, 'large');
-    assert.strictEqual(byName['InlandWater'].role, 'inland');
-    assert.strictEqual(byName['Drainage Network (Public Beta)'].role, 'drainage');
+    const ids = ls.map((l) => l.id);
+    // Each scale-duplicate is dropped (lowest id kept): InlandWater 2 (not 3), Strahler 6–9 from group 4 (ids 10–13, not 15–18).
+    assert.deepStrictEqual(ids, [2, 5, 6, 7, 8, 9, 10, 11, 12, 13, 19]);
+    const byId = Object.fromEntries(ls.map((l) => [l.id, l]));
+    assert.strictEqual(byId[5].cls, 'small');    // Strahler 1
+    assert.strictEqual(byId[6].cls, 'small');    // Strahler 2
+    assert.strictEqual(byId[7].cls, 'medium');   // Strahler 3
+    assert.strictEqual(byId[8].cls, 'medium');   // Strahler 4
+    assert.strictEqual(byId[9].cls, 'large');    // Strahler 5
+    assert.strictEqual(byId[19].cls, 'large');   // River_Net_polygon
+    assert.strictEqual(byId[2].role, 'inland');
+    assert.ok(!ls.some((l) => /coastal|transit|drainage/i.test(l.name)), 'sea, transitional and drainage layers are excluded');
+});
+
+testAsync('EU-DEM WCS: candidate endpoints are tried in order; the first that lists an EU-DEM coverage wins', async () => {
+    const calls = [];
+    const xml = '<wcs:Capabilities xmlns:wcs="http://www.opengis.net/wcs/2.0"><wcs:Contents><wcs:CoverageSummary><wcs:CoverageId>DEM_v11_Masked2</wcs:CoverageId></wcs:CoverageSummary></wcs:Contents></wcs:Capabilities>';
+    prov.setFetch(async (url) => {
+        calls.push(url);
+        if (url.startsWith(prov.CONFIG.euDem.wcsEndpoints[0])) return { ok: true, status: 503, text: async () => '', headers: { get: () => null } };
+        return { ok: true, status: 200, text: async () => xml, headers: { get: () => 'text/xml' } };
+    });
+    const dem = prov.createEuDemProvider();
+    const cov = await dem.discover();
+    assert.strictEqual(cov.id, 'DEM_v11_Masked2');
+    assert.strictEqual(cov.endpoint, prov.CONFIG.euDem.wcsEndpoints[1]);
+    assert.ok(calls[0].startsWith(prov.CONFIG.euDem.wcsEndpoints[0]), 'first candidate is tried first');
+    assert.ok(!JSON.stringify(prov.CONFIG).includes('GioLandPublic'), 'the unverified GioLandPublic path is gone');
+    prov.setFetch(null);
+});
+
+testAsync('debug mode records every request: URL, status, timing; CORS/network failures are labelled', async () => {
+    prov.setDebug(true);
+    prov.clearDebugLog();
+    prov.setFetch(async (url) => {
+        if (url.includes('EUHydro')) throw new TypeError('Failed to fetch');          // simulated CORS block
+        return { ok: true, status: 200, json: async () => ({ elements: [] }), headers: { get: () => 'application/json' } };
+    });
+    await prov.schedule('debug-test', () => null);   // ensure the scheduler is idle
+    await prov.createOverpassWaterProvider().fetchWater({ south: 1, west: 1, north: 1.1, east: 1.1 }, {}).catch(() => null);
+    await prov.createEuHydroProvider().fetchWater({ south: 1, west: 1, north: 1.1, east: 1.1 }, {}).catch(() => null);
+    const log = prov.getDebugLog();
+    assert.ok(log.length >= 1, 'at least one request is logged');
+    const first = log[0];
+    assert.strictEqual(first.method, 'POST');
+    assert.ok(first.url.startsWith('https://overpass-api.de/api/interpreter'));
+    assert.strictEqual(first.status, 200);
+    assert.strictEqual(typeof first.ms, 'number');
+    const failed = log.find((r) => r.status == null);
+    assert.ok(failed && /CORS/.test(failed.hint), 'network/CORS failure is labelled');
+    prov.setFetch(null);
+    prov.setDebug(false);
 });
 
 test('ArcGIS query URL: envelope, GeoJSON, simplification, paging parameters', () => {
@@ -585,8 +641,75 @@ test('worker harness: setAnalysis → score (MANUAL) and train → score (TRAIN)
     assert.ok(sc2 && sc2.ok, 'train-score ok: ' + (sc2 && sc2.error));
 });
 
+/* ── Phase 2 input rules: radius, curves, translations ───────────────────── */
+console.log('UI rules');
+
+test('search radius is limited to 1–10 km (the spec), with a readable error outside it', () => {
+    assert.strictEqual(core.RADIUS_KM.min, 1);
+    assert.strictEqual(core.RADIUS_KM.max, 10);
+    assert.strictEqual(core.validateRadiusKm('5'), 5);
+    assert.strictEqual(core.validateRadiusKm(1), 1);
+    assert.strictEqual(core.validateRadiusKm(10), 10);
+    assert.throws(() => core.validateRadiusKm(25), /between 1 and 10 km/);
+    assert.throws(() => core.validateRadiusKm(0.5), /between 1 and 10 km/);
+    assert.throws(() => core.validateRadiusKm('abc'), /between 1 and 10 km/);
+});
+
+test('curve text: "x, y" lines, comments ignored, malformed lines reported with line numbers', () => {
+    const p = core.parseCurveText('0, 1\n# comment\n5 1\n10;0.5\nbad line\n20, 2, 3');
+    assert.deepStrictEqual(p.points, [[0, 1], [5, 1], [10, 0.5]]);
+    assert.strictEqual(p.errors.length, 2);
+    assert.ok(p.errors[0].startsWith('line 5'));
+    assert.ok(p.errors[1].startsWith('line 6'));
+});
+
+test('curve validation: at least two points, x strictly increasing, y in [0,1], x inside the curve range', () => {
+    const slopeSpec = core.CURVE_SPECS.slope;
+    assert.deepStrictEqual(core.validateCurve([[0, 1], [5, 1], [20, 0]], slopeSpec), []);
+    assert.ok(core.validateCurve([[0, 1]], slopeSpec).length > 0, 'one point is not a curve');
+    assert.ok(core.validateCurve([[5, 1], [5, 0]], slopeSpec).some((e) => /must increase/.test(e)), 'x must increase');
+    assert.ok(core.validateCurve([[0, 1], [5, 1.2]], slopeSpec).some((e) => /between 0 and 1/.test(e)), 'y ≤ 1');
+    assert.ok(core.validateCurve([[0, 1], [95, 0]], slopeSpec).some((e) => /outside/.test(e)), 'slope x ≤ 90');
+});
+
+test('the default curves pass validation as a set; an invalid edit is reported per curve', () => {
+    const ok = core.validateCurves(core.DEFAULT_CURVES);
+    assert.deepStrictEqual(ok.errors, {});
+    assert.ok(ok.curves && ok.curves.water.small);
+    const bad = JSON.parse(JSON.stringify(core.DEFAULT_CURVES));
+    bad.slope = [[0, 1], [0, 0.5]];
+    bad.water.medium = [[0, 2], [100, 0]];
+    const res = core.validateCurves(bad);
+    assert.strictEqual(res.curves, null);
+    assert.ok(res.errors.slope && res.errors.water_medium, 'errors name the curves they belong to');
+});
+
+test('translations: every Romanian key exists in English and vice versa; placeholders are filled', () => {
+    const I = require('./js/apm-next/apm-i18n.js');
+    const en = Object.keys(I.STRINGS.en), ro = Object.keys(I.STRINGS.ro);
+    assert.deepStrictEqual(en.filter((k) => !ro.includes(k)), [], 'keys missing in ro');
+    assert.deepStrictEqual(ro.filter((k) => !en.includes(k)), [], 'keys missing in en');
+    assert.strictEqual(I.t('point.at', 'ro', { lat: 44.4, lon: 26.1 }), 'Punct: 44.4, 26.1');
+    assert.strictEqual(I.t('point.at', 'en', { lat: 1, lon: 2 }), 'Point: 1, 2');
+    assert.strictEqual(I.t('no.such.key', 'ro'), 'no.such.key', 'unknown keys fall back to the key');
+    assert.strictEqual(I.normaliseLang('ro-RO'), 'ro');
+    assert.strictEqual(I.normaliseLang('fr'), 'en');
+});
+
+test('colours follow the spec: medium = orange, high = green, very high = baby blue; each has a legend label key', () => {
+    const I = require('./js/apm-next/apm-i18n.js');
+    const byId = Object.fromEntries(core.CLASSES.map((c) => [c.id, c.colour]));
+    assert.strictEqual(byId.medium, '#FFA500');
+    assert.strictEqual(byId.high, '#2E9E4F');
+    assert.strictEqual(byId.veryhigh, '#89CFF0');
+    core.CLASSES.forEach((c) => {
+        assert.ok(I.STRINGS.en['cls.' + c.id], 'legend label (en) for ' + c.id);
+        assert.ok(I.STRINGS.ro['cls.' + c.id], 'legend label (ro) for ' + c.id);
+    });
+});
+
 /* ── Summary ─────────────────────────────────────────────────────────────── */
-Promise.resolve().then(() => {
+asyncChain.then(() => {
     console.log(`\n${passed} passed, ${failed} failed`);
     if (failed) { console.log('Failed: ' + failures.join('; ')); process.exit(1); }
 });
