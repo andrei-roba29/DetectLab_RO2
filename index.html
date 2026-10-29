@@ -5769,6 +5769,7 @@
 
     <!-- Layer Info Popup -->
     <div class="layer-info-overlay" id="layerInfoOverlay" onclick="if(event.target===this) closeLayerInfo()">
+        <div class="layer-info-window-stack" id="layerInfoWindowStack" role="tablist" aria-label="Open layer windows" hidden></div>
         <div class="layer-info-box" role="dialog" aria-modal="true" aria-labelledby="layerInfoTitle">
             <button type="button" class="layer-info-close" onclick="closeLayerInfo()" title="Close / Închide" aria-label="Close">
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -5919,27 +5920,60 @@
         // Al treilea parametru (opțional) e o descriere mai lungă, afișată sub
         // atribuire — folosită de ex. de „Zone cu potențial arheologic”, a cărei
         // explicație a fost mutată din panou aici (vezi showArcheoPotInfo()).
-        function showLayerInfo(name, attribution, description) {
-            var overlay = document.getElementById('layerInfoOverlay');
+        var layerInfoWindows = [];
+        var activeLayerInfoWindow = -1;
+        function renderLayerInfoWindow(index) {
+            var item = layerInfoWindows[index];
+            if (!item) return;
+            activeLayerInfoWindow = index;
             var battlesLegend = document.getElementById('battlesLayerInfoLegend');
             if (battlesLegend) battlesLegend.style.display = 'none';
             var lang = (typeof window._currentLang === 'function') ? window._currentLang() : 'en';
             var T = (typeof translations !== 'undefined' && translations[lang]) ? translations[lang] : {};
-            var key = LAYER_NAME_TO_KEY[name] || name;
-            var localizedTitle = T[key] || name;
+            var key = LAYER_NAME_TO_KEY[item.name] || item.name;
+            var localizedTitle = T[key] || item.name;
             document.getElementById('layerInfoTitle').textContent = localizedTitle;
             renderLayerInfoAttribution(document.getElementById('layerInfoAttribution'),
-                String(attribution == null ? '' : attribution));
+                String(item.attribution == null ? '' : item.attribution));
             var desc = document.getElementById('layerInfoDescription');
             if (desc) {
-                var text = (description == null) ? '' : String(description);
+                var text = (item.description == null) ? '' : String(item.description);
                 desc.textContent = text;
                 desc.style.display = text ? '' : 'none';
             }
+            var stack = document.getElementById('layerInfoWindowStack');
+            stack.replaceChildren();
+            stack.hidden = layerInfoWindows.length < 2;
+            layerInfoWindows.forEach(function (windowInfo, i) {
+                var tab = document.createElement('button');
+                tab.type = 'button';
+                tab.className = 'layer-info-window-tab';
+                tab.setAttribute('role', 'tab');
+                tab.setAttribute('aria-selected', i === index ? 'true' : 'false');
+                tab.textContent = windowInfo.name;
+                tab.title = windowInfo.name;
+                tab.addEventListener('click', function () { renderLayerInfoWindow(i); });
+                stack.appendChild(tab);
+            });
+            document.getElementById('layerInfoOverlay').classList.add('open');
+        }
+        function showLayerInfo(name, attribution, description) {
+            var overlay = document.getElementById('layerInfoOverlay');
+            var existing = layerInfoWindows.findIndex(function (item) { return item.name === name; });
+            if (existing >= 0) layerInfoWindows.splice(existing, 1);
+            layerInfoWindows.push({ name: String(name || 'Layer'), attribution: attribution, description: description });
+            renderLayerInfoWindow(layerInfoWindows.length - 1);
             overlay.classList.add('open');
         }
         function closeLayerInfo() {
-            document.getElementById('layerInfoOverlay').classList.remove('open');
+            if (layerInfoWindows.length > 1) {
+                layerInfoWindows.splice(activeLayerInfoWindow, 1);
+                renderLayerInfoWindow(Math.max(0, activeLayerInfoWindow - 1));
+            } else {
+                layerInfoWindows = [];
+                activeLayerInfoWindow = -1;
+                document.getElementById('layerInfoOverlay').classList.remove('open');
+            }
         }
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') closeLayerInfo();
