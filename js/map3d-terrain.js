@@ -45,19 +45,6 @@
  *   window.DETECTLAB_MAP3D = { terrain: { provider: 'maptiler', key: '…' }, … }
  *   See MAP3D_DEFAULT in js/layer-registry.js and MAP_3D_TERRAIN.md.
  *
- * THE “CESIUM” ALTERNATIVE (3D basemap picker, 4th entry)
- *   The picker also offers “Cesium”: a real second 3D engine (CesiumJS globe),
- *   lazy-loaded from CDN only when picked. Its terrain is MapTiler's
- *   terrain-quantized-mesh-v2 (quantized-mesh-1.0) via
- *   CesiumTerrainProvider.fromUrl(cesium.tilesJson) — a binary mesh format
- *   MapLibre's raster-dem source cannot read, which is why this is an engine
- *   switch and not another raster source. The current ArcGIS basemap
- *   (Imagery / Topographic / Terrain) is draped as its imagery layer;
- *   picking an ArcGIS entry again destroys the Cesium viewer and returns to
- *   this MapLibre deck (camera handed over both ways). The mirrored
- *   WMS/LiDAR/vector deck is a MapLibre feature and is not drawn by the
- *   Cesium globe — its terrain + imagery are. See MAP3D_CESIUM.md.
- *
  * Exposes window.DetectLabMap3D:
  *   .open() .close() .toggle() .isOpen() .getMap() .syncLayers()
  *   .setExaggeration(v) .setPitch(v) .setBearing(v) .resetView()
@@ -83,11 +70,6 @@
     var CONFIG = REGISTRY.config();
     var MAPLIBRE = null;                 /* resolved constructor namespace */
     var sdkPromise = null;
-    var CESIUM = null;                   /* resolved CesiumJS namespace (“Cesium” alternative) */
-    var cesiumSdkPromise = null;
-    var cesiumViewer = null;             /* live Cesium.Viewer while the Cesium engine is on */
-    var cesiumEl = null;                 /* its container, inside the 3D surface */
-    var cesiumGeneration = 0;            /* cancels a pending Cesium activation */
     var openGeneration = 0;
     var map = null;
     var surface = null;
@@ -104,7 +86,7 @@
 
     var state = {
         open: false,
-        engine: 'maplibre',              /* 'maplibre' | 'cesium' — the “Cesium” basemap alternative */
+        engine: 'maplibre',
         exaggeration: CONFIG.terrain.exaggeration,
         proxyHosts: {},                  /* host → true when it must be proxied */
         directHosts: {},                 /* host → true when CORS is confirmed  */
@@ -344,9 +326,6 @@
             basemapImagery: 'Imagery ArcGIS',
             basemapTopographic: 'Topographic ArcGIS',
             basemapTerrain: 'Terrain ArcGIS',
-            basemapCesium: 'Cesium',
-            cesiumLoading: 'Se încarcă globul Cesium și terenul quantized-mesh…',
-            cesiumFailed: 'Globul Cesium nu a putut porni — vederea revine la MapLibre.',
             exaggeration: 'Exagerare relief',
             reset: 'Resetează',
             resetTitle: 'Reia poziția și unghiul hărții 2D',
@@ -394,9 +373,6 @@
             basemapImagery: 'Imagery ArcGIS',
             basemapTopographic: 'Topographic ArcGIS',
             basemapTerrain: 'Terrain ArcGIS',
-            basemapCesium: 'Cesium',
-            cesiumLoading: 'Loading the Cesium globe and its quantized-mesh terrain…',
-            cesiumFailed: 'The Cesium globe could not start — returning to the MapLibre view.',
             exaggeration: 'Terrain exaggeration',
             reset: 'Reset',
             resetTitle: 'Return to the 2D camera',
@@ -1545,10 +1521,6 @@
         });
         var terrain = terrainSource();
         if (terrain.attribution && !seen[terrain.attribution]) list.push(terrain.attribution);
-        if (state.engine === 'cesium') {
-            var cesiumAttr = String(cesiumConfig().attribution || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-            if (cesiumAttr && !seen[cesiumAttr]) list.push(cesiumAttr);
-        }
         if (!list.length) { attribution.innerHTML = ''; return; }
         attribution.innerHTML = '<b>' + escapeHtml(t('attribution')) + ':</b> ' +
             escapeHtml(list.slice(0, 6).join(' · '));
@@ -1829,7 +1801,6 @@
             '<option value="imagery">' + t('basemapImagery') + '</option>',
             '<option value="topographic">' + t('basemapTopographic') + '</option>',
             '<option value="terrain">' + t('basemapTerrain') + '</option>',
-            '<option value="cesium">' + t('basemapCesium') + '</option>',
             '</select></div>',
             /* No exaggeration / pitch / bearing sliders: the camera is moved by
              * gestures only (drag to pan, right-drag or Ctrl+drag to pitch and
@@ -1853,13 +1824,6 @@
         var basemapKeys = ['imagery', 'topographic', 'terrain'];
         function syncBasemapSelect(key) {
             if (!basemapSelect) return;
-            /* The “Cesium” entry is a 3D-only engine, not an ArcGIS basemap:
-             * while it is on, the picker reads Cesium whatever the 2D stack
-             * underneath is set to. */
-            if (state.engine === 'cesium' && basemapKeys.indexOf(key) < 0) {
-                basemapSelect.value = 'cesium';
-                return;
-            }
             var active = key;
             if (basemapKeys.indexOf(active) < 0) {
                 try {
@@ -1871,14 +1835,6 @@
         }
         if (basemapSelect) {
             basemapSelect.addEventListener('change', function () {
-                if (basemapSelect.value === 'cesium') {
-                    activateCesium();
-                    return;
-                }
-                /* Leaving Cesium: hand its camera back to MapLibre first, then
-                 * route the ArcGIS choice through the shared 2D setter as
-                 * before (root.setArcgisBasemap(basemapSelect.value)). */
-                if (state.engine === 'cesium') deactivateCesium(true);
                 if (typeof root.setArcgisBasemap !== 'function') {
                     syncBasemapSelect();
                     return;
@@ -1900,27 +1856,9 @@
          * remaining action buttons are one-tap shortcuts, not sliders. */
         bar.querySelector('.m3d-reset').addEventListener('click', function () { resetView(true); });
         bar.querySelector('.m3d-north').addEventListener('click', function () {
-            if (cesiumViewer && CESIUM) {
-                try {
-                    cesiumViewer.camera.setView({
-                        destination: cesiumViewer.camera.position,
-                        orientation: { heading: 0, pitch: cesiumViewer.camera.pitch, roll: 0 }
-                    });
-                    return;
-                } catch (e) { /* fall through to MapLibre */ }
-            }
             if (map) map.setBearing(0);
         });
         bar.querySelector('.m3d-flat').addEventListener('click', function () {
-            if (cesiumViewer && CESIUM) {
-                try {
-                    cesiumViewer.camera.setView({
-                        destination: cesiumViewer.camera.position,
-                        orientation: { heading: cesiumViewer.camera.heading, pitch: -Math.PI / 2, roll: 0 }
-                    });
-                    return;
-                } catch (e) { /* fall through to MapLibre */ }
-            }
             if (map) map.easeTo({ pitch: 0, bearing: 0, duration: 400 });
         });
         bar.querySelector('.m3d-collapse').addEventListener('click', function () {
@@ -1953,7 +1891,6 @@
         if (basemapOptions[0]) basemapOptions[0].textContent = t('basemapImagery');
         if (basemapOptions[1]) basemapOptions[1].textContent = t('basemapTopographic');
         if (basemapOptions[2]) basemapOptions[2].textContent = t('basemapTerrain');
-        if (basemapOptions[3]) basemapOptions[3].textContent = t('basemapCesium');
         var reset = bar.querySelector('.m3d-reset');
         if (reset) { reset.textContent = t('reset'); reset.title = t('resetTitle'); }
         refreshFocusRow();
@@ -2105,20 +2042,6 @@
 
     function resetView(animate) {
         var cam = cameraFrom2D();
-        if (cesiumViewer && CESIUM) {
-            try {
-                cesiumViewer.camera.setView({
-                    destination: CESIUM.Cartesian3.fromDegrees(
-                        cam.center[0], cam.center[1], cesiumHeightForZoom(cam.zoom, cam.center[1])),
-                    orientation: {
-                        heading: CESIUM.Math.toRadians(cam.bearing || 0),
-                        pitch: CESIUM.Math.toRadians((CONFIG.camera.pitch || 62) - 90),
-                        roll: 0
-                    }
-                });
-            } catch (e) { /* the MapLibre reset below is the fallback */ }
-            return;
-        }
         if (!map) return;
         map.easeTo({
             center: cam.center,
@@ -2126,243 +2049,6 @@
             bearing: cam.bearing,
             pitch: CONFIG.camera.pitch,
             duration: animate ? 500 : 0
-        });
-    }
-
-    /* ═══════════════════════════════════════════════════════════════════════
-     *  “CESIUM” — the alternative 3D engine (CesiumJS globe)
-     * -----------------------------------------------------------------------
-     *  MapTiler terrain-quantized-mesh-v2 is a quantized-mesh-1.0 TIN:
-     *  MapLibre raster-dem (terrarium/mapbox) cannot decode it, so picking
-     *  “Cesium” in the basemap picker lazy-loads CesiumJS, builds a real
-     *  Cesium.Viewer over the MapLibre surface and feeds it
-     *  CesiumTerrainProvider.fromUrl(cesium.tilesJson). The ArcGIS basemap
-     *  active underneath (Imagery/Topographic/Terrain) is draped as the
-     *  globe's imagery. Picking an ArcGIS entry destroys the viewer and
-     *  returns to the MapLibre deck, camera handed over both ways.
-     * ═══════════════════════════════════════════════════════════════════════ */
-    function cesiumConfig() {
-        if (REGISTRY.cesiumTerrain) return REGISTRY.cesiumTerrain();
-        var c = (REGISTRY.config() || {}).cesium || {};
-        return {
-            id: 'cesium', name: 'Cesium', label: c.label || 'Cesium', engine: 'cesium',
-            format: c.format || 'quantized-mesh-1.0',
-            extensions: c.extensions || ['octvertexnormals'],
-            projection: c.projection || 'EPSG:4326',
-            tilesJson: c.tilesJson || '', tileTemplate: c.tileTemplate || '',
-            tiles: c.tileTemplate ? [c.tileTemplate] : [],
-            minzoom: 0, maxzoom: 15, attribution: c.attribution || '', sdk: c.sdk || {}
-        };
-    }
-
-    /** The ArcGIS raster draped on the Cesium globe (registry URLs are
-     * already `{z}/{y}/{x}` templates, which UrlTemplateImageryProvider
-     * resolves as-is). Terrain mode drapes the Terrain Base sheet. */
-    function cesiumImageryTemplate() {
-        var key = 'imagery';
-        try {
-            if (typeof root.getArcgisBasemap === 'function') key = root.getArcgisBasemap() || key;
-        } catch (e) { key = 'imagery'; }
-        var defId = { imagery: 'base.imagery', topographic: 'base.topographic', terrain: 'base.terrain-base' }[key]
-            || 'base.imagery';
-        var def = REGISTRY.get(defId);
-        return def && def.url ? def.url : '';
-    }
-
-    /* Web-Mercator zoom ↔ Cesium camera height (same ground resolution). */
-    function cesiumHeightForZoom(zoom, lat) {
-        var heightPx = (surface && surface.clientHeight) || 768;
-        var metresPerPixel = 156543.03392804097 * Math.cos(Number(lat || 0) * Math.PI / 180)
-            / Math.pow(2, Number(zoom) || 0);
-        return Math.max(30, metresPerPixel * heightPx / (2 * Math.tan(Math.PI / 6)));
-    }
-
-    function cesiumZoomForHeight(height, lat) {
-        var heightPx = (cesiumEl && cesiumEl.clientHeight) || (surface && surface.clientHeight) || 768;
-        var metresPerPixel = Number(height) * 2 * Math.tan(Math.PI / 6) / Math.max(1, heightPx);
-        var atZoomZero = 156543.03392804097 * Math.cos(Number(lat || 0) * Math.PI / 180);
-        if (!(metresPerPixel > 0) || !(atZoomZero > 0)) return 3;
-        return Math.max(2, Math.min(20, Math.log2(atZoomZero / metresPerPixel)));
-    }
-
-    /** Lazy-load CesiumJS (primary CDN, then the configured fallbacks). */
-    function loadCesium() {
-        if (CESIUM) return Promise.resolve(CESIUM);
-        if (root.Cesium && root.Cesium.Viewer) { CESIUM = root.Cesium; return Promise.resolve(CESIUM); }
-        if (cesiumSdkPromise) return cesiumSdkPromise;
-        var sdk = cesiumConfig().sdk || {};
-        var urls = [sdk.js].concat(sdk.jsFallbacks || []).filter(function (u) { return !!u; });
-        var timeoutMs = isMobile() ? (sdk.timeoutMsMobile || sdk.timeoutMs || 30000) : (sdk.timeoutMs || 30000);
-        if (sdk.css && !document.getElementById('map3d-cesium-css')) {
-            var link = document.createElement('link');
-            link.id = 'map3d-cesium-css';
-            link.rel = 'stylesheet';
-            link.href = sdk.css;
-            (document.head || document.documentElement).appendChild(link);
-        }
-        function attempt(index) {
-            if (index >= urls.length) return Promise.reject(new Error('CesiumJS could not be loaded'));
-            return new Promise(function (resolve, reject) {
-                var script = document.createElement('script');
-                var settled = false;
-                var timer = root.setTimeout(function () {
-                    finish(new Error('Timed out loading CesiumJS after ' + timeoutMs + 'ms'));
-                }, timeoutMs);
-                function finish(error) {
-                    if (settled) return;
-                    settled = true;
-                    root.clearTimeout(timer);
-                    script.onload = script.onerror = null;
-                    if (script.parentNode) script.parentNode.removeChild(script);
-                    if (root.Cesium && root.Cesium.Viewer) {
-                        CESIUM = root.Cesium;
-                        resolve(CESIUM);
-                    } else {
-                        reject(error || new Error('CesiumJS did not expose Cesium.Viewer'));
-                    }
-                }
-                /* Workers/assets resolve against the folder Cesium.js came
-                 * from — deriving it from the winning URL keeps fallbacks
-                 * self-consistent. */
-                try { root.CESIUM_BASE_URL = urls[index].replace(/Cesium\.js(?:\?.*)?$/, ''); } catch (e) { /* ignore */ }
-                script.src = urls[index];
-                script.async = true;
-                script.onload = function () { finish(); };
-                script.onerror = function () { finish(new Error('CesiumJS could not be loaded from ' + urls[index])); };
-                (document.head || document.documentElement).appendChild(script);
-            }).catch(function () { return attempt(index + 1); });
-        }
-        cesiumSdkPromise = attempt(0).catch(function (error) {
-            cesiumSdkPromise = null;
-            throw error;
-        });
-        return cesiumSdkPromise;
-    }
-
-    function ensureCesiumEl() {
-        if (cesiumEl) return cesiumEl;
-        if (!ensureSurface()) return null;
-        cesiumEl = document.createElement('div');
-        cesiumEl.id = 'map3d-cesium';
-        cesiumEl.setAttribute('aria-label', 'Cesium 3D globe');
-        surface.appendChild(cesiumEl);
-        return cesiumEl;
-    }
-
-    function syncCesiumCameraToMapLibre() {
-        if (!cesiumViewer || !CESIUM || !map) return;
-        try {
-            var carto = cesiumViewer.camera.positionCartographic;
-            if (!carto) return;
-            var lng = CESIUM.Math.toDegrees(carto.longitude);
-            var lat = CESIUM.Math.toDegrees(carto.latitude);
-            map.jumpTo({
-                center: [lng, lat],
-                zoom: cesiumZoomForHeight(carto.height, lat),
-                bearing: CESIUM.Math.toDegrees(cesiumViewer.camera.heading || 0),
-                pitch: Math.max(0, Math.min(CONFIG.camera.maxPitch || 80,
-                    90 + CESIUM.Math.toDegrees(cesiumViewer.camera.pitch || -Math.PI / 2)))
-            });
-        } catch (e) { /* never break the engine switch on a camera hand-off */ }
-    }
-
-    function destroyCesiumViewer(syncCamera) {
-        if (syncCamera) syncCesiumCameraToMapLibre();
-        if (cesiumViewer) {
-            try { cesiumViewer.destroy(); } catch (e) { /* ignore */ }
-            cesiumViewer = null;
-        }
-        if (cesiumEl && cesiumEl.parentNode) cesiumEl.parentNode.removeChild(cesiumEl);
-        cesiumEl = null;
-        state.engine = 'maplibre';
-        if (surface) surface.classList.remove('is-cesium');
-    }
-
-    function deactivateCesium(syncCamera) {
-        cesiumGeneration++;
-        destroyCesiumViewer(!!syncCamera);
-        if (bar && typeof bar.syncBasemap === 'function') bar.syncBasemap();
-        return true;
-    }
-
-    function activateCesium() {
-        if (!state.open) return Promise.resolve(false);
-        if (state.engine === 'cesium' && cesiumViewer) return Promise.resolve(true);
-        var generation = ++cesiumGeneration;
-        state.engine = 'cesium';
-        showVeil('busy', t('title'), t('cesiumLoading'), null);
-        return loadCesium().then(function (Cesium) {
-            var cfg = cesiumConfig();
-            if (!cfg.tilesJson) throw new Error('No Cesium tiles.json configured');
-            var providerPromise = (Cesium.CesiumTerrainProvider && typeof Cesium.CesiumTerrainProvider.fromUrl === 'function')
-                ? Cesium.CesiumTerrainProvider.fromUrl(cfg.tilesJson, { requestVertexNormals: true })
-                : Promise.resolve(new Cesium.CesiumTerrainProvider({ url: cfg.tilesJson, requestVertexNormals: true }));
-            return providerPromise.then(function (terrainProvider) {
-                if (!state.open || generation !== cesiumGeneration) return false;
-                destroyCesiumViewer(false);
-                state.engine = 'cesium';
-                var el = ensureCesiumEl();
-                if (!el) throw new Error('The 3D surface is not available');
-                if (bar && typeof bar.syncBasemap === 'function') bar.syncBasemap();
-                cesiumViewer = new Cesium.Viewer(el, {
-                    animation: false,
-                    timeline: false,
-                    baseLayerPicker: false,
-                    geocoder: false,
-                    homeButton: false,
-                    sceneModePicker: false,
-                    navigationHelpButton: false,
-                    fullscreenButton: false,
-                    infoBox: false,
-                    selectionIndicator: false,
-                    baseLayer: false,
-                    terrainProvider: terrainProvider
-                });
-                try { cesiumViewer.imageryLayers.removeAll(); } catch (e) { /* ignore */ }
-                var imageryTemplate = cesiumImageryTemplate();
-                if (imageryTemplate) {
-                    var imagery = new Cesium.UrlTemplateImageryProvider({
-                        url: imageryTemplate,
-                        maximumLevel: 18,
-                        credit: 'Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-                    });
-                    cesiumViewer.imageryLayers.addImageryProvider(imagery);
-                }
-                try {
-                    cesiumViewer.scene.globe.depthTestAgainstTerrain = true;
-                    if ('verticalExaggeration' in cesiumViewer.scene) {
-                        cesiumViewer.scene.verticalExaggeration = state.exaggeration;
-                    }
-                } catch (e) { /* decoration only */ }
-                var cam = map ? {
-                    center: [map.getCenter().lng, map.getCenter().lat],
-                    zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch()
-                } : cameraFrom2D();
-                cesiumViewer.camera.setView({
-                    destination: Cesium.Cartesian3.fromDegrees(
-                        cam.center[0], cam.center[1], cesiumHeightForZoom(cam.zoom, cam.center[1])),
-                    orientation: {
-                        heading: Cesium.Math.toRadians(cam.bearing || 0),
-                        pitch: Cesium.Math.toRadians((cam.pitch == null ? (CONFIG.camera.pitch || 62) : cam.pitch) - 90),
-                        roll: 0
-                    }
-                });
-                if (surface) surface.classList.add('is-cesium');
-                state.engine = 'cesium';
-                hideVeil();
-                syncAttribution();
-                return true;
-            });
-        }).catch(function (error) {
-            if (generation !== cesiumGeneration) return false;
-            var message = String((error && error.message) || error || 'unknown error');
-            state.lastError = message;
-            pushError('Cesium: ' + message);
-            console.warn('[Map3D] ' + t('cesiumFailed') + ' ' + message);
-            destroyCesiumViewer(false);
-            if (bar && typeof bar.syncBasemap === 'function') bar.syncBasemap();
-            hideVeil();
-            return false;
         });
     }
 
@@ -4650,9 +4336,6 @@
     function close() {
         ++openGeneration;
         if (!state.open && !map && !state.failed) return false;
-        /* Cesium first: its camera is handed to the MapLibre map below, which
-         * cameraTo2D() then writes back to Leaflet. */
-        if (cesiumViewer || state.engine === 'cesium') deactivateCesium(true);
         state.open = false;
         state.firstSyncDone = false;
         state.failed = false;
@@ -4843,11 +4526,6 @@
             } : null,
             terrain: terrainSource(),
             engine: state.engine,
-            cesium: {
-                active: state.engine === 'cesium' && !!cesiumViewer,
-                viewer: !!cesiumViewer,
-                terrain: cesiumConfig()
-            },
             hillshade: REGISTRY.config().hillshade,
             proxyHosts: Object.keys(state.proxyHosts),
             directHosts: Object.keys(state.directHosts),
@@ -4963,14 +4641,6 @@
         isOpen: function () { return state.open; },
         getMap: function () { return map; },
         getEngine: function () { return state.engine; },
-        getCesiumViewer: function () { return cesiumViewer; },
-        setBasemapCesium: activateCesium,
-        _cesiumTerrain: cesiumConfig,
-        _cesiumImageryTemplate: cesiumImageryTemplate,
-        _cesiumHeightForZoom: cesiumHeightForZoom,
-        _cesiumZoomForHeight: cesiumZoomForHeight,
-        _activateCesium: activateCesium,
-        _deactivateCesium: deactivateCesium,
         syncLayers: syncLayers,
         refreshTiles: refreshTiles,
         setExaggeration: setExaggeration,

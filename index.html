@@ -26,12 +26,12 @@
     <link rel="stylesheet" href="css/leaflet.photon.css">
     <link rel="stylesheet" href="css/leaflet-measure.css">
     <link rel="stylesheet" href="css/fontawesome-all.min.css">
-    <link rel="stylesheet" href="css/styles.css?v=20261029-android-zoom-glass">
+    <link rel="stylesheet" href="css/styles.css?v=20261029-romania-5m">
     <!-- 3D TERRAIN VIEW (2D ⇄ 3D) — MapLibre GL JS, vendored like Leaflet.
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
     <link rel="stylesheet" href="css/maplibre-gl.css?v=20261013-3d-terrain">
-    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261026-pwa-3d-button-size">
+    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261029-no-cesium">
     <link rel="stylesheet" href="css/hist-shift.css?v=20261014-hist-shift">
     <!-- „Alte hărți / Other maps” — punctele verzi + suprapunerea liberă a
          hărților ne-georeferențiate (Hungaricana + NLS Map Finder). -->
@@ -2491,6 +2491,24 @@
                                 <input type="range" class="transp-slider" id="lidarRo2mOpacitySlider"
                                        min="0" max="100" value="0"
                                        oninput="setLidarRo2mOpacity(this.value)">
+                            </div>
+
+                            <!-- Romania 5m/pixel (Ro5m) sub-layer -->
+                            <div>
+                                <div style="display:flex;align-items:center;font-size:0.78rem;color:rgba(245,240,235,0.75);margin-bottom:5px;">
+                                    <span style="display:flex;align-items:center;gap:5px;">
+                                        <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="2" width="8" height="6" rx="1" fill="none" stroke="#4fc3f7" stroke-width="1" /><text x="5" y="7" text-anchor="middle" font-size="3.5" fill="#4fc3f7" font-family="sans-serif" font-weight="bold">RO</text></svg>
+                                        <span>Romania 5m/pixel</span>
+                                    </span>
+                                    <input type="hidden" id="lidarRo5mToggle">
+                                </div>
+                                <div class="transp-layer-label" style="margin-bottom:5px;">
+                                    <span style="font-size:0.72rem;opacity:0.6">Opacity</span>
+                                    <span class="pct" id="lidarRo5mPct">0%</span>
+                                </div>
+                                <input type="range" class="transp-slider" id="lidarRo5mOpacitySlider"
+                                       min="0" max="100" value="0"
+                                       oninput="setLidarRo5mOpacity(this.value)">
                             </div>
 
                             <!-- Romania 1m/pixel agregare (1m) sub-layer -->
@@ -5288,7 +5306,7 @@
          depend on. -->
     <script src="js/finland-tm35.js?v=20261019-finland-filter"></script>
     <script src="js/finland-layers.config.js?v=20261019-finland-filter"></script>
-    <script src="js/layer-registry.js?v=20261024-uk-historical-maps"></script>
+    <script src="js/layer-registry.js?v=20261029-no-cesium"></script>
     <!-- Roman roads („Drumuri romane”): the parser owns the record/geometry
          format, the layer paints the road network on canvas tiles, and the
          worker streams + parses the NDJSON off the main thread. map-app.js
@@ -5296,7 +5314,7 @@
          See ROMAN_ROADS_PERFORMANCE.md. -->
     <script src="js/roman-roads-parser.js?v=20261015-roman-roads"></script>
     <script src="js/roman-roads.js?v=20261015-roman-roads"></script>
-    <script src="js/map-app.js?v=20261029-android-zoom-glass"></script>
+    <script src="js/map-app.js?v=20261029-romania-5m"></script>
     <link rel="stylesheet" href="css/rvt-panel.css?v=1">
     <script src="js/lidar-photo-filter.js?v=1" defer></script>
     <script src="js/rvt-panel.js?v=2" defer></script>
@@ -5335,8 +5353,8 @@
          GeoJSON, markers, clusters and heatmaps included (js/map3d-mirror.js)
          — so nothing can be visible in 2D and missing in 3D. MapLibre GL
          itself is downloaded only when 3D is opened (js/map3d-terrain.js). -->
-    <script src="js/map3d-mirror.js?v=20261021-lidar-canvas-tiles"></script>
-    <script src="js/map3d-terrain.js?v=20261026-desktop-basemap"></script>
+    <script src="js/map3d-mirror.js?v=20261029-romania-5m"></script>
+    <script src="js/map3d-terrain.js?v=20261029-no-cesium"></script>
     <!-- LiDAR in the 3D view (js/lidar-3d-focus.js): a national LiDAR pyramid
          cannot be draped the way a historical sheet is, so pressing 3D with a
          LiDAR layer switched on asks first — HOW MUCH (the chosen layers in
@@ -5366,7 +5384,7 @@
     <script src="js/other-maps.js?v=20261028-other-maps-fix"></script>
     <script src="js/offline-maps.js?v=20261024-uk-historical-maps"></script>
     <script src="js/battles-layer.js?v=20261020-3d-analysis-points"></script>
-    <script src="js/vertical-opacity-control.js?v=20261026-flat-country-sections"></script>
+    <script src="js/vertical-opacity-control.js?v=20261029-romania-5m"></script>
     <!-- leaflet-heat rămâne în shell (pre-cache), dar nu mai e folosit de
          „Archeological Potential Sites": heatmap-ul de acolo e propriul raster de
          scoruri ancorat geografic, ca să nu alunece la zoom. -->

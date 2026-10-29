@@ -6936,6 +6936,16 @@
                     className: 'lidar-ro2m-tiles',
                     leafletLayer: null
                 },
+                ro5m: {
+                    label: 'Romania 5m/pixel',
+                    enabled: false,
+                    opacity: 0,
+                    type: 'xyz',
+                    url: 'https://tiles.arcgis.com/tiles/wCvLzGFkz06gCfBg/arcgis/rest/services/Ro5m/MapServer/tile/{z}/{y}/{x}',
+                    maxNativeZoom: 16,
+                    className: 'lidar-ro5m-tiles',
+                    leafletLayer: null
+                },
                 ro1m: {
                     label: 'Romania 1m/pixel agregare',
                     enabled: false,
@@ -8128,6 +8138,22 @@
                 if (masterToggle && val > 0 && !_lidarVisible) { masterToggle.checked = true; window.toggleLidarLayer(true); }
             };
 
+            // ── Public: Romania 5m/pixel opacity slider ──
+            window.setLidarRo5mOpacity = function(val) {
+                var opacity = val / 100;
+                var cfg = LIDAR_SUB_LAYERS['ro5m'];
+                cfg.opacity = opacity;
+                var pctEl = document.getElementById('lidarRo5mPct');
+                if (pctEl) pctEl.textContent = val + '%';
+                if (cfg.leafletLayer) {
+                    cfg.leafletLayer.options.opacity = opacity;
+                    if (cfg.leafletLayer.setOpacity) cfg.leafletLayer.setOpacity(opacity);
+                }
+                if (val > 0 && !cfg.enabled) { window.toggleLidarSub('ro5m', true); }
+                var masterToggle = document.getElementById('lidarToggle');
+                if (masterToggle && val > 0 && !_lidarVisible) { masterToggle.checked = true; window.toggleLidarLayer(true); }
+            };
+
             // ── Public: Romania 1m/pixel agregare opacity slider ──
             window.setLidarRo1mOpacity = function(val) {
                 var opacity = val / 100;
@@ -8402,7 +8428,7 @@
             };
 
             map.on('zoomend', function() {
-                ['ar', 'hd', 'ab', 'bh', 'cs', 'ro2m', 'ro1m', 'cs917', 'dj917', 'gj917', 'mh917',
+                ['ar', 'hd', 'ab', 'bh', 'cs', 'ro2m', 'ro5m', 'ro1m', 'cs917', 'dj917', 'gj917', 'mh917',
                  'nlAhn', 'noLidar', 'plLidar', 'esLidar', 'chLidar', 'ukLidar', 'frLidar', 'dkLidar',
                  'seLidar'].forEach(function(key) {
                     var cfg = LIDAR_SUB_LAYERS[key];
@@ -13473,6 +13499,7 @@
                     bh: [[46.40, 21.30], [47.50, 22.80]],
                     cs: [[44.60, 21.30], [45.70, 22.60]],
                     ro2m: [[43.5, 19.5], [48.5, 30.5]],
+                    ro5m: [[43.5, 19.5], [48.5, 30.5]],
                     ro1m: [[43.5, 19.5], [48.5, 30.5]],
                     cs917: [[44.70, 21.50], [45.60, 22.80]],
                     dj917: [[43.90, 23.00], [44.80, 24.50]],
@@ -13699,6 +13726,7 @@
                         bh: 'lidarBhOpacitySlider',
                         cs: 'lidarCsOpacitySlider',
                         ro2m: 'lidarRo2mOpacitySlider',
+                        ro5m: 'lidarRo5mOpacitySlider',
                         ro1m: 'lidarRo1mOpacitySlider',
                         cs917: 'lidarCs917OpacitySlider',
                         dj917: 'lidarDj917OpacitySlider',

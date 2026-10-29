@@ -109,6 +109,7 @@
        screen(base, invert(pixel)) — pixel for pixel. */
     var BLEND_BY_CLASS = {
         'lidar-ro1m-tiles': 'invert-screen',
+        'lidar-ro5m-tiles': 'invert-screen',
         'lidar-ro2m-tiles': 'invert-screen'
     };
 

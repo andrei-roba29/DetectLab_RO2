@@ -829,7 +829,7 @@
 //   the panel transparent and empty. Re-tags css/styles.css,
 //   js/tile-perf.js and js/map-app.js; see MAP_LAYER_PERFORMANCE.md and
 //   LAYER_WINDOW_GLASS.md.
-const CACHE_NAME = 'detectlab-v295-android-zoom-glass';
+const CACHE_NAME = 'detectlab-v297-romania-5m';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -893,7 +893,7 @@ const PRECACHE_URLS = [
   'js/asig-albania-layers.js?v=20261024-asig-catalogue',
   'js/layer-registry.js?v=20261024-asig-catalogue',
   // v265: premium UK historical maps (Ordnance Survey / Bartholomew, MapTiler).
-  'js/layer-registry.js?v=20261024-uk-historical-maps',
+  'js/layer-registry.js?v=20261029-no-cesium',
   'js/map-app.js?v=20261024-uk-historical-maps',
   'js/map-app.js?v=20261025-lidar-3d-tile-heal',
   // v275: one Hillshade LiDAR derivate row + maxNativeZoom 12.
@@ -966,7 +966,7 @@ const PRECACHE_URLS = [
   'data/other-maps-nls-catalog.json?v=20261028-other-maps-fix',
   'js/translations.js?v=20261023-other-maps',
   'js/map3d-mirror.js?v=20261017-archeo-3d-projection',
-  'js/map3d-mirror.js?v=20261021-lidar-canvas-tiles',
+  'js/map3d-mirror.js?v=20261029-romania-5m',
   'js/map3d-mirror.js?v=20261020-3d-analysis-points',
   'js/map3d-mirror.js?v=20261014-lidar-3d-focus',
   'js/map3d-mirror.js?v=20261014-3d-vectors',
@@ -1008,8 +1008,8 @@ const PRECACHE_URLS = [
   'css/map3d-terrain.css?v=20261026-lidar-whole-or-disc',
   'js/map3d-terrain.js?v=20261026-lidar-whole-or-disc',
   // v285: PWA 38×38 switch/refresh squares; the group centres in 3D.
-  'css/map3d-terrain.css?v=20261026-pwa-3d-button-size',
-  'js/map3d-terrain.js?v=20261026-desktop-basemap',
+  'css/map3d-terrain.css?v=20261029-no-cesium',
+  'js/map3d-terrain.js?v=20261029-no-cesium',
   'js/map-app.js?v=20261026-lidar-whole-or-disc',
   'js/lidar-3d-focus.js?v=20261026-lidar-whole-or-disc',
   'js/map3d-terrain.js?v=20261024-gesture-only-camera',
@@ -1701,7 +1701,7 @@ const PRECACHE_URLS = [
   // instead of any CSS viewport unit, and the temporary on-device band probe
   // is gone. Only index.html + this file changed; the entry below is the live
   // mirror URL index.html requests, which the shell must pre-cache with it.
-  'js/vertical-opacity-control.js?v=20261026-flat-country-sections',
+  'js/vertical-opacity-control.js?v=20261029-romania-5m',
   'js/danish-layers.js?v=20261026-flat-country-sections',
   // v287: the archaeological-potential legend's heat-bar label reads “Strong”
   // (“Puternic” in Romanian) instead of “Weak”, in every language, and the ASIG
@@ -1746,9 +1746,9 @@ const PRECACHE_URLS = [
   //   checkLayerVisibility now fails open on an unusable viewport instead
   //   of hiding every row of the layer panel. The three URLs below are the
   //   live ones index.html requests.
-  'css/styles.css?v=20261029-android-zoom-glass',
+  'css/styles.css?v=20261029-romania-5m',
   'js/tile-perf.js?v=20261029-android-zoom-glass',
-  'js/map-app.js?v=20261029-android-zoom-glass'
+  'js/map-app.js?v=20261029-romania-5m'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──
