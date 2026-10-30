@@ -848,7 +848,11 @@
 // v314: choose a LiDAR area before showing image settings.
 // v315: drape the prepared LiDAR image adjustments in 3D without selection tint.
 // v316: lift the analysis action dock above 3D controls in PWA and web.
-const CACHE_NAME = 'detectlab-v316-3d-analysis-dock';
+// v317: "Satellite imagery 60's" × live location on Android — one composited
+//   surface for the CORONA stack, no dead zoom band at z11–z12, one manager
+//   update per gesture, a conservation back-off and a GPS pin that is moved
+//   instead of rebuilt. See SATELLITE_60s_LIVE_LOCATION.md.
+const CACHE_NAME = 'detectlab-v317-sat60-live-location';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1802,7 +1806,22 @@ const PRECACHE_URLS = [
   'css/styles.css?v=20261029-romania-5m',
   'js/tile-perf.js?v=20261029-android-zoom-glass',
   'js/map-app.js?v=20261029-other-maps-visibility',
-  'js/map-app.js?v=20261030-remove-hillshade-derivate'
+  'js/map-app.js?v=20261030-remove-hillshade-derivate',
+  // v317: "Satellite imagery 60's" + live location on Android. The CORONA
+  //   stack now renders inside ONE composited surface (the pane carries the
+  //   opacity, the products stay opaque), which is the state Android's
+  //   compositor needed to stop painting the map as a solid green rectangle
+  //   while zooming; the product selection no longer has a dead zoom band
+  //   between z11 and z12 (fractional zooms — every frame of the `flyTo()` the
+  //   live-location button uses — used to detach everything); a gesture runs
+  //   ONE manager update instead of two; the layer backs off to half of its
+  //   attached products while the tile governor is in conservation mode; and
+  //   the GPS pin updates in place instead of being re-created on every fix.
+  //   The three URLs below are the live ones index.html requests.
+  //   See SATELLITE_60s_LIVE_LOCATION.md.
+  'js/corona-wms-layer.js?v=20261030-sat60-live-location',
+  'js/tile-perf.js?v=20261030-sat60-live-location',
+  'js/map-app.js?v=20261030-sat60-live-location'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──

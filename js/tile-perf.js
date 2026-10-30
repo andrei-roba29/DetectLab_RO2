@@ -203,6 +203,7 @@
         conservation: false,
         noticeShown: false,
         stats: null,
+        conservationListeners: [],
         tick: null,
         // body.map-gesturing is currently applied / the timer that lifts it.
         glassAdded: false,
@@ -594,6 +595,7 @@
         if (typeof api.onConservation === 'function') {
             try { api.onConservation(stats()); } catch (err) { /* ignore */ }
         }
+        notifyConservationChange();
     }
 
     function exitConservationMode() {
@@ -607,6 +609,20 @@
             delete layer._dltilePerfKeepBuffer;
         });
         console.info('[TilePerf] conservation mode OFF — back to normal limits');
+        notifyConservationChange();
+    }
+
+    /* ── 5b. Conservation transition broadcast ────────────────────────────
+       `onConservation` only ever fired when the page ENTERED conservation
+       mode, so a layer that backed off (the CORONA 60's stack, which cuts how
+       many products it keeps attached) could never come back to its normal
+       limits. This broadcasts both transitions. Registered listeners are
+       called with no arguments; they should read `inConservationMode()`. */
+    function notifyConservationChange() {
+        var list = STATE.conservationListeners || [];
+        for (var i = 0; i < list.length; i++) {
+            try { list[i](STATE.conservation); } catch (err) { /* ignore */ }
+        }
     }
 
     function tick() {
@@ -839,7 +855,18 @@
             for (var k in extra) o[k] = extra[k];
             return o;
         },
-        onConservation: null
+        onConservation: null,
+        // Both transitions (conservation ON and OFF). Used by the CORONA
+        // layer to shrink its attached-product count when the page is over
+        // its decoded-tile budget — the state in which Android used to render
+        // the map as a solid green rectangle — and to restore it afterwards.
+        onConservationChange: function (cb) {
+            if (typeof cb !== 'function') return api;
+            if (STATE.conservationListeners.indexOf(cb) === -1) {
+                STATE.conservationListeners.push(cb);
+            }
+            return api;
+        }
     };
 
     window.DLTilePerf = api;

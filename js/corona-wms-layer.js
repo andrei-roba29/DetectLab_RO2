@@ -493,11 +493,28 @@
      *   group            {L.LayerGroup} where active tile layers are attached
      *   pane             {string}
      *   opacity          {number}
+     *   opacityTarget    {'layers'|'pane'}  where the opacity is applied
+     *                    (see §"ONE COMPOSITED SURFACE" below), default 'layers'
      *   viewportPad      {number}  extra view margin (fraction), default 0.25
      *   maxActivePasses  {number}  safety cap, default 18
      *   maxActiveFrames  {number}  safety cap, default 24
+     *   maxCachedLayers  {number}  tile layers kept in the LRU, default 60
      *   tileLayerOptions {Object}  merged into every tile layer (perf tuning)
      *   onChange         {Function(activeDescriptors)}
+     *
+     * ── ONE COMPOSITED SURFACE, NOT ONE PER PRODUCT ────────────────────────
+     * A Leaflet tile layer whose `opacity` is below 1 gets that opacity on its
+     * own container div, which makes the browser promote EVERY layer to a
+     * separate composited GPU surface. With this manager that is 8–24 surfaces
+     * in the same pane, and during a zoom animation the whole tile pane is
+     * re-transformed every frame — the pathological case for the GPU memory of
+     * an Android device (the reported symptom was the map flashing a solid
+     * green/blank rectangle while zooming with the 1960s layer on).
+     *
+     * With `opacityTarget: 'pane'` every product renders at opacity 1 and the
+     * single shared pane carries the opacity instead: one composited surface
+     * for the whole CORONA stack, identical pixels on screen, a fraction of
+     * the GPU memory. `setOpacity()` keeps working in both modes.
      */
     function CoronaRasterManager(map, options) {
         this._map = map;
@@ -507,9 +524,14 @@
             group: null,
             pane: undefined,
             opacity: 0.85,
+            opacityTarget: 'layers',
             viewportPad: 0.25,
             maxActivePasses: 18,
             maxActiveFrames: 24,
+            // How many product tile layers may stay cached (created but not
+            // attached) while the user pans/zooms around. Every cached layer
+            // holds a container div; only the attached ones hold tiles.
+            maxCachedLayers: 60,
             passMinZoom: PASS_MIN_ZOOM,
             passMaxZoom: PASS_MAX_ZOOM,
             frameMinZoom: FRAME_MIN_ZOOM,
@@ -539,6 +561,17 @@
         selectProducts: function (zoom, bbox) {
             var out = [];
             var i, j;
+            // ── NO DEAD ZOOM BAND ───────────────────────────────────────────
+            // Leaflet's `getZoom()` is not always an integer: `flyTo()` moves
+            // through FRACTIONAL zooms on every animation frame (that is how
+            // the live-location button recentres the map), and pinch/wheel
+            // zoom with `zoomSnap: 0` ends on one too. The atlas's two bands
+            // are 8–11 and 12–20, so any z between 11 and 12 falls into
+            // NEITHER branch: every product was detached, the pane went empty
+            // and the imagery popped out and back in while the user was still
+            // pinching. Rounding picks the nearer band, so the selection is
+            // never empty between the bands.
+            zoom = (typeof zoom === 'number' && isFinite(zoom)) ? Math.round(zoom) : zoom;
             if (zoom >= this.options.passMinZoom && zoom <= this.options.passMaxZoom) {
                 for (i = 0; i < this.blocks.length; i++) {
                     var block = this.blocks[i];
@@ -586,6 +619,11 @@
             var bounds = L.latLngBounds([[extent[1], extent[0]], [extent[3], extent[2]]]);
             var isFrame = descriptor.type === 'frame';
 
+            // In `opacityTarget: 'pane'` mode the product itself stays fully
+            // opaque and the shared pane carries the opacity — see the note in
+            // the constructor. One composited GPU surface instead of one per
+            // product, which is what made Android flash green while zooming.
+            var paneOpacityMode = this.options.opacityTarget === 'pane';
             var opts = L.extend({
                 layers: name,
                 coronaLayer: name,
@@ -593,7 +631,7 @@
                 transparent: true,
                 attribution: '© Corona 1960s (CAST UARK)',
                 tileSize: 256,
-                opacity: this.options.opacity,
+                opacity: paneOpacityMode ? 1 : this.options.opacity,
                 bounds: bounds,
                 minZoom: isFrame ? this.options.frameMinZoom : this.options.passMinZoom,
                 maxZoom: isFrame ? this.options.frameMaxZoom : 20,
@@ -659,7 +697,7 @@
             }
 
             // keep the cache bounded (tile layers hold decoded images alive)
-            this._evictUnused(60);
+            this._evictUnused(this.options.maxCachedLayers);
 
             this._active = wanted;
             if (typeof this.options.onChange === 'function') {
@@ -670,13 +708,36 @@
 
         _evictUnused: function (limit) {
             var locations = Object.keys(this._layers);
+            if (typeof limit !== 'number' || limit < 0) limit = 60;
             if (locations.length <= limit) return;
             for (var i = 0; i < locations.length && Object.keys(this._layers).length > limit; i++) {
                 var layer = this._layers[locations[i]];
                 if (this._group.hasLayer(layer)) continue;
+                // Detached layers are already tile-free (GridLayer.onRemove
+                // removes every tile), but their container and any retained
+                // level must go too — otherwise panning across Europe leaves a
+                // pile of empty-but-composited divs in the pane, exactly the
+                // kind of per-layer surface that starves the GPU on Android.
+                try {
+                    if (layer._removeAllTiles) layer._removeAllTiles();
+                    if (layer._container && layer._container.parentNode) {
+                        layer._container.parentNode.removeChild(layer._container);
+                    }
+                    layer._container = null;
+                } catch (err) { /* cosmetic only — never break the map */ }
                 layer.off();
                 delete this._layers[locations[i]];
             }
+        },
+
+        /** How many product layers are attached right now (diagnostics/tests). */
+        getAttachedCount: function () {
+            var n = 0;
+            for (var location in this._layers) {
+                if (!Object.prototype.hasOwnProperty.call(this._layers, location)) continue;
+                if (this._group.hasLayer(this._layers[location])) n++;
+            }
+            return n;
         },
 
         getActiveProducts: function () {
@@ -692,11 +753,36 @@
             return out;
         },
 
+        /**
+         * In 'pane' mode: push the opacity onto the shared pane and keep every
+         * product fully opaque, so the whole CORONA stack is ONE composited GPU
+         * surface instead of one per product. Returns true when it applied.
+         */
+        _applyPaneOpacity: function (opacity) {
+            if (this.options.opacityTarget !== 'pane') return false;
+            if (this._paneEl && !this._paneEl.parentNode) this._paneEl = null;
+            if (!this._paneEl) {
+                try {
+                    this._paneEl = (this.options.pane && this._map && this._map.getPane)
+                        ? this._map.getPane(this.options.pane) : null;
+                } catch (err) { this._paneEl = null; }
+            }
+            if (!this._paneEl) return false;
+            this._paneEl.style.opacity = String(opacity);
+            for (var loc in this._layers) {
+                if (!Object.prototype.hasOwnProperty.call(this._layers, loc)) continue;
+                var pl = this._layers[loc];
+                if (pl && pl.setOpacity) pl.setOpacity(1);
+            }
+            return true;
+        },
+
         setOpacity: function (opacity) {
             this.options.opacity = opacity;
-            for (var location in this._layers) {
-                if (!Object.prototype.hasOwnProperty.call(this._layers, location)) continue;
-                var layer = this._layers[location];
+            if (this._applyPaneOpacity(opacity)) return;
+            for (var loc in this._layers) {
+                if (!Object.prototype.hasOwnProperty.call(this._layers, loc)) continue;
+                var layer = this._layers[loc];
                 if (layer && layer.setOpacity) layer.setOpacity(opacity);
             }
         },
