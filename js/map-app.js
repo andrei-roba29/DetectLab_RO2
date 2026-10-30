@@ -5891,10 +5891,6 @@
                     label: 'Roads', color: '#FF5A36', weight: 1.8, enabled: false,
                     type: 'ndjson'
                 },
-                places: {
-                    label: 'Roman Sites (Pleiades)', color: '#FFD60A', weight: 1, enabled: false,
-                    type: 'pleiades'
-                },
                 // ── POINTS & LABELS ──
                 dare_11: { label: 'Major Settlements', color: '#CC2222', weight: 1.5, enabled: true, type: 'geojson', dare: true },
                 dare_17: { label: 'Major Forts', color: '#CC2222', weight: 1.5, enabled: true, type: 'geojson', dare: true },
@@ -5921,12 +5917,6 @@
                     type: 'geojson',
                     url: _AWMC + 'walls/walls.geojson'
                 },
-                regional_names: {
-                    label: 'Regional Names', color: '#FFFFFF', weight: 0.8, enabled: false,
-                    type: 'geojson',
-                    url: _AWMC + 'regional_name_linework/regional_names_linework.geojson'
-                },
-
                 // ── POLITICAL SHADING ──
                 shade_117: {
                     label: 'Roman Empire 117 CE', color: '#AA32AA', weight: 1.2, enabled: false,
@@ -6053,7 +6043,7 @@
                     return L.geoJSON(geojsonData, {
                         pane: 'pane_roman',
                         filter: isShade ? null : function (feature) { return _romanFeatureInBounds(feature); },
-                        interactive: key === 'regional_names',
+                        interactive: false,
                         style: function() {
                             return {
                                 color: cfg.color,
@@ -6231,11 +6221,6 @@
             // ── DARE: cereri pe viewport, deduplicate, o singură cerere în zbor ──
             var _dareSeen = {};          // id → true (toate categoriile)
             var _dareInflight = false, _dareAgain = false, _dareTimer = null, _dareRequestVersion = 0;
-            var _pleiadesRows = null, _pleiadesLoading = false, _pleiadesPeriod = 'R';
-            var PLEIADES_URLS = [
-                'https://atlantides.org/downloads/pleiades/dumps/pleiades-places-latest.csv.gz',
-                'http://atlantides.org/downloads/pleiades/dumps/pleiades-places-latest.csv.gz'
-            ];
             var DARE_MIN_ZOOM = 7;
 
             function _dareAnyEnabled() {
@@ -6332,152 +6317,11 @@
                     });
             }
 
-            // ── Pleiades: export CSV comprimat, filtrat după perioada selectată ──
-            function _parseRomanCsv(text) {
-                var rows = [], row = [], field = '', quoted = false;
-                for (var i = 0; i < text.length; i++) {
-                    var c = text[i];
-                    if (quoted) {
-                        if (c === '"') {
-                            if (text[i + 1] === '"') { field += '"'; i++; }
-                            else quoted = false;
-                        } else field += c;
-                    } else if (c === '"') quoted = true;
-                    else if (c === ',') { row.push(field); field = ''; }
-                    else if (c === '\n' || c === '\r') {
-                        if (c === '\r' && text[i + 1] === '\n') i++;
-                        row.push(field); field = '';
-                        if (row.length > 1 || row[0] !== '') rows.push(row);
-                        row = [];
-                    } else field += c;
-                }
-                if (field !== '' || row.length) { row.push(field); rows.push(row); }
-                return rows;
-            }
-            function _parsePleiadesCsv(text) {
-                var rows = _parseRomanCsv(text);
-                if (!rows.length) throw new Error('empty CSV');
-                var headers = rows[0].map(function (x) { return x.replace(/^\uFEFF/, '').trim().toLowerCase(); });
-                var ix = function (name) { return headers.indexOf(name); };
-                var iId = ix('id'), iTitle = ix('title'), iDesc = ix('description'), iTypes = ix('featuretypes');
-                var iLat = ix('reprlat'), iLon = ix('reprlong'), iLatLon = ix('reprlatlong');
-                var iKeys = ix('timeperiodskeys'), iPeriods = ix('timeperiods');
-                if (iLat < 0 && iLatLon < 0) throw new Error('no coordinate column');
-                if (iKeys < 0 && iPeriods < 0) throw new Error('no time period column');
-                var out = [];
-                for (var r = 1; r < rows.length; r++) {
-                    var row = rows[r], lat = parseFloat(row[iLat]), lon = parseFloat(row[iLon]);
-                    if ((!isFinite(lat) || !isFinite(lon)) && iLatLon >= 0) {
-                        var pair = String(row[iLatLon] || '').split(/[ ,]+/);
-                        lat = parseFloat(pair[0]); lon = parseFloat(pair[1]);
-                    }
-                    if (!isFinite(lat) || !isFinite(lon)) continue;
-                    var tokens = ((iKeys >= 0 ? row[iKeys] : '') + ',' + (iPeriods >= 0 ? row[iPeriods] : ''))
-                        .toLowerCase().split(/[\s,;|]+/).filter(Boolean);
-                    var isRoman = tokens.indexOf('r') >= 0 || tokens.indexOf('roman') >= 0;
-                    var isRepublican = tokens.indexOf('h') >= 0 || tokens.some(function (x) { return x.indexOf('hellenistic') === 0; });
-                    var isLate = tokens.indexOf('l') >= 0 || tokens.some(function (x) { return x.indexOf('late') === 0; });
-                    if (!(isRoman || isRepublican || isLate)) continue;
-                    out.push({
-                        pid: row[iId], title: row[iTitle] || '(untitled)', description: row[iDesc] || '',
-                        types: String(row[iTypes] || '').replace(/,/g, ', '), lat: lat, lon: lon,
-                        R: isRoman ? 1 : 0, H: isRepublican ? 1 : 0, L: isLate ? 1 : 0
-                    });
-                }
-                return out;
-            }
-            function _bytesToRomanText(buffer) {
-                var bytes = new Uint8Array(buffer);
-                if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-                    if (typeof DecompressionStream === 'undefined') throw new Error('gzip decompression is not supported in this browser');
-                    return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
-                }
-                return Promise.resolve(new TextDecoder().decode(bytes));
-            }
             function _romanEscapeHtml(value) {
                 return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
                     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
                 });
             }
-            function _pleiadesRowsForPeriod() {
-                return (_pleiadesRows || []).filter(function (row) {
-                    return _pleiadesPeriod === 'RH' ? (row.R || row.H)
-                        : _pleiadesPeriod === 'RL' ? (row.R || row.L) : row.R;
-                });
-            }
-            function _buildRomanPleiadesLayer() {
-                if (!_pleiadesRows) return;
-                var oldLayer = _romanLayers.places;
-                if (oldLayer && _romanGroup.hasLayer(oldLayer)) _romanGroup.removeLayer(oldLayer);
-                var rows = _pleiadesRowsForPeriod().filter(function (row) {
-                    return _romanFeatureInBounds({geometry: {type: 'Point', coordinates: [row.lon, row.lat]}});
-                });
-                var features = rows.map(function (row) {
-                    return {type: 'Feature', id: String(row.pid || ''), geometry: {type: 'Point', coordinates: [row.lon, row.lat]}, properties: row};
-                });
-                var layer = L.geoJSON({type: 'FeatureCollection', features: features}, {
-                    pane: 'pane_roman',
-                    pointToLayer: function (feature, latlng) {
-                        return L.circleMarker(latlng, {pane: 'pane_roman', radius: 4, color: '#111111', weight: 0.7,
-                            fillColor: '#FFD60A', fillOpacity: 0.95, opacity: _romanOpacity, interactive: true});
-                    },
-                    onEachFeature: function (feature, featureLayer) {
-                        var p = feature.properties || {};
-                        var title = _romanEscapeHtml(p.title || '(untitled)');
-                        var content = '<p>' + _romanEscapeHtml(p.description || '') + '</p><p><b>Types:</b> ' + _romanEscapeHtml(p.types || '–') + '</p>' +
-                            '<p><a href="https://pleiades.stoa.org/places/' + encodeURIComponent(p.pid || '') + '" target="_blank" rel="noopener">Open in Pleiades</a></p>';
-                        featureLayer.bindTooltip(title + '<br><span style="font-size:0.68rem;opacity:0.7">Pleiades · Roman-period site</span>',
-                            {className: 'map-search-tooltip', sticky: true});
-                        featureLayer.bindPopup(content);
-                    }
-                });
-                _romanLayers.places = layer;
-                if (_romanVisible && _romanEnabled.places) _romanGroup.addLayer(layer);
-                _romanStatus('places', 'Sites: ' + rows.length.toLocaleString() + ' Roman-period places (Pleiades).');
-            }
-            function _ingestRomanPleiades(buffer) {
-                return _bytesToRomanText(buffer).then(function (text) {
-                    _pleiadesRows = _parsePleiadesCsv(text);
-                    _buildRomanPleiadesLayer();
-                    return true;
-                }).catch(function (e) {
-                    _romanStatus('places', 'Sites: ' + e.message);
-                    return false;
-                });
-            }
-            function _showRomanPleiadesFilePicker() {
-                var fallback = document.getElementById('romanPlacesFallback');
-                if (fallback) fallback.style.display = 'block';
-            }
-            function _loadRomanPleiades() {
-                if (!_romanVisible || !_romanEnabled.places) return;
-                if (_pleiadesRows) { _buildRomanPleiadesLayer(); return; }
-                if (_pleiadesLoading) return;
-                _pleiadesLoading = true;
-                _romanStatus('places', 'Sites: downloading Pleiades export…');
-                (async function () {
-                    for (var i = 0; i < PLEIADES_URLS.length; i++) {
-                        try {
-                            var response = await fetch(PLEIADES_URLS[i]);
-                            if (!response.ok) throw new Error('HTTP ' + response.status);
-                            if (await _ingestRomanPleiades(await response.arrayBuffer())) return;
-                        } catch (e) { console.warn('[Roman] Pleiades source unavailable:', e && e.message); }
-                    }
-                    _romanStatus('places', 'Sites: Pleiades server unavailable. Select the CSV.GZ export file.');
-                    _showRomanPleiadesFilePicker();
-                })().finally(function () { _pleiadesLoading = false; });
-            }
-            var _romanPlacesFile = document.getElementById('romanPlacesFile');
-            if (_romanPlacesFile) _romanPlacesFile.addEventListener('change', function () {
-                var file = _romanPlacesFile.files && _romanPlacesFile.files[0];
-                if (!file) return;
-                _romanStatus('places', 'Sites: reading selected Pleiades file…');
-                file.arrayBuffer().then(_ingestRomanPleiades);
-            });
-            window.setRomanPlacesPeriod = function (period) {
-                _pleiadesPeriod = period === 'RH' || period === 'RL' ? period : 'R';
-                if (_pleiadesRows && _romanVisible && _romanEnabled.places) _buildRomanPleiadesLayer();
-            };
             window.toggleRomanDareCategories = function (on) {
                 var ids = Object.keys(ROMAN_SUB_LAYERS).filter(function (key) { return key.indexOf('dare_') === 0; });
                 ids.forEach(function (key) {
@@ -6612,7 +6456,6 @@
                     return;
                 }
                 if (cfg.type === 'ndjson') { _loadRomanRoads(); return; }
-                if (cfg.type === 'pleiades') { _loadRomanPleiades(); return; }
                 if (_romanLayers[key]) {
                     if (_romanEnabled[key] && _romanVisible && !_romanGroup.hasLayer(_romanLayers[key])) {
                         _romanGroup.addLayer(_romanLayers[key]);
@@ -6666,7 +6509,6 @@
                     _clearDareSites();
                     _romanStatus('dare', '');
                     _romanStatus('roads', '');
-                    _romanStatus('places', '');
                 }
             };
 
@@ -14053,11 +13895,11 @@
                 var ROMAN_EMPIRE_BOUNDS = toBounds([[20.0, -15.0], [60.0, 50.0]]);
                 var romanBoundsDef = _isEuropeMarket() ? ROMAN_EMPIRE_BOUNDS : ROMANIA_BOUNDS;
                 var romanToggleIds = [
-                    'roman_roads', 'roman_places',
+                    'roman_roads',
                     'roman_dare_11','roman_dare_17','roman_dare_13','roman_dare_12','roman_dare_18','roman_dare_53',
                     'roman_dare_16','roman_dare_61','roman_dare_66','roman_dare_32','roman_dare_63','roman_dare_21',
                     'roman_dare_24','roman_dare_14','roman_dare_57','roman_dare_49','roman_dare_51','roman_dare_55',
-                    'roman_dare_52','roman_dare_64','roman_walls','roman_regional_names',
+                    'roman_dare_52','roman_dare_64','roman_walls',
                     'roman_shade_117','roman_shade_60bce','roman_shade_200','roman_shade_alexander',
                     'roman_shade_persian','roman_shade_diocletian','roman_shade_herod','roman_shade_hasmonean'
                 ];

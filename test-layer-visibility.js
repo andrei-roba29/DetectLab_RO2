@@ -192,7 +192,7 @@ test('desktop: Banat keeps covered leaves and hides Bucovina and unrelated areas
     // WWII, Mitteleuropa and Reymann also cover Banat. Excluding them would break intersects semantics.
     assert.equal(h.row('otherMapsRow').parentElement.id, 'histSubLayers');
     assert.equal(highlighted(h, 'otherMapsRow'), true, 'free Other maps is available');
-    assert.deepEqual(premiumRows(h), ['banatRow', 'mitteleuropaRow', 'reymannRow', 'ww2Row']);
+    assert.deepEqual(premiumRows(h), ['banatRow', 'mitteleuropaRow', 'reymannRow', 'walachiaRow', 'ww2Row']);
     assert.equal(highlighted(h, 'bucovinaRow'), false);
     assert.equal(highlighted(h, 'satellite60sRow'), true);
     assert.equal(h.row('histPremiumExpandIcon').classList.contains(ARROW_CLASS), false);
@@ -207,7 +207,7 @@ test('PWA: _dlMap takes precedence over a stale local map and window.map', () =>
     // Galicia 1855, Chrzanowski, KDR Großblatt, Mitteleuropa, Reymann, WIG 100k also span the Bucovina viewport.
     // The UK-only maps are hidden (no GB/IE intersection).
     assert.equal(highlighted(h, 'otherMapsRow'), true);
-    assert.deepEqual(premiumRows(h), ['bucovinaRow', 'chrzanowskiRow', 'galicia1855Row', 'kdrGbRow', 'mitteleuropaRow', 'reymannRow', 'wig100kRow', 'ww2Row']);
+    assert.deepEqual(premiumRows(h), ['bucovinaRow', 'chrzanowskiRow', 'galicia1855Row', 'kdrGbRow', 'mitteleuropaRow', 'reymannRow', 'walachiaRow', 'wig100kRow', 'ww2Row']);
     assert.equal(active.reads, 1);
     assert.equal(local.reads + legacy.reads, 0);
     assert.equal(h.row('histPremiumExpandIcon').classList.contains(ARROW_CLASS), false);
@@ -373,11 +373,13 @@ test('all real historical, LIDAR and Roman rows resolve in the shared PWA panel'
             }
             return false;
         }));
-    assert.equal(leafRows.length, 73, '4 historical + 11 LIDAR + 32 Roman + 26 premium rows');
-    // The Pleiades, AWMC names and eastern Mediterranean political layers are
-    // now real rows in the shared Roman/Premium panel.
-    ['roman_places', 'roman_regional_names', 'roman_shade_herod', 'roman_shade_hasmonean'].forEach(id => {
+    assert.equal(leafRows.length, 72, '4 historical + 11 LIDAR + 30 Roman + 27 premium rows');
+    // The eastern Mediterranean political layers remain in the Roman panel.
+    ['roman_shade_herod', 'roman_shade_hasmonean'].forEach(id => {
         assert(h.row(id), '#' + id + ' is present in the Roman sublayer UI');
+    });
+    ['roman_places', 'roman_regional_names'].forEach(id => {
+        assert(!h.row(id), '#' + id + ' is absent from the Roman sublayer UI');
     });
     const pwaStack = h.row('pwa-br-stack');
     assert(pwaStack, 'PWA account stack keeps its id');

@@ -2886,26 +2886,6 @@
                                 <label class="apm-toggle-switch" title="Toggle Monuments"><input type="checkbox" id="roman_dare_64" checked onchange="toggleRomanSub('dare_64',this.checked)"><span class="apm-toggle-track"></span></label>
                             </div>
 
-                            <!-- Pleiades Roman-period sites -->
-                            <div id="romanPlacesRow" style="margin-top:7px;padding-top:7px;border-top:1px solid rgba(232,119,42,0.18);">
-                                <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);">
-                                    <span style="display:flex;align-items:center;gap:5px;">
-                                        <span style="width:9px;height:9px;border-radius:50%;background:#FFD60A;border:1px solid rgba(0,0,0,0.7);display:inline-block;"></span>
-                                        <span>Roman Sites (Pleiades)</span>
-                                    </span>
-                                    <label class="apm-toggle-switch" title="Toggle Pleiades Roman sites"><input type="checkbox" id="roman_places" onchange="toggleRomanSub('places',this.checked)"><span class="apm-toggle-track"></span></label>
-                                </div>
-                                <select id="roman_period" onchange="setRomanPlacesPeriod(this.value)" aria-label="Pleiades site period" style="width:100%;margin-top:5px;padding:4px 6px;border:1px solid rgba(200,169,110,0.25);border-radius:4px;background:rgba(13,26,43,0.9);color:#f5f0eb;font-size:0.68rem;">
-                                    <option value="R">Sites: Roman (AD 30–300)</option>
-                                    <option value="RH">Sites: + Republican (from 330 BC)</option>
-                                    <option value="RL">Sites: + Late Antique (to AD 640)</option>
-                                </select>
-                                <div id="romanPlacesFallback" style="display:none;margin-top:5px;font-size:0.66rem;color:rgba(245,240,235,0.6);">
-                                    Pleiades server unavailable. Choose the downloaded CSV/CSV.GZ file:
-                                    <input type="file" id="romanPlacesFile" accept=".csv,.gz" style="display:block;max-width:100%;margin-top:3px;font-size:0.65rem;">
-                                </div>
-                            </div>
-
                             <!-- Walls -->
                             <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);">
                                 <span style="display:flex;align-items:center;gap:5px;">
@@ -2913,14 +2893,6 @@
                                     <span class="t" data-key="layer_walls">Walls</span>
                                 </span>
                                 <label class="apm-toggle-switch" title="Toggle Walls"><input type="checkbox" id="roman_walls" onchange="toggleRomanSub('walls',this.checked)"><span class="apm-toggle-track"></span></label>
-                            </div>
-
-                            <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.78rem;color:rgba(245,240,235,0.75);">
-                                <span style="display:flex;align-items:center;gap:5px;">
-                                    <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 8C3 7 3 3 5 3S7 7 9 2" fill="none" stroke="#ffffff" stroke-width="0.8"/></svg>
-                                    <span>Regional names (AWMC)</span>
-                                </span>
-                                <label class="apm-toggle-switch" title="Toggle AWMC regional names"><input type="checkbox" id="roman_regional_names" onchange="toggleRomanSub('regional_names',this.checked)"><span class="apm-toggle-track"></span></label>
                             </div>
 
                             <!-- Political Shading header -->
@@ -5289,7 +5261,7 @@
          See ROMAN_ROADS_PERFORMANCE.md. -->
     <script src="js/roman-roads-parser.js?v=20261015-roman-roads"></script>
     <script src="js/roman-roads.js?v=20261015-roman-roads"></script>
-    <script src="js/map-app.js?v=20261030-lidar-touch-fix"></script>
+    <script src="js/map-app.js?v=20261030-roman-layer-cleanup"></script>
     <link rel="stylesheet" href="css/rvt-panel.css?v=20261030-shared-dock">
     <script src="js/lidar-photo-filter.js?v=20261030-no-photo-toast" defer></script>
     <script src="js/map-window-dock.js?v=20261030-shared-dock"></script>

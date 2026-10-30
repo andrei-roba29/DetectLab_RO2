@@ -857,7 +857,8 @@
 // v325: lift LiDAR in 3D above the PWA bleed and phone navigation bar.
 // v333: remove the hillshade controls from below the search bar.
 // v334: paint the free Josephine coverage below the other map dots.
-const CACHE_NAME = 'detectlab-v336-report-exclusions';
+// v337: remove Pleiades sites and AWMC regional names from the Roman layer.
+const CACHE_NAME = 'detectlab-v337-roman-layer-cleanup';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1833,6 +1834,7 @@ const PRECACHE_URLS = [
   //   See SATELLITE_60s_LIVE_LOCATION.md.
   'js/corona-wms-layer.js?v=20261030-sat60-live-location',
   'js/tile-perf.js?v=20261030-sat60-live-location',
+  'js/map-app.js?v=20261030-roman-layer-cleanup',
   'js/map-app.js?v=20261030-walachia'
 ];
 
