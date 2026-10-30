@@ -4375,7 +4375,7 @@
             // which matches the previous stacking order (markers were drawn under this
             // canvas, but were the intended click target).
             map.on('click', function (e) {
-                if (window.dlApmPicking) return;   // APM point picking owns this map click
+                if (window.dlApmPicking || window.dlLidarPhotoPicking) return; // point selection owns this tap
                 if (!map.hasLayer(patrimoniuLayer)) return;   // heritage layer switched off
                 if (!e.latlng || !e.containerPoint) return;
 

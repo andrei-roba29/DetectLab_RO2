@@ -855,7 +855,7 @@
 // v321: keep APM settings hidden until the search-area point is chosen.
 // v324: icon-only LiDAR settings and restored sublayer visibility switches.
 // v325: lift LiDAR in 3D above the PWA bleed and phone navigation bar.
-const CACHE_NAME = 'detectlab-v325-lidar-pwa-bottom';
+const CACHE_NAME = 'detectlab-v332-shared-window-dock';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -897,7 +897,7 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 // ── Static assets to pre-cache on install ──
 const PRECACHE_URLS = [
   // v301: Next-Gen APM (MANUAL) — see the header note above.
-  'css/next-gen-apm.css?v=20261030-apm-pick-hidden',
+  'css/next-gen-apm.css?v=20261030-shared-dock',
   'js/apm-next/apm-core.js?v=20261030-apm-pick-hidden',
   'js/apm-next/apm-raster.js?v=20261030-apm-pick-hidden',
   'js/apm-next/apm-heatmap.js?v=20261030-apm-pick-hidden',
@@ -905,7 +905,7 @@ const PRECACHE_URLS = [
   'js/apm-next/apm-sites.js?v=20261030-apm-pick-hidden',
   'js/apm-next/apm-providers.js?v=20261030-apm-pick-hidden',
   'js/apm-next/apm-pipeline.js?v=20261030-apm-pick-hidden',
-  'js/apm-next/apm-ui.js?v=20261030-apm-pick-hidden',
+  'js/apm-next/apm-ui.js?v=20261030-shared-dock',
   'js/apm-next/apm-i18n.js?v=20261030-apm-pick-hidden',
   'js/apm-next/apm-worker.js?v=20261030-apm-pick-hidden',
   'js/apm-next/apm-worker.js',
@@ -1035,12 +1035,13 @@ const PRECACHE_URLS = [
   'js/lidar-3d-focus.js?v=20261030-lidar-photo-3d',
   'js/lidar-photo-filter.js?v=1',
   'js/lidar-photo-filter.js?v=20261030-area-first',
-  'js/lidar-photo-filter.js?v=20261030-lidar-photo-3d',
+  'js/lidar-photo-filter.js?v=20261030-no-photo-toast',
   'js/rvt-panel.js?v=2',
   'js/rvt-panel.js?v=20261030-area-first',
-  'js/rvt-panel.js?v=20261030-lidar-controls',
-  'css/rvt-panel.css?v=20261030-lidar-controls',
-  'js/map-app.js?v=20261030-lidar-controls',
+  'js/map-window-dock.js?v=20261030-shared-dock',
+  'js/rvt-panel.js?v=20261030-shared-dock',
+  'css/rvt-panel.css?v=20261030-shared-dock',
+  'js/map-app.js?v=20261030-lidar-touch-fix',
   'css/rvt-panel.css?v=1',
   'rvt_service/methods.json',
   'js/lidar-3d-focus.js?v=20261020-lidar-disc-route',

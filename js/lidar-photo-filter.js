@@ -4,15 +4,13 @@
     const map = root._dlMap, L = root.L;
     if (!map || !L) return;
     let session = null, overlay = null, generation = 0, selecting = false, marker = null, pendingClick = null;
-    const toast=document.createElement('div'); toast.id='rvt-photo-status'; toast.hidden=true; toast.setAttribute('role','status'); document.body.appendChild(toast);
     const tilePixels = new Map(), canvases = new Map();
     const blurCache = new WeakMap();
     const MAX_TILES = root.innerWidth && root.innerWidth < 700 ? 48 : 96;
     const controls = {exposure:0, highlights:0, shadows:0, contrast:0, brightness:0, sharpness:0, opacity:100};
     const snapshot = () => session && session.ready && {key:session.key, center:{lat:session.center.lat,lng:session.center.lng}, radiusKm:1,
         zoom:session.zoom, method:session.method, tiles:tilePixels.size};
-    function announce(text) { toast.textContent=text; toast.hidden=false;
-        root.dispatchEvent(new CustomEvent('dl:photo-filter', {detail:{status:text,session:snapshot()}})); }
+    function announce(text) { root.dispatchEvent(new CustomEvent('dl:photo-filter', {detail:{status:text,session:snapshot()}})); }
     const active = key => {
         const known=(root.DetectLabLidar3D?.activeLayers() || []).find(entry =>
             entry.tagKey === 'lidar.' + key || entry.lidarKey === 'lidar.' + key || entry.defId === key);
@@ -115,6 +113,7 @@
     }
     function stop() {
         generation++; paintGeneration++; selecting=false;
+        root.dlLidarPhotoPicking = false;
         if(pendingClick) { map.off('click',pendingClick); pendingClick=null; }
         if(session?.controller) session.controller.abort();
         map.getContainer().style.cursor='';
@@ -123,7 +122,7 @@
         if (overlay) map.removeLayer(overlay);
         overlay=null; session=null; tilePixels.clear(); canvases.clear();
         if (marker) { map.removeLayer(marker); marker=null; }
-        toast.hidden=true; root.dispatchEvent(new CustomEvent('dl:photo-filter', {detail:{status:'Image effect off',session:null}}));
+        root.dispatchEvent(new CustomEvent('dl:photo-filter', {detail:{status:'Image effect off',session:null}}));
     }
     function blurs(source, radius) {
         const out=new Float32Array(256*256);
@@ -296,18 +295,24 @@
     }
     function choose(key,method,values,onComplete) {
         if(pendingClick) map.off('click',pendingClick);
-        selecting=true; map.getContainer().style.cursor='crosshair';
+        selecting=true; root.dlLidarPhotoPicking = true; map.getContainer().style.cursor='crosshair';
         announce('Tap the centre of a LiDAR-covered area on the map (1 km radius)');
         const click=event=>{
             if(window.dlApmPicking) return; // Another tool owns this click; keep selection active.
             map.off('click',click); pendingClick=null; selecting=false; map.getContainer().style.cursor='';
-            prepare(key,event.latlng,method,values).then(ok => {
+            // Leaflet dispatches all map listeners for the same tap. Keep ownership
+            // until the dispatch finishes so heritage hit tests cannot react to it.
+            setTimeout(() => { if (!selecting) root.dlLidarPhotoPicking = false; }, 0);
+            const preparation = prepare(key,event.latlng,method,values);
+            // prepare() resets the previous session, including its picking flag.
+            root.dlLidarPhotoPicking = true;
+            preparation.then(ok => {
                 if (ok && onComplete) onComplete(null);
             }).catch(err => { announce(err.message); if (onComplete) onComplete(err); });
         };
         pendingClick=click; map.on('click',click);
         return () => {
-            if(pendingClick === click) { map.off('click',click); pendingClick=null; selecting=false; map.getContainer().style.cursor=''; }
+            if(pendingClick === click) { map.off('click',click); pendingClick=null; selecting=false; root.dlLidarPhotoPicking=false; map.getContainer().style.cursor=''; }
         };
     }
     map.createPane('rvt-photo-pane'); map.getPane('rvt-photo-pane').style.zIndex=615;
