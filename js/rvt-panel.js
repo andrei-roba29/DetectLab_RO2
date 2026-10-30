@@ -7,7 +7,7 @@
     root.id = 'rvt-panel';
     root.setAttribute('aria-label', 'RVT terrain visualizations');
     root.innerHTML = '<div id="rvt-body" role="dialog" aria-label="LiDAR Settings" hidden></div>';
-    document.body.appendChild(root);
+    map.getContainer().appendChild(root);
     const body = root.querySelector('#rvt-body');
     let layerName = '';
     let profileOn = false, profilePoints = [], profileLine = null;
@@ -175,9 +175,12 @@
         body.replaceChildren();
         const header = el('div', '', 'rvt-heading');
         const heading = el('h2', 'LiDAR Settings');
+        const resize = el('button', body.classList.contains('expanded') ? '−' : '+'); resize.type='button';
+        resize.setAttribute('aria-label', body.classList.contains('expanded') ? 'Reduce settings panel' : 'Expand settings panel');
+        resize.onclick=()=>{ body.classList.toggle('expanded'); render(); };
         const close = el('button', '×'); close.type = 'button'; close.setAttribute('aria-label', 'Close LiDAR Settings');
         close.onclick = () => { body.hidden = true; stopProfile(); };
-        header.append(heading, close); body.appendChild(header);
+        header.append(heading, resize, close); body.appendChild(header);
         body.appendChild(el('p', layerName || layerKey, 'rvt-layer-name'));
         if (layers[layerKey]) {
             const modeButton = el('button',isPhoto() ? 'Use numeric DTM instead' : 'Use WMS photo effects');
@@ -454,6 +457,11 @@
                 body.hidden=false;
                 if (!config) { body.textContent='Loading LiDAR Settings…'; return; }
                 activate(); render();
+                const activeLayer = window.DLPhotoFilter?.active(layerKey);
+                if (activeLayer && window.DLPhotoFilter?.choose) {
+                    body.hidden=true;
+                    window.DLPhotoFilter.choose(layerKey, method, photoState());
+                }
             };
             const header = row.firstElementChild;
             if (header) header.appendChild(button); else row.prepend(button);
@@ -463,8 +471,10 @@
     mounts.forEach(id => { const mount = document.getElementById(id); if (!mount) return;
         new MutationObserver(attachButtons).observe(mount,{childList:true,subtree:true}); });
     attachButtons();
-    window.addEventListener('dl:photo-filter', event=>{ if(!body.hidden && isPhoto()) {
-        if (/ready|off|failed/i.test(event.detail.status)) render(); status(event.detail.status); } });
+    window.addEventListener('dl:photo-filter', event=>{
+        if (isPhoto() && /ready|failed|failed|unavailable/i.test(event.detail.status)) body.hidden=false;
+        if(!body.hidden && isPhoto()) { if (/ready|off|failed/i.test(event.detail.status)) render(); status(event.detail.status); }
+    });
     fetch('/api/rvt/metadata').then(async response => { if (!response.ok) throw Error('No raw DTM service on this deployment'); return response.json(); })
         .then(info => { if (!info || !info.config?.groups || !info.layers) throw Error('No raw DTM service');
             config = info.config; layers = info.layers; layerKey = layerKey || 'nlAhn'; if (!body.hidden) render(); })

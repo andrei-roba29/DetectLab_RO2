@@ -40,9 +40,14 @@
         }
         return tiles;
     }
+    function zoomTiles(center, maxZoom) {
+        const tiles=[];
+        for (let z=0; z<=maxZoom; z++) tiles.push(...tileCoordinates(center,z));
+        return tiles;
+    }
     function chooseZoom(center, layer) {
         let z = Math.min(18, Math.floor(map.getZoom()), layer.maxzoom || 18);
-        while (z > 0 && tileCoordinates(center,z).length + tileCoordinates(center,z-1).length > MAX_TILES) z--;
+        while (z > 0 && zoomTiles(center,z).length > MAX_TILES) z--;
         return z;
     }
     const keyOf = t => [t.z,t.x,t.y].join('/');
@@ -225,7 +230,7 @@
         if (!entry) throw Error('Switch on this LiDAR sublayer before preparing its image area');
         if (!root.DetectLabMirror || !root.DetectLabMap3D) throw Error('3D image tile transport is not ready');
         const zoom=chooseZoom(center,entry);
-        const tiles=[...tileCoordinates(center,zoom-1),...tileCoordinates(center,zoom)];
+        const tiles=zoomTiles(center,zoom);
         const serial=++generation, controller=new AbortController();
         session={key,entry,center,zoom,method,controller}; Object.assign(controls,values||{});
         marker=L.circle(center,{radius:1000,color:'#efbb75',weight:2,fill:false,interactive:false,pane:'rvt-photo-pane'}).addTo(map);
@@ -243,7 +248,7 @@
         await Promise.all(Array.from({length:Math.min(4,tiles.length)},worker));
         if (serial!==generation) return false;
         if (failures) { stop(); throw Error(failures + ' of ' + tiles.length + ' image tiles failed; no partial filter was applied'); }
-        overlay=new PhotoLayer({pane:'rvt-photo-pane',tileSize:256,minZoom:zoom-1,maxNativeZoom:zoom,maxZoom:22,keepBuffer:1});
+        overlay=new PhotoLayer({pane:'rvt-photo-pane',tileSize:256,minZoom:0,maxNativeZoom:zoom,maxZoom:22,keepBuffer:1});
         overlay._dl3dSkip=true; // 3D has its own separately prepared image/terrain deck.
         overlay.addTo(map);
         overlay.on('tileunload', e=>canvases.delete(keyOf(e.coords)));
