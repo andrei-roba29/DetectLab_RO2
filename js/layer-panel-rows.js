@@ -51,6 +51,7 @@
         'premium.polish-tactical-1933': { lat: 49.842, lng: 24.031 },  /* Lviv */
         'premium.ww1':                 { lat: 49.783, lng: 22.768 },   /* Przemyśl */
         'premium.ww2':                 { lat: 49.783, lng: 22.768 },   /* Przemyśl */
+        'premium.walachia-1855':       { lat: 44.4268, lng: 26.1025 }, /* Bucharest */
         'premium.banat':               { lat: 45.748, lng: 21.208 },   /* Timișoara */
         'premium.galicia-1855':        { lat: 49.842, lng: 24.031 },   /* Lviv */
         'premium.mitteleuropa':        { lat: 52.232, lng: 21.006 },   /* Warsaw */
@@ -59,6 +60,18 @@
         'premium.kdr-100k':            { lat: 52.520, lng: 13.405 },   /* Berlin */
         'premium.kdr-gb':              { lat: 52.232, lng: 21.006 },   /* Warsaw */
         'premium.wig-100k':            { lat: 52.232, lng: 21.006 }    /* Warsaw */
+    };
+
+    /* Preview-only candidates for sheets with sparse or uncertain pyramids.
+     * Coordinates for the four R2 sheets are inside their coverage rectangles
+     * in map-app.js. Try different locations and native zooms before nearby
+     * tiles; do not infer the availability of a whole pyramid from one tile. */
+    var SPARSE_PREVIEWS = {
+        'premium.walachia-1855': { tiles: [[14, 9209, 5843]] },
+        'premium.moldova-1868': { points: [[47.158, 27.601], [46.57, 27.91], [45.44, 28.05]], zooms: [12, 11, 10, 13, 9, 8] },
+        'premium.polish-tactical-1933': { points: [[48.10, 25.90], [48.10, 24.00], [47.95, 27.00]], zooms: [12, 11, 10, 13, 9, 8] },
+        'premium.ww1': { points: [[45.44, 28.05], [44.4268, 26.1025], [47.158, 27.601]], zooms: [10, 9, 11, 8] },
+        'premium.ww2': { points: [[44.4268, 26.1025], [45.44, 28.05], [47.158, 27.601]], zooms: [10, 9, 8] }
     };
 
     var TILE_ZOOM = 13;      /* mid detail: recognisable, small, and inside
@@ -125,6 +138,20 @@
         if (!centre || !def.url) return [];
 
         if (def.kind === 'xyz' || def.kind === 'arcgis-image') {
+            var sparse = SPARSE_PREVIEWS[id];
+            if (sparse) {
+                var previewTiles = (sparse.tiles || []).slice();
+                (sparse.zooms || []).forEach(function (level) {
+                    (sparse.points || []).forEach(function (point) {
+                        previewTiles.push([level, tileX(point[1], level), tileY(point[0], level)]);
+                    });
+                });
+                return previewTiles.map(function (tile) {
+                    return String(def.url).replace(/\{(z|x|y)\}/g, function (match, key) {
+                        return tile[key === 'z' ? 0 : key === 'x' ? 1 : 2];
+                    });
+                }).filter(function (url, index, urls) { return urls.indexOf(url) === index; });
+            }
             var z = zoomOf(def);
             var cx = tileX(centre.lng, z);
             var cy = tileY(centre.lat, z);
