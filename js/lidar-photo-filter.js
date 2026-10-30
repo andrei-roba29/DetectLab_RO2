@@ -9,7 +9,7 @@
     const blurCache = new WeakMap();
     const MAX_TILES = root.innerWidth && root.innerWidth < 700 ? 48 : 96;
     const controls = {exposure:0, highlights:0, shadows:0, contrast:0, brightness:0, sharpness:0, opacity:100};
-    const snapshot = () => session && {key:session.key, center:{lat:session.center.lat,lng:session.center.lng}, radiusKm:1,
+    const snapshot = () => session && session.ready && {key:session.key, center:{lat:session.center.lat,lng:session.center.lng}, radiusKm:1,
         zoom:session.zoom, method:session.method, tiles:tilePixels.size};
     function announce(text) { toast.textContent=text; toast.hidden=false;
         root.dispatchEvent(new CustomEvent('dl:photo-filter', {detail:{status:text,session:snapshot()}})); }
@@ -234,6 +234,7 @@
         const serial=++generation, controller=new AbortController();
         session={key,entry,center,zoom,method,controller}; Object.assign(controls,values||{});
         marker=L.circle(center,{radius:1000,color:'#efbb75',weight:2,fill:false,interactive:false,pane:'rvt-photo-pane'}).addTo(map);
+        marker._dl3dSkip=true; // Selection chrome is not imagery.
         announce('Fetching image tiles: 0/' + tiles.length + ' (zoom ' + zoom + ')');
         let next=0,done=0,failures=0;
         async function worker() {
@@ -241,8 +242,8 @@
                 const t=tiles[next++];
                 try { const pixels=await fetchPixels(entry,t,controller.signal);
                     if(serial===generation) tilePixels.set(keyOf(t),pixels); }
-                catch(err) { failures++; if(failures===1) announce('A tile failed: ' + err.message); }
-                done++; announce('Fetching image tiles: ' + done + '/' + tiles.length);
+                catch(err) { failures++; if(serial===generation && failures===1) announce('A tile failed: ' + err.message); }
+                done++; if (serial===generation) announce('Fetching image tiles: ' + done + '/' + tiles.length);
             }
         }
         await Promise.all(Array.from({length:Math.min(4,tiles.length)},worker));
@@ -253,7 +254,7 @@
         overlay.addTo(map);
         overlay.on('tileunload', e=>canvases.delete(keyOf(e.coords)));
         session.entry.layer.on?.('tileload',maskOrigin);
-        maskOrigin(); announce('Photo effect ready: ' + tiles.length + ' tiles in a 1 km radius (not real RVT)');
+        maskOrigin(); session.ready=true; announce('Photo effect ready: ' + tiles.length + ' tiles in a 1 km radius (not real RVT)');
         return true;
     }
     function preview(method) {
@@ -264,17 +265,50 @@
         const prior=session.method; session.method=method; paint(canvas,original,coords); session.method=prior;
         const small=document.createElement('canvas'); small.width=small.height=44; small.getContext('2d').drawImage(canvas,0,0,44,44); return small;
     }
-    function choose(key,method,values) {
+    // The 3D renderer may use these exact processed pixels only for the same
+    // live layer and the same prepared circle, never for another focus.
+    function info3d(layer, mask) {
+        if (!session || !session.ready || session.entry.layer !== layer || !mask) return null;
+        if (Math.abs(Number(mask.lat) - session.center.lat) > 1e-6 ||
+            Math.abs(Number(mask.lng) - session.center.lng) > 1e-6 ||
+            Math.abs(Number(mask.radiusKm) - 1) > 1e-6) return null;
+        return { zoom: session.zoom };
+    }
+    async function tile3d(layer, mask, z, x, y) {
+        if (!info3d(layer, mask)) throw Error('The selected image area is no longer available');
+        const current = session;
+        const canvas=document.createElement('canvas'); canvas.width=canvas.height=256;
+        const ctx=canvas.getContext('2d');
+        // The cache contains both the native zoom and its parent. For lower
+        // zooms, composite the cached parent tiles into their correct positions.
+        const sourceZoom = z < current.zoom ? current.zoom - 1 : current.zoom;
+        const scale = 2 ** (z-sourceZoom);
+        for (const [key, pixels] of tilePixels) {
+            const [tz,tx,ty]=key.split('/').map(Number);
+            if (tz !== sourceZoom || Math.floor(tx*scale) !== x || Math.floor(ty*scale) !== y) continue;
+            const part=document.createElement('canvas'); part.width=part.height=256;
+            paint(part,pixels,{z:tz,x:tx,y:ty});
+            ctx.drawImage(part,(tx*scale-x)*256,(ty*scale-y)*256,256*scale,256*scale);
+        }
+        const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+        if (!blob || session !== current || !info3d(layer,mask)) throw Error('Image area changed during rendering');
+        return blob.arrayBuffer();
+    }
+    function choose(key,method,values,onComplete) {
         if(pendingClick) map.off('click',pendingClick);
         selecting=true; map.getContainer().style.cursor='crosshair';
         announce('Tap the centre of a LiDAR-covered area on the map (1 km radius)');
         const click=event=>{
+            if(window.dlApmPicking) return; // Another tool owns this click; keep selection active.
             map.off('click',click); pendingClick=null; selecting=false; map.getContainer().style.cursor='';
-            if(window.dlApmPicking) return;   // APM point picking owns this map click (selection already cleared above)
-            prepare(key,event.latlng,method,values).catch(err=>announce(err.message));
+            prepare(key,event.latlng,method,values).then(ok => {
+                if (ok && onComplete) onComplete(null);
+            }).catch(err => { announce(err.message); if (onComplete) onComplete(err); });
         };
-        pendingClick=click; map.once('click',click);
-        return () => { if(selecting) { map.off('click',click); pendingClick=null; selecting=false; map.getContainer().style.cursor=''; } };
+        pendingClick=click; map.on('click',click);
+        return () => {
+            if(pendingClick === click) { map.off('click',click); pendingClick=null; selecting=false; map.getContainer().style.cursor=''; }
+        };
     }
     map.createPane('rvt-photo-pane'); map.getPane('rvt-photo-pane').style.zIndex=615;
     map.getPane('rvt-photo-pane').style.pointerEvents='none';
@@ -284,6 +318,7 @@
         if(overlay.getContainer()) overlay.getContainer().style.display=visible?'':'none';
         if(visible) maskOrigin(); else clearMask();
     } });
-    root.DLPhotoFilter={active,choose,prepare,update,stop,get:snapshot,preview,
+    root.DLPhotoFilter={active,choose,prepare,update,stop,get:snapshot,preview,info3d,tile3d,
+        source3d: () => session && session.ready ? session.entry.layer : null,
         _test:{effect,tileCoordinates,chooseZoom}};
 })(window);

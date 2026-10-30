@@ -7087,31 +7087,6 @@
                         'Terrängskuggning © Lantmäteriet',
                     leafletLayer: null
                 },
-                // Hillshade LiDAR derivate (MapTiler Hillshade) — ONE global
-                // shaded-relief overlay for the whole continent. The catalogue
-                // used to carry 50 per-country copies of this single raster
-                // (derivateAD … derivateXK, identical URL) so the panel showed
-                // "Hillshade LiDAR derivate" once per country whose box touched
-                // the viewport, each copy drawing the same tiles. One key, one
-                // layer, one switch.
-                derivate: {
-                    label: 'Hillshade LiDAR derivate', enabled: false, opacity: 0.7,
-                    type: 'xyz',
-                    url: 'https://api.maptiler.com/tiles/hillshade/{z}/{x}/{y}.webp?key=lJtTFcjiimg8ZwMPUfpf',
-                    attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
-                    // The Hillshade tileset's TileJSON declares maxzoom 12
-                    // (https://api.maptiler.com/tiles/hillshade/tiles.json).
-                    // With Leaflet's default maxNativeZoom (18 here) every zoom
-                    // above 12 requested tiles the service does not have, so the
-                    // overlay went blank and only the basemap was left on screen.
-                    // 12 = last native tile: Leaflet upscales it above z12, so
-                    // the relief stays visible (soft, not gone) at every zoom.
-                    // maxZoom is the xyz builder's own cap (20); only the
-                    // native-zoom limit above has to be declared here.
-                    maxNativeZoom: 12,
-                    minZoom: 0,
-                    leafletLayer: null
-                },
             };
 
             var LIDAR_COUNTRY_TOGGLE_IDS = {
@@ -7120,7 +7095,6 @@
                 chLidar: 'lidarChLidarToggle', ukLidar: 'lidarUkLidarToggle',
                 frLidar: 'lidarFrLidarToggle', dkLidar: 'lidarDkLidarToggle',
                 seLidar: 'lidarSeLidarToggle',
-                derivate: 'lidarDerivateToggle',
             };
 
             function _createSelectableEuropeanLidarLayer(cfg) {
@@ -13457,18 +13431,6 @@
             // Only layers whose coverage intersects the current map viewport remain
             // in the panel. Rows return automatically when the map moves back into
             // their coverage; desktop and standalone PWA share this same panel.
-            // Coverage box for the single Hillshade LiDAR derivate row. The
-            // MapTiler Hillshade tileset is ONE global shaded-relief raster
-            // (bounds -180..180 / -85..85), so the row is continent-wide and
-            // country-independent: the panel carries one switch for all of
-            // Europe instead of the 50 identical per-country copies it used to
-            // have ("Hillshade LiDAR derivate" repeated for AD, AL … XK — the
-            // same global layer tripled down the panel as soon as the viewport
-            // reached more than one country's box, and each copy drew the very
-            // same tiles on top of the others).
-            var LIDAR_DERIVATE_BOUNDS = {
-                derivate: [[34.0, -25.0], [72.0, 45.0]]
-            };
             // Resolve rows on every check: auth/layer UI may not be ready yet.
             (function() {
                 function _isEuropeMarket() {
@@ -13562,11 +13524,6 @@
                     lidar_frLidar: ['FR'],
                     lidar_dkLidar: ['DK'],
                     lidar_seLidar: ['SE'],
-                    // Hillshade LiDAR derivate is deliberately NOT listed: it is
-                    // one continent-wide global raster (LIDAR_DERIVATE_BOUNDS,
-                    // countryIndependent), not a national service, so every
-                    // country view keeps the single row instead of 50 per-ISO
-                    // duplicates of the same tiles.
                     // Romanian national catalogue (county LiDAR keys are added
                     // below — all of them are Romanian counties/national grids).
                     apm: ['RO'], apm20: ['RO'], sat: ['RO'], osmPlaces: ['RO'],
@@ -13798,22 +13755,6 @@
                         })(realSliderId),
                         group: null
                     });
-                });
-
-                // The single Hillshade LiDAR derivate row. A continent-wide
-                // global raster carries no country attribution: it is offered in
-                // every country view (`countryIndependent`), and it never
-                // multiplies into one row per country again.
-                internationalLayerDefs.push({
-                    key: 'lidar_derivate',
-                    bounds: toBounds(LIDAR_DERIVATE_BOUNDS.derivate),
-                    getRow: function() {
-                        var s = document.getElementById('lidarDerivateOpacitySlider');
-                        if (!s) return null;
-                        return getDirectChildRowByElement(s, 'lidarEuropeanSubLayers') || s.parentElement;
-                    },
-                    group: null,
-                    countryIndependent: true
                 });
 
                 // Premium top-level leaf layers
@@ -14136,7 +14077,7 @@
                     // available — decided BOTH ways, exactly like the country
                     // filter below: through `def.group` AND through DOM
                     // containment. The European LiDAR rows (Netherlands … UK …
-                    // plus the 50 hillshade derivate rows) deliberately carry no
+                    // and other national services) deliberately carry no
                     // group key — only the Romanian county rows can set
                     // `groupVisible.lidar` — so as soon as the viewport left
                     // Romania (e.g. zoomed onto the UK) the whole LiDAR section

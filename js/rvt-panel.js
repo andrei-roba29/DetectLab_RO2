@@ -13,6 +13,7 @@
     let profileOn = false, profilePoints = [], profileLine = null;
     let config, layers = {}, layerKey = '', method = 'hillshade', overlay = null, busy = false;
     let requestId = 0, timer, histogramTimer;
+    let selectionSerial = 0, cancelSelection = null, areaReady = false;
     const settings = {};
     const tileStore = new Map();
     const featureSelection = new Set();
@@ -172,6 +173,7 @@
         button.textContent = (isPhoto() ? 'Reset image adjustments' : 'At RVT\'s defaults') + (changes ? ' (' + changes + ' changed)' : '');
     }
     function render() {
+        if (!areaReady || !config) return;
         body.replaceChildren();
         const header = el('div', '', 'rvt-heading');
         const heading = el('h2', 'LiDAR Settings');
@@ -182,12 +184,8 @@
         close.onclick = () => { body.hidden = true; stopProfile(); };
         header.append(heading, resize, close); body.appendChild(header);
         body.appendChild(el('p', layerName || layerKey, 'rvt-layer-name'));
-        if (layers[layerKey]) {
-            const modeButton = el('button',isPhoto() ? 'Use numeric DTM instead' : 'Use WMS photo effects');
-            modeButton.type='button';
-            modeButton.onclick=()=>{ photoMode=!photoMode; stopProfile(); if(!photoMode) window.DLPhotoFilter?.stop(); activate(); render(); };
-            body.appendChild(modeButton);
-        }
+        // Numeric RVT is not area-clipped yet; keep this workflow limited to
+        // the prepared image circle rather than applying settings to the map.
         const navigation = el('div', '', 'rvt-nav');
         const all = methods(), index = all.indexOf(method);
         const previous = el('button', '←', ''); previous.setAttribute('aria-label','Previous method');
@@ -238,12 +236,12 @@
             if (!activeLayer) settingsBox.appendChild(el('p','Switch on this LiDAR sublayer first. Only visible layers can be prefetched.'));
             const choose = el('button',ready ? 'Choose a different 1 km area' : 'Choose and prefetch a 1 km area');
             choose.type='button'; choose.disabled=!activeLayer;
-            choose.onclick=()=>{ body.hidden=true; window.DLPhotoFilter.choose(layerKey,method,photoState()); };
+            choose.onclick=()=>{ beginAreaSelection(); };
             settingsBox.appendChild(choose);
             if (ready) {
                 const area = window.DLPhotoFilter.get();
                 settingsBox.appendChild(el('p','Ready: '+area.tiles+' fetched tiles · zoom '+area.zoom+' · 1 km radius. Outside the circle the original map is unchanged.'));
-                const stop=el('button','Remove photo effect'); stop.type='button'; stop.onclick=()=>{ window.DLPhotoFilter.stop(); render(); }; settingsBox.appendChild(stop);
+                const stop=el('button','Remove photo effect'); stop.type='button'; stop.onclick=()=>{ window.DLPhotoFilter.stop(); beginAreaSelection(); }; settingsBox.appendChild(stop);
             }
             settingsBox.appendChild(el('h4','Image adjustments'));
             for (const [key,label,min,max,tip] of [
@@ -442,6 +440,43 @@
         if (input) return input.id.replace(/^lidar/, '').replace(/OpacitySlider$/, '').replace(/^./, c => c.toLowerCase());
         return null;
     }
+    function selectionMessage(message, retry) {
+        body.replaceChildren(); body.hidden = false;
+        const header = el('div', '', 'rvt-heading');
+        header.appendChild(el('h2', 'Choose LiDAR area'));
+        const close = el('button', '×'); close.type = 'button'; close.setAttribute('aria-label', 'Cancel area selection');
+        close.onclick = () => { selectionSerial++; if (cancelSelection) cancelSelection(); cancelSelection = null;
+            window.DLPhotoFilter?.stop(); body.hidden = true; };
+        header.appendChild(close); body.appendChild(header);
+        body.appendChild(el('p', layerName || layerKey, 'rvt-layer-name'));
+        body.appendChild(el('p', message, 'rvt-warning'));
+        if (retry) { const button = el('button', 'Choose area again'); button.type = 'button';
+            button.onclick = beginAreaSelection; body.appendChild(button); }
+    }
+    function beginAreaSelection() {
+        const serial = ++selectionSerial;
+        if (cancelSelection) cancelSelection();
+        areaReady = false; photoMode = true;
+        if (!window.DLPhotoFilter?.choose) { selectionMessage('Area selection is unavailable. Please try again.', true); return; }
+        selectionMessage('Tap the centre of the desired area on the map (1 km radius).', false);
+        cancelSelection = window.DLPhotoFilter.choose(layerKey, method, photoState(), err => {
+            if (serial !== selectionSerial) return;
+            cancelSelection = null;
+            if (err) { selectionMessage(err.message, true); return; }
+            areaReady = true; body.hidden = false;
+            if (config) { activate(); render(); }
+            else selectionMessage('Loading LiDAR settings…', false);
+        });
+    }
+    function enableRow(row) {
+        const toggle = row.querySelector('input[type="checkbox"]');
+        if (toggle && !toggle.checked) toggle.click();
+        // Romanian rows are enabled through their opacity slider, not a checkbox.
+        const range = row.querySelector('input[id$="OpacitySlider"]');
+        if (!toggle && range && Number(range.value) === 0) {
+            range.value = 70; range.dispatchEvent(new Event('input', {bubbles:true}));
+        }
+    }
     function attachButtons() {
         const rows = document.querySelectorAll('#lidarEuropeanSubLayers .lidar-country-row, #lidarSubLayers > div, #albaniaLidarLayers .lidar-country-row, #danishLidarLayers .lidar-country-row');
         rows.forEach(row => {
@@ -451,17 +486,17 @@
             button.setAttribute('aria-label','LiDAR Settings for ' + key);
             button.onclick = event => {
                 event.preventDefault(); event.stopPropagation();
-                stopProfile(); if (layerKey !== key && window.DLPhotoFilter?.get()) window.DLPhotoFilter.stop(); layerKey = key;
+                stopProfile();
+                selectionSerial++; if (cancelSelection) cancelSelection(); cancelSelection = null;
+                areaReady = false;
+                if (window.DLPhotoFilter?.get()) window.DLPhotoFilter.stop();
+                layerKey = key; photoMode = true;
                 const title = row.querySelector('.albania-layer-title, .danish-layer-title');
                 layerName = (title?.textContent || row.firstElementChild?.textContent || key).trim().replace(/ⓘ/g,'').slice(0,85);
-                body.hidden=false;
-                if (!config) { body.textContent='Loading LiDAR Settings…'; return; }
-                activate(); render();
-                const activeLayer = window.DLPhotoFilter?.active(layerKey);
-                if (activeLayer && window.DLPhotoFilter?.choose) {
-                    body.hidden=true;
-                    window.DLPhotoFilter.choose(layerKey, method, photoState());
-                }
+                enableRow(row);
+                const panel = document.getElementById('transpPanel');
+                if (panel?.classList.contains('open') && window.toggleTranspPanel) window.toggleTranspPanel();
+                beginAreaSelection();
             };
             const header = row.firstElementChild;
             if (header) header.appendChild(button); else row.prepend(button);
@@ -472,14 +507,15 @@
         new MutationObserver(attachButtons).observe(mount,{childList:true,subtree:true}); });
     attachButtons();
     window.addEventListener('dl:photo-filter', event=>{
-        if (isPhoto() && /ready|failed|failed|unavailable/i.test(event.detail.status)) body.hidden=false;
-        if(!body.hidden && isPhoto()) { if (/ready|off|failed/i.test(event.detail.status)) render(); status(event.detail.status); }
+        if (areaReady && isPhoto() && event.detail.status === 'Image effect off') {
+            areaReady = false; if (!body.hidden) selectionMessage('The layer or image effect was turned off. Choose an area again.', true);
+        } else if (areaReady && !body.hidden && isPhoto()) status(event.detail.status);
     });
     fetch('/api/rvt/metadata').then(async response => { if (!response.ok) throw Error('No raw DTM service on this deployment'); return response.json(); })
         .then(info => { if (!info || !info.config?.groups || !info.layers) throw Error('No raw DTM service');
-            config = info.config; layers = info.layers; layerKey = layerKey || 'nlAhn'; if (!body.hidden) render(); })
+            config = info.config; layers = info.layers; layerKey = layerKey || 'nlAhn'; if (!body.hidden && areaReady) render(); })
         .catch(() => fetch('rvt_service/methods.json').then(r => r.json()).then(c => {
-            config = c; layerKey = layerKey || 'nlAhn'; if (!body.hidden) render(); status('No raw DTM service on this deployment; existing map imagery is unchanged.');
+            config = c; layerKey = layerKey || 'nlAhn'; if (!body.hidden && areaReady) render(); status('No raw DTM service on this deployment; existing map imagery is unchanged.');
         }).catch(() => { body.appendChild(el('p', 'Terrain filters unavailable: configuration could not be loaded.')); }));
     map.on('moveend zoomend', histogram);
 })();

@@ -843,7 +843,12 @@
 //   keeps its natural proportions at every zoom. Re-tags js/other-maps-overlay.js
 //   and the cache name. See OTHER_MAPS.md §9.
 // v307: keep the PWA layers panel uniformly tinted through its bottom clearance.
-const CACHE_NAME = 'detectlab-v311-web-3d-basemap-row';
+// v312: make the PWA layers panel opaque so the map cannot change its color.
+// v313: remove the global Hillshade LiDAR derivate layer from the catalogue.
+// v314: choose a LiDAR area before showing image settings.
+// v315: drape the prepared LiDAR image adjustments in 3D without selection tint.
+// v316: lift the analysis action dock above 3D controls in PWA and web.
+const CACHE_NAME = 'detectlab-v316-3d-analysis-dock';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1004,6 +1009,7 @@ const PRECACHE_URLS = [
   'js/translations.js?v=20261023-other-maps',
   'js/map3d-mirror.js?v=20261017-archeo-3d-projection',
   'js/map3d-mirror.js?v=20261029-romania-5m',
+  'js/map3d-mirror.js?v=20261030-lidar-photo-3d',
   'js/map3d-mirror.js?v=20261020-3d-analysis-points',
   'js/map3d-mirror.js?v=20261014-lidar-3d-focus',
   'js/map3d-mirror.js?v=20261014-3d-vectors',
@@ -1017,8 +1023,12 @@ const PRECACHE_URLS = [
   'js/roman-roads-worker.js?v=20261015-roman-roads',
   /* LiDAR in the 3D view: the focus dialog, the prefetch and the entry gate. */
   'js/lidar-3d-focus.js?v=20261028-lidar-photo-bridge',
+  'js/lidar-3d-focus.js?v=20261030-lidar-photo-3d',
   'js/lidar-photo-filter.js?v=1',
+  'js/lidar-photo-filter.js?v=20261030-area-first',
+  'js/lidar-photo-filter.js?v=20261030-lidar-photo-3d',
   'js/rvt-panel.js?v=2',
+  'js/rvt-panel.js?v=20261030-area-first',
   'css/rvt-panel.css?v=1',
   'rvt_service/methods.json',
   'js/lidar-3d-focus.js?v=20261020-lidar-disc-route',
@@ -1048,8 +1058,11 @@ const PRECACHE_URLS = [
   'css/map3d-terrain.css?v=20261029-no-cesium',
   'css/map3d-terrain.css?v=20261029-pwa-3d-clearance',
   'css/map3d-terrain.css?v=20261029-web-3d-basemap-row',
+  'css/map3d-terrain.css?v=20261030-3d-analysis-dock',
   'js/map3d-terrain.js?v=20261029-no-cesium',
   'js/map3d-terrain.js?v=20261029-3d-startup-repaint',
+  'js/map3d-terrain.js?v=20261030-lidar-photo-3d',
+  'js/map3d-terrain.js?v=20261030-3d-analysis-dock',
   'js/map-app.js?v=20261026-lidar-whole-or-disc',
   'js/lidar-3d-focus.js?v=20261026-lidar-whole-or-disc',
   'js/map3d-terrain.js?v=20261024-gesture-only-camera',
@@ -1788,7 +1801,8 @@ const PRECACHE_URLS = [
   //   live ones index.html requests.
   'css/styles.css?v=20261029-romania-5m',
   'js/tile-perf.js?v=20261029-android-zoom-glass',
-  'js/map-app.js?v=20261029-other-maps-visibility'
+  'js/map-app.js?v=20261029-other-maps-visibility',
+  'js/map-app.js?v=20261030-remove-hillshade-derivate'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──
