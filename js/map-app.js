@@ -13696,6 +13696,7 @@
                     premium_ww1: ['RO', 'MD', 'UA', 'BG', 'HU', 'RS'],
                     premium_ww2: ['RO', 'MD', 'UA', 'BG', 'HU', 'RS'],
                     premium_banat: ['RO', 'HU', 'RS'],
+                    premium_walachia: ['RO'],
                     premium_transylvania1859: ['RO'],
                     // United Kingdom · Ordnance Survey / Bartholomew sheets
                     // (MapTiler / National Library of Scotland). The seamless
@@ -13968,6 +13969,7 @@
                     { key: 'ww1', toggle: 'ww1MapToggle', row: 'ww1Row' },
                     { key: 'ww2', toggle: 'ww2MapToggle', row: 'ww2Row' },
                     { key: 'banat', toggle: 'banatMapToggle', row: 'banatRow' },
+                    { key: 'walachia', toggle: 'walachiaMapToggle', row: 'walachiaRow' },
                     { key: 'transylvania1859', toggle: 'transylvania1859MapToggle', row: 'transylvania1859Row' },
                     { key: 'mitteleuropa', toggle: 'mitteleuropaMapToggle', row: 'mitteleuropaRow' },
                     { key: 'chrzanowski', toggle: 'chrzanowskiMapToggle', row: 'chrzanowskiRow' },
@@ -14868,6 +14870,31 @@
                 };
             })();
 
+            // Valahia 1855-1859 — XYZ tiles from Supabase Storage.
+            (function () {
+                map.createPane('pane_walachia');
+                map.getPane('pane_walachia').style.zIndex = 650;
+                map.getPane('pane_walachia').style.pointerEvents = 'none';
+                window._walachiaMapLayer = L.tileLayer(DL.url2d('premium.walachia-1855'),
+                    DL.tile2dOptions('premium.walachia-1855', { pane: 'pane_walachia', minZoom: 0, maxZoom: 20 }));
+                window.toggleWalachiaMap = function (on) {
+                    if (on) {
+                        var parent = document.getElementById('histPremiumToggle');
+                        if (parent && !parent.checked) {
+                            parent.checked = true;
+                            window.toggleHistPremiumLayer(true);
+                        }
+                        window._walachiaMapLayer.addTo(map);
+                    } else if (map.hasLayer(window._walachiaMapLayer)) {
+                        map.removeLayer(window._walachiaMapLayer);
+                    }
+                };
+                window.setWalachiaMapOpacity = function (val) {
+                    document.getElementById('walachiaMapPct').textContent = val + '%';
+                    window._walachiaMapLayer.setOpacity(val / 100);
+                };
+            })();
+
             // ── HARTA TRANSILVANIEI 1859 (Tiled Map Service, ArcGIS Online) ──
             // Strat premium nou. Sursă: serviciu de tile-uri găzduit pe ArcGIS
             // Online (org. t2AVhHhEnEvHcPF6), public (share level Everyone).
@@ -15617,6 +15644,7 @@
                 { id: 'ww1MapToggle', fnName: 'toggleWw1Map' },
                 { id: 'ww2MapToggle', fnName: 'toggleWw2Map' },
                 { id: 'banatMapToggle', fnName: 'toggleBanatMap' },
+                { id: 'walachiaMapToggle', fnName: 'toggleWalachiaMap' },
                 { id: 'transylvania1859MapToggle', fnName: 'toggleTransylvania1859Map' },
                 { id: 'mitteleuropaMapToggle', fnName: 'toggleMitteleuropaMap' },
                 { id: 'chrzanowskiMapToggle', fnName: 'toggleChrzanowskiMap' },

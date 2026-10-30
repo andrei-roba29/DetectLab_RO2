@@ -75,7 +75,7 @@ console.log('  ✓ the photo is a mean, violet-washed backdrop underneath the co
 
 /* ── 3. Every historical sublayer row opts in, and every id resolves ───── */
 const tagged = [...html.matchAll(/data-preview-layer="([^"]+)"/g)].map(m => m[1]);
-assert(tagged.length === 28, 'all 28 remaining historical sublayer rows carry a preview layer id (got ' + tagged.length + ')');
+assert(tagged.length === 29, 'all 29 remaining historical sublayer rows carry a preview layer id (got ' + tagged.length + ')');
 assert.deepStrictEqual(tagged, [...new Set(tagged)], 'no row is tagged twice');
 
 const fakeDocument = {
@@ -178,6 +178,29 @@ pyramids.forEach(def => {
 assert(bounded >= 8, 'the bounded pyramids are checked against their own footprint');
 console.log('  ✓ ' + pyramids.length + ' tile pyramids resolve to a tile inside their own coverage');
 
+/* Sparse sheets must try known or in-coverage tiles at several zooms. */
+assert(api.urlFor('premium.walachia-1855').endsWith('/charta/14/9209/5843.png'),
+    'Walachia uses the tile supplied for this sheet');
+const sparseBounds = {
+    'premium.moldova-1868': [44.9959, 26.2354, 48.3124, 29.8389],
+    'premium.polish-tactical-1933': [47.6950, 22.0166, 48.3124, 28.3887],
+    'premium.ww1': [43.3252, 22.3242, 48.3416, 29.8828],
+    'premium.ww2': [43.8345, 20.0391, 48.4584, 29.8828]
+};
+Object.keys(sparseBounds).forEach(id => {
+    const def = sandboxWindow.DetectLabLayers.get(id);
+    const tiles = api.urlsFor(id).map(url => readBack(def.url, url));
+    assert(tiles.length >= 6 && new Set(tiles.map(tile => tile.z)).size >= 3,
+        id + ' retries across locations and native zoom levels');
+    const [south, west, north, east] = sparseBounds[id];
+    tiles.forEach(tile => {
+        assert(tile && tile.z >= def.minZoom && tile.z <= def.maxNativeZoom, id + ' native zoom');
+        const c = tileCentre(tile);
+        assert(c.lat >= south - 1 && c.lat <= north + 1 && c.lng >= west - 1 && c.lng <= east + 1,
+            id + ' preview stays near its footprint');
+    });
+});
+
 /* WMS mosaics preview through a small GetMap over the sheet's middle. */
 const josephine = api.urlFor('premium.josephine');
 assert(/r2\.dev\/Josephine\/\d+\/\d+\/\d+\.jpg$/.test(josephine), 'Josephine previews its own R2 mosaic tile');
@@ -242,8 +265,8 @@ console.log('  ✓ previews load only for visible rows, once, and fail soft');
 }
 
 /* ── 6. Wiring: cache-busting, precache, shell version ─────────────────── */
-const TAG = '20261028-historical-tile-fallback';
-const STYLES_TAG = '20261029-android-zoom-glass';
+const TAG = '20261030-sparse-previews';
+const STYLES_TAG = '20261029-romania-5m';
 assert(html.includes('js/layer-panel-rows.js?v=' + TAG), 'index.html loads the row chrome, versioned');
 assert(sw.includes("'js/layer-panel-rows.js?v=" + TAG + "'"), 'sw.js precaches the row chrome');
 const stylesUrl = (html.match(/href="(css\/styles\.css\?v=[^"]+)"/) || [])[1];

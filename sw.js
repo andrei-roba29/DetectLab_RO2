@@ -853,7 +853,7 @@
 //   update per gesture, a conservation back-off and a GPS pin that is moved
 //   instead of rebuilt. See SATELLITE_60s_LIVE_LOCATION.md.
 // v321: keep APM settings hidden until the search-area point is chosen.
-const CACHE_NAME = 'detectlab-v321-apm-pick-hidden';
+const CACHE_NAME = 'detectlab-v323-sparse-previews';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -941,7 +941,7 @@ const PRECACHE_URLS = [
   'js/asig-albania-layers.js?v=20261024-asig-catalogue',
   'js/layer-registry.js?v=20261024-asig-catalogue',
   // v265: premium UK historical maps (Ordnance Survey / Bartholomew, MapTiler).
-  'js/layer-registry.js?v=20261029-no-cesium',
+  'js/layer-registry.js?v=20261030-walachia',
   'js/map-app.js?v=20261024-uk-historical-maps',
   'js/map-app.js?v=20261025-lidar-3d-tile-heal',
   // v275: one Hillshade LiDAR derivate row + maxNativeZoom 12.
@@ -973,7 +973,7 @@ const PRECACHE_URLS = [
   'js/map-rotate.js?v=20261026-touch-rotate-deadband',
   'js/tutorial.js?v=20261029-live-location-guide',
   'js/layer-panel-rows.js?v=20261025-layer-glass',
-  'js/layer-panel-rows.js?v=20261028-historical-tile-fallback',
+  'js/layer-panel-rows.js?v=20261030-sparse-previews',
   'css/styles.css?v=20261028-historical-tile-fallback',
   // v271: unified slim 3D-style pastel faded semitransparent orange sliders
   // and blurred button-box (--ctl-*) slider containers across desktop & PWA.
@@ -1761,13 +1761,13 @@ const PRECACHE_URLS = [
   // instead of any CSS viewport unit, and the temporary on-device band probe
   // is gone. Only index.html + this file changed; the entry below is the live
   // mirror URL index.html requests, which the shell must pre-cache with it.
-  'js/vertical-opacity-control.js?v=20261029-romania-5m',
+  'js/vertical-opacity-control.js?v=20261030-walachia',
   'js/danish-layers.js?v=20261026-flat-country-sections',
   // v287: the archaeological-potential legend's heat-bar label reads “Strong”
   // (“Puternic” in Romanian) instead of “Weak”, in every language, and the ASIG
   // map tap only queries inside Albania while a layer is really on the map.
   // Both URLs below are the live ones index.html requests.
-  'js/translations.js?v=20261026-legend-strong',
+  'js/translations.js?v=20261030-walachia',
   'js/asig-albania-layers.js?v=20261026-asig-tap-guard',
   // v288: every free Denmark layer is restyled like the other countries'
   // rows (pill on/off switch + opacity slider), grouped as LiDAR /
@@ -1824,7 +1824,7 @@ const PRECACHE_URLS = [
   //   See SATELLITE_60s_LIVE_LOCATION.md.
   'js/corona-wms-layer.js?v=20261030-sat60-live-location',
   'js/tile-perf.js?v=20261030-sat60-live-location',
-  'js/map-app.js?v=20261030-sat60-live-location'
+  'js/map-app.js?v=20261030-walachia'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──
