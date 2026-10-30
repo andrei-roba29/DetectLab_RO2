@@ -1,13 +1,13 @@
-#rvt-panel { position:fixed; right:14px; bottom:85px; z-index:1250; font:14px/1.4 system-ui,sans-serif; color:#eaf4f1; }
+#rvt-panel { position:absolute; left:50%; bottom:10%; transform:translateX(-50%); z-index:1250; font-family:inherit; font-size:14px; line-height:1.4; color:#eaf4f1; pointer-events:none; }
 #rvt-panel button, #rvt-panel select { font:inherit; cursor:pointer; }
-#rvt-open { border:1px solid #be995e; border-radius:12px; padding:11px 16px; background:#152c2c; color:#fff; box-shadow:0 4px 18px #0007; }
-#rvt-body { width:min(370px,calc(100vw - 24px)); max-height:min(80vh,740px); overflow-y:auto; overscroll-behavior:contain; background:#102727; border:1px solid #647d74; border-radius:16px; padding:17px; box-sizing:border-box; box-shadow:0 10px 35px #0009; }
+#rvt-body { pointer-events:auto; width:min(440px,calc(100vw - 24px)); max-height:min(42vh,420px); overflow-y:auto; overscroll-behavior:contain; background:rgba(16,39,39,.92); border:1px solid rgba(148,177,165,.62); border-radius:14px; padding:15px; box-sizing:border-box; box-shadow:0 8px 28px rgba(0,0,0,.48); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); }
+#rvt-body.expanded { width:min(700px,calc(100vw - 24px)); max-height:min(72vh,720px); }
 #rvt-body[hidden] { display:none; }
 #rvt-body h2 { font-size:19px; margin:0 0 12px; }
 #rvt-body h3 { font-size:14px; color:#d9bf93; margin:16px 0 7px; }
 #rvt-body h4 { font-size:13px; margin:15px 0 5px; }
 #rvt-body p, #rvt-body small { color:#b8c9c4; font-size:12px; }
-#rvt-body button { background:#23403f; border:1px solid #54736c; color:#f5f6f2; border-radius:8px; padding:7px; }
+#rvt-body button { background:rgba(35,64,63,.9); border:1px solid rgba(130,160,150,.72); color:#f5f6f2; border-radius:8px; padding:7px; }
 #rvt-body button:disabled { opacity:.4; cursor:not-allowed; }
 #rvt-body button:focus-visible, #rvt-body input:focus-visible, #rvt-body select:focus-visible { outline:2px solid #f4c27a; }
 #rvt-body select { display:block; width:100%; background:#1b3737; color:#fff; border:1px solid #79948d; border-radius:7px; padding:10px; }
@@ -29,23 +29,18 @@
 .rvt-warning { padding:10px; background:#4f3934; border-radius:7px; }
 .rvt-readout { min-height:2em; }
 #rvt-reset { display:block; width:100%; margin:16px 0 8px; }
-@media(max-width:650px) { #rvt-panel { right:8px; bottom:70px; } #rvt-body { max-height:65dvh; } #rvt-open { min-height:44px; } }
-#rvt-panel { bottom: max(68px, env(safe-area-inset-bottom)); }
 .rvt-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-.rvt-heading h2 { margin:0 !important; }
+.rvt-heading h2 { margin:0 !important; flex:1; }
 .rvt-heading button { min-width:34px; min-height:34px; font-size:22px !important; line-height:1; }
 #rvt-body .rvt-layer-name { margin:5px 0 10px; color:#d6bd96; }
-.rvt-row-button { margin-left:auto; white-space:nowrap; border:1px solid rgba(119,202,195,.6); border-radius:7px; background:#173738; color:#eaf3ed; padding:4px 7px; font:600 11px system-ui,sans-serif; cursor:pointer; min-height:28px; }
+.rvt-row-button { margin-left:auto; white-space:nowrap; border:0; border-radius:7px; background:transparent; color:inherit; padding:4px 8px; font:600 17px system-ui,sans-serif; cursor:pointer; min-height:28px; }
 .rvt-row-button:focus-visible { outline:2px solid #ffc674; }
 .rvt-ground { border-top:1px solid #58746b; margin-top:14px; padding-top:2px; }
 .rvt-ground .rvt-control { display:flex; align-items:center; gap:10px; }
 .rvt-ground input { width:20px; height:20px; accent-color:#e9b971; }
 .rvt-profile canvas { display:block; width:100%; height:105px; margin:8px 0; }
 .rvt-profile button { margin:8px 0; }
-@media(max-width:650px) { #rvt-panel { right:8px; bottom:max(68px,env(safe-area-inset-bottom)); } .rvt-row-button { padding:6px; min-height:36px; } }
-#rvt-photo-status { position:fixed; left:50%; bottom:75px; transform:translateX(-50%); z-index:1252;
-    max-width:min(350px,90vw); background:#183636; border:1px solid #dab481; color:#fff;
-    border-radius:10px; padding:8px 12px; font:12px system-ui,sans-serif; pointer-events:none; text-align:center; }
+#rvt-photo-status { position:absolute; left:50%; bottom:4%; transform:translateX(-50%); z-index:1252; max-width:min(350px,90vw); background:rgba(24,54,54,.94); border:1px solid #dab481; color:#fff; border-radius:10px; padding:8px 12px; font:12px system-ui,sans-serif; pointer-events:none; text-align:center; }
 #rvt-photo-status[hidden] { display:none; }
-/* Visually distinguish image-only controls from numeric terrain settings. */
 #rvt-body .rvt-warning { border-left:3px solid #e5a46c; }
+@media(max-width:650px) { #rvt-panel { bottom:8%; } #rvt-body { max-height:52dvh; } #rvt-body.expanded { max-height:78dvh; } .rvt-row-button { padding:6px; min-height:36px; } }
