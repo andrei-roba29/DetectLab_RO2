@@ -86,6 +86,7 @@
         return decode(bytes);
     }
     const maskedTiles = new Map();
+    let maskFrame = 0;
     function clearMask() {
         for(const [node, prior] of maskedTiles) {
             node.style.maskImage=prior.maskImage; node.style.webkitMaskImage=prior.webkitMaskImage;
@@ -93,23 +94,63 @@
         }
         maskedTiles.clear();
     }
+    function clipOrigin() {
+        if (!session) return null;
+        const mapBounds = map.getContainer().getBoundingClientRect(),
+              p = map.latLngToContainerPoint(session.center);
+        const radius = map.project(session.center, map.getZoom()).distanceTo(
+            map.project([session.center.lat + 1000 / 111200, session.center.lng], map.getZoom()));
+        return { left: mapBounds.left + p.x, top: mapBounds.top + p.y, radius };
+    }
+    function applyClip(node, clip) {
+        const r = node.getBoundingClientRect();
+        if (!r.width || !r.height) return;
+        if (!maskedTiles.has(node)) maskedTiles.set(node, {
+            maskImage: node.style.maskImage, webkitMaskImage: node.style.webkitMaskImage,
+            maskRepeat: node.style.maskRepeat, webkitMaskRepeat: node.style.webkitMaskRepeat
+        });
+        const x = clip.left - r.left, y = clip.top - r.top;
+        const value = `radial-gradient(circle ${clip.radius}px at ${x}px ${y}px, transparent calc(100% - 1px), black 100%)`;
+        node.style.maskImage = value; node.style.webkitMaskImage = value;
+        node.style.maskRepeat = 'no-repeat'; node.style.webkitMaskRepeat = 'no-repeat';
+    }
     function maskOrigin() {
-        if(!session || !overlay) return;
-        const mapBounds=map.getContainer().getBoundingClientRect(), p=map.latLngToContainerPoint(session.center);
-        const radius=map.project(session.center,map.getZoom()).distanceTo(
-            map.project([session.center.lat+1000/111200,session.center.lng],map.getZoom()));
-        const tiles=session.entry.layer._tiles || {};
-        for(const tile of Object.values(tiles)) {
-            const node=tile?.el; if(!node || !node.getBoundingClientRect) continue;
-            if(!maskedTiles.has(node)) maskedTiles.set(node,{
-                maskImage:node.style.maskImage,webkitMaskImage:node.style.webkitMaskImage,
-                maskRepeat:node.style.maskRepeat,webkitMaskRepeat:node.style.webkitMaskRepeat
-            });
-            const r=node.getBoundingClientRect(), x=mapBounds.left+p.x-r.left,y=mapBounds.top+p.y-r.top;
-            const value=`radial-gradient(circle ${radius}px at ${x}px ${y}px, transparent calc(100% - 1px), black 100%)`;
-            node.style.maskImage=value; node.style.webkitMaskImage=value;
-            node.style.maskRepeat='no-repeat'; node.style.webkitMaskRepeat='no-repeat';
+        if (!session || !overlay) return;
+        const clip = clipOrigin();
+        const tiles = session.entry.layer._tiles || {};
+        for (const tile of Object.values(tiles)) {
+            const node = tile?.el; if (node) applyClip(node, clip);
         }
+    }
+    /* The clip is painted on the base-layer tile nodes. Their geometry only
+     * settles once Leaflet finishes a zoom or a pan: the move/zoom events fire
+     * while the tiles are still at their old positions, so recomputing there
+     * used to read a stale rect and offset the mask circle from the tiles —
+     * visible as a twitch around the LiDAR area after every zoom, and much
+     * worse after a 2D⇄3D round trip, where cameraTo2D() places the tiles
+     * once and then settles. Recompute on settled events only (throttled to a
+     * single pass per frame), and clip each tile as soon as it loads. */
+    function settleMasks() {
+        if (maskFrame) return;
+        maskFrame = requestAnimationFrame(() => {
+            maskFrame = 0;
+            if (!session || !overlay) return;
+            const visible = map.getZoom() >= session.zoom - 1;
+            const container = overlay.getContainer();
+            if (container) container.style.display = visible ? '' : 'none';
+            visible ? maskOrigin() : clearMask();
+        });
+    }
+    function onPhotoTileLoad(event) {
+        if (!session || !overlay || event.layer !== session.entry.layer) return;
+        const node = event.tile; if (!node) return;
+        const clip = clipOrigin();
+        applyClip(node, clip);
+    }
+    function onPhotoTileUnload(event) {
+        if (!session || event.layer !== session.entry.layer) return;
+        const node = event.tile;
+        if (node) maskedTiles.delete(node);
     }
     function stop() {
         generation++; paintGeneration++; selecting=false;
@@ -117,8 +158,12 @@
         if(pendingClick) { map.off('click',pendingClick); pendingClick=null; }
         if(session?.controller) session.controller.abort();
         map.getContainer().style.cursor='';
+        if (maskFrame) { cancelAnimationFrame(maskFrame); maskFrame = 0; }
+        if (session?.entry?.layer) {
+            session.entry.layer.off?.('tileload', onPhotoTileLoad);
+            session.entry.layer.off?.('tileunload', onPhotoTileUnload);
+        }
         clearMask();
-        if(session?.entry?.layer) session.entry.layer.off?.('tileload',maskOrigin);
         if (overlay) map.removeLayer(overlay);
         overlay=null; session=null; tilePixels.clear(); canvases.clear();
         if (marker) { map.removeLayer(marker); marker=null; }
@@ -252,7 +297,8 @@
         overlay._dl3dSkip=true; // 3D has its own separately prepared image/terrain deck.
         overlay.addTo(map);
         overlay.on('tileunload', e=>canvases.delete(keyOf(e.coords)));
-        session.entry.layer.on?.('tileload',maskOrigin);
+        session.entry.layer.on?.('tileload', onPhotoTileLoad);
+        session.entry.layer.on?.('tileunload', onPhotoTileUnload);
         maskOrigin(); session.ready=true; announce('Photo effect ready: ' + tiles.length + ' tiles in a 1 km radius (not real RVT)');
         return true;
     }
@@ -318,11 +364,7 @@
     map.createPane('rvt-photo-pane'); map.getPane('rvt-photo-pane').style.zIndex=615;
     map.getPane('rvt-photo-pane').style.pointerEvents='none';
     map.on('layerremove',event=>{ if (session && event.layer===session.entry.layer) stop(); });
-    map.on('move zoom resize',()=>{ if(session && overlay) {
-        const visible=map.getZoom()>=session.zoom-1;
-        if(overlay.getContainer()) overlay.getContainer().style.display=visible?'':'none';
-        if(visible) maskOrigin(); else clearMask();
-    } });
+    map.on('zoomend moveend resize', settleMasks);
     root.DLPhotoFilter={active,choose,prepare,update,stop,get:snapshot,preview,info3d,tile3d,
         source3d: () => session && session.ready ? session.entry.layer : null,
         _test:{effect,tileCoordinates,chooseZoom}};
