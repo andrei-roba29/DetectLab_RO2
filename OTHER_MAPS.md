@@ -20,6 +20,23 @@ să intre în aplicație ca sub-strat în grupul premium
 
 ---
 
+## Harta Iosefină gratuită — acoperire estimată
+
+`iosfree_db.json` asociază localități și coordonate cu scanări Wikimedia Commons.
+Când „Other maps” este activ, ele apar ca discuri verde-închis, desenate
+înaintea punctelor existente și disponibile și sub zoom 13. Apăsarea unui disc
+deschide lista cu foaia corespunzătoare; la suprapunere, punctele existente au
+prioritate, dar lista include și foile Iosefine. Discurile respectă opacitatea
+stratului și scala geografică la zoom.
+
+Catalogul nu conține poligoane ale localităților sau limite georeferențiate ale
+foilor, deci acestea sunt **estimări**, nu contururi exacte. Localitățile aceleiași
+foi sunt grupate în zone compacte (cel mult 25 km între oricare două puncte),
+iar fiecare disc acoperă centrele grupului cu o marjă de 1 km (minimum 1,2 km
+raza). Astfel, omonimele geocodate departe nu produc un disc pe jumătate de
+țară. Mai multe discuri pot duce la aceeași foaie, fără a o duplica în catalog.
+Calitatea pozițiilor depinde de `iosfree_db.json`.
+
 ## 1. De ce e nevoie de un modul separat
 
 Un strat Leaflet este poziționat geografic: primește o anvelopă și Leaflet îi rescrie

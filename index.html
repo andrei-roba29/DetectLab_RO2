@@ -1346,8 +1346,7 @@
                              country has been picked on the globe: the
                              slide-down button shows the current 2-letter code
                              and drops open the full initials list (hover = full
-                             name), next to the small World-hillshade overlay
-                             checkbox. Selecting a country transitions from
+                             name). Selecting a country transitions from
                              the temporary 3D gate to the flat 2D map.
                              js/country-dock.js. -->
                         <div class="country-dock" id="countryDock">
@@ -1359,13 +1358,6 @@
                                     <span class="country-dock-code" id="countryDockCode">—</span>
                                     <span class="country-dock-caret" aria-hidden="true">▾</span>
                                 </button>
-                                <label class="country-dock-hs" id="countryDockHillshadeWrap"
-                                       title="World Hillshade (Esri · USGS · NOAA, 30 m) — terrain shading over the flat 2D map">
-                                    <input type="checkbox" id="countryDockHillshade">
-                                    <span class="t" data-key="country_dock_hillshade">World hillshade</span>
-                                </label>
-                                <button type="button" class="country-dock-info" id="countryDockHsInfo"
-                                        title="Layer info — source and credits" aria-label="Layer info">ⓘ</button>
                             </div>
                             <div class="country-dock-panel" id="countryDockPanel" hidden>
                                 <div class="country-dock-panel-head">
@@ -2104,7 +2096,7 @@
 
                                     </span>
                                     <span class="pct-wrap" style="display:flex;align-items:center;gap:5px">
-                                        <button type="button" class="layer-info-btn" onclick="event.stopPropagation();showLayerInfo('Alte hărți / Other maps','© Hungaricana – Kulturális Örökség Portál (instituții partenere: Magyar Nemzeti Levéltár, Hadtörténeti Intézet és Múzeum, arhive județene) · © National Library of Scotland – maps.nls.uk Map Finder')" title="Layer info"><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="7.5" r="1.3" fill="currentColor" /><rect x="10.8" y="10.5" width="2.4" height="7" rx="1.2" fill="currentColor" /></svg></button>
+                                        <button type="button" class="layer-info-btn" onclick="event.stopPropagation();showLayerInfo('Alte hărți / Other maps','© Hungaricana – Kulturális Örökség Portál (instituții partenere: Magyar Nemzeti Levéltár, Hadtörténeti Intézet és Múzeum, arhive județene) · © National Library of Scotland – maps.nls.uk Map Finder · © Österreichisches Staatsarchiv / Wikimedia Commons')" title="Layer info"><svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="7.5" r="1.3" fill="currentColor" /><rect x="10.8" y="10.5" width="2.4" height="7" rx="1.2" fill="currentColor" /></svg></button>
                                         <span class="pct" id="otherMapsPct">80%</span>
                                     </span>
                                 </div>
@@ -5365,7 +5357,7 @@
     <script src="js/other-maps-tiles.js?v=20261028-other-maps-fix"></script>
     <script src="js/other-maps-nls.js?v=20261028-other-maps-fix"></script>
     <script src="js/other-maps-overlay.js?v=20261029-other-maps-stable"></script>
-    <script src="js/other-maps.js?v=20261029-josephine-merge"></script>
+    <script src="js/other-maps.js?v=20261030-josephine-coverage"></script>
     <script src="js/offline-maps.js?v=20261024-uk-historical-maps"></script>
     <script src="js/battles-layer.js?v=20261020-3d-analysis-points"></script>
     <script src="js/vertical-opacity-control.js?v=20261030-walachia"></script>

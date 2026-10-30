@@ -228,12 +228,14 @@ function pt(x, y) {
  * body, and an unset body answers non-OK (the NLS catalogue is optional). */
 let fakeCatalogJson = null;
 let fakeNlsCatalogJson = null;
+let fakeJosephineJson = null;
 let fakeNlsInfoJson = null;
 let fakeWfsJson = null;
 sandbox.fetch = (url) => {
     const u = String(url || '');
     let body = fakeCatalogJson;
     if (u.indexOf('other-maps-nls-catalog.json') !== -1) body = fakeNlsCatalogJson;
+    else if (u.indexOf('iosfree_db.json') !== -1) body = fakeJosephineJson;
     else if (u.indexOf('info.json') !== -1) body = fakeNlsInfoJson;
     else if (u.indexOf('geoserver') !== -1 || u.indexOf('wfs') !== -1) body = fakeWfsJson;
     return Promise.resolve({ ok: body != null, json: () => Promise.resolve(body) });
@@ -713,6 +715,11 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
 
     // ── the dots canvas ─────────────────────────────────────────────────
     fakeCatalogJson = catalog;
+    fakeJosephineJson = {
+        centre: { d: 'Centre', l: 'https://commons.wikimedia.org/wiki/File:Test.jpg', c: { lat: 47.933, lng: 23.892 } },
+        nearby: { d: 'Nearby', l: 'https://commons.wikimedia.org/wiki/File:Test.jpg', c: { lat: 47.93305, lng: 23.892 } },
+        homonym: { d: 'Distant homonym', l: 'https://commons.wikimedia.org/wiki/File:Test.jpg', c: { lat: 45, lng: 25 } }
+    };
     OtherMaps.attach(projMap);
     OtherMaps.setEnabled(true);
     await new Promise((r) => setImmediate(r));   // loadCatalog → ensureCanvas → redraw
@@ -720,6 +727,23 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
     ok(OtherMaps.state.canvas && /leaflet-zoom-animated/.test(OtherMaps.state.canvas.className),
         'the dots canvas carries the zoom-anim class (0.25 s transition, 0 0 origin)');
     ok(OtherMaps.state.hits.length > 0, 'dots are painted at the settled zoom');
+    ok(OtherMaps.records().some((r) => r.source === 'josephine'), 'enable loads the Josephine catalogue');
+    const foot = OtherMaps.state.josephineFootprints;
+    eq(foot.length, 2, 'distant homonyms do not create a country-wide coverage disc');
+    eq(foot[0].sheet.id, foot[1].sheet.id, 'separated coverage groups select the same sheet');
+    ok(OtherMaps.state.hits.some((h) => h.coverage), 'coverage appears below zoom 13');
+    const styles = [];
+    const ctx = OtherMaps.state.ctx;
+    const oldFill = ctx.fill;
+    ctx.fill = function () { styles.push(this.fillStyle); };
+    OtherMaps.redraw();
+    ctx.fill = oldFill;
+    ok(styles.length > 1 && styles[0] === 'rgba(0, 70, 35, 0.30)', 'dark green coverage is drawn first');
+    ok(styles.slice(1).some((style) => style !== styles[0]), 'existing green dots are drawn on top');
+    const coverageHit = OtherMaps.state.hits.find((h) => h.coverage);
+    ok(OtherMaps.mergeTapSheets([coverageHit]).sheets[0].source === 'josephine',
+        'the coverage hit resolves to the selectable Josephine sheet');
+
 
     const omState = OtherMaps.state;
     const anchor12 = originAt(12).add(TOP_LEFT);
@@ -1216,6 +1240,71 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
         });
         ok(enclosing, 'Josephine coverage circles enclose all places assigned to each scan');
     });
+
+    // Every catalogue locality must belong to an estimated, compact footprint.
+    const allFootprints = OtherMaps.buildJosephineFootprints(josephineRecords);
+    eq(allFootprints.reduce((sum, f) => sum + f.places.length, 0),
+        josephineRecords.reduce((sum, r) => sum + r.josephinePlaces.length, 0),
+        'all indexed Josephine localities are represented');
+    allFootprints.forEach((f) => f.places.forEach((p) => {
+        const dLat = (p.lat - f.lat) * Math.PI / 180;
+        const dLng = (p.lng - f.lng) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(f.lat * Math.PI / 180) *
+            Math.cos(p.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+        ok(12742000 * Math.asin(Math.sqrt(a)) <= f.radiusMeters,
+            'each estimated disc covers the localities assigned to it');
+    }));
+    // At high zoom, a disc remains hittable even if its centre is off screen.
+    const state = OtherMaps.state;
+    state.staticRecords = OtherMaps.buildJosephineRecords(fakeJosephineJson);
+    state.liveRecords = [];
+    OtherMaps.rebuildRecords();
+    fm._state.center = { lat: 47.933025, lng: 23.892035 };
+    fm._state.zoom = 14;
+    OtherMaps.redraw();
+    const coverageOffscreen = state.hits.find((h) => h.coverage);
+    ok(coverageOffscreen && coverageOffscreen.point.x < -17, 'a footprint intersecting the view is kept with its centre off screen');
+    ok(OtherMaps.mergeTapSheets([coverageOffscreen]).sheets[0].josephineEntry,
+        'off-centre coverage selects its original scan');
+    // Drive the actual click handler and inspect its available-sheets modal.
+    const modal = fakeEl('div');
+    const modalChildren = {};
+    modal.querySelector = (selector) => modalChildren[selector] || (modalChildren[selector] = fakeEl('div'));
+    state.modal = modal;
+    const clickPoint = pt(-16, Math.max(-9, Math.min(591, coverageOffscreen.point.y)));
+    fm.fire('click', { latlng: { lat: 47.933, lng: 23.892 },
+        layerPoint: clickPoint, containerPoint: clickPoint.add(PANE_POS) });
+    ok(modal.classList.contains('show'), 'clicking the visible portion opens the available maps');
+    ok(modalChildren['.om-modal-list'].innerHTML.includes('Test.jpg'),
+        'the available maps list contains the Josephine scan');
+    // A normal dot must win hit precedence even if the large coverage disc
+    // has a closer centre; both sources remain available in the same list.
+    state.staticRecords.push({ id: 'normal-test', source: 'hungaricana', path: 'test/path',
+        place: 'Existing dot', title: 'Existing sheet', lat: 47.933025, lng: 23.892011 });
+    OtherMaps.rebuildRecords();
+    OtherMaps.redraw();
+    const ordinaryHit = state.hits.find((h) => !h.coverage);
+    ok(ordinaryHit, 'ordinary dots remain present over the coverage');
+    modal.classList.remove('show');
+    fm.fire('click', { latlng: fm._state.center, layerPoint: ordinaryHit.point,
+        containerPoint: ordinaryHit.point.add(PANE_POS) });
+    const listHtml = modalChildren['.om-modal-list'].innerHTML;
+    ok(listHtml.indexOf('Existing sheet') >= 0 && listHtml.indexOf('Test.jpg') >= 0 &&
+        listHtml.indexOf('Existing sheet') < listHtml.indexOf('Test.jpg'),
+        'the top dot is selected first while overlapping Josephine sheets remain accessible');
+    fm._state.center = { lat: 47.933025, lng: 23.892 };
+    fm._state.zoom = 13;
+    OtherMaps.redraw();
+    const radius13 = state.hits.find((h) => h.coverage).radius;
+    fm._state.zoom = 14;
+    OtherMaps.redraw();
+    const radius14 = state.hits.find((h) => h.coverage).radius;
+    ok(Math.abs(radius14 / radius13 - 2) < 0.001, 'coverage scales with geographic area on zoom');
+    OtherMaps.setEnabled(false);
+    eq(state.hits.length, 0, 'disabling Other maps removes the coverage hit targets');
+    OtherMaps.setEnabled(true);
+    await new Promise((r) => setImmediate(r));
+    ok(state.hits.some((h) => h.coverage), 're-enabling restores the Josephine coverage');
 
     console.log('✓ other-maps: ' + checks + ' checks passed '+
         ('(' + catalog.maps.length + ' Hungaricana + ' + nlsCatalog.maps.length + ' NLS catalogue records, ' +
