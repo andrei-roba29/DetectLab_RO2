@@ -5,15 +5,16 @@
  *   terrain       Horn slope/aspect/curvature for a DEM block
  *   sampleTile    TRAIN: DEM tile → values at site/background points (+ water distance via rbush)
  *   setAnalysis   MANUAL/TRAIN prediction window: terrain, percentiles, water distance fields (EDT)
- *   score         score grid from curves/weights → non-overlapping class polygons (GeoJSON)
+ *   score         score grid → bounded continuous heatmap + very-high-only hotspot contours (GeoJSON)
  *
  * Analysis rasters stay inside the worker, so re-scoring with new weights or curves does
  * not refetch or recompute terrain (see setAnalysis / score).
  */
-/* global importScripts, self, DetectLabApmCore, DetectLabApmRaster, DetectLabApmPolygonise, rbush */
+/* global importScripts, self, DetectLabApmCore, DetectLabApmRaster, DetectLabApmPolygonise, DetectLabApmHeatmap, rbush */
 importScripts(
     'apm-core.js',
     'apm-raster.js',
+    'apm-heatmap.js',
     '../d3.min.js',
     '../vendor/polygon-clipping.umd.min.js',
     'apm-polygonise.js',
@@ -161,9 +162,12 @@ importScripts(
         var res = scoreGrid(m.mode, cfg);
         var fc = P.polygonise(res.score, state.analysis.grid, m.thresholds, {
             minAreaM2: m.minAreaM2 == null ? 2500 : m.minAreaM2,
-            smoothIters: m.smoothIters == null ? 1 : m.smoothIters
+            smoothIters: m.smoothIters == null ? 1 : m.smoothIters,
+            highestOnly: true
         });
-        reply(m.id, { geojson: fc, areaKm2: P.areaByClass(fc), scoreStats: res.stats });
+        var heatmap = DetectLabApmHeatmap.buildRaster(res.score, state.analysis.grid, m.thresholds, 512);
+        reply(m.id, { geojson: fc, heatmap: heatmap, thresholds: m.thresholds,
+            areaKm2: P.areaByScores(res.score, state.analysis.grid, m.thresholds), scoreStats: res.stats }, [heatmap.rgba.buffer]);
     }
 
     function handleTrain(m) {

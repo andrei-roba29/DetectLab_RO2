@@ -852,7 +852,8 @@
 //   surface for the CORONA stack, no dead zoom band at z11–z12, one manager
 //   update per gesture, a conservation back-off and a GPS pin that is moved
 //   instead of rebuilt. See SATELLITE_60s_LIVE_LOCATION.md.
-const CACHE_NAME = 'detectlab-v317-sat60-live-location';
+// v321: keep APM settings hidden until the search-area point is chosen.
+const CACHE_NAME = 'detectlab-v321-apm-pick-hidden';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -894,15 +895,17 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 // ── Static assets to pre-cache on install ──
 const PRECACHE_URLS = [
   // v301: Next-Gen APM (MANUAL) — see the header note above.
-  'css/next-gen-apm.css?v=20261029-apm-layer',
-  'js/apm-next/apm-core.js?v=20261029-apm-next-phase4',
-  'js/apm-next/apm-raster.js?v=20261029-apm-next-phase4',
-  'js/apm-next/apm-sites.js?v=20261029-apm-next-phase4',
-  'js/apm-next/apm-providers.js?v=20261029-apm-next-phase4',
-  'js/apm-next/apm-pipeline.js?v=20261029-apm-next-phase4',
-  'js/apm-next/apm-ui.js?v=20261029-apm-layer',
-  'js/apm-next/apm-i18n.js?v=20261029-apm-next-phase4',
-  'js/apm-next/apm-worker.js?v=20261029-apm-next-phase4',
+  'css/next-gen-apm.css?v=20261030-apm-pick-hidden',
+  'js/apm-next/apm-core.js?v=20261030-apm-pick-hidden',
+  'js/apm-next/apm-raster.js?v=20261030-apm-pick-hidden',
+  'js/apm-next/apm-heatmap.js?v=20261030-apm-pick-hidden',
+  'js/apm-next/apm-heatmap.js',
+  'js/apm-next/apm-sites.js?v=20261030-apm-pick-hidden',
+  'js/apm-next/apm-providers.js?v=20261030-apm-pick-hidden',
+  'js/apm-next/apm-pipeline.js?v=20261030-apm-pick-hidden',
+  'js/apm-next/apm-ui.js?v=20261030-apm-pick-hidden',
+  'js/apm-next/apm-i18n.js?v=20261030-apm-pick-hidden',
+  'js/apm-next/apm-worker.js?v=20261030-apm-pick-hidden',
   'js/apm-next/apm-worker.js',
   'js/apm-next/apm-polygonise.js',
   'js/apm-next/apm-core.js',

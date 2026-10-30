@@ -44,7 +44,8 @@
     -webkit-backdrop-filter: var(--ctl-blur, blur(10px));
     backdrop-filter: var(--ctl-blur, blur(10px));
 }
-.apm-panel[hidden] { display: none; }
+/* Keep settings completely out of the way while choosing the search-area centre. */
+.apm-panel[hidden], body.apm-picking #apmNextPanel { display: none !important; }
 .apm-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .apm-head h3 { margin: 0; font-size: 15px; font-weight: 600; }
 .apm-close {
@@ -176,3 +177,12 @@
 .apm-premium-badge { margin-left: auto; font-size: .55rem; background: rgba(255,200,50,.15); color: #ffc832; border: 1px solid rgba(255,200,50,.4); border-radius: 3px; padding: 1px 4px; }
 .apm-layer-button { width: 100%; margin-top: 8px; padding: 7px; border: 1px solid var(--ctl-border); border-radius: 8px; background: var(--ctl-bg); color: inherit; font: inherit; cursor: pointer; }
 .apm-layer-button:hover { background: var(--ctl-bg-hover); }
+
+/* Continuous suitability heat texture, with only very-high-potential vector boundaries. */
+.apm-heatmap-tile { pointer-events: none; }
+.apm-hotspot-outline { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8)); }
+.apm-heat-ramp { height: 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,.3); margin: 6px 0 2px; }
+.apm-heat-labels { display: flex; justify-content: space-between; gap: 16px; font-size: 11px; opacity: .9; }
+.apm-hotspot-swatch { width: 18px; height: 12px; box-sizing: border-box; border: 2px solid #d9f5ff; border-radius: 4px; background: transparent; flex-shrink: 0; }
+.apm-result-scale { margin-bottom: 6px; }
+.apm-map-legend { max-width: 270px; }

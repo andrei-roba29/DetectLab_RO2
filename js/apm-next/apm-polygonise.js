@@ -1,5 +1,5 @@
 /*!
- * DetectLab — Next-Gen APM · score grid → non-overlapping class polygons.
+ * DetectLab — Next-Gen APM · score grid → highest-potential contours (or legacy class polygons).
  *
  * Nested iso-regions come from d3-contour (marching squares, smooth=true).
  * Non-overlap is enforced with polygon-clipping set differences:
@@ -93,7 +93,7 @@
      * @param score   Float32Array(w·h); cells outside the analysis mask must be NaN or < 0.
      * @param grid    grid object (see apm-raster.js)
      * @param thr     { medium, high, veryhigh }
-     * @param opts    { minAreaM2 = 2500, smoothIters = 1 }
+     * @param opts    { minAreaM2 = 2500, smoothIters = 1, highestOnly = false }
      * @returns GeoJSON FeatureCollection; features carry class, label, colour, areaM2.
      */
     function polygonise(score, grid, thr, opts) {
@@ -104,9 +104,11 @@
             var s = score[i];
             values[i] = (s === s && s > 0) ? s : 0;    // NaN/outside → 0
         }
-        var regions = classRegions(values, w, h, thr);
+        var regions = opts.highestOnly
+            ? { veryhigh: regionAtThreshold(values, w, h, thr.veryhigh) }
+            : classRegions(values, w, h, thr);
         var features = [];
-        core.CLASSES.slice().reverse().forEach(function (cls) {        // veryhigh first, draw order later
+        core.CLASSES.slice().reverse().filter(function (cls) { return !opts.highestOnly || cls.id === 'veryhigh'; }).forEach(function (cls) {        // veryhigh first, draw order later
             var polys = toGeoPolygons(regions[cls.id], grid, opts);
             polys.forEach(function (p) {
                 features.push({
@@ -124,6 +126,23 @@
         return { type: 'FeatureCollection', features: features };
     }
 
+    /** Scored raster area per class, independent of contour smoothing / fragment filtering. */
+    function areaByScores(score, grid, thresholds) {
+        var out = { medium: 0, high: 0, veryhigh: 0 };
+        for (var j = 0; j < grid.h; j++) {
+            var mpd = core.metresPerDegree(grid.north - (j + 0.5) * grid.dLat);
+            var cellKm2 = grid.dLon * mpd.lon * grid.dLat * mpd.lat / 1e6;
+            for (var i = 0; i < grid.w; i++) {
+                var s = score[j * grid.w + i];
+                if (!Number.isFinite(s) || s < 0) continue;
+                if (s >= thresholds.veryhigh) out.veryhigh += cellKm2;
+                else if (s >= thresholds.high) out.high += cellKm2;
+                else if (s >= thresholds.medium) out.medium += cellKm2;
+            }
+        }
+        return out;
+    }
+
     /** Area in km² per class for a FeatureCollection. */
     function areaByClass(fc) {
         var out = { medium: 0, high: 0, veryhigh: 0 };
@@ -136,6 +155,7 @@
         classRegions: classRegions,
         chaikinRing: chaikinRing,
         polygonise: polygonise,
-        areaByClass: areaByClass
+        areaByClass: areaByClass,
+        areaByScores: areaByScores
     };
 });

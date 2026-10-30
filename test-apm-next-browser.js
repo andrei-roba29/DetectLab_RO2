@@ -4,7 +4,7 @@
 //
 // What is real: Leaflet, the APM panel, the pick-on-map flow, the map legend, the layout CSS.
 // What is stubbed: the premium check (window._dlIsPremium), the model run (runManual returns a fixed
-// polygon), and the app's own map click handlers (a stand-in handler written with the same guard line).
+// heatmap/outline fixture), and the app's own map click handlers (a stand-in handler written with the same guard line).
 // The app's real handlers in map-app.js etc. are not loaded here: the full page needs login, Supabase and
 // CDN scripts that this sandbox cannot reach. Their guard lines are checked by test-apm-next.js.
 'use strict';
@@ -20,6 +20,7 @@ const APM_SCRIPTS = [
     'js/leaflet.js',
     'js/apm-next/apm-core.js',
     'js/apm-next/apm-raster.js',
+    'js/apm-next/apm-heatmap.js',
     'js/apm-next/apm-sites.js',
     'js/apm-next/apm-providers.js',
     'js/apm-next/apm-i18n.js',
@@ -49,7 +50,15 @@ async function openHarness(browser, width, height) {
             window._t.calls.push(e.latlng.lat.toFixed(3));
         });
         window.DetectLabApmPipeline.runManual = function () {
+            const grid = { w: 64, h: 64, west: -0.6, north: 51.56, dLon: .2 / 64, dLat: .12 / 64 };
+            const scores = new Float32Array(64 * 64);
+            for (let j = 0; j < 64; j++) for (let i = 0; i < 64; i++) {
+                const radius = Math.hypot((i - 31.5) / 31.5, (j - 31.5) / 31.5);
+                scores[j * 64 + i] = radius <= 1 ? 1 - radius : NaN;
+            }
+            const thresholds = { medium: .55, high: .7, veryhigh: .85 };
             return Promise.resolve({
+                heatmap: window.DetectLabApmHeatmap.buildRaster(scores, grid, thresholds), thresholds,
                 geojson: { type: 'FeatureCollection', features: [{
                     type: 'Feature',
                     properties: { class: 'veryhigh', colour: '#89CFF0', areaM2: 1.2e6 },
@@ -132,6 +141,50 @@ test('APM picking: the pick click goes to APM only; the app handler is blocked; 
     await page.close();
 });
 
+for (const mode of ['MANUAL', 'TRAIN']) test(mode + ': settings stay visually hidden through pan and reopen attempts until a point is chosen (desktop + phone)', async (ctx) => {
+    for (const width of [1280, 390]) {
+        const { page, errors } = await openHarness(ctx.browser, width, 844);
+        // Exercise the CSS guard as well as the hidden property, without relying on UA defaults.
+        await page.addStyleTag({ content: '.apm-panel { display: block !important; }' });
+        await page.evaluate(() => {
+            window.DetectLabApmProviders.createAriadneSiteProvider = () => ({ getSites: async () => [] });
+            window.DetectLabApmUi.open();
+        });
+        if (mode === 'TRAIN') await clickButtonByText(page, '.apm-tab', 'TRAIN');
+        await clickButtonByText(page, '.apm-panel button', 'Pick point on map');
+        const visibility = () => page.evaluate(() => {
+            const panel = document.getElementById('apmNextPanel');
+            return { hidden: panel.hidden, display: getComputedStyle(panel).display, height: panel.getBoundingClientRect().height,
+                ariaHidden: panel.getAttribute('aria-hidden'), expanded: document.getElementById('apmNextBtn').getAttribute('aria-expanded'),
+                picking: window.DetectLabApmUi.state().picking, lock: document.body.classList.contains('apm-picking') };
+        });
+        const hidden = { hidden: true, display: 'none', height: 0, ariaHidden: 'true', expanded: 'false', picking: true, lock: true };
+        assert.deepStrictEqual(await visibility(), hidden);
+        await page.evaluate(() => window.DetectLabApmUi.open());
+        await page.evaluate(() => document.getElementById('apmNextBtn').click());
+        assert.deepStrictEqual(await visibility(), hidden, 'settings cannot reopen over the map during point selection');
+        await page.mouse.move(width / 2, 350);
+        await page.mouse.down();
+        await page.mouse.move(width / 2 - 60, 420, { steps: 8 });
+        await page.mouse.up();
+        await sleep(300);
+        assert.deepStrictEqual(await visibility(), hidden, 'panning is not a selection and must not restore settings');
+        // Pick inside the space formerly occupied by the settings panel.
+        await mapClick(page, 80, 620);
+        const selected = await visibility();
+        assert.strictEqual(selected.hidden, false);
+        assert.notStrictEqual(selected.display, 'none');
+        assert.ok(selected.height > 0, 'settings return after selecting the area centre');
+        assert.strictEqual(selected.ariaHidden, 'false');
+        assert.strictEqual(selected.expanded, 'true');
+        assert.strictEqual(selected.picking, false);
+        assert.strictEqual(selected.lock, false);
+        assert.ok(await page.evaluate(() => window.DetectLabApmUi.state().centre));
+        assert.deepStrictEqual(errors, []);
+        await page.close();
+    }
+});
+
 test('a handler registered while picking is also blocked for that click (flag clears after the click, not during)', async (ctx) => {
     const { page } = await openHarness(ctx.browser, 1280, 800);
     await page.evaluate(() => window.DetectLabApmUi.open());
@@ -199,6 +252,78 @@ test('desktop 1280 px, panel open with a result: legend visible and not overlapp
     const legend = await rectOf(page, '.apm-legend');
     assert.ok(legend && legend.display !== 'none' && legend.width > 0, 'legend visible on desktop');
     assert.ok(!intersects(panel, legend), 'no overlap on desktop');
+    await page.close();
+});
+
+test('hybrid output renders coloured heat tiles and unfilled very-high-only outlines; replaces and clears both', async (ctx) => {
+    const { page, errors } = await openHarness(ctx.browser, 1280, 800);
+    await runWithResult(page);
+    const inspect = () => page.evaluate(() => {
+        const tiles = [...document.querySelectorAll('.apm-heatmap-tile')];
+        return { tiles: tiles.length,
+            coloured: tiles.some(tile => tile.getContext('2d').getImageData(0, 0, tile.width, tile.height).data.some((v, i) => i % 4 === 3 && v > 0)),
+            outlines: [...document.querySelectorAll('.apm-hotspot-outline')].map(el => el.getAttribute('fill')),
+            heatLayers: Object.values(window._dlMap._layers).filter(l => l instanceof L.GridLayer).length,
+            pointerEvents: getComputedStyle(window._dlMap.getPane('apmHeat')).pointerEvents,
+            heatOrder: Number(window._dlMap.getPane('apmHeat').style.zIndex),
+            outlineOrder: Number(window._dlMap.getPane('apmHotspots').style.zIndex) };
+    });
+    let result = await inspect();
+    assert.ok(result.tiles > 0 && result.coloured, 'canvas tiles carry real model-score colour pixels');
+    assert.deepStrictEqual(result.outlines, ['none'], 'hotspot is an outline, not another opaque fill');
+    assert.strictEqual(result.heatLayers, 1);
+    assert.strictEqual(result.pointerEvents, 'none', 'heatmap cannot intercept gestures');
+    assert.ok(result.outlineOrder > result.heatOrder);
+    await page.evaluate(() => window._dlMap.setView([51.50, -0.50], 13, { animate: false }));
+    await sleep(250);
+    assert.ok((await inspect()).coloured, 'heat remains aligned after zoom/pan');
+    await clickButtonByText(page, '.apm-panel button', 'Run MANUAL model');
+    await sleep(200);
+    assert.strictEqual((await inspect()).heatLayers, 1, 're-running replaces the heat layer rather than accumulating layers');
+    await clickButtonByText(page, '.apm-panel button', 'Clear result');
+    assert.strictEqual(await page.$('.apm-heatmap-tile'), null);
+    assert.strictEqual(await page.$('.apm-hotspot-outline'), null);
+    assert.strictEqual(await page.$('.apm-map-legend'), null);
+    assert.deepStrictEqual(errors, []);
+    await page.close();
+});
+
+test('no very-high polygons still shows the heatmap and never falls back to lower-class polygons', async (ctx) => {
+    const { page, errors } = await openHarness(ctx.browser, 1280, 800);
+    await page.evaluate(() => {
+        const baseRun = window.DetectLabApmPipeline.runManual;
+        window.DetectLabApmPipeline.runManual = () => baseRun().then(res => { res.geojson.features = []; return res; });
+    });
+    await runWithResult(page);
+    assert.ok(await page.$('.apm-heatmap-tile'));
+    assert.strictEqual(await page.$('.apm-hotspot-outline'), null);
+    assert.match(await page.$eval('.apm-results', el => el.textContent), /no very-high area/);
+    await page.evaluate(() => window.DetectLabApmUi.setEnabled(false));
+    assert.strictEqual(await page.$('.apm-heatmap-tile'), null, 'disabling removes the heatmap too');
+    assert.deepStrictEqual(errors, []);
+    await page.close();
+});
+
+test('display/export excludes lower-class polygons and exports hybrid rendering metadata', async (ctx) => {
+    const { page, errors } = await openHarness(ctx.browser, 1280, 800);
+    await page.evaluate(() => {
+        const baseRun = window.DetectLabApmPipeline.runManual;
+        window.DetectLabApmPipeline.runManual = () => baseRun().then(res => {
+            res.geojson.features.push({ ...res.geojson.features[0], properties: { class: 'medium', colour: '#FFA500', areaM2: 10 } });
+            return res;
+        });
+        const createURL = URL.createObjectURL;
+        URL.createObjectURL = blob => { window._exportBlob = blob; return createURL(blob); };
+    });
+    await runWithResult(page);
+    assert.strictEqual(await page.$$eval('.apm-hotspot-outline', nodes => nodes.length), 1);
+    await clickButtonByText(page, '.apm-panel button', 'Export hotspot GeoJSON');
+    const exported = await page.evaluate(async () => JSON.parse(await window._exportBlob.text()));
+    assert.deepStrictEqual(exported.features.map(f => f.properties.class), ['veryhigh']);
+    assert.strictEqual(exported.metadata.rendering.polygonClass, 'veryhigh');
+    assert.ok(exported.metadata.rendering.heatmap.width > 0);
+    assert.strictEqual(exported.metadata.rendering.thresholds.veryhigh, .85);
+    assert.deepStrictEqual(errors, []);
     await page.close();
 });
 

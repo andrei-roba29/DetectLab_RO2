@@ -868,7 +868,8 @@ test('worker harness: setAnalysis → score (MANUAL) and train → score (TRAIN)
         minSlopeDeg: 0.5, preferredAspectDeg: 180, waterClasses: [], thresholds: { medium: 0.55, high: 0.7, veryhigh: 0.85 }, minAreaM2: 0, smoothIters: 0 });
     const sc = posted.find((m) => m.id === 2);
     assert.ok(sc && sc.ok, 'score ok: ' + (sc && sc.error));
-    assert.ok(sc.geojson.features.length >= 1, 'produces at least one class polygon');
+    assert.ok(sc.heatmap && sc.heatmap.rgba.length > 0, 'produces a continuous score heatmap');
+    assert.ok(sc.geojson.features.every(f => f.properties.class === 'veryhigh'), 'only very-high hotspots are polygonised');
     assert.ok(sc.geojson.features.every((f) => ['#FFA500', '#2E9E4F', '#89CFF0'].includes(f.properties.colour)));
 
     // TRAIN path through the worker (small synthetic set)
@@ -886,6 +887,9 @@ test('worker harness: setAnalysis → score (MANUAL) and train → score (TRAIN)
     send({ op: 'score', id: 4, mode: 'train', model: tr.result.model, waterClasses: ['small'], thresholds: tr.result.thresholds, minAreaM2: 0, smoothIters: 0 });
     const sc2 = posted.find((m) => m.id === 4);
     assert.ok(sc2 && sc2.ok, 'train-score ok: ' + (sc2 && sc2.error));
+    assert.ok(sc2.heatmap.rgba.length > 0);
+    assert.ok(sc2.geojson.features.every(f => f.properties.class === 'veryhigh'));
+    assert.strictEqual(sc2.thresholds.veryhigh, tr.result.thresholds.veryhigh);
 });
 
 /* ── Phase 2 input rules: radius, curves, translations ───────────────────── */
