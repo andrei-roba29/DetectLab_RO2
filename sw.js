@@ -853,7 +853,9 @@
 //   update per gesture, a conservation back-off and a GPS pin that is moved
 //   instead of rebuilt. See SATELLITE_60s_LIVE_LOCATION.md.
 // v321: keep APM settings hidden until the search-area point is chosen.
-const CACHE_NAME = 'detectlab-v323-sparse-previews';
+// v324: icon-only LiDAR settings and restored sublayer visibility switches.
+// v325: lift LiDAR in 3D above the PWA bleed and phone navigation bar.
+const CACHE_NAME = 'detectlab-v325-lidar-pwa-bottom';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1036,6 +1038,9 @@ const PRECACHE_URLS = [
   'js/lidar-photo-filter.js?v=20261030-lidar-photo-3d',
   'js/rvt-panel.js?v=2',
   'js/rvt-panel.js?v=20261030-area-first',
+  'js/rvt-panel.js?v=20261030-lidar-controls',
+  'css/rvt-panel.css?v=20261030-lidar-controls',
+  'js/map-app.js?v=20261030-lidar-controls',
   'css/rvt-panel.css?v=1',
   'rvt_service/methods.json',
   'js/lidar-3d-focus.js?v=20261020-lidar-disc-route',
@@ -1066,6 +1071,7 @@ const PRECACHE_URLS = [
   'css/map3d-terrain.css?v=20261029-pwa-3d-clearance',
   'css/map3d-terrain.css?v=20261029-web-3d-basemap-row',
   'css/map3d-terrain.css?v=20261030-3d-analysis-dock',
+  'css/map3d-terrain.css?v=20261030-lidar-pwa-bottom',
   'js/map3d-terrain.js?v=20261029-no-cesium',
   'js/map3d-terrain.js?v=20261029-3d-startup-repaint',
   'js/map3d-terrain.js?v=20261030-lidar-photo-3d',

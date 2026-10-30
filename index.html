@@ -31,7 +31,7 @@
          maplibre-gl.css must come before our own sheet, which re-skins its
          controls; the SDK itself is only downloaded when 3D is opened. -->
     <link rel="stylesheet" href="css/maplibre-gl.css?v=20261013-3d-terrain">
-    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261030-3d-analysis-dock">
+    <link rel="stylesheet" href="css/map3d-terrain.css?v=20261030-lidar-pwa-bottom">
     <link rel="stylesheet" href="css/hist-shift.css?v=20261014-hist-shift">
     <!-- „Alte hărți / Other maps” — punctele verzi + suprapunerea liberă a
          hărților ne-georeferențiate (Hungaricana + NLS Map Finder). -->
@@ -2317,7 +2317,10 @@
                                         <span>HD</span>
                                         <span style="font-size:0.65rem;opacity:0.5;font-style:italic">Hunedoara</span>
                                     </span>
-                                    <input type="hidden" id="lidarHdToggle">
+                                    <label class="apm-toggle-switch" title="Toggle LiDAR Hd" style="margin-left:auto;transform:scale(0.85);transform-origin:right center;">
+                                        <input type="checkbox" id="lidarHdToggle" aria-label="Toggle LiDAR Hd" onchange="toggleInternationalLidar('hd', this.checked)">
+                                        <span class="apm-toggle-track"></span>
+                                    </label>
                                 </div>
                                 <div class="transp-layer-label" style="margin-bottom:5px;">
                                     <span style="font-size:0.72rem;opacity:0.6">Opacity</span>
@@ -2338,7 +2341,10 @@
                                         <span>AR</span>
                                         <span style="font-size:0.65rem;opacity:0.5;font-style:italic">Arad</span>
                                     </span>
-                                    <input type="hidden" id="lidarArToggle">
+                                    <label class="apm-toggle-switch" title="Toggle LiDAR Ar" style="margin-left:auto;transform:scale(0.85);transform-origin:right center;">
+                                        <input type="checkbox" id="lidarArToggle" aria-label="Toggle LiDAR Ar" onchange="toggleInternationalLidar('ar', this.checked)">
+                                        <span class="apm-toggle-track"></span>
+                                    </label>
                                 </div>
                                 <div class="transp-layer-label" style="margin-bottom:5px;">
                                     <span style="font-size:0.72rem;opacity:0.6">Opacity</span>
@@ -2357,7 +2363,10 @@
                                         <span>AB</span>
                                         <span style="font-size:0.65rem;opacity:0.5;font-style:italic">Alba</span>
                                     </span>
-                                    <input type="hidden" id="lidarAbToggle">
+                                    <label class="apm-toggle-switch" title="Toggle LiDAR Ab" style="margin-left:auto;transform:scale(0.85);transform-origin:right center;">
+                                        <input type="checkbox" id="lidarAbToggle" aria-label="Toggle LiDAR Ab" onchange="toggleInternationalLidar('ab', this.checked)">
+                                        <span class="apm-toggle-track"></span>
+                                    </label>
                                 </div>
                                 <div class="transp-layer-label" style="margin-bottom:5px;">
                                     <span style="font-size:0.72rem;opacity:0.6">Opacity</span>
@@ -2376,7 +2385,10 @@
                                         <span>BH</span>
                                         <span style="font-size:0.65rem;opacity:0.5;font-style:italic">Bihor</span>
                                     </span>
-                                    <input type="hidden" id="lidarBhToggle">
+                                    <label class="apm-toggle-switch" title="Toggle LiDAR Bh" style="margin-left:auto;transform:scale(0.85);transform-origin:right center;">
+                                        <input type="checkbox" id="lidarBhToggle" aria-label="Toggle LiDAR Bh" onchange="toggleInternationalLidar('bh', this.checked)">
+                                        <span class="apm-toggle-track"></span>
+                                    </label>
                                 </div>
                                 <div class="transp-layer-label" style="margin-bottom:5px;">
                                     <span style="font-size:0.72rem;opacity:0.6">Opacity</span>
@@ -2395,7 +2407,10 @@
                                         <span>CS</span>
                                         <span style="font-size:0.65rem;opacity:0.5;font-style:italic">Caraș-Severin</span>
                                     </span>
-                                    <input type="hidden" id="lidarCsToggle">
+                                    <label class="apm-toggle-switch" title="Toggle LiDAR Cs" style="margin-left:auto;transform:scale(0.85);transform-origin:right center;">
+                                        <input type="checkbox" id="lidarCsToggle" aria-label="Toggle LiDAR Cs" onchange="toggleInternationalLidar('cs', this.checked)">
+                                        <span class="apm-toggle-track"></span>
+                                    </label>
                                 </div>
                                 <div class="transp-layer-label" style="margin-bottom:5px;">
                                     <span style="font-size:0.72rem;opacity:0.6">Opacity</span>
@@ -2413,7 +2428,10 @@
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="2" width="8" height="6" rx="1" fill="none" stroke="#4fc3f7" stroke-width="1" /><text x="5" y="7" text-anchor="middle" font-size="3.5" fill="#4fc3f7" font-family="sans-serif" font-weight="bold">RO</text></svg>
                                         <span>Romania 2-5m/pixel</span>
                                     </span>
-                                    <input type="hidden" id="lidarRo2mToggle">
+                                    <label class="apm-toggle-switch" title="Toggle LiDAR Ro2m" style="margin-left:auto;transform:scale(0.85);transform-origin:right center;">
+                                        <input type="checkbox" id="lidarRo2mToggle" aria-label="Toggle LiDAR Ro2m" onchange="toggleInternationalLidar('ro2m', this.checked)">
+                                        <span class="apm-toggle-track"></span>
+                                    </label>
                                 </div>
                                 <div class="transp-layer-label" style="margin-bottom:5px;">
                                     <span style="font-size:0.72rem;opacity:0.6">Opacity</span>
@@ -2431,7 +2449,10 @@
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="2" width="8" height="6" rx="1" fill="none" stroke="#4fc3f7" stroke-width="1" /><text x="5" y="7" text-anchor="middle" font-size="3.5" fill="#4fc3f7" font-family="sans-serif" font-weight="bold">RO</text></svg>
                                         <span>Romania 5m/pixel</span>
                                     </span>
-                                    <input type="hidden" id="lidarRo5mToggle">
+                                    <label class="apm-toggle-switch" title="Toggle LiDAR Ro5m" style="margin-left:auto;transform:scale(0.85);transform-origin:right center;">
+                                        <input type="checkbox" id="lidarRo5mToggle" aria-label="Toggle LiDAR Ro5m" onchange="toggleInternationalLidar('ro5m', this.checked)">
+                                        <span class="apm-toggle-track"></span>
+                                    </label>
                                 </div>
                                 <div class="transp-layer-label" style="margin-bottom:5px;">
                                     <span style="font-size:0.72rem;opacity:0.6">Opacity</span>
@@ -2449,7 +2470,10 @@
                                         <svg width="10" height="10" viewBox="0 0 10 10"><rect x="1" y="2" width="8" height="6" rx="1" fill="none" stroke="#4fc3f7" stroke-width="1" /><text x="5" y="7" text-anchor="middle" font-size="3" fill="#4fc3f7" font-family="sans-serif" font-weight="bold">1m</text></svg>
                                         <span>Romania 1m/pixel agregare</span>
                                     </span>
-                                    <input type="hidden" id="lidarRo1mToggle">
+                                    <label class="apm-toggle-switch" title="Toggle LiDAR Ro1m" style="margin-left:auto;transform:scale(0.85);transform-origin:right center;">
+                                        <input type="checkbox" id="lidarRo1mToggle" aria-label="Toggle LiDAR Ro1m" onchange="toggleInternationalLidar('ro1m', this.checked)">
+                                        <span class="apm-toggle-track"></span>
+                                    </label>
                                 </div>
                                 <div class="transp-layer-label" style="margin-bottom:5px;">
                                     <span style="font-size:0.72rem;opacity:0.6">Opacity</span>
@@ -2468,7 +2492,10 @@
                                         <span>CS - LAKI III</span>
                                         <span style="font-size:0.65rem;opacity:0.5;font-style:italic">Caraș-Severin</span>
                                     </span>
-                                    <input type="hidden" id="lidarCs917Toggle">
+                                    <label class="apm-toggle-switch" title="Toggle LiDAR Cs917" style="margin-left:auto;transform:scale(0.85);transform-origin:right center;">
+                                        <input type="checkbox" id="lidarCs917Toggle" aria-label="Toggle LiDAR Cs917" onchange="toggleInternationalLidar('cs917', this.checked)">
+                                        <span class="apm-toggle-track"></span>
+                                    </label>
                                 </div>
                                 <div class="transp-layer-label" style="margin-bottom:5px;">
                                     <span style="font-size:0.72rem;opacity:0.6">Opacity</span>
@@ -2487,7 +2514,10 @@
                                         <span>DJ - LAKI III</span>
                                         <span style="font-size:0.65rem;opacity:0.5;font-style:italic">Dolj</span>
                                     </span>
-                                    <input type="hidden" id="lidarDj917Toggle">
+                                    <label class="apm-toggle-switch" title="Toggle LiDAR Dj917" style="margin-left:auto;transform:scale(0.85);transform-origin:right center;">
+                                        <input type="checkbox" id="lidarDj917Toggle" aria-label="Toggle LiDAR Dj917" onchange="toggleInternationalLidar('dj917', this.checked)">
+                                        <span class="apm-toggle-track"></span>
+                                    </label>
                                 </div>
                                 <div class="transp-layer-label" style="margin-bottom:5px;">
                                     <span style="font-size:0.72rem;opacity:0.6">Opacity</span>
@@ -2506,7 +2536,10 @@
                                         <span>GJ - LAKI III</span>
                                         <span style="font-size:0.65rem;opacity:0.5;font-style:italic">Gorj</span>
                                     </span>
-                                    <input type="hidden" id="lidarGj917Toggle">
+                                    <label class="apm-toggle-switch" title="Toggle LiDAR Gj917" style="margin-left:auto;transform:scale(0.85);transform-origin:right center;">
+                                        <input type="checkbox" id="lidarGj917Toggle" aria-label="Toggle LiDAR Gj917" onchange="toggleInternationalLidar('gj917', this.checked)">
+                                        <span class="apm-toggle-track"></span>
+                                    </label>
                                 </div>
                                 <div class="transp-layer-label" style="margin-bottom:5px;">
                                     <span style="font-size:0.72rem;opacity:0.6">Opacity</span>
@@ -2525,7 +2558,10 @@
                                         <span>MH - LAKI III</span>
                                         <span style="font-size:0.65rem;opacity:0.5;font-style:italic">Mehedinți</span>
                                     </span>
-                                    <input type="hidden" id="lidarMh917Toggle">
+                                    <label class="apm-toggle-switch" title="Toggle LiDAR Mh917" style="margin-left:auto;transform:scale(0.85);transform-origin:right center;">
+                                        <input type="checkbox" id="lidarMh917Toggle" aria-label="Toggle LiDAR Mh917" onchange="toggleInternationalLidar('mh917', this.checked)">
+                                        <span class="apm-toggle-track"></span>
+                                    </label>
                                 </div>
                                 <div class="transp-layer-label" style="margin-bottom:5px;">
                                     <span style="font-size:0.72rem;opacity:0.6">Opacity</span>
@@ -5257,10 +5293,10 @@
          See ROMAN_ROADS_PERFORMANCE.md. -->
     <script src="js/roman-roads-parser.js?v=20261015-roman-roads"></script>
     <script src="js/roman-roads.js?v=20261015-roman-roads"></script>
-    <script src="js/map-app.js?v=20261030-walachia"></script>
-    <link rel="stylesheet" href="css/rvt-panel.css?v=2">
+    <script src="js/map-app.js?v=20261030-lidar-controls"></script>
+    <link rel="stylesheet" href="css/rvt-panel.css?v=20261030-lidar-controls">
     <script src="js/lidar-photo-filter.js?v=20261030-lidar-photo-3d" defer></script>
-    <script src="js/rvt-panel.js?v=20261030-area-first" defer></script>
+    <script src="js/rvt-panel.js?v=20261030-lidar-controls" defer></script>
     <!-- Danish layers: panel rows, basemap-control buttons and the lazy
          Leaflet layers, all built from js/danish-layers.config.js. -->
     <script src="js/danish-layers.js?v=20261028-kulturarv-sublayers"></script>
