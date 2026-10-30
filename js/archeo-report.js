@@ -67,7 +67,8 @@
         RADIUS_KM_MAX: 10,
         RADIUS_KM_DEFAULT: 3,
         MAX_RESULTS: 3,               // "Cele 3 rezultate"
-        RESULT_RADIUS_M: 180,         // radius of the circular result ring
+        RESULT_RADIUS_M: 180,         // legacy circle helper
+        FOCUS: { CELL_M: 50, HALF_WIDTH_M: 400, MAIN_MAX_M: 200, GRID_M: 100, MAIN_DROP: 0.10, SECONDARY_DROP: 0.25 },
         RESULT_MIN_SEPARATION_M: 350, // two results may not be closer than this
         SEED_GRID_M: 100,             // baseline seed spacing (grows with radius)
         RESULT_CIRCLE_VERTS: 32,      // circular footprint for PDF / geometry
@@ -1022,6 +1023,49 @@
         return { ok: true };
     }
 
+    // A result footprint represents an entire square cell, not just its
+    // centre. Reject cells that touch an excluded raster cell, a protection
+    // circle, a site polygon, or the edge of the analysis circle.
+    function focusCellAllowed(x, y, cellM, ctx) {
+        var half = cellM / 2, diagonal = Math.SQRT2 * half;
+        var area = ctx.square;
+        var dx = x - area.cx, dy = y - area.cy;
+        if (Math.hypot(dx, dy) + diagonal > area.radiusM) return false;
+        var grid = ctx.uatGrid;
+        if (!grid || !grid.red || !(grid.cellM > 0)) return false;
+        var x0 = Math.floor((x - half - grid.x0) / grid.cellM);
+        var x1 = Math.floor((x + half - grid.x0) / grid.cellM);
+        var y0 = Math.floor((y - half - grid.y0) / grid.cellM);
+        var y1 = Math.floor((y + half - grid.y0) / grid.cellM);
+        if (x0 < 0 || y0 < 0 || x1 >= grid.cols || y1 >= grid.rows) return false;
+        for (var row = y0; row <= y1; row++) for (var col = x0; col <= x1; col++) {
+            if (!grid.red[row * grid.cols + col]) return false;
+        }
+        var radius = CONFIG.SITE.RADIUS_M + CONFIG.SITE.BUFFER_M;
+        for (var i = 0; i < ctx.siteRecords.length; i++) {
+            var points = ctx.siteRecords[i].points;
+            for (var j = 0; j < points.length; j++) {
+                var sx = Math.max(Math.abs(points[j].x - x) - half, 0);
+                var sy = Math.max(Math.abs(points[j].y - y) - half, 0);
+                if (sx * sx + sy * sy <= radius * radius) return false;
+            }
+        }
+        for (var p = 0; p < ctx.polygons.length; p++) {
+            var rings = ctx.polygons[p].rings;
+            for (var r = 0; r < rings.length; r++) {
+                var ring = rings[r];
+                if (pointInPolygon(x, y, ring)) return false;
+                // A circumscribed disc is conservative at the square corners.
+                // It catches crossing edges and even tiny polygons inside a cell.
+                for (var k = 0; k < ring.length; k++) {
+                    var a = ring[k], b = ring[(k + 1) % ring.length];
+                    if (distPointToSegment(x, y, a.x, a.y, b.x, b.y) <= diagonal) return false;
+                }
+            }
+        }
+        return true;
+    }
+
     function nearestBubble(x, y, ctx) {
         var best = null;
         for (var i = 0; i < ctx.bubbles.length; i++) {
@@ -1419,8 +1463,117 @@
             weights: scoringWeights(cand.parts.lidarApplied),
             nearestSites: nearest,
             period: period,
-            polygon: resultPolygon(ll.lat, ll.lng, CONFIG.RESULT_RADIUS_M, ctx.lat0)
+            focus: buildFocusAreas(cand, ctx)
         };
+    }
+
+    // Resample the same scoring and exclusion rules around each selected result.
+    // These are indicative 50 m cells, not surveyed settlement boundaries.
+    function buildFocusAreas(cand, ctx) {
+        var F = CONFIG.FOCUS, step = F.CELL_M;
+        var half = Math.floor(F.HALF_WIDTH_M / step), size = half * 2 + 1;
+        var values = new Float32Array(size * size);
+        values.fill(-1);
+        for (var row = 0; row < size; row++) for (var col = 0; col < size; col++) {
+            var x = cand.x + (col - half) * step, y = cand.y + (row - half) * step;
+            if (!focusCellAllowed(x, y, step, ctx)) continue;
+            var sample = evaluateSeed({ x: x, y: y, origin: 'focus' }, ctx);
+            if (sample.ok) values[row * size + col] = sample.score;
+        }
+        var centre = half * size + half;
+        if (values[centre] < 0) return { main: [], secondary: [], lines: [], cellM: step, gridM: F.GRID_M };
+        // A LIDAR annotation is an exact point, not evidence for an entire
+        // surrounding cell. Anchor the thresholds to its valid neighbours.
+        var anchor = values[centre];
+        if (cand.annotated) {
+            var adjacent = [];
+            [centre - 1, centre + 1, centre - size, centre + size].forEach(function (i) {
+                if (values[i] >= 0) adjacent.push(values[i]);
+            });
+            if (adjacent.length) anchor = Math.max.apply(null, adjacent);
+        }
+        function component(threshold, required, maxDistance) {
+            var selected = new Uint8Array(size * size), stack = [centre];
+            selected[centre] = 1;
+            while (stack.length) {
+                var cur = stack.pop(), cx = cur % size, cy = Math.floor(cur / size);
+                [[1,0],[-1,0],[0,1],[0,-1]].forEach(function (d) {
+                    var nx = cx + d[0], ny = cy + d[1];
+                    if (nx < 0 || ny < 0 || nx >= size || ny >= size) return;
+                    var ni = ny * size + nx;
+                    var distance = Math.hypot((nx - half) * step, (ny - half) * step);
+                    if (!selected[ni] && values[ni] >= 0 && (!maxDistance || distance <= maxDistance) && (values[ni] >= threshold || (required && required[ni]))) {
+                        selected[ni] = 1; stack.push(ni);
+                    }
+                });
+            }
+            return selected;
+        }
+        var main = component(Math.max(0, anchor - F.MAIN_DROP), null, F.MAIN_MAX_M);
+        var secondary = component(Math.max(0, anchor - F.SECONDARY_DROP), main);
+        var x0 = cand.x - (half + 0.5) * step, y0 = cand.y - (half + 0.5) * step;
+        function ll(x, y) { var p = localMetersToLatLng(x, y, ctx.lat0); return [p.lat, p.lng]; }
+        // Boundary edges of the union of cells, including holes. Edges are
+        // oriented so the outer ring and holes have opposite winding.
+        function rings(mask) {
+            var edges = {}, all = [];
+            function edge(ax, ay, bx, by) {
+                var e = { a: [ax, ay], b: [bx, by], used: false };
+                var key = ax + ',' + ay; (edges[key] || (edges[key] = [])).push(e); all.push(e);
+            }
+            function has(x, y) { return x >= 0 && y >= 0 && x < size && y < size && mask[y * size + x]; }
+            for (var y = 0; y < size; y++) for (var x = 0; x < size; x++) if (has(x, y)) {
+                if (!has(x, y - 1)) edge(x, y, x + 1, y);
+                if (!has(x + 1, y)) edge(x + 1, y, x + 1, y + 1);
+                if (!has(x, y + 1)) edge(x + 1, y + 1, x, y + 1);
+                if (!has(x - 1, y)) edge(x, y + 1, x, y);
+            }
+            var loops = [];
+            all.forEach(function (start) {
+                if (start.used) return;
+                var e = start, loop = [], guard = 0;
+                while (e && !e.used && guard++ <= all.length) {
+                    e.used = true; loop.push(e.a);
+                    if (e.b[0] === start.a[0] && e.b[1] === start.a[1]) break;
+                    var next = (edges[e.b[0] + ',' + e.b[1]] || []).filter(function (v) { return !v.used; });
+                    // At a corner-touch choose the leftmost turn, keeping
+                    // touching boundaries as separate rings rather than a bow tie.
+                    var dx = e.b[0] - e.a[0], dy = e.b[1] - e.a[1];
+                    next.sort(function (a, b) {
+                        function turn(v) {
+                            var vx = v.b[0] - v.a[0], vy = v.b[1] - v.a[1];
+                            return Math.atan2(dx * vy - dy * vx, dx * vx + dy * vy);
+                        }
+                        return turn(b) - turn(a);
+                    });
+                    e = next[0];
+                }
+                if (loop.length >= 4) {
+                    var area = 0;
+                    for (var i = 0; i < loop.length; i++) {
+                        var a = loop[i], b = loop[(i + 1) % loop.length];
+                        area += a[0] * b[1] - b[0] * a[1];
+                    }
+                    loops.push({ area: area, points: loop.map(function (p) { return ll(x0 + p[0] * step, y0 + p[1] * step); }) });
+                }
+            });
+            loops.sort(function (a, b) { return Math.abs(b.area) - Math.abs(a.area); });
+            return loops.map(function (r) { return r.points; });
+        }
+        // Meridians at 100 m spacing, clipped to contiguous selected cells.
+        var lines = [], spacing = F.GRID_M;
+        for (var gx = Math.ceil(x0 / spacing) * spacing; gx < x0 + size * step; gx += spacing) {
+            var column = Math.floor((gx - x0) / step), start = -1;
+            for (var gy = 0; gy <= size; gy++) {
+                var inside = gy < size && secondary[gy * size + column];
+                if (inside && start < 0) start = gy;
+                if (!inside && start >= 0) {
+                    lines.push([ll(gx, y0 + start * step), ll(gx, y0 + gy * step)]); start = -1;
+                }
+            }
+        }
+        return { main: rings(main), secondary: rings(secondary), lines: lines,
+            cellM: step, gridM: spacing, mainDrop: F.MAIN_DROP, secondaryDrop: F.SECONDARY_DROP };
     }
 
     // Blue result footprint: a circle (32 vertices for PDF / geometry).
@@ -1550,9 +1703,11 @@
             var waited = 0;
             (function poll() {
                 var data = window._localLayerData;
-                if (data && data[0] !== undefined && data[0] !== null) return resolve(data);
+                var layers = (window.ARCH_POTENTIAL_CONFIG && window.ARCH_POTENTIAL_CONFIG.SITE_LAYERS) || [0, 5, 6];
+                if (window._detectlabApiFailed) return resolve(null);
+                if (data && layers.every(function (id) { return data[id] && Array.isArray(data[id].features); })) return resolve(data);
                 waited += CONFIG.SITES_DATA_POLL_MS;
-                if (waited >= CONFIG.SITES_DATA_TIMEOUT_MS) return resolve(data || {});
+                if (waited >= CONFIG.SITES_DATA_TIMEOUT_MS) return resolve(null);
                 setTimeout(poll, CONFIG.SITES_DATA_POLL_MS);
             })();
         });
@@ -1594,8 +1749,12 @@
         return (async function main() {
             try {
                 setStatus('arch_report_step_sites');
-                await waitForSiteData();
+                var siteData = await waitForSiteData();
                 if (myVersion !== _state.version) return null;
+                if (!siteData || window._detectlabApiFailed) {
+                    setStatus('arch_report_heritage_unavailable', true);
+                    return null;
+                }
 
                 var radiusKm = currentRadiusKm();
                 var radiusM = radiusKm * 1000;
@@ -1610,7 +1769,7 @@
                 };
 
                 // ── known sites (radii + polygons) via archeo-potential.js ──
-                var collected = collectSites(center.lat, center.lng, Math.max(CONFIG.POTENTIAL.SEARCH_RADIUS_M, radiusM + CONFIG.SITE.RADIUS_M + CONFIG.SITE.BUFFER_M), ctx.lat0);
+                var collected = collectSites(center.lat, center.lng, Math.max(CONFIG.POTENTIAL.SEARCH_RADIUS_M, radiusM + CONFIG.SITE.RADIUS_M + CONFIG.SITE.BUFFER_M + CONFIG.FOCUS.CELL_M), ctx.lat0);
                 ctx.sites = collected.sites || [];
                 ctx.polygons = collected.polygons || [];
                 ctx.siteRecords = buildSiteRecords(ctx.sites);
@@ -1692,7 +1851,8 @@
                     var batch = seeds.slice(i, i + 60);
                     batch.forEach(function (seed) {
                         var res = evaluateSeed(seed, ctx);
-                        if (res.ok) candidates.push(res);
+                        if (res.ok && focusCellAllowed(res.x, res.y, CONFIG.FOCUS.CELL_M, ctx)) candidates.push(res);
+                        else if (res.ok) rejected.focus_exclusion = (rejected.focus_exclusion || 0) + 1;
                         else rejected[res.reason] = (rejected[res.reason] || 0) + 1;
                     });
                     await yieldToUI();
@@ -1774,7 +1934,7 @@
     }
 
     /* ═══════════════════════════════════════════════════════════════════════
-     * 12. MAP RENDERING — blue circular rings + "Result 1/2/3" labels
+     * 12. MAP RENDERING — focus polygons and transects + "Result 1/2/3" labels
      * ═══════════════════════════════════════════════════════════════════════ */
 
     function ensurePanes(map) {
@@ -2003,10 +2163,14 @@
         }
         var strokeColor = CONFIG.RENDER.COLOR || '#66c8ff';
         var fillColor = CONFIG.RENDER.FILL || strokeColor;
-        var ringRadiusM = CONFIG.RESULT_RADIUS_M || 180;
         var curLang = lang();
+        function coords(ring) {
+            var out = ring.map(function (p) { return [p[1], p[0]]; });
+            if (out.length) out.push(out[0]);
+            return out;
+        }
         (model.results || []).forEach(function (res) {
-            if (!res || !isFinite(res.lat) || !isFinite(res.lng)) return;
+            if (!res || !isFinite(res.lat) || !isFinite(res.lng) || !res.focus || !res.focus.main.length) return;
             var locRes = Object.assign({}, res, {
                 label: tr('arch_report_result') + ' ' + res.index + '/' + res.total,
                 classificationLabel: tr('arch_report_class_' + res.classification)
@@ -2014,24 +2178,31 @@
             var popup = resultPopupHtml(locRes);
             var tagText = locRes.label + ' · ' + res.scorePct + '%';
             features.push(feature3d(
-                { type: 'Polygon', coordinates: [groundRing3d(res.lat, res.lng, ringRadiusM)] },
-                {
-                    index: res.index,
-                    kind: 'result-ring',
-                    color: strokeColor,
-                    fillColor: fillColor,
-                    fillOpacity: 0.22,
-                    opacity: 0.98,
-                    weight: 2,
-                    radiusM: ringRadiusM,
-                    lat: res.lat,
-                    lng: res.lng,
-                    score: res.score,
-                    scorePct: res.scorePct,
-                    label: tagText,
-                    popup: popup
-                }
+                { type: 'Polygon', coordinates: res.focus.main.map(coords) },
+                { index: res.index, kind: 'result-focus', color: strokeColor, fillColor: fillColor,
+                    fillOpacity: 0.22, opacity: 0.98, weight: 2, popup: popup, label: tagText }
             ));
+            // Explicit dashes keep the boundary dotted in 3D while survey
+            // transects remain solid in the shared vector line layer.
+            res.focus.secondary.forEach(function (ring) {
+                for (var i = 0; i < ring.length; i++) {
+                    var a = ring[i], b = ring[(i + 1) % ring.length];
+                    var dy = (b[0] - a[0]) * 111320;
+                    var dx = (b[1] - a[1]) * 111320 * Math.cos(res.lat * Math.PI / 180);
+                    var length = Math.sqrt(dx * dx + dy * dy);
+                    for (var d = 0; d < length; d += 12) {
+                        var f0 = d / length, f1 = Math.min(1, (d + 5) / length);
+                        features.push(feature3d({ type: 'LineString', coordinates: [
+                            [a[1] + (b[1] - a[1]) * f0, a[0] + (b[0] - a[0]) * f0],
+                            [a[1] + (b[1] - a[1]) * f1, a[0] + (b[0] - a[0]) * f1]
+                        ] }, { kind: 'secondary-outline', color: '#ffffff', opacity: 0.8, weight: 1.5 }));
+                    }
+                }
+            });
+            res.focus.lines.forEach(function (line) {
+                features.push(feature3d({ type: 'LineString', coordinates: line.map(function (p) { return [p[1], p[0]]; }) },
+                    { kind: 'survey-line', color: '#ffffff', opacity: 0.55, weight: 1.5 }));
+            });
             features.push(feature3d(
                 { type: 'Point', coordinates: [res.lng, res.lat] },
                 {
@@ -2058,8 +2229,7 @@
                 line: {
                     'line-color': strokeColor,
                     'line-width': 2,
-                    'line-opacity': 0.98,
-                    'line-dasharray': [2, 2]
+                    'line-opacity': 0.98
                 },
                 /* See searchAreaFeatures3d: 'line-color' is not a fill
                    paint property — MapLibre rejects the layer carrying it. */
@@ -2109,11 +2279,22 @@
         // LIDAR Scanner): they are clickable, and the shapes pane is
         // pointer-events:none so a canvas surface would swallow map clicks.
         model.results.forEach(function (res) {
-            var ring = L.circle([res.lat, res.lng], assignPane({
-                radius: CONFIG.RESULT_RADIUS_M,
-                color: CONFIG.RENDER.COLOR, weight: 2, dashArray: '3 6',
+            if (!res.focus || !res.focus.main.length) return;
+            var outline = L.polygon(res.focus.secondary, assignPane({
+                color: '#ffffff', weight: 1.5, dashArray: '3 6', opacity: 0.8,
+                fill: false, interactive: false
+            }, CONFIG.RENDER.PANE_SHAPES));
+            outline._dl3dSkip = true;
+            group.addLayer(outline);
+            res.focus.lines.forEach(function (line) {
+                var gridLine = L.polyline(line, assignPane({ color: '#ffffff', weight: 1.5, opacity: 0.55, interactive: false }, CONFIG.RENDER.PANE_SHAPES));
+                gridLine._dl3dSkip = true;
+                group.addLayer(gridLine);
+            });
+            var ring = L.polygon(res.focus.main, assignPane({
+                color: CONFIG.RENDER.COLOR, weight: 2,
                 fillColor: CONFIG.RENDER.FILL || CONFIG.RENDER.COLOR,
-                fillOpacity: 0.11, opacity: 0.98, interactive: true
+                fillOpacity: 0.22, opacity: 0.98, interactive: true
             }, CONFIG.RENDER.PANE_SHAPES));
             ring._dl3dSkip = true;
             ring.bindPopup(resultPopupHtml(res), { className: 'arch-report-popup', maxWidth: 320 });
@@ -2377,21 +2558,39 @@
 
     function drawResultPolygons(g, proj, model, highlightIndex, trx) {
         var t = trx || tr;
-        var rM = CONFIG.RESULT_RADIUS_M;
         model.results.forEach(function (res, idx) {
             var pt = proj.latLngToPx(res.lat, res.lng);
-            var rPx = Math.max(4, rM * proj.pxPerMeter);
+            if (!res.focus || !res.focus.main.length) return;
+            function path(rings) {
+                g.beginPath();
+                rings.forEach(function (ring) {
+                    ring.forEach(function (ll, i) {
+                        var p = proj.latLngToPx(ll[0], ll[1]);
+                        if (i) g.lineTo(p.x, p.y); else g.moveTo(p.x, p.y);
+                    });
+                    g.closePath();
+                });
+            }
             g.save();
-            g.beginPath();
-            g.arc(pt.x, pt.y, rPx, 0, Math.PI * 2);
+            path(res.focus.main);
             g.fillStyle = (highlightIndex === undefined || highlightIndex === idx + 1)
                 ? 'rgba(41,182,246,0.28)' : 'rgba(41,182,246,0.12)';
-            g.fill();
+            g.fill('evenodd');
             g.strokeStyle = '#66c8ff';
             g.lineWidth = (highlightIndex === idx + 1) ? 3 : 2;
-            g.setLineDash([4, 4]);
             g.stroke();
-            g.setLineDash([]);
+            path(res.focus.secondary);
+            g.strokeStyle = 'rgba(255,255,255,0.8)';
+            g.lineWidth = 1.5;
+            g.setLineDash([3, 5]); g.stroke(); g.setLineDash([]);
+            g.strokeStyle = 'rgba(255,255,255,0.55)';
+            g.beginPath();
+            res.focus.lines.forEach(function (line) {
+                var a = proj.latLngToPx(line[0][0], line[0][1]);
+                var b = proj.latLngToPx(line[1][0], line[1][1]);
+                g.moveTo(a.x, a.y); g.lineTo(b.x, b.y);
+            });
+            g.stroke();
 
             var text = t('arch_report_result') + ' ' + (idx + 1);
             g.font = "700 12px 'Outfit', 'Segoe UI', Arial, sans-serif";
@@ -2972,6 +3171,7 @@
         apmCellM: apmCellM,
         buildSeeds: buildSeeds,
         passesSiteFilters: passesSiteFilters,
+        focusCellAllowed: focusCellAllowed,
         nearestBubble: nearestBubble,
         nearestLidar: nearestLidar,
         nearestRomanRoadM: nearestRomanRoadM,
@@ -2988,6 +3188,7 @@
         romanToInt: romanToInt,
         estimatePeriod: estimatePeriod,
         buildResultModel: buildResultModel,
+        buildFocusAreas: buildFocusAreas,
         buildSiteRecords: buildSiteRecords,
         siteInfo: siteInfo,
         distanceToSite: distanceToSite,

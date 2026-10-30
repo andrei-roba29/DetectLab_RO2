@@ -288,6 +288,32 @@ console.log('\n[collectSitesInRadius]');
     check('pointInPolygon: exterior point is outside', D.pointInPolygon(outsidePt.x, outsidePt.y, res.polygons[0].rings[0]) === false);
 }
 
+// Fetches populate individual layer slots without replacing the container.
+{
+    const data = { 0: { features: [] }, 5: null, 6: null };
+    const before = D.buildGlobalSiteIndex(data);
+    data[5] = { features: [{ id: 5, properties: {}, geometry: { type: 'Point', coordinates: [23.6, 46.8] } }] };
+    const after = D.buildGlobalSiteIndex(data);
+    check('site index rebuilds when a layer arrives in the same data object',
+        after !== before && after.pointIndex.queryCircle(23.6, 46.8, 0.01).length === 1);
+}
+
+// A large boundary can contain the working circle even though every guard
+// point and the centroid are outside it.
+{
+    sandbox.window._localLayerData = { 0: { features: [] }, 5: { features: [] }, 6: { features: [
+        { id: 10, properties: {}, geometry: { type: 'Polygon', coordinates: [[
+            [23.5, 46.7], [23.9, 46.7], [23.9, 47.0], [23.5, 47.0], [23.5, 46.7]
+        ]] } }
+    ] } };
+    const enclosed = D.collectSitesInRadius(46.8, 23.6, 1000, 46.8);
+    check('large polygon enclosing the search area is retained without nearby guards',
+        enclosed.sites.length === 0 && enclosed.polygons.length === 1);
+    const centre = D.projectToLocalMeters(46.8, 23.6, 46.8);
+    check('enclosing polygon still excludes the centre',
+        D.pointInPolygon(centre.x, centre.y, enclosed.polygons[0].rings[0]));
+}
+
 // ── 6. UAT pixel math consistency ─────────────────────────────────────
 console.log('\n[UAT tile math]');
 {

@@ -2,7 +2,7 @@
 
 Premium layer. Pick a point on the map, press **Run / Rulează**: the layer
 analyses the selected **1–10 km circular radius** around that point, returns
-**up to 3 ranked locations** as blue circles and produces a **downloadable PDF** that explains each one.
+**up to 3 ranked locations** as blue focus polygons and produces a **downloadable PDF** that explains each one.
 
 Three sources feed a single weighted score:
 
@@ -60,7 +60,7 @@ document *metadata* (`/Title`, `/Author`) with `winAnsiSafe()`.
 1. Switch the layer on → map clicks pick the analysis centre (orange pin).
 2. **Run** (disabled until a point exists) → status steps: sites → potential →
    LIDAR → UAT → APM → scoring.
-3. **3 orange hexagons** (radius 180 m) with permanent `Rezultat n/3 · %` labels
+3. **Up to 3 focus polygons** with permanent `Rezultat n/3 · %` labels
    appear and **stay until the layer is switched off** (or "show results" is
    unticked). The polygon *and* its label are clickable → score popup.
 4. Pick the **PDF language** with the RO / EN selector next to the download
@@ -167,7 +167,7 @@ appears only when a record genuinely says nothing.
 ## Rendering
 
 Panes `pane_arch_report_shapes` (z 672) and `pane_arch_report_tags` (z 674),
-colour `#ff8a1e`, drawn above the LIDAR scanner tags (665).
+colour `#66c8ff`, drawn above the LIDAR scanner tags (665).
 
 ## Debugging
 
@@ -222,3 +222,29 @@ heritage API is unreachable).
 4. `css/styles.css`: the layer's classes.
 5. `sw.js`: add the versioned URLs to `PRECACHE_URLS` **and** bump `CACHE_NAME`.
 6. Run `node test-<layer>.js` and the harnesses of the layers you touched.
+
+## Focus areas and field transects
+
+Each selected result is resampled on a 50 m grid using the report's existing
+score and mandatory exclusions. Its connected main focus contains cells within
+0.10 of the result's local score, capped at 200 m from its centre; the connected
+secondary focus uses a 0.25 score drop and is capped by an 800 m-wide sampling
+window. The main focus is always included in the secondary focus. For a LIDAR
+annotation, thresholds use the best valid adjacent score rather than extending
+its point-only annotation bonus across the surrounding area. If the data do not
+support a wider area, the two areas can coincide.
+
+The blue polygon, dotted white secondary boundary and translucent white
+north–south transects (100 m apart, clipped to the secondary area) appear in
+2D, 3D and report figures. Whole cells are screened against the sampled UAT raster, heritage circles and
+site polygons; scoring still samples their centres. Raster resolution and cell edges are approximate: the footprints are **not** measured site boundaries, calibrated
+probabilities, permission to enter land, or a substitute for heritage checks.
+The underlying report still uses APM 2.0; Next-Gen APM integration has not yet
+been implemented.
+
+Focus cells that touch the UAT raster exclusion, a protection radius, or a
+site polygon are omitted altogether, including from the secondary survey area.
+The report retains its stricter 500 m UAT clearance for result centres. If
+heritage data is missing or any heritage API layer fails, the report displays
+no results; UAT raster failures are also treated as excluded. The raster is a
+sampled representation and cannot guarantee that every small feature is visible.

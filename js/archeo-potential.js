@@ -396,9 +396,11 @@
     // meters per analysis run.
     function buildGlobalSiteIndex(data) {
         var key = CONFIG.SITE_LAYERS.join(',') + '|' + (CONFIG.INCLUDE_APPROXIMATE_SITES ? 1 : 0);
-        // Rebuild when the config changes OR when the underlying layer data
-        // object is replaced (e.g. a future refresh of window._localLayerData).
-        if (_siteIndexCache && _siteIndexCache.key === key && _siteIndexCache.dataRef === data) {
+        // Individual asynchronous downloads replace layer values in the same
+        // container; the container identity alone does not detect that change.
+        var layerRefs = CONFIG.SITE_LAYERS.map(function (id) { return data[id]; });
+        if (_siteIndexCache && _siteIndexCache.key === key && _siteIndexCache.dataRef === data &&
+            layerRefs.every(function (ref, i) { return ref === _siteIndexCache.layerRefs[i]; })) {
             return _siteIndexCache;
         }
 
@@ -432,7 +434,7 @@
             });
         });
 
-        _siteIndexCache = { key: key, dataRef: data, pointIndex: pointIndex, polygons: polygons };
+        _siteIndexCache = { key: key, dataRef: data, layerRefs: layerRefs, pointIndex: pointIndex, polygons: polygons };
         return _siteIndexCache;
     }
 
@@ -465,12 +467,13 @@
     function collectSitesInRadius(centerLat, centerLng, radiusM, lat0) {
         var cache = buildGlobalSiteIndex(window._localLayerData || {});
         var c = projectToLocalMeters(centerLat, centerLng, lat0);
-        var DEG_R = radiusM / 111320; // coarse degree radius for culling
+        var DEG_R = radiusM / 111320; // latitude radius for coarse culling
+        var DEG_LNG_R = DEG_R / Math.max(0.01, Math.abs(Math.cos(centerLat * Math.PI / 180)));
 
         var sites = [];
         var seen = {}; // dedupe within ~SITE_DEDUPE_M
 
-        var rawPoints = cache.pointIndex.queryCircle(centerLng, centerLat, DEG_R * 1.6);
+        var rawPoints = cache.pointIndex.queryCircle(centerLng, centerLat, Math.max(DEG_R, DEG_LNG_R));
         for (var i = 0; i < rawPoints.length; i++) {
             var p = rawPoints[i];
             var pm = projectToLocalMeters(p.lat, p.lng, lat0);
@@ -495,7 +498,7 @@
         for (var pi = 0; pi < cache.polygons.length; pi++) {
             var poly = cache.polygons[pi];
             var b = poly.bbox;
-            if (b.maxLng < centerLng - DEG_R || b.minLng > centerLng + DEG_R ||
+            if (b.maxLng < centerLng - DEG_LNG_R || b.minLng > centerLng + DEG_LNG_R ||
                 b.maxLat < centerLat - DEG_R || b.minLat > centerLat + DEG_R) continue;
 
             var localRings = poly.rings.map(function (ring) {
@@ -533,11 +536,9 @@
                 }
             });
 
-            var hasGuardInside = false;
             for (var g = 0; g < guards.length; g++) {
                 var gd = Math.sqrt((guards[g].x - c.x) * (guards[g].x - c.x) + (guards[g].y - c.y) * (guards[g].y - c.y));
                 if (gd <= radiusM) {
-                    hasGuardInside = true;
                     // dedupe guard points too (dense polygons would flood the list)
                     var gkey = Math.round(guards[g].x / CONFIG.SITE_DEDUPE_M) + '|' + Math.round(guards[g].y / CONFIG.SITE_DEDUPE_M);
                     if (!seen[gkey]) {
@@ -547,7 +548,11 @@
                     }
                 }
             }
-            if (hasGuardInside) polygons.push({ rings: localRings, layerId: poly.layerId, oid: poly.oid });
+            // The site polygon can enclose or cross the search area even when
+            // all of its sampled perimeter guards and centroid are outside it.
+            // A bbox hit is a safe coarse filter; point-in-polygon does the
+            // exact exclusion later.
+            polygons.push({ rings: localRings, layerId: poly.layerId, oid: poly.oid });
         }
 
         return { sites: sites, polygons: polygons };

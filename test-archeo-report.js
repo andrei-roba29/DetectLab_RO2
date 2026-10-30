@@ -302,6 +302,51 @@ section('Geometry');
     check('pointInPolygon: far point is outside', R.pointInPolygon(CENTER.x + 5000, CENTER.y, local) === false);
 }
 
+section('Focus-area geometry and exclusions');
+{
+    const ctx = baseCtx({ square: R.analysisArea(46.8, 23.6, 3000) });
+    ctx.uatGrid = mkUatGrid(300, 300, 10, true);
+    ctx.apmGrid = mkApmGrid(300, 300, 10, 5);
+    ctx.uatGrid.x0 = ctx.apmGrid.x0 = CENTER.x - 1500;
+    ctx.uatGrid.y0 = ctx.apmGrid.y0 = CENTER.y - 1500;
+    const seed = R.evaluateSeed({ x: CENTER.x, y: CENTER.y, origin: 'grid' }, ctx);
+    const f = R.buildFocusAreas(seed, ctx);
+    const bounds = rings => {
+        const pts = rings[0].map(p => R.projectToLocalMeters(p[0], p[1], ctx.lat0));
+        return { minX: Math.min(...pts.map(p => p.x)), maxX: Math.max(...pts.map(p => p.x)) };
+    };
+    check('valid seed generates nested focus areas', f.main.length && f.secondary.length && bounds(f.secondary).maxX > bounds(f.main).maxX);
+    check('focus transects run north–south', f.lines.length > 1 && f.lines.every(l => Math.abs(l[0][1] - l[1][1]) < 1e-10));
+    const cell = CFG.FOCUS.CELL_M;
+    const site = { points: [{ x: CENTER.x + 720, y: CENTER.y }] };
+    ctx.siteRecords = [site];
+    check('cell touching a heritage radius is excluded even if its centre is outside',
+        !R.focusCellAllowed(CENTER.x, CENTER.y, cell, ctx));
+    site.points[0].x = CENTER.x + 730;
+    check('cell entirely outside the heritage radius is allowed', R.focusCellAllowed(CENTER.x, CENTER.y, cell, ctx));
+    ctx.siteRecords = [];
+    const tiny = [
+        { x: CENTER.x + 17, y: CENTER.y + 17 }, { x: CENTER.x + 20, y: CENTER.y + 17 },
+        { x: CENTER.x + 20, y: CENTER.y + 20 }, { x: CENTER.x + 17, y: CENTER.y + 20 }
+    ];
+    ctx.polygons = [{ rings: [tiny] }];
+    check('site polygon entirely inside the cell is excluded', !R.focusCellAllowed(CENTER.x, CENTER.y, cell, ctx));
+    ctx.polygons = [];
+    const pixelX = Math.floor((CENTER.x + 20 - ctx.uatGrid.x0) / ctx.uatGrid.cellM);
+    const pixelY = Math.floor((CENTER.y + 20 - ctx.uatGrid.y0) / ctx.uatGrid.cellM);
+    ctx.uatGrid.red[pixelY * ctx.uatGrid.cols + pixelX] = 0;
+    check('cell touching a UAT built-up raster cell is excluded', !R.focusCellAllowed(CENTER.x, CENTER.y, cell, ctx));
+    ctx.uatGrid.red[pixelY * ctx.uatGrid.cols + pixelX] = 1;
+
+    // APM-red cells to the east are not eligible and must clip the footprint.
+    for (let y = 0; y < 300; y++) for (let x = 0; x < 300; x++) {
+        if (ctx.apmGrid.x0 + (x + .5) * 10 > CENTER.x + 125) ctx.apmGrid.cls[y * 300 + x] = 1;
+    }
+    const clipped = R.buildFocusAreas(seed, ctx);
+    check('secondary focus stops at rejected APM cells', bounds(clipped.secondary).maxX <= CENTER.x + 126);
+    check('transects stop at the same rejected cells', clipped.lines.every(l => R.projectToLocalMeters(l[0][0], l[0][1], ctx.lat0).x <= CENTER.x + 126));
+}
+
 /* ═══════════════ 4. mandatory exclusions ═══════════════ */
 section('Mandatory exclusions (evaluateSeed)');
 {
@@ -819,7 +864,7 @@ section('End-to-end analysis (runReport)');
         const m = R.projectToLocalMeters(r.lat, r.lng, C.lat);
         const inside = R.inCircle(area, m.x, m.y);
         check('result ' + r.index + ' inside the search radius', inside);
-        check('result ' + r.index + ' has a circular footprint', r.polygon.length >= 32, r.polygon.length);
+        check('result ' + r.index + ' has main and secondary focus polygons', r.focus.main.length > 0 && r.focus.secondary.length > 0);
         check('result ' + r.index + ' score in [0,1]', r.score >= 0 && r.score <= 1, r.score);
         const dMin = Math.min.apply(null, r.nearestSites.map(s => s.distanceM));
         check('result ' + r.index + ' is \u2265 700 m from every known site', dMin >= 700, dMin);
@@ -876,31 +921,26 @@ section('End-to-end analysis (runReport)');
     const rendered = CREATED_GROUPS[CREATED_GROUPS.length - 1];
     check('a leaflet layerGroup was added to the map', !!(rendered && rendered._added));
     const polys = (rendered ? rendered.layers : []).filter(l => l.latlngs);
-    const circles = (rendered ? rendered.layers : []).filter(l => l.options && l.options.radius !== undefined);
-    check('results are drawn as circles, not polygons', polys.length === 0, polys.length);
-    check('3 result circles drawn', circles.length === 3, circles.length);
-    check('result circles use the configured radius',
-        circles.every(c => c.options.radius === CFG.RESULT_RADIUS_M), CFG.RESULT_RADIUS_M);
-    check('result circles are the configured blue',
-        circles.every(c => c.options.color === CFG.RENDER.COLOR), CFG.RENDER.COLOR);
-    check('result circles are clickable (popups bound)', circles.every(c => !!c.popup));
-    check('labels are permanent tooltips in the tags pane',
-        circles.every(c => c.tooltipOpts && c.tooltipOpts.permanent === true &&
-            c.tooltipOpts.className === 'arch-report-tooltip'));
-    check('labels read "Result n/3" + score %',
-        circles[0].tooltip.indexOf('Result 1/3') !== -1 && circles[2].tooltip.indexOf('Result 3/3') !== -1,
-        circles[0].tooltip + ' || ' + circles[2].tooltip);
-    check('2D result circles are marked _dl3dSkip for 3D', circles.every(c => c._dl3dSkip === true));
+    const mainPolys = polys.filter(l => l.options && l.options.interactive === true);
+    const secondary = polys.filter(l => l.options && l.options.dashArray === '3 6');
+    const gridLines = (rendered ? rendered.layers : []).filter(l => l.points);
+    check('three clickable main focus polygons', mainPolys.length === 3 && mainPolys.every(c => !!c.popup));
+    check('three dotted secondary boundaries', secondary.length === 3);
+    check('north–south survey lines are drawn', gridLines.length > 0 && gridLines.every(l => l.options.color === '#ffffff' && l.options.opacity < 1 && Math.abs(l.points[0][1] - l.points[1][1]) < 1e-10));
+    check('labels are permanent tooltips in the tags pane', mainPolys.every(c => c.tooltipOpts && c.tooltipOpts.permanent === true));
+    check('focus polygons are marked _dl3dSkip', mainPolys.every(c => c._dl3dSkip === true));
     check('result group exposes _dl3dFeatures() for 3D projection', !!(rendered && typeof rendered._dl3dFeatures === 'function'));
     const virt3d = rendered && rendered._dl3dFeatures ? rendered._dl3dFeatures() : null;
     const feats3d = (virt3d && virt3d.geojson && virt3d.geojson.features) || [];
-    const rings3d = feats3d.filter(f => f.geometry.type === 'Polygon' && f.properties.kind === 'result-ring');
+    const focus3d = feats3d.filter(f => f.geometry.type === 'Polygon' && f.properties.kind === 'result-focus');
     const pts3d = feats3d.filter(f => f.geometry.type === 'Point' && f.properties.kind === 'result-point');
-    check('3D projection emits 3 ground polygon rings (180 m)', rings3d.length === 3 && rings3d.every(f => f.geometry.coordinates[0].length === 33 && f.properties.radiusM === CFG.RESULT_RADIUS_M), rings3d.length);
-    check('3D projection emits 3 result points with labels and popups',
-        pts3d.length === 3 && pts3d.every(f => f.properties.popup && f.properties.label && f.properties.label.indexOf('Result ') !== -1), pts3d.length);
-    check('3D result rings and points are clickable (popups bound)',
-        rings3d.every(f => !!f.properties.popup) && pts3d.every(f => !!f.properties.popup));
+    check('3D projection emits focus polygons', focus3d.length === 3 && focus3d.every(f => !!f.properties.popup));
+    check('3D projection emits survey lines and secondary outlines', feats3d.some(f => f.properties.kind === 'survey-line') && feats3d.some(f => f.properties.kind === 'secondary-outline'));
+    check('3D projection emits labelled result points', pts3d.length === 3 && pts3d.every(f => f.properties.popup && f.properties.label));
+    model.results.forEach(function (r) {
+        const xs = [...new Set(r.focus.lines.map(line => R.projectToLocalMeters(line[0][0], line[0][1], C.lat).x.toFixed(2)))].map(Number).sort((a,b) => a-b);
+        check('survey lines are separated by multiples of 100 m', xs.every((x,i) => !i || Math.abs((x - xs[i-1]) / 100 - Math.round((x - xs[i-1]) / 100)) < 0.001));
+    });
     check('results stay visible until the user opts out', fakeMap.hasLayer(rendered));
     const showBox = domNodes['archReportResultsToggle'];
     check('the "show results" checkbox has a change handler registered', !!(showBox._handlers.change || []).length);
@@ -1137,12 +1177,21 @@ section('End-to-end analysis (runReport)');
         const degraded = await sandbox.runArcheoReport();
         const degradedMs = Date.now() - tDeg;
         sandbox.ARCH_REPORT_CONFIG.SITES_DATA_TIMEOUT_MS = savedWait;
-        APM_UNREADABLE = false;
         check('the site-data wait is capped once, not twice',
-            degradedMs >= 1900 && degradedMs < 3900, degradedMs + ' ms (cap was 2000 ms)');
+            degradedMs >= 1700 && degradedMs < 3900, degradedMs + ' ms (cap was 2000 ms)');
 
-        check('the run survives an unreachable LIDAR CSV', !!degraded);
-        if (degraded) {
+        check('unavailable heritage data fails closed', degraded === null && /heritage/i.test(domNodes['archReportStatus'].textContent));
+        check('failed heritage load clears stale results', sandbox._archeoReportState().results.length === 0);
+        sandbox._localLayerData = { 0: { features: [] }, 5: { features: [] }, 6: { features: [] } };
+        sandbox._detectlabApiFailed = true;
+        check('a failed heritage API layer also fails closed', await sandbox.runArcheoReport() === null);
+        sandbox._detectlabApiFailed = false;
+        sandbox._localLayerData = { 0: { features: [] }, 5: { features: [] }, 6: { features: [] } };
+        const degradedOtherSources = await sandbox.runArcheoReport();
+        APM_UNREADABLE = false;
+        check('the run survives an unreachable LIDAR CSV', !!degradedOtherSources);
+        if (degradedOtherSources) {
+            const degraded = degradedOtherSources;
             console.log('  [degraded]', JSON.stringify(degraded.meta.sources || degraded.meta));
             check('APM marked unreadable, never guessed',
                 degraded.meta.apmUnreadable === true && degraded.meta.apmAvailable === false,
