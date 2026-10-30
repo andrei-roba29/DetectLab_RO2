@@ -45,8 +45,7 @@ for (const key of keys) {
     assert.equal(configs[key].opacity, .45, 'switch preserves chosen opacity');
 }
 const sw = fs.readFileSync('sw.js','utf8');
-for (const asset of ['js/map-app.js', 'js/rvt-panel.js', 'css/rvt-panel.css']) {
-    const url = asset + '?v=20261030-lidar-controls';
+for (const url of ['js/map-app.js?v=20261030-lidar-touch-fix', 'js/rvt-panel.js?v=20261030-shared-dock', 'css/rvt-panel.css?v=20261030-shared-dock']) {
     assert(html.includes(url) && sw.includes(url), 'updated asset is precached');
 }
 console.log('OK — all 12 LiDAR switches, opacity activation, state sync and cache wiring.');

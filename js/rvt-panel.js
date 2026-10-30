@@ -7,13 +7,40 @@
     root.id = 'rvt-panel';
     root.setAttribute('aria-label', 'RVT terrain visualizations');
     root.innerHTML = '<div id="rvt-body" role="dialog" aria-label="LiDAR Settings" hidden></div>';
-    map.getContainer().appendChild(root);
+    // Leaflet disables native touch panning on its container. Keep this scrollable
+    // dialog alongside the map (not inside it), as with the layers panel, so
+    // Android/iOS can scroll it without moving the map.
+    const mapContainer = map.getContainer();
+    const host = (mapContainer.closest && mapContainer.closest('.map-frame')) || mapContainer.parentElement || mapContainer;
+    host.appendChild(root);
     const body = root.querySelector('#rvt-body');
+    // Also isolate the fallback embedding when no separate host exists.
+    if (L.DomEvent) {
+        L.DomEvent.disableClickPropagation(body);
+        L.DomEvent.disableScrollPropagation(body);
+    }
     let layerName = '';
     let profileOn = false, profilePoints = [], profileLine = null;
     let config, layers = {}, layerKey = '', method = 'hillshade', overlay = null, busy = false;
     let requestId = 0, timer, histogramTimer;
-    let selectionSerial = 0, cancelSelection = null, areaReady = false;
+    let selectionSerial = 0, cancelSelection = null, areaReady = false, minimized = false;
+    function removeDockItem() {
+        minimized = false;
+        window.DetectLabWindowDock?.remove('lidar-settings');
+    }
+    function minimizeSettings() {
+        if (!window.DetectLabWindowDock) return;
+        minimized = true; body.hidden = true;
+        window.DetectLabWindowDock.minimize('lidar-settings', 'LiDAR Settings', () => {
+            minimized = false; body.hidden = false;
+        });
+    }
+    function minimizeButton() {
+        const button = el('button', '−'); button.type = 'button';
+        button.setAttribute('aria-label', 'Minimize LiDAR Settings');
+        button.title = 'Minimize LiDAR Settings'; button.onclick = minimizeSettings;
+        return button;
+    }
     const settings = {};
     const tileStore = new Map();
     const featureSelection = new Set();
@@ -181,8 +208,8 @@
         resize.setAttribute('aria-label', body.classList.contains('expanded') ? 'Reduce settings panel' : 'Expand settings panel');
         resize.onclick=()=>{ body.classList.toggle('expanded'); render(); };
         const close = el('button', '×'); close.type = 'button'; close.setAttribute('aria-label', 'Close LiDAR Settings');
-        close.onclick = () => { body.hidden = true; stopProfile(); };
-        header.append(heading, resize, close); body.appendChild(header);
+        close.onclick = () => { removeDockItem(); body.hidden = true; stopProfile(); };
+        header.append(heading, resize, minimizeButton(), close); body.appendChild(header);
         body.appendChild(el('p', layerName || layerKey, 'rvt-layer-name'));
         // Numeric RVT is not area-clipped yet; keep this workflow limited to
         // the prepared image circle rather than applying settings to the map.
@@ -441,15 +468,17 @@
         return null;
     }
     function selectionMessage(message, retry) {
-        body.replaceChildren(); body.hidden = false;
+        body.replaceChildren(); body.hidden = minimized;
         const header = el('div', '', 'rvt-heading');
         header.appendChild(el('h2', 'Choose LiDAR area'));
         const close = el('button', '×'); close.type = 'button'; close.setAttribute('aria-label', 'Cancel area selection');
         close.onclick = () => { selectionSerial++; if (cancelSelection) cancelSelection(); cancelSelection = null;
-            window.DLPhotoFilter?.stop(); body.hidden = true; };
-        header.appendChild(close); body.appendChild(header);
+            window.DLPhotoFilter?.stop(); removeDockItem(); body.hidden = true; };
+        header.appendChild(minimizeButton()); header.appendChild(close); body.appendChild(header);
         body.appendChild(el('p', layerName || layerKey, 'rvt-layer-name'));
-        body.appendChild(el('p', message, 'rvt-warning'));
+        const messageNode = el('p', message, 'rvt-warning');
+        messageNode.id = 'rvt-status'; messageNode.setAttribute('role', 'status');
+        body.appendChild(messageNode);
         if (retry) { const button = el('button', 'Choose area again'); button.type = 'button';
             button.onclick = beginAreaSelection; body.appendChild(button); }
     }
@@ -463,7 +492,7 @@
             if (serial !== selectionSerial) return;
             cancelSelection = null;
             if (err) { selectionMessage(err.message, true); return; }
-            areaReady = true; body.hidden = false;
+            areaReady = true; body.hidden = minimized;
             if (config) { activate(); render(); }
             else selectionMessage('Loading LiDAR settings…', false);
         });
@@ -489,6 +518,7 @@
             button.onclick = event => {
                 event.preventDefault(); event.stopPropagation();
                 stopProfile();
+                removeDockItem();
                 selectionSerial++; if (cancelSelection) cancelSelection(); cancelSelection = null;
                 areaReady = false;
                 if (window.DLPhotoFilter?.get()) window.DLPhotoFilter.stop();
@@ -510,8 +540,8 @@
     attachButtons();
     window.addEventListener('dl:photo-filter', event=>{
         if (areaReady && isPhoto() && event.detail.status === 'Image effect off') {
-            areaReady = false; if (!body.hidden) selectionMessage('The layer or image effect was turned off. Choose an area again.', true);
-        } else if (areaReady && !body.hidden && isPhoto()) status(event.detail.status);
+            areaReady = false; if (!body.hidden || minimized) selectionMessage('The layer or image effect was turned off. Choose an area again.', true);
+        } else if (!body.hidden && isPhoto() && event.detail.status !== 'Image effect off') status(event.detail.status);
     });
     fetch('/api/rvt/metadata').then(async response => { if (!response.ok) throw Error('No raw DTM service on this deployment'); return response.json(); })
         .then(info => { if (!info || !info.config?.groups || !info.layers) throw Error('No raw DTM service');

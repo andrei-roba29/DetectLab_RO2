@@ -24,3 +24,7 @@ const center={lat:52,lng:5};
 const z=chooseZoom(center,{maxzoom:18});
 assert.ok(z<=17 && tileCoordinates(center,z).length+tileCoordinates(center,z-1).length<=96);
 console.log('Photo effects: 17 distinct styles; <=96 prefetched tiles.');
+
+const source = fs.readFileSync('js/lidar-photo-filter.js', 'utf8');
+assert(!source.includes('rvt-photo-status'), 'no separate photo-effect status window');
+assert(source.includes("CustomEvent('dl:photo-filter'"), 'settings still receive status updates');

@@ -28,6 +28,7 @@
     var state = {
         mode: 'manual',
         enabled: false,
+        opacity: 1,
         centre: null,               // { lat, lon } picked on the map
         picking: false,
         radiusKm: 5,
@@ -154,9 +155,20 @@
         else if (state.mode === 'train' && state.centre && !state.records) loadAriadneSites();
         renderSwitch();
         updateGate();
+        if (ui.panel) {
+            if (on) {
+                hideDock();
+                var layers = document.getElementById('transpPanel');
+                if (layers && layers.classList.contains('open') && typeof root.toggleTranspPanel === 'function') root.toggleTranspPanel();
+                togglePanel(true);
+            }
+            else { hideDock(); togglePanel(false); }
+        }
     }
 
     function renderSwitch() {
+        var rowToggle = document.getElementById('apmNextToggle');
+        if (rowToggle) rowToggle.checked = state.enabled;
         if (!els.switch) return;
         els.switch.setAttribute('aria-checked', String(state.enabled));
         els.switchText.textContent = state.enabled ? T('switch.on') : T('switch.off');
@@ -574,10 +586,20 @@
         layers.push(outlines);
         layer = root.L.layerGroup(layers);
         if (m && layer.addTo) layer.addTo(m);
+        applyOpacity();
         renderLegend();
         renderResult(res);
         els.exportBtn.disabled = false;
         els.clearBtn.disabled = false;
+    }
+
+    function applyOpacity() {
+        var m = getMap();
+        if (!m || !m.getPane) return;
+        ['apmHeat', 'apmHotspots'].forEach(function (name) {
+            var pane = m.getPane(name);
+            if (pane) pane.style.opacity = String(state.opacity);
+        });
     }
 
     function heatColour(classId, res) {
@@ -957,11 +979,10 @@
         bind(clBtn, 'debug.clear');
         prov().onDebug(function () { renderDebugLog(); });
 
-        var close = h('button', { type: 'button', class: 'apm-close', onclick: function () { togglePanel(false); } });
-        close.setAttribute('aria-label', 'Close');
-        bind(close, 'panel.close', 'aria-label');
-        bind(close, 'panel.close', 'title');
-        close.textContent = '✕';
+        var close = h('button', { type: 'button', class: 'apm-close', onclick: function () { minimizePanel(); } });
+        close.setAttribute('aria-label', 'Minimize configuration');
+        close.title = 'Minimize configuration';
+        close.textContent = '−';
 
         var manualOnly = h('div', { class: 'apm-manual-only' }, [
             h('fieldset', { class: 'apm-group' }, [h('legend', { key: 'weights.title' }), wRel.row, wWat.row, wSoil.row]),
@@ -1000,7 +1021,7 @@
         var panel = h('section', { class: 'apm-panel', id: 'apmNextPanel', hidden: true, 'aria-hidden': 'true', 'aria-label': 'Next-Gen APM' }, [
             h('header', { class: 'apm-head' }, [
                 h('h3', { key: 'panel.title' }),
-                h('div', { class: 'apm-head-right' }, [els.switch, close])
+                h('div', { class: 'apm-head-right' }, [close])
             ]),
             els.gate,
             els.controls,
@@ -1054,7 +1075,7 @@
         ui.panel.setAttribute('aria-hidden', String(!open));
         // On phones the map legend steps aside only while settings are actually visible.
         document.body.classList.toggle('apm-panel-open', open);
-        ui.btn.setAttribute('aria-expanded', String(open));
+        if (ui.btn) ui.btn.setAttribute('aria-expanded', String(open));
     }
 
     function togglePanel(force) {
@@ -1063,7 +1084,19 @@
         if (open && state.picking) { setPanelVisible(false); return; }
         if (!open) stopPick();                       // explicit close cancels selection
         setPanelVisible(open);
-        if (open) { updateGate(); renderDebugLog(); }
+        if (open) { hideDock(); updateGate(); renderDebugLog(); }
+    }
+
+    function hideDock() {
+        if (root.DetectLabWindowDock) root.DetectLabWindowDock.remove('apm-next');
+    }
+
+    function minimizePanel() {
+        if (!root.DetectLabWindowDock) return;
+        togglePanel(false);
+        if (state.enabled) {
+            root.DetectLabWindowDock.minimize('apm-next', T('panel.title'), function () { togglePanel(true); });
+        }
     }
 
     function onLanguageChange() { refreshI18n(); }
@@ -1076,25 +1109,24 @@
         try { state.enabled = root.localStorage.getItem(SWITCH_KEY) === 'on'; } catch (e) { state.enabled = false; }
 
         ui.panel = buildPanel();
-        ui.btn = document.getElementById('apmNextBtn');
-        if (!ui.btn) {
-            // Standalone embedding (outside the main layer list).
-            ui.btn = h('button', {
-                type: 'button', id: 'apmNextBtn', class: 'apm-fab', 'aria-expanded': 'false',
-                'aria-controls': 'apmNextPanel'
-            }, [h('span', { text: 'APM' }), h('span', { class: 'apm-fab-sub' })]);
-            document.body.appendChild(ui.btn);
-        }
-        ui.btn.title = T('btn.title');
-        ui.btn.addEventListener('click', function () {
-            var layers = document.getElementById('transpPanel');
-            if (layers && layers.classList.contains('open') && typeof root.toggleTranspPanel === 'function') root.toggleTranspPanel();
-            togglePanel();
+        var rowToggle = document.getElementById('apmNextToggle');
+        var opacity = document.getElementById('apmNextOpacity');
+        if (rowToggle) rowToggle.addEventListener('change', function () { setEnabled(rowToggle.checked); });
+        if (opacity) opacity.addEventListener('input', function () {
+            state.opacity = Math.max(0, Math.min(1, Number(opacity.value) / 100));
+            applyOpacity();
         });
-        document.body.appendChild(ui.panel);
+        var host = document.querySelector('#map-section .map-frame') || document.querySelector('.map-frame') || document.body;
+        host.appendChild(ui.panel);
+        // Keep a launcher for standalone embeddings without the layer list.
+        if (!rowToggle) {
+            ui.btn = h('button', { type: 'button', id: 'apmNextBtn', class: 'apm-fab', 'aria-expanded': 'false', 'aria-controls': 'apmNextPanel', text: 'APM', onclick: function () { togglePanel(); } });
+            host.appendChild(ui.btn);
+        }
         document.addEventListener('detectlab:langchange', onLanguageChange);
         renderSwitch();
         updateGate();
+        if (state.enabled && rowToggle) togglePanel(true);
     }
 
     root.DetectLabApmUi = {
