@@ -857,7 +857,7 @@
 // v325: lift LiDAR in 3D above the PWA bleed and phone navigation bar.
 // v333: remove the hillshade controls from below the search bar.
 // v334: paint the free Josephine coverage below the other map dots.
-const CACHE_NAME = 'detectlab-v334-josephine-coverage';
+const CACHE_NAME = 'detectlab-v336-report-exclusions';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1652,10 +1652,10 @@ const PRECACHE_URLS = [
   // v138: archeo potential canvas must not swallow detectorist pin taps after
   // the layer is switched off (click-through pane + renderer detach).
   'js/archeo-potential.js?v=20261017-archeo-3d-projection',
-  'js/archeo-potential.js?v=20261020-3d-analysis-points',
+  'js/archeo-potential.js?v=20261030-report-exclusions',
   'js/lidar-scanner.js?v=20260922-distance-mirror-close',
   'js/archeo-report.js?v=20260922-distance-mirror-close',
-  'js/archeo-report.js?v=20261020-3d-analysis-points',
+  'js/archeo-report.js?v=20261030-report-exclusions',
   // v130: caption chip (DISTANȚĂ / RAZĂ / ISTORIC) anchored to the card
   // itself, so it floats above the slider in the PWA as well.
   'css/styles.css?v=20260922-caption-above-card',
@@ -1776,7 +1776,7 @@ const PRECACHE_URLS = [
   // (“Puternic” in Romanian) instead of “Weak”, in every language, and the ASIG
   // map tap only queries inside Albania while a layer is really on the map.
   // Both URLs below are the live ones index.html requests.
-  'js/translations.js?v=20261030-walachia',
+  'js/translations.js?v=20261030-report-exclusions',
   'js/asig-albania-layers.js?v=20261026-asig-tap-guard',
   // v288: every free Denmark layer is restyled like the other countries'
   // rows (pill on/off switch + opacity slider), grouped as LiDAR /
