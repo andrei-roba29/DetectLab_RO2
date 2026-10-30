@@ -33,7 +33,9 @@
 .rvt-heading h2 { margin:0 !important; flex:1; }
 .rvt-heading button { min-width:34px; min-height:34px; font-size:22px !important; line-height:1; }
 #rvt-body .rvt-layer-name { margin:5px 0 10px; color:#d6bd96; }
-.rvt-row-button { margin-left:auto; white-space:nowrap; border:0; border-radius:7px; background:transparent; color:inherit; padding:4px 8px; font:600 17px system-ui,sans-serif; cursor:pointer; min-height:28px; }
+.rvt-row-button { display:inline-flex; align-items:center; justify-content:center; flex:0 0 28px; width:28px; height:28px; margin-left:6px; border:0; border-radius:7px; background:transparent; color:inherit; padding:6px; cursor:pointer; }
+.rvt-row-button:hover { background:rgba(255,255,255,.08); }
+.rvt-row-button svg { flex:none; pointer-events:none; }
 .rvt-row-button:focus-visible { outline:2px solid #ffc674; }
 .rvt-ground { border-top:1px solid #58746b; margin-top:14px; padding-top:2px; }
 .rvt-ground .rvt-control { display:flex; align-items:center; gap:10px; }
@@ -43,4 +45,4 @@
 #rvt-photo-status { position:absolute; left:50%; bottom:4%; transform:translateX(-50%); z-index:1252; max-width:min(350px,90vw); background:rgba(24,54,54,.94); border:1px solid #dab481; color:#fff; border-radius:10px; padding:8px 12px; font:12px system-ui,sans-serif; pointer-events:none; text-align:center; }
 #rvt-photo-status[hidden] { display:none; }
 #rvt-body .rvt-warning { border-left:3px solid #e5a46c; }
-@media(max-width:650px) { #rvt-panel { bottom:8%; } #rvt-body { max-height:52dvh; } #rvt-body.expanded { max-height:78dvh; } .rvt-row-button { padding:6px; min-height:36px; } }
+@media(max-width:650px) { #rvt-panel { bottom:8%; } #rvt-body { max-height:52dvh; } #rvt-body.expanded { max-height:78dvh; } .rvt-row-button { height:36px; } }

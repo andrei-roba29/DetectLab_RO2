@@ -7782,7 +7782,7 @@
                     Object.keys(LIDAR_SUB_LAYERS).forEach(function (key) {
                         var cfg = LIDAR_SUB_LAYERS[key];
                         cfg.enabled = false;
-                        var countryToggle = document.getElementById(LIDAR_COUNTRY_TOGGLE_IDS[key] || '');
+                        var countryToggle = document.getElementById(LIDAR_COUNTRY_TOGGLE_IDS[key] || 'lidar' + key.charAt(0).toUpperCase() + key.slice(1) + 'Toggle');
                         if (countryToggle) countryToggle.checked = false;
                     });
                     _handleLidarVisibilityChange();
@@ -7806,6 +7806,9 @@
                 var cfg = LIDAR_SUB_LAYERS[key];
                 if (!cfg) return;
                 cfg.enabled = on;
+                var uiKey = key.charAt(0).toUpperCase() + key.slice(1);
+                var toggle = document.getElementById('lidar' + uiKey + 'Toggle');
+                if (toggle) toggle.checked = !!on;
                 if (!_lidarVisible) return;
                 if (on) {
                     if (!cfg.leafletLayer) {
@@ -7840,6 +7843,11 @@
             window.toggleInternationalLidar = function (key, on) {
                 var cfg = LIDAR_SUB_LAYERS[key];
                 if (!cfg) return;
+                // A restored switch must produce a visible layer even when its
+                // opacity slider still has the initial zero value.
+                if (on && cfg.opacity === 0) {
+                    window.setInternationalLidarOpacity(key, 70);
+                }
                 if (on && !_lidarVisible) {
                     var master = document.getElementById('lidarToggle');
                     if (master) master.checked = true;

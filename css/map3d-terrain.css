@@ -1084,11 +1084,14 @@ body:not(.is-3d) #map3d-focus.is-minimized { display: none; }
     #map3d-focus .m3d-focus-layers { max-height: 88px; }
 }
 
-/* Leave room for the phone's navigation/home indicator even on devices that
- * report a zero safe-area inset. Applies to both the card and its folded pill. */
+/* The PWA map can extend below the visible viewport (--pwa-bleed).
+ * Use the shell's navigation-bar clearance, not just the OS safe-area inset:
+ * Android can report zero even while the phone's bottom bar covers the map.
+ * Keep a 16px visual gap above that area for both the card and folded pill. */
 body.is-pwa #map3d-focus {
-    padding-bottom: calc(30px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
+    --m3d-focus-bottom-clearance: calc(16px + max(var(--pwa-bottom-controls-clearance, 44px), var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px))));
+    padding-bottom: var(--m3d-focus-bottom-clearance);
 }
 body.is-pwa #map3d-focus .m3d-focus-card {
-    max-height: min(76vh, 620px, calc(100% - 40px - var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px))));
+    max-height: min(76vh, 620px, calc(100% - 16px - var(--m3d-focus-bottom-clearance)));
 }

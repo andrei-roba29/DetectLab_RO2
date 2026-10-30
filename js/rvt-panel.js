@@ -471,7 +471,7 @@
     function enableRow(row) {
         const toggle = row.querySelector('input[type="checkbox"]');
         if (toggle && !toggle.checked) toggle.click();
-        // Romanian rows are enabled through their opacity slider, not a checkbox.
+        // Fallback for rows supplied without a visibility switch.
         const range = row.querySelector('input[id$="OpacitySlider"]');
         if (!toggle && range && Number(range.value) === 0) {
             range.value = 70; range.dispatchEvent(new Event('input', {bubbles:true}));
@@ -482,7 +482,9 @@
         rows.forEach(row => {
             if (row.querySelector('.rvt-row-button')) return;
             const key = rowKey(row); if (!key || !/^[a-zA-Z0-9_-]{1,60}$/.test(key)) return;
-            const button = el('button', '⚙ Settings', 'rvt-row-button'); button.type='button';
+            const button = el('button', '', 'rvt-row-button'); button.type='button';
+            button.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2.5" fill="var(--bg, #182e2e)"/><circle cx="15" cy="17" r="2.5" fill="var(--bg, #182e2e)"/></svg>';
+            button.title = 'LiDAR Settings';
             button.setAttribute('aria-label','LiDAR Settings for ' + key);
             button.onclick = event => {
                 event.preventDefault(); event.stopPropagation();

@@ -30,6 +30,9 @@ const ctx={window,document,L:{GridLayer:{extend:()=>function(){}}},MutationObser
     fetch:()=>Promise.resolve({ok:true,json:()=>Promise.resolve({config,layers:{}})}),Event:class{},console,Map,Set,URLSearchParams,setTimeout,clearTimeout};
 vm.runInNewContext(source,ctx);
 const button=header.children[0];
+assert.equal(button.textContent, '', 'settings entry point is icon-only');
+assert(button.innerHTML.includes('<svg'), 'settings uses a minimal SVG icon');
+assert.equal(button.title, 'LiDAR Settings');
 const click=()=>button.onclick({preventDefault(){},stopPropagation(){}});
 const text=n=>n.textContent+' '+n.children.map(text).join(' ');
 (async()=>{
@@ -47,6 +50,6 @@ const text=n=>n.textContent+' '+n.children.map(text).join(' ');
     body.children[0].children[1].onclick(); assert(body.hidden); assert(cancelled>0); assert(stops>0);
     callback(null); assert(body.hidden,'cancelled selection cannot reopen settings');
     const html=fs.readFileSync('index.html','utf8'), sw=fs.readFileSync('sw.js','utf8');
-    for(const tag of ['js/rvt-panel.js?v=20261030-area-first','js/lidar-photo-filter.js?v=20261030-lidar-photo-3d']) assert(html.includes(tag)&&sw.includes(tag));
+    for(const tag of ['js/rvt-panel.js?v=20261030-lidar-controls','js/lidar-photo-filter.js?v=20261030-lidar-photo-3d']) assert(html.includes(tag)&&sw.includes(tag));
     console.log('OK — LiDAR settings require a successfully prepared area; failure, retry and cancellation work.');
 })().catch(err=>{console.error(err);process.exitCode=1;});

@@ -27,11 +27,19 @@ for (const r of [group, layer]) {
   assert(r.includes('--map3d-safe-area-bottom'));
   assert(r.includes('--country-exit-lift'));
 }
-assert(rule('body.is-pwa #map3d-focus').includes('30px + var(--map3d-safe-area-bottom'));
-assert(rule('body.is-pwa #map3d-focus .m3d-focus-card').includes('calc(100% - 40px'));
+const focus = rule('body.is-pwa #map3d-focus');
+assert(focus.includes('calc(16px + max(var(--pwa-bottom-controls-clearance, 44px), var(--map3d-safe-area-bottom'));
+assert(focus.includes('padding-bottom: var(--m3d-focus-bottom-clearance)'));
+// The shell clearance includes viewport bleed. Never sum the safe area twice.
+const clearance = (bleed, safeArea) => 16 + Math.max(44 + bleed, safeArea);
+assert.equal(clearance(0, 0), 60, 'zero-inset Android still clears the navigation bar');
+assert.equal(clearance(28, 0), 88, 'map bleed is included');
+assert.equal(clearance(0, 34), 60, 'safe area is not added a second time');
+assert.equal(clearance(0, 64), 80, 'larger OS insets are respected');
+assert(rule('body.is-pwa #map3d-focus .m3d-focus-card').includes('calc(100% - 16px - var(--m3d-focus-bottom-clearance))'));
 assert(rule('body.is-pwa.is-3d #map3d-bar').includes('142px'));
-assert(html.includes('css/map3d-terrain.css?v=20261030-3d-analysis-dock'));
-assert(sw.includes('css/map3d-terrain.css?v=20261030-3d-analysis-dock'));
+assert(html.includes('css/map3d-terrain.css?v=20261030-lidar-pwa-bottom'));
+assert(sw.includes('css/map3d-terrain.css?v=20261030-lidar-pwa-bottom'));
 console.log('PWA 3D clearance checks passed');
 assert(css.includes('body.is-pwa.is-3d #map3d-bar .m3d-basemap-row { display: none; }'));
 assert(rule('body.is-pwa.is-3d #map3d-bar.collapsed .m3d-actions').includes('display: flex'));
