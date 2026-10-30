@@ -1,10 +1,11 @@
 /* =====================================================================
  * other-maps.js — “Alte hărți / Other maps” (sub-layer of Hărți istorice)
  * ---------------------------------------------------------------------
- * Two portals feed this sub-layer, both full of historical sheets that are
+ * Three sources feed this sub-layer, with historical sheets that are
  * not aligned to the ground: maps.hungaricana.hu (ECW pyramid, see
  * other-maps-tiles.js) and the National Library of Scotland Map Finder
- * (IIIF scans + live GeoServer WFS discovery, see other-maps-nls.js).  Each
+ * (IIIF scans + live GeoServer WFS discovery, see other-maps-nls.js), plus
+ * free Josephine scans from Wikimedia. Each
  * catalogue row carries a `source` field the tile dispatcher routes on; a
  * row without one stays Hungaricana, so the original data is untouched.
  *
@@ -126,6 +127,8 @@
      * case” escape hatch (a wide county sheet, an approximate place name). */
     var GEOREF_OPTIONS = [2, 5, 10, 20, 50, 100];
 
+    var JOSEPHINE_FILL = 'rgba(0, 70, 35, 0.30)';
+    var JOSEPHINE_STROKE = 'rgba(0, 85, 40, 0.75)';
     var DOT_FILL = 'rgba(46, 204, 113, 0.35)';
     var DOT_STROKE = 'rgba(46, 204, 113, 0.9)';
     var CLUSTER_FILL = 'rgba(14, 64, 38, 0.88)';
@@ -242,6 +245,7 @@
         nlsLive: { gen: 0, timer: null, keys: Object.create(null), keyOrder: [], inflight: false },
         records: [],
         locations: [],
+        josephineFootprints: [],
         index: null,
         hits: [],
         canvas: null,
@@ -336,16 +340,17 @@
         return 'Hungaricana · Maps';
     }
 
-    /* Collapse the free Josephine place database by scanned sheet.  A sheet
-     * can name many localities; its result marker is centred on their centroid
-     * and its green footprint radius reaches every listed locality. */
+    /* Collapse the free Josephine place database by scanned sheet. Preserve
+     * every listed locality; buildJosephineFootprints uses them to estimate
+     * compact coverage discs rather than drawing this record centroid. */
     function buildJosephineRecords(db) {
         var byImage = Object.create(null);
         Object.keys(db || {}).forEach(function (key) {
             var place = db[key];
-            var lat = Number(place && place.c && place.c.lat);
-            var lng = Number(place && place.c && place.c.lng);
-            if (!place || !place.l || !isFinite(lat) || !isFinite(lng)) return;
+            if (!place || !place.l || !place.c || place.c.lat == null || place.c.lng == null) return;
+            var lat = Number(place.c.lat);
+            var lng = Number(place.c.lng);
+            if (!isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return;
             var match = place.l.match(/File:([^/?#]+)/i);
             var file = match ? decodeURIComponent(match[1]).replace(/_/g, ' ') : place.l;
             var bucket = byImage[file] || (byImage[file] = { file: file, places: [], first: place });
@@ -381,6 +386,51 @@
                 precision: 'sheet'
             };
         });
+    }
+
+    // The database contains place centres, not georeferenced sheet outlines.
+    // Some names were geocoded to distant homonyms. Do not join those across
+    // hundreds of kilometres into one misleading disc: split each sheet into
+    // geographically compact groups, retaining the same selectable sheet ID.
+    function distanceMeters(a, b) {
+        var dLat = (b.lat - a.lat) * Math.PI / 180;
+        var dLng = (b.lng - a.lng) * Math.PI / 180;
+        var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) *
+            Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        return 12742000 * Math.asin(Math.sqrt(Math.min(1, h)));
+    }
+
+    function buildJosephineFootprints(records) {
+        var footprints = [];
+        (records || []).forEach(function (record) {
+            if (record.source !== 'josephine' || !record.josephinePlaces) return;
+            var groups = [];
+            record.josephinePlaces.forEach(function (place) {
+                var group = null;
+                for (var i = 0; i < groups.length; i++) {
+                    if (groups[i].every(function (p) { return distanceMeters(p, place) <= 25000; })) {
+                        group = groups[i]; break;
+                    }
+                }
+                if (!group) { group = []; groups.push(group); }
+                group.push(place);
+            });
+            groups.forEach(function (places) {
+                var lat = places.reduce(function (sum, p) { return sum + p.lat; }, 0) / places.length;
+                var lng = places.reduce(function (sum, p) { return sum + p.lng; }, 0) / places.length;
+                var centre = { lat: lat, lng: lng };
+                var radius = places.reduce(function (max, p) {
+                    return Math.max(max, distanceMeters(centre, p));
+                }, 0);
+                footprints.push({
+                    lat: lat, lng: lng, latlng: L.latLng(lat, lng),
+                    radiusMeters: Math.max(1200, radius + 1000),
+                    places: places, sheet: record
+                });
+            });
+        });
+        return footprints;
     }
 
     function loadCatalog() {
@@ -487,7 +537,8 @@
             });
         });
         state.records = records;
-        buildLocations(records);
+        state.josephineFootprints = buildJosephineFootprints(records);
+        buildLocations(records.filter(function (record) { return record.source !== 'josephine'; }));
         return records;
     }
 
@@ -582,7 +633,7 @@
         var canvas = state.canvas;
         var ctx = state.ctx;
         if (!canvas || !ctx) return;
-        if (!state.enabled || !state.locations.length) {
+        if (!state.enabled || (!state.locations.length && !state.josephineFootprints.length)) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             state.hits = [];
             return;
@@ -596,10 +647,7 @@
         var zoom = map.getZoom();
         var distanceKm = clusterer ? clusterer.getDistanceKm(zoom, config) : (zoom >= 11 ? 0 : 5);
         var bounds = map.getBounds();
-        var josephinePad = state.records.reduce(function (max, record) {
-            return Math.max(max, record.source === 'josephine' ? record.coverageRadiusMeters || 0 : 0);
-        }, 0);
-        var padM = Math.max(distanceKm * 1000 + 1000, josephinePad);
+        var padM = distanceKm * 1000 + 1000;
         var sw = clusterer ? clusterer.project(bounds.getSouth(), bounds.getWest())
             : { x: bounds.getWest(), y: bounds.getSouth() };
         var ne = clusterer ? clusterer.project(bounds.getNorth(), bounds.getEast())
@@ -617,18 +665,6 @@
                     location._clusterY >= minY && location._clusterY <= maxY;
             });
 
-        /* Josephine sheet footprints are meaningful only at neighbourhood
-         * scale: avoid clutter and unnecessary map-image results below z13. */
-        candidates = candidates.map(function (location) {
-            if (zoom >= 13) return location;
-            var visibleSheets = location.sheets.filter(function (r) { return r.source !== 'josephine'; });
-            if (!visibleSheets.length) return null;
-            if (visibleSheets.length === location.sheets.length) return location;
-            var copy = Object.assign({}, location);
-            copy.sheets = visibleSheets;
-            copy.count = visibleSheets.length;
-            return copy;
-        }).filter(Boolean);
         var clusters = clusterer
             ? clusterer.clusterRecords(candidates, zoom, state.index, config)
             : candidates.map(function (location) {
@@ -647,6 +683,30 @@
         ctx.globalAlpha = state.opacity;
         state.hits = [];
 
+        // Coverage is painted first on the same canvas, behind the existing
+        // place/cluster dots. Radius is in ground metres, not screen pixels.
+        state.josephineFootprints.forEach(function (footprint) {
+            var point = layerPointUnrounded(footprint.latlng);
+            var metersPerPixel = 40075016.686 * Math.cos(footprint.lat * Math.PI / 180) /
+                (256 * Math.pow(2, zoom));
+            var radius = Math.max(3, footprint.radiusMeters / Math.max(metersPerPixel, 0.01));
+            if (point.x + radius < topLeft.x || point.x - radius > topLeft.x + size.x ||
+                point.y + radius < topLeft.y || point.y - radius > topLeft.y + size.y) return;
+            ctx.beginPath();
+            ctx.fillStyle = JOSEPHINE_FILL;
+            ctx.strokeStyle = JOSEPHINE_STROKE;
+            ctx.lineWidth = 1.5;
+            ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            var location = {
+                place: footprint.places.map(function (p) { return p.name; }).join(', '),
+                latlng: footprint.latlng, sheets: [footprint.sheet], count: 1
+            };
+            state.hits.push({ latlng: footprint.latlng, point: point, radius: Math.max(radius, 10),
+                coverage: true, cluster: { members: [location], count: 1 } });
+        });
+
         for (var i = 0; i < clusters.length; i++) {
             var cluster = clusters[i];
             if (cluster.maxX < minX || cluster.minX > maxX ||
@@ -656,25 +716,10 @@
             var point = layerPointUnrounded(ll);
             var radius;
             var sheets = 0;
-            var josephineRadius = 0;
             for (var m = 0; m < cluster.members.length; m++) {
                 sheets += cluster.members[m].count || 1;
-                (cluster.members[m].sheets || []).forEach(function (sheet) {
-                    josephineRadius = Math.max(josephineRadius, sheet.coverageRadiusMeters || 0);
-                });
             }
-            if (josephineRadius > 0 && zoom >= 13) {
-                var metersPerPixel = 40075016.686 * Math.cos(ll.lat * Math.PI / 180) /
-                    (256 * Math.pow(2, zoom));
-                radius = Math.max(18, josephineRadius / Math.max(metersPerPixel, 0.01));
-                ctx.beginPath();
-                ctx.fillStyle = DOT_FILL;
-                ctx.strokeStyle = DOT_STROKE;
-                ctx.lineWidth = 2;
-                ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
-            } else if (cluster.members.length > 1) {
+            if (cluster.members.length > 1) {
                 // A geographic group of several places: one bigger bubble that
                 // says how many sheets live behind it.
                 radius = Math.min(22, 11 + Math.log(sheets) * 2);
@@ -813,7 +858,9 @@
             if (dx * dx + dy * dy > hit.radius * hit.radius) continue;
             found.push({ hit: hit, dist: dx * dx + dy * dy });
         }
-        found.sort(function (a, b) { return a.dist - b.dist; });
+        found.sort(function (a, b) {
+            return Number(!!a.hit.coverage) - Number(!!b.hit.coverage) || a.dist - b.dist;
+        });
         return found.map(function (entry) { return entry.hit; });
     }
 
@@ -1516,6 +1563,7 @@
         georefOptionsHtml: georefOptionsHtml,
         combineCatalogMaps: combineCatalogMaps,
         buildJosephineRecords: buildJosephineRecords,
+        buildJosephineFootprints: buildJosephineFootprints,
         sourceLabel: sourceLabel,
         mergeLiveRecords: mergeLiveRecords,
         rebuildRecords: rebuildRecords,

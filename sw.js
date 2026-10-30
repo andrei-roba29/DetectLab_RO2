@@ -855,7 +855,9 @@
 // v321: keep APM settings hidden until the search-area point is chosen.
 // v324: icon-only LiDAR settings and restored sublayer visibility switches.
 // v325: lift LiDAR in 3D above the PWA bleed and phone navigation bar.
-const CACHE_NAME = 'detectlab-v332-shared-window-dock';
+// v333: remove the hillshade controls from below the search bar.
+// v334: paint the free Josephine coverage below the other map dots.
+const CACHE_NAME = 'detectlab-v334-josephine-coverage';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1010,7 +1012,7 @@ const PRECACHE_URLS = [
   'js/other-maps-tiles.js?v=20261028-other-maps-fix',
   'js/other-maps-nls.js?v=20261028-other-maps-fix',
   'js/other-maps-overlay.js?v=20261029-other-maps-stable',
-  'js/other-maps.js?v=20261029-josephine-merge',
+  'js/other-maps.js?v=20261030-josephine-coverage',
   'css/other-maps.css?v=20261028-other-maps-fix',
   'data/other-maps-catalog.json?v=20261026-cluj-alba',
   'data/other-maps-nls-catalog.json?v=20261028-other-maps-fix',

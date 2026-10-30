@@ -1,5 +1,5 @@
 // Test suite for the country dock — the slide-down country switcher glued
-// under the map search bar, the World-hillshade overlay checkbox and the
+// under the map search bar, the World-hillshade overlay and the
 // bottom-centre “Exit view” button of the locked country view.
 // Covers js/country-dock.js, the country-switching/lock API added to
 // js/globe-country-picker.js, the index.html markup and the sw.js shell.
@@ -18,7 +18,7 @@ console.log('[Test] Country dock + locked country view...');
    ══════════════════════════════════════════════════════════════ */
 const indexHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 ['countryDock', 'countryDockBtn', 'countryDockCode', 'countryDockPanel', 'countryDockGrid',
- 'countryDockName', 'countryDockClose', 'countryDockHillshade', 'countryDockHsInfo',
+ 'countryDockName', 'countryDockClose',
  'countryExitViewBtn', 'mapSearchResults'].forEach(function (id) {
     assert(indexHtml.includes('id="' + id + '"'), 'index.html contains #' + id);
 });
@@ -28,12 +28,13 @@ assert(indexHtml.includes('js/country-dock.js?v=20261021-country-exit-3d-stack')
 assert(indexHtml.indexOf('js/globe-country-picker.js?v=20261017-outline-zoom-settle') <
     indexHtml.indexOf('js/country-dock.js?v=20261021-country-exit-3d-stack'), 'globe gate loads before the dock');
 assert(indexHtml.indexOf('js/country-dock.js?v=20261021-country-exit-3d-stack') <
-    indexHtml.indexOf('js/map-app.js?v=20261029-android-zoom-glass'), 'dock loads before map-app.js');
+    indexHtml.indexOf('js/map-app.js?v='), 'dock loads before map-app.js');
 // The dock lives *inside* the search wrap so it stays glued to the search bar.
 const wrapIdx = indexHtml.indexOf('id="mapSearchWrap"');
 const dockIdx = indexHtml.indexOf('id="countryDock"');
 assert(wrapIdx !== -1 && dockIdx > wrapIdx, 'the dock is nested in #mapSearchWrap');
-assert(indexHtml.includes('data-key="country_dock_hillshade"'), 'hillshade label is translatable');
+assert(!indexHtml.includes('id="countryDockHillshade"'), 'hillshade checkbox is absent from the search dock');
+assert(!indexHtml.includes('id="countryDockHsInfo"'), 'hillshade info button is absent from the search dock');
 assert(indexHtml.includes('data-key="country_exit_view"'), 'exit view label is translatable');
 assert(indexHtml.includes('country_exit_view') && /id="countryExitViewBtn"[^>]*hidden/.test(indexHtml),
     'the exit-view button starts hidden');
@@ -518,7 +519,7 @@ function makeSandbox(elMap) {
        ══════════════════════════════════════════════════════════ */
     const dockEls = {};
     ['countryDock', 'countryDockBtn', 'countryDockCode', 'countryDockPanel', 'countryDockGrid',
-     'countryDockName', 'countryDockClose', 'countryDockHillshade', 'countryDockHsInfo',
+     'countryDockName', 'countryDockClose',
      'countryExitViewBtn', 'mapSearchResults'].forEach(function (id) { dockEls[id] = makeEl(id); });
     const dockSandbox = makeSandbox(dockEls);
     const dockL = makeLeaflet();
@@ -606,9 +607,9 @@ function makeSandbox(elMap) {
     console.log('  ✓ the dock never fights the search autocomplete');
 
     // // 6d. World hillshade overlay — one lazily created tile layer, over the basemap.
-    assert(dockL.created.length === 0, 'no hillshade tiles are requested before the box is ticked');
-    dockEls.countryDockHillshade.fire('change', { target: { checked: true } });
-    assert(dockL.created.length === 1, 'ticking the box creates exactly one tile layer');
+    assert(dockL.created.length === 0, 'no hillshade tiles are requested before the overlay is enabled');
+    dock.toggleHillshade(true);
+    assert(dockL.created.length === 1, 'enabling the overlay creates exactly one tile layer');
     const hsLayer = dockL.created[0];
     assert(hsLayer.url.indexOf('Elevation/World_Hillshade/MapServer') !== -1, 'it is the Esri World Hillshade service');
     assert(hsLayer.options.maxNativeZoom === 16, 'overzoom is capped at the service’s own levels');
@@ -618,11 +619,11 @@ function makeSandbox(elMap) {
         'the pane sits at basemap level, below every data pane (401+)');
     assert(dock.isHillshadeOn(), 'the module reports the overlay as on');
     assert(dockSandbox.localStorage.getItem('detectlab_world_hillshade_v1') === '1', 'the choice is persisted');
-    dockEls.countryDockHillshade.fire('change', { target: { checked: false } });
-    assert(!dockMap.hasLayer(hsLayer), 'unticking removes the overlay');
+    dock.toggleHillshade(false);
+    assert(!dockMap.hasLayer(hsLayer), 'disabling removes the overlay');
     assert(dockSandbox.localStorage.getItem('detectlab_world_hillshade_v1') === '0', 'off is persisted too');
-    dockEls.countryDockHillshade.fire('change', { target: { checked: true } });
-    assert(dockL.created.length === 1 && dockMap.hasLayer(hsLayer), 'ticking again reuses the same layer');
+    dock.toggleHillshade(true);
+    assert(dockL.created.length === 1 && dockMap.hasLayer(hsLayer), 'enabling again reuses the same layer');
 
     // The app's naming-style hook + the attribution popup (Leaflet's own
     // attribution control is hidden by CSS, so live layers credit the source).
@@ -718,7 +719,7 @@ function makeSandbox(elMap) {
     // // 6g. The hillshade choice survives a reload.
     const els2 = {};
     ['countryDock', 'countryDockBtn', 'countryDockCode', 'countryDockPanel', 'countryDockGrid',
-     'countryDockName', 'countryDockClose', 'countryDockHillshade', 'countryDockHsInfo',
+     'countryDockName', 'countryDockClose',
      'countryExitViewBtn'].forEach(function (id) {
         els2[id] = makeEl(id);
     });
@@ -731,7 +732,7 @@ function makeSandbox(elMap) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, 'js/country-dock.js'), 'utf8'), sb2);
     const map2 = makeMap();
     sb2.DetectLabCountryDock.attach(map2);
-    assert(els2.countryDockHillshade.checked === true, 'the checkbox is restored from the last session');
+    assert(sb2.DetectLabCountryDock.isHillshadeOn(), 'the overlay state is restored from the last session');
     assert(L2.created.length === 1 && map2.hasLayer(L2.created[0]), 'the overlay is switched back on');
     console.log('  ✓ the hillshade choice persists across sessions');
 
