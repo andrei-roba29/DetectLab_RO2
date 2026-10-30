@@ -38,8 +38,8 @@ The tab row below the title uses the same tokens (idle `--ctl-bg`, hover
 material as the rows under them.
 
 In the installed PWA (`index.html`, `body.is-pwa .transp-panel`) the panel
-uses a uniform `rgba(20,14,34,0.86)` tint from top to bottom, including the
-safe-area clearance. Backdrop blur remains disabled for mobile performance,
+uses a uniform opaque `rgb(20,14,34)` color from top to bottom, including the
+safe-area clearance. The opaque fill prevents the map beneath from changing its apparent color. Backdrop blur remains disabled for mobile performance,
 and the bottom padding still keeps the last controls above the system bar.
 
 ## 2. The rows

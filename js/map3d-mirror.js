@@ -143,6 +143,12 @@
     function lidarTag(layer, def) {
         var tag = layer && layer._dlLidar;
         if (tag && tag.key) return { key: String(tag.key), label: String(tag.label || '') };
+        // Some country LiDAR products are mounted outside the LiDAR group.
+        var photo = root.DLPhotoFilter;
+        if (photo && photo.source3d && photo.source3d() === layer) {
+            var photoId = layer._dlDefId || keyOf(layer);
+            return { key: layer._dlDefId ? 'def:' + photoId : photoId, label: titleOf(def) || photoId };
+        }
         if (def && def.group === 'lidar') return { key: 'def:' + def.id, label: titleOf(def) || def.id };
         var group = root._lidarGroup;
         var inGroup = false;
@@ -797,7 +803,7 @@
         var weight = o.weight == null ? 3 : Number(o.weight);
         var lineOpacity = o.opacity == null ? 1 : Number(o.opacity);
         var fillColor = o.fillColor || color;
-        var fillOpacity = o.fillOpacity == null ? 0.2 : Number(o.fillOpacity);
+        var fillOpacity = o.fill === false ? 0 : (o.fillOpacity == null ? 0.2 : Number(o.fillOpacity));
         /* The country selection wash is 2D navigation chrome, not imagery.
          * Draping its translucent green polygon over terrain tints the whole
          * landscape. Keep the geographic border in 3D, but no interior wash.
@@ -1718,7 +1724,7 @@
     function styleStamp(child) {
         var o = (child && child.options) || {};
         var icon = o.icon && o.icon.options;
-        return [o.color, o.weight, o.opacity, o.fillColor, o.fillOpacity, o.radius,
+        return [o.color, o.weight, o.opacity, o.fillColor, o.fillOpacity, o.fill, o.radius,
             o.dashArray, o.lineCap, o.lineJoin, icon && (icon.iconUrl || icon.html)]
             .join(',');
     }

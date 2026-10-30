@@ -30,8 +30,8 @@ for (const r of [group, layer]) {
 assert(rule('body.is-pwa #map3d-focus').includes('30px + var(--map3d-safe-area-bottom'));
 assert(rule('body.is-pwa #map3d-focus .m3d-focus-card').includes('calc(100% - 40px'));
 assert(rule('body.is-pwa.is-3d #map3d-bar').includes('142px'));
-assert(html.includes('css/map3d-terrain.css?v=20261029-web-3d-basemap-row'));
-assert(sw.includes('css/map3d-terrain.css?v=20261029-web-3d-basemap-row'));
+assert(html.includes('css/map3d-terrain.css?v=20261030-3d-analysis-dock'));
+assert(sw.includes('css/map3d-terrain.css?v=20261030-3d-analysis-dock'));
 console.log('PWA 3D clearance checks passed');
 assert(css.includes('body.is-pwa.is-3d #map3d-bar .m3d-basemap-row { display: none; }'));
 assert(rule('body.is-pwa.is-3d #map3d-bar.collapsed .m3d-actions').includes('display: flex'));

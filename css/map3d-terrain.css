@@ -199,6 +199,15 @@ body.is-pwa.is-3d .m3d-toggle-group {
     transform: translateX(-50%);
 }
 
+/* The analysis dock lives outside the map wrapper. Its bottom offset is
+ * measured against its own containing block and clears the entire 3D button
+ * stack. The fallback works before the first measurement. Specificity and
+ * !important also beat the PWA's inline bottom/bleed override. */
+body.is-3d .layer-action-dock,
+body.is-pwa.is-3d .layer-action-dock {
+    bottom: var(--m3d-analysis-dock-bottom, calc(192px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)) + var(--country-exit-lift, 0px))) !important;
+}
+
 /* In the installed 3D view the basemap control joins the 2D/refresh row.
  * Keep it in Leaflet's corner (and its existing event handlers), but position
  * the corner across the map so it shares the row's safe-area offset. */

@@ -1347,6 +1347,13 @@
         refreshFocusOutline();
     }
 
+    // Match both the live source layer and the exact selected 1 km circle.
+    function photoInfoFor(layer, key) {
+        var photo = root.DLPhotoFilter;
+        var mask = focusMaskFor(key);
+        return photo && typeof photo.info3d === 'function' && mask ? photo.info3d(layer, mask) : null;
+    }
+
     function registerProtocols(maplibre) {
         if (state.protocols || !maplibre || typeof maplibre.addProtocol !== 'function') return;
         state.protocols = true;
@@ -1363,6 +1370,12 @@
             var coords = { z: z, x: x, y: y };
             var layer = MIRROR.layerByKey(key);
             if (!layer) return Promise.reject(new Error('[Map3D] the 2D layer behind ' + key + ' is gone'));
+            // Processed pixels must win over the raw prefetched 3D tiles.
+            // The photo renderer already clips and applies the 2D opacity.
+            if (photoInfoFor(layer, key)) {
+                return root.DLPhotoFilter.tile3d(layer, focusMaskFor(key), z, x, y)
+                    .then(function (data) { return { data: data }; });
+            }
             /* Prepared by the LiDAR focus: no network, no rendering, no clip
              * work — the disc the user waited for is handed over as it is. */
             var prepared = primedOutput(templateUrl, pipelineSigFor(key, templateUrl));
@@ -1572,7 +1585,40 @@
         if (anchorQueued) return;
         anchorQueued = true;
         var next = root.requestAnimationFrame || function (fn) { return root.setTimeout(fn, 16); };
-        next(function () { anchorQueued = false; syncToggleAnchor(); });
+        next(function () { anchorQueued = false; syncToggleAnchor(); syncAnalysisDock(); });
+    }
+
+    /* The dock is a sibling of .map-wrapper, not its child. Measure against
+     * its real containing block, and use the highest visible 3D control so
+     * wrapped/localised camera actions and safe-area lifts cannot overlap it. */
+    function syncAnalysisDock() {
+        var dock = document.getElementById('layerActionDock');
+        if (!dock || !dock.style || typeof dock.style.setProperty !== 'function') return false;
+        if (!document.body || !document.body.classList.contains('is-3d')) {
+            dock.style.removeProperty('--m3d-analysis-dock-bottom');
+            return false;
+        }
+        var parent = dock.offsetParent || dock.parentElement;
+        if (!parent || typeof parent.getBoundingClientRect !== 'function') return false;
+        var frame = parent.getBoundingClientRect();
+        if (!frame.height) return false;
+        var ctrl = document.getElementById(BASE_LAYER_CTRL_ID);
+        var header = ctrl && ctrl.querySelector ? ctrl.querySelector('.arcgis-basemap-header') : null;
+        var top = Infinity;
+        [toggleGroup, bar, header].forEach(function (el) {
+            if (!el || typeof el.getBoundingClientRect !== 'function') return;
+            var rect = el.getBoundingClientRect();
+            if (rect.height > 0 && rect.width > 0 && isFinite(rect.top)) top = Math.min(top, rect.top);
+        });
+        if (!isFinite(top)) return false; // Keep the CSS fallback until controls are laid out.
+        var bottom = Math.max(0, Math.ceil(frame.bottom - top + ANCHOR_GAP));
+        dock.style.setProperty('--m3d-analysis-dock-bottom', bottom + 'px');
+        return true;
+    }
+
+    function watchAnalysisControl(element) {
+        if (!element || typeof root.ResizeObserver !== 'function') return;
+        try { new root.ResizeObserver(queueAnchorSync).observe(element); } catch (e) { /* optional */ }
     }
 
     /* Returns true once the control has actually been measured. */
@@ -1767,6 +1813,7 @@
         toggleGroup.appendChild(refreshStatus);
 
         host.appendChild(toggleGroup);
+        watchAnalysisControl(toggleGroup);
         refreshToggle();
         /* Measure the base-layer button and follow it: the switch's slot in the
          * bottom-left column belongs to that control's geometry. */
@@ -1816,6 +1863,7 @@
             '</div>'
         ].join('');
         host.appendChild(bar);
+        watchAnalysisControl(bar);
 
         /* The 3D view uses the same basemap stack as Leaflet. Route selection
          * through the existing 2D setter so there is still only one active
@@ -2450,6 +2498,7 @@
         var discFocus = focused && focusScope(state.focus) === 'disc';
         var plan = discFocus ? planForLayer(item.lidarKey || item.key) : null;
         var tiles = rasterTilesFor(item, focused);
+        var photoInfo = focused && photoInfoFor(item.layer, item.key);
         var spec = {
             type: 'raster',
             tiles: tiles,
@@ -2485,6 +2534,8 @@
             spec.maxzoom = Math.max(Number(spec.minzoom) || 0,
                 Math.min(Number(spec.maxzoom), Number(plan.zoomTo)));
         }
+        if (photoInfo) spec.maxzoom = Math.min(spec.maxzoom, photoInfo.zoom);
+        var rasterOpacity = photoInfo ? 1 : (item.opacity == null ? 1 : item.opacity);
         if (!map.getSource(sourceId)) {
             map.addSource(sourceId, spec);
         } else {
@@ -2500,10 +2551,10 @@
                 id: layerId,
                 type: 'raster',
                 source: sourceId,
-                paint: { 'raster-opacity': item.opacity == null ? 1 : item.opacity, 'raster-fade-duration': fadeDuration() }
+                paint: { 'raster-opacity': rasterOpacity, 'raster-fade-duration': fadeDuration() }
             });
         } else {
-            map.setPaintProperty(layerId, 'raster-opacity', item.opacity == null ? 1 : item.opacity);
+            map.setPaintProperty(layerId, 'raster-opacity', rasterOpacity);
         }
         var viaProtocol = /^dl2d:\/\//.test(tiles[0]);
         state.status[entry.id] = {
@@ -4651,6 +4702,16 @@
         return data;
     }
 
+    if (typeof root.addEventListener === 'function') {
+        var photoRefreshTimer;
+        root.addEventListener('dl:photo-filter', function (event) {
+            var text = event && event.detail && event.detail.status || '';
+            if (!state.open || !state.focus || !/^(Photo effect:|Photo effect ready:|Image effect off)/.test(text)) return;
+            root.clearTimeout(photoRefreshTimer);
+            photoRefreshTimer = root.setTimeout(function () { refreshFocusedSource(); syncLayers(); }, 100);
+        });
+    }
+
     var api = {
         VERSION: REGISTRY.VERSION,
         open: open,
@@ -4761,6 +4822,7 @@
          * read what was actually measured instead of guessing from the
          * stylesheet's fallbacks. */
         _syncToggleAnchor: syncToggleAnchor,
+        _syncAnalysisDock: syncAnalysisDock,
         /* The base-layer button's measured lift over MapLibre's bottom-left
          * widgets while 3D is on (--m3d-basemap-lift). Exposed for the same
          * reason as the anchor above: a support session can read what the

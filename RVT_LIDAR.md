@@ -62,3 +62,18 @@ Relief Visualization Toolbox (RVT-py), © ZRC SAZU and University of Ljubljana, 
 A gear **Settings** button is attached to every existing LiDAR sublayer row (European, Romanian counties, and dynamic Albania/Denmark rows) without replacing the WMS service or changing its toggle. The 17-method list is grouped 3/3/5/6; Openness is one method with a positive/negative direction selector in true-DTM mode. On WMS-only layers, all 17 entries have **distinct photo-only simulations**. True RVT methods remain available only on registered numeric DTMs; unsupported numerical methods explain why they are unavailable. The screenshot's MSRM -2.7…2.7 m and 2.5 m display range are UI presets, not the upstream RVT 2.2.3 stretch of -2.5…2.5 m. The six Looking for chips remain unverified and do not claim ratings. Feature-size “play” buttons have unknown semantics and are **not fabricated**.
 
 When a bare-earth DTM is registered, **Section along a line** lets the user click two points on the map (up to 5 km apart). The new `/api/rvt/profile/:layer` endpoint samples 101 heights from that DTM, charts heights alongside values from any already loaded float visualization tiles (separate scales), and copies the numerical samples as CSV. It never samples the WMS pixel colours. The tool is disabled where no DTM exists.
+
+### 2D image adjustments in 3D
+
+When the user chooses the same prepared 1 km area in the 3D entry dialog, the
+viewer drapes the photo filter's **processed image pixels** over the terrain,
+using the same method, adjustments, alpha and circular mask as 2D. These remain
+image effects, not elevation data. The 3D source overzooms the prepared native
+tiles; lower zooms are assembled from the cached parent tiles. Raw 3D prefetch
+entries never replace the adjusted pixels. A different layer or circle keeps
+its normal 3D imagery. Changes to the image effect refresh the focused 3D
+source. Selection markers are UI and are not draped as a yellow fill.
+
+Run `node test-lidar-photo-3d.js` for the pixel, layer/area matching, and
+protocol precedence checks. `node test-lidar-area-first.js` covers area
+selection and cancellation.

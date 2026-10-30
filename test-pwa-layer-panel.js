@@ -68,8 +68,8 @@ assert(/--pwa-panel-bottom-clearance:\s*max\(var\(--pwa-bottom-controls-clearanc
     'the bottom clearance is at least 44px and grows to the device safe-area when needed');
 assert(/padding-bottom:\s*var\(--pwa-panel-bottom-clearance\)\s*!important/.test(pwa),
     'the final layer rows and buttons receive the restored bottom clearance');
-assert(/background:\s*rgba\(20,\s*14,\s*34,\s*0\.86\)\s*!important/.test(pwa),
-    'one violet tint paints the entire panel including the bottom clearance');
+assert(/background:\s*rgb\(20,\s*14,\s*34\)\s*!important/.test(pwa),
+    'one opaque violet color paints the entire panel including the bottom clearance');
 assert(!/gradient\s*\(|background-(?:size|clip|image|color)\s*:|mask(?:-image)?\s*:/.test(pwa),
     'no gradient, clipping, or mask can fade or truncate the panel background');
 assert(/backdrop-filter:\s*none\s*!important/.test(pwa),
@@ -101,7 +101,7 @@ assert(!/left:\s*max\(10px/.test(hideRule) && !/right:\s*auto/.test(hideRule),
 /* 5. Installed PWAs must actually receive it. */
 const sw = read('sw.js');
 const cacheName = (sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1];
-assert(Number(cacheName) >= 307, 'the SW cache must be bumped to v307+ (got v' + cacheName + ')');
+assert(Number(cacheName) >= 312, 'the SW cache must be bumped to v312+ (got v' + cacheName + ')');
 assert(/\/\/ v307: keep the PWA layers panel uniformly tinted/.test(sw),
     'the SW changelog must describe the uniform panel tint');
 assert(/['\"]index\.html['\"]/.test(sw), 'the current shell must remain in the service-worker precache');

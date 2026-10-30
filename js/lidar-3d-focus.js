@@ -334,18 +334,19 @@
     function activeLayers() {
         var group = lidarGroup();
         var map = leafletMap();
-        if (!group || !map || typeof group.getLayers !== 'function') return [];
-        var groupOnMap = true;
-        try { groupOnMap = typeof map.hasLayer !== 'function' || map.hasLayer(group); } catch (e) { groupOnMap = true; }
-        if (!groupOnMap) return [];
-        return group.getLayers().filter(function (layer) {
+        if (!map) return [];
+        var groupOnMap = false;
+        try { groupOnMap = !!group && (typeof map.hasLayer !== 'function' || map.hasLayer(group)); } catch (e) { groupOnMap = !!group; }
+        var candidates = groupOnMap && typeof group.getLayers === 'function' ? group.getLayers().slice() : [];
+        // Danish/Albanian image layers can live outside the shared group.
+        var photoSource = root.DLPhotoFilter && root.DLPhotoFilter.source3d && root.DLPhotoFilter.source3d();
+        if (photoSource && candidates.indexOf(photoSource) === -1) candidates.push(photoSource);
+        return candidates.filter(function (layer) {
             if (!layer) return false;
             try { if (typeof map.hasLayer === 'function' && !map.hasLayer(layer)) return false; } catch (e) { /* keep it */ }
-            var tag = tagOf(layer);
-            if (!tag) return false;
-            return true;
+            return !!tagOf(layer) || layer === photoSource;
         }).map(function (layer) {
-            var tag = tagOf(layer);
+            var tag = tagOf(layer) || { key: layer._dlDefId ? 'def:' + layer._dlDefId : (mirror() && mirror().keyFor ? mirror().keyFor(layer) : ''), label: 'LiDAR' };
             var zoom = zoomWindowOf(layer);
             var mirrorKey = mirror() && mirror().keyFor ? mirror().keyFor(layer) : (tag.key || '');
             return {
@@ -617,6 +618,7 @@
         };
         if (!discState.circle) {
             discState.circle = L.circle(latlng, style).addTo(map);
+            discState.circle._dl3dSkip = true; // 3D draws its own outline, not this selection wash.
         } else {
             discState.circle.setStyle(style);
             discState.circle.setLatLng(latlng);
@@ -627,6 +629,7 @@
                 pane: pane, radius: 4, color: '#ffe9b8', weight: 2,
                 fillColor: '#c8a96e', fillOpacity: 1, interactive: false
             }).addTo(map);
+            discState.dot._dl3dSkip = true;
         } else {
             discState.dot.setLatLng(latlng);
         }
@@ -722,6 +725,7 @@
                     weight: 1.5, dashArray: '4 5', fillColor: '#c8a96e',
                     fillOpacity: 0.05, interactive: false
                 }).addTo(map);
+                discState.preview._dl3dSkip = true;
             } else {
                 discState.preview.setLatLng(latlng);
             }
@@ -1789,14 +1793,15 @@
             try { clearDisc(); } catch (e3) {}
             return Promise.resolve(true);
         }
-        /* An image-only 2D filter can have a separate prepared 1 km area.
-         * Ask before the normal 3D preparation; do not reuse its processed
-         * bytes as 3D terrain or silently move the user's 3D camera. */
+        /* The photo filter is image-only, not elevation. For the same chosen
+         * area its processed pixels are draped over the 3D terrain. */
         var options = { mode: 'gate' };
         if (usePhoto) {
             if (samePhoto) {
+                var source = root.DLPhotoFilter.source3d && root.DLPhotoFilter.source3d();
+                var chosen = layers.filter(function (entry) { return entry.layer === source; })[0];
                 options = { mode: 'gate', scope: 'disc', radiusKm: 1,
-                    lat: photo.center.lat, lng: photo.center.lng, keys: ['lidar.' + photo.key] };
+                    lat: photo.center.lat, lng: photo.center.lng, keys: chosen ? [chosen.key] : ['lidar.' + photo.key] };
             } else {
                 var c = leafletMap() && leafletMap().getCenter();
                 options = { mode: 'gate', scope: 'disc', radiusKm: 1,
