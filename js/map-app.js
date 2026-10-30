@@ -1730,34 +1730,152 @@
                 // This is shared with trail recording as well as the live-location
                 // button. Keeping the marker update in one place ensures that starting a
                 // trail always gives the user an immediate, visible location pin.
+                //
+                // ── THE PIN IS UPDATED, NEVER REBUILT ────────────────────────
+                // The old version called removeMarker() + a fresh L.marker() +
+                // a fresh L.circle() for EVERY GPS fix. Android hands out a fix
+                // roughly once a second (enableHighAccuracy), so the pin, the
+                // accuracy circle, their popup and two panes were torn down and
+                // re-created a thousand times in a quarter of an hour — on top
+                // of the 1960s imagery stack. Each add/remove re-renders the
+                // overlay layer and invalidates the composite of every pane
+                // above it, which is what made the map "twitch" while panning
+                // or zooming with both features on. One marker and one circle
+                // now live for the whole session and only their position (and,
+                // when it really changed, the radius) is written.
+                //
+                // Accuracy values that only wobble by a few metres are ignored:
+                // re-writing a radius re-projects the whole circle.
+                var _ACC_MAX_R = 3000;        // never draw a circle larger than this
+                var _ACC_SHOW_MAX = 3000;     // no circle at all beyond this
+                var _ACC_MIN_STEP = 5;        // ignore accuracy changes below 5 m
+
+                var _pendingFix = null;
+                var _pendingCenter = false;
+                var _fixRaf = null;
+                var _lastAccuracy = null;
+                var _centering = false;      // our own flyTo is running
+                var _deferred = false;       // a zoom/move listener is already armed
+
+                function _validFix(lat, lng, accuracy) {
+                    if (typeof lat !== 'number' || typeof lng !== 'number') return false;
+                    if (!isFinite(lat) || !isFinite(lng)) return false;
+                    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return false;
+                    // Providers on some Android builds emit a "no fix yet"
+                    // record of exactly (0,0)/accuracy 0. Plotting it drags the
+                    // map to the Gulf of Guinea and produces the huge bogus
+                    // accuracy circle that used to paint over the whole screen.
+                    if (lat === 0 && lng === 0) return false;
+                    if (accuracy !== undefined && accuracy !== null) {
+                        if (typeof accuracy !== 'number' || !isFinite(accuracy) || accuracy < 0) return false;
+                    }
+                    return true;
+                }
+
                 function showLiveLocation(lat, lng, accuracy, shouldCenter) {
-                    createMarker(lat, lng, accuracy);
-                    if (shouldCenter) {
-                        map.flyTo([lat, lng], Math.max(map.getZoom(), 14), { duration: 1.2 });
+                    if (!_validFix(lat, lng, accuracy)) {
+                        console.warn('[LIVE] ignoring implausible GPS fix', lat, lng, accuracy);
+                        return;
+                    }
+                    // Coalesce: a burst of fixes must produce ONE paint, not one
+                    // paint per fix.
+                    _pendingFix = { lat: lat, lng: lng, accuracy: accuracy };
+                    if (shouldCenter) _pendingCenter = true;
+                    if (_fixRaf === null) {
+                        var raf = window.requestAnimationFrame || function (f) { return setTimeout(f, 16); };
+                        _fixRaf = raf(function () {
+                            _fixRaf = null;
+                            _applyPendingFix();
+                        });
                     }
                 }
 
-                function createMarker(lat, lng, accuracy) {
-                    removeMarker();
-                    var icon = L.divIcon({
-                        className: '',
-                        html: '<div class="live-location-marker"></div>',
-                        iconSize: [16, 16],
-                        iconAnchor: [8, 8]
-                    });
-                    locationMarker = L.marker([lat, lng], { icon: icon, zIndexOffset: 1000 })
-                        .bindPopup('<div class="map-place-popup">You are here</div>')
-                        .addTo(map);
-                    if (accuracy && accuracy < 5000) {
-                        locationCircle = L.circle([lat, lng], {
-                            radius: accuracy,
+                function _applyPendingFix() {
+                    var fix = _pendingFix;
+                    if (!fix) return;
+                    // Never repaint the overlay in the middle of a zoom or a
+                    // flyTo: the panes are being transformed frame by frame and
+                    // an overlay write there forces a full re-composite of the
+                    // map on every frame. Apply the LATEST fix once when the
+                    // animation is over.
+                    if (map._animatingZoom || _centering) {
+                        if (!_deferred) {
+                            _deferred = true;
+                            map.once('zoomend moveend', function () {
+                                _deferred = false;
+                                _applyPendingFix();
+                            });
+                        }
+                        return;
+                    }
+                    var center = _pendingCenter;
+                    _pendingFix = null;
+                    _pendingCenter = false;
+                    updateMarker(fix.lat, fix.lng, fix.accuracy);
+                    if (center) {
+                        // `_centering` is cleared by the moveend listener, not
+                        // by a timer: a fix that arrives during the flight is
+                        // held and painted once, when the map has settled.
+                        _centering = true;
+                        map.once('moveend', function () {
+                            _centering = false;
+                            _applyPendingFix();
+                        });
+                        map.flyTo([fix.lat, fix.lng], Math.max(map.getZoom(), 14), { duration: 1.2 });
+                    }
+                }
+
+                function updateMarker(lat, lng, accuracy) {
+                    var latLng = [lat, lng];
+                    if (!locationMarker) {
+                        var icon = L.divIcon({
+                            className: '',
+                            html: '<div class="live-location-marker"></div>',
+                            iconSize: [16, 16],
+                            iconAnchor: [8, 8]
+                        });
+                        locationMarker = L.marker(latLng, { icon: icon, zIndexOffset: 1000 })
+                            .bindPopup('<div class="map-place-popup">You are here</div>')
+                            .addTo(map);
+                    } else {
+                        locationMarker.setLatLng(latLng);
+                    }
+
+                    var showCircle = (typeof accuracy === 'number' && accuracy > 0 &&
+                        accuracy <= _ACC_SHOW_MAX);
+                    var radius = showCircle ? Math.min(accuracy, _ACC_MAX_R) : 0;
+
+                    if (!showCircle) {
+                        // Previously the circle was simply not drawn for a bad
+                        // fix, so a run of bad fixes left a stale circle behind.
+                        if (locationCircle) { map.removeLayer(locationCircle); locationCircle = null; }
+                        _lastAccuracy = null;
+                        return;
+                    }
+                    if (!locationCircle) {
+                        locationCircle = L.circle(latLng, {
+                            radius: radius,
                             color: '#C42B2B', fillColor: '#C42B2B',
-                            fillOpacity: 0.08, weight: 1, opacity: 0.4
+                            fillOpacity: 0.08, weight: 1, opacity: 0.4,
+                            // The circle is a status hint, never a target.
+                            interactive: false
                         }).addTo(map);
+                        _lastAccuracy = radius;
+                        return;
+                    }
+                    locationCircle.setLatLng(latLng);
+                    if (_lastAccuracy === null || Math.abs(radius - _lastAccuracy) >= _ACC_MIN_STEP) {
+                        locationCircle.setRadius(radius);
+                        _lastAccuracy = radius;
                     }
                 }
 
                 function removeMarker() {
+                    _pendingFix = null;
+                    _pendingCenter = false;
+                    _lastAccuracy = null;
+                    _centering = false;
+                    _deferred = false;
                     if (locationMarker) { map.removeLayer(locationMarker); locationMarker = null; }
                     if (locationCircle) { map.removeLayer(locationCircle); locationCircle = null; }
                 }
@@ -1783,6 +1901,16 @@
                             var lat = pos.coords.latitude;
                             var lng = pos.coords.longitude;
                             var acc = pos.coords.accuracy;
+                            // A "no fix yet" record (exactly 0,0 / NaN) must not
+                            // be treated as a position: it would recentre the map
+                            // on the Atlantic, publish a bogus presence and fire
+                            // the heritage-proximity check thousands of km away.
+                            if (!_validFix(lat, lng, acc)) {
+                                console.warn('[LIVE] ignoring implausible GPS fix', lat, lng, acc);
+                                return;   // keep `firstFix` for the first REAL fix
+                            }
+                            // Only the first REAL fix centres the map; a rejected
+                            // record must not consume that one-shot.
                             showLiveLocation(lat, lng, acc, firstFix);
                             firstFix = false;
                             // Share coordinates with detection system so it can fire immediately
@@ -1849,6 +1977,10 @@
                 // turning off a manually enabled live-location session. It uses this small
                 // public bridge to render the same pin and accuracy circle.
                 window._showLiveLocation = showLiveLocation;
+                // The same plausibility rule for every other GPS consumer
+                // (trail recording, detection), so a (0,0) "no fix" record can
+                // never reach the map or the presence table.
+                window._isPlausibleFix = _validFix;
 
             })();
 
@@ -2273,6 +2405,13 @@
                                 var lat = pos.coords.latitude;
                                 var lng = pos.coords.longitude;
                                 var accuracy = pos.coords.accuracy;
+                                // Never record a "no fix yet" record (0,0/NaN):
+                                // one of those draws the whole trail to the
+                                // Gulf of Guinea and back.
+                                if (typeof window._isPlausibleFix === 'function' &&
+                                    !window._isPlausibleFix(lat, lng, accuracy)) {
+                                    return;
+                                }
                                 var previous = trackPoints[trackPoints.length - 1];
 
                                 // Location providers sometimes repeat the exact same fix.
@@ -9194,8 +9333,19 @@
             var _detLat = null, _detLng = null;
 
             function _detOnPosition(pos) {
-                _detLat = pos.coords.latitude;
-                _detLng = pos.coords.longitude;
+                var lat = pos.coords.latitude;
+                var lng = pos.coords.longitude;
+                var acc = pos.coords.accuracy;
+                // Same plausibility rule as the live-location pin: a (0,0)
+                // "no fix yet" record would otherwise be published as a real
+                // position and trigger the proximity check on the Atlantic.
+                if (typeof window._isPlausibleFix === 'function' &&
+                    !window._isPlausibleFix(lat, lng, acc)) {
+                    console.warn('[DETECT] ignoring implausible GPS fix', lat, lng, acc);
+                    return;
+                }
+                _detLat = lat;
+                _detLng = lng;
                 // Visible to others only while live location is on AND the user
                 // answered "Da" — detection mode is not part of the rule.
                 publishDetectorPresence(_detLat, _detLng, _presenceVisible());
@@ -15133,6 +15283,41 @@
                 var _sat60Opacity = SAT60_OPACITY;
                 var _sat60On = false;
                 var _sat60CatalogPromise = null;
+                var _sat60UpdateTimer = null;
+                var _sat60NormalCaps = null;   // caps before any conservation back-off
+
+                // ── ONE COMPOSITED SURFACE FOR THE WHOLE CORONA STACK ───────
+                // The opacity lives on the PANE, not on each product. A Leaflet
+                // tile layer with opacity < 1 promotes its container to its own
+                // composited GPU surface; with 8–24 CORONA products in this pane
+                // that is 8–24 surfaces that must all be re-composited on every
+                // frame of a zoom animation. On Android that is exactly the
+                // state that renders as a solid green/blank rectangle ("the
+                // whole map turns green") and as violent twitching between
+                // zoom levels — worst while the live-location button keeps the
+                // map animating (flyTo) and the GPS pin is re-drawn on top.
+                // Fading the pane instead gives the same pixels with a single
+                // composited surface.
+                map.getPane("pane_sat60").style.opacity = String(SAT60_OPACITY);
+
+                // Live knobs (consistent with window.DLTILE_PERF in
+                // js/tile-perf.js): window.DLSAT60 = { maxFrames: 6, … } is
+                // applied to the manager right after it is created.
+                function _sat60ApplyKnobs(manager) {
+                    var over = window.DLSAT60;
+                    if (!manager || !over || typeof over !== "object") return;
+                    var map = {
+                        maxPasses: "maxActivePasses",
+                        maxFrames: "maxActiveFrames",
+                        maxCached: "maxCachedLayers",
+                        viewportPad: "viewportPad"
+                    };
+                    Object.keys(map).forEach(function (key) {
+                        if (typeof over[key] === "number" && isFinite(over[key])) {
+                            manager.options[map[key]] = over[key];
+                        }
+                    });
+                }
 
                 // Used by the premium coverage-rectangle system and by the tests.
                 window._sat60MapLayer = _sat60MapLayer;
@@ -15195,15 +15380,26 @@
                         group: _sat60MapLayer,
                         pane: "pane_sat60",
                         opacity: _sat60Opacity,
+                        // The pane carries the opacity (see above), so the
+                        // products stay opaque and the whole stack is one
+                        // composited surface.
+                        opacityTarget: "pane",
                         // A product slightly off-screen still counts as visible,
                         // so a normal drag does not uncover an empty area before
-                        // moveend fires.
-                        viewportPad: lowPower ? 0.2 : 0.35,
+                        // moveend fires. On a phone the pad is dropped to the
+                        // minimum: it multiplies the number of products that can
+                        // be attached at once (and therefore live tiles) without
+                        // adding a single pixel of visible imagery.
+                        viewportPad: lowPower ? 0.15 : 0.35,
                         // Safety caps: a dense Corona corridor can put dozens of
                         // frames in one view; beyond these the extra layers add
                         // memory, not imagery.
-                        maxActivePasses: lowPower ? 8 : 18,
-                        maxActiveFrames: lowPower ? 10 : 24,
+                        maxActivePasses: lowPower ? 6 : 18,
+                        maxActiveFrames: lowPower ? 8 : 24,
+                        // Cached (detached) product layers are empty divs; on a
+                        // phone only keep a working set so panning around
+                        // Europe cannot accumulate compositing surfaces.
+                        maxCachedLayers: lowPower ? 16 : 60,
                         tileLayerOptions: {
                             // Never queue tiles for the intermediate frames of a
                             // zoom animation: Leaflet then only re-transforms the
@@ -15223,12 +15419,81 @@
                         }
                     });
 
+                    // Live tuning without a redeploy.
+                    _sat60ApplyKnobs(_sat60Manager);
+                    _sat60NormalCaps = {
+                        passes: _sat60Manager.options.maxActivePasses,
+                        frames: _sat60Manager.options.maxActiveFrames
+                    };
+
+                    // ── Back off when the page is over its tile budget ──────
+                    // The tile governor switches to conservation mode when the
+                    // decoded tiles of the page exceed the device budget. That
+                    // is precisely the state in which Android's compositor
+                    // starts handing out garbage (the reported solid green
+                    // map). CORONA is the biggest single contributor, so it
+                    // halves its attached-product count there and restores it
+                    // when the page calms down.
+                    if (window.DLTilePerf && typeof window.DLTilePerf.onConservationChange === "function") {
+                        window.DLTilePerf.onConservationChange(function () {
+                            _sat60ApplyConservation();
+                        });
+                        _sat60ApplyConservation();
+                    }
+
                     // The atlas re-runs checkZoom() on every moveend
                     // (corona.zoomChanged()) — never during the gesture.
                     map.on("moveend zoomend", function () {
-                        if (_sat60On && _sat60Manager) _sat60Manager.update();
+                        _sat60RequestUpdate();
                     });
                     return _sat60Manager;
+                }
+
+                // Half the attached products while the page is over budget —
+                // never fewer than 2, so a corridor still shows imagery.
+                function _sat60ApplyConservation() {
+                    if (!_sat60Manager || !_sat60NormalCaps) return;
+                    var on = !!(window.DLTilePerf &&
+                        typeof window.DLTilePerf.inConservationMode === "function" &&
+                        window.DLTilePerf.inConservationMode());
+                    var passes = on ? Math.max(2, Math.round(_sat60NormalCaps.passes / 2))
+                                    : _sat60NormalCaps.passes;
+                    var frames = on ? Math.max(2, Math.round(_sat60NormalCaps.frames / 2))
+                                    : _sat60NormalCaps.frames;
+                    if (_sat60Manager.options.maxActivePasses === passes &&
+                        _sat60Manager.options.maxActiveFrames === frames) return;
+                    _sat60Manager.options.maxActivePasses = passes;
+                    _sat60Manager.options.maxActiveFrames = frames;
+                    // Re-select now so the extra products are really detached
+                    // (their tiles are freed), not just capped for next time.
+                    _sat60RequestUpdate();
+                }
+
+                // ── ONE UPDATE PER GESTURE ─────────────────────────────────
+                // A zoom fires BOTH zoomend and moveend, and `flyTo()` (which
+                // is how the live-location button recentres the map) ends the
+                // same way. Running update() twice per gesture makes the
+                // manager detach and re-attach CORONA layers twice in a row —
+                // two full tile-pane rebuilds in a few milliseconds, which is
+                // visible as the imagery "twitching" and is pure GPU churn.
+                // The work is coalesced into a single pass on the frame after
+                // the gesture has really finished.
+                function _sat60RequestUpdate() {
+                    if (!_sat60On || !_sat60Manager) return;
+                    if (_sat60UpdateTimer !== null) {
+                        clearTimeout(_sat60UpdateTimer);
+                    }
+                    _sat60UpdateTimer = setTimeout(function () {
+                        _sat60UpdateTimer = null;
+                        // Never re-tile in the middle of a zoom/fly animation:
+                        // Leaflet is still transforming the old level, and a
+                        // detach/attach right now tears the image apart.
+                        if (map._animatingZoom) {
+                            _sat60RequestUpdate();
+                            return;
+                        }
+                        if (_sat60On && _sat60Manager) _sat60Manager.update();
+                    }, 120);
                 }
 
                 function _sat60LoadCatalog() {
@@ -15254,6 +15519,11 @@
                     _sat60On = !!on;
                     if (on) {
                         _sat60EnsureManager();
+                        // Re-assert the pane opacity: the manager applies it on
+                        // creation, but a pane that was re-created or whose
+                        // style was reset by another layer must get it back.
+                        var sat60Pane = map.getPane("pane_sat60");
+                        if (sat60Pane) sat60Pane.style.opacity = String(_sat60Opacity);
                         if (!map.hasLayer(_sat60MapLayer)) {
                             _sat60MapLayer.addTo(map);
                         }
@@ -15295,7 +15565,15 @@
                     var pct = document.getElementById("satellite60sMapPct");
                     if (pct) pct.textContent = val + "%";
                     _sat60Opacity = val / 100;
-                    if (_sat60Manager) _sat60Manager.setOpacity(_sat60Opacity);
+                    // With `opacityTarget: 'pane'` this writes the shared pane
+                    // style (one composited surface) instead of touching every
+                    // product layer.
+                    if (_sat60Manager) {
+                        _sat60Manager.setOpacity(_sat60Opacity);
+                    } else {
+                        var sat60PaneEl = map.getPane("pane_sat60");
+                        if (sat60PaneEl) sat60PaneEl.style.opacity = String(_sat60Opacity);
+                    }
                 };
             })();
 

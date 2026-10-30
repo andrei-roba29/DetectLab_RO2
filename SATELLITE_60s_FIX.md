@@ -217,9 +217,16 @@ be used as a product catalogue.
 node test-sat60-fetch.js          # 63 checks — request format, zoom constants
 node test-sat60-layers.js         # 50 checks — catalogue handling, product names
 node test-sat60-mobile-crash.js   # 51 checks — gesture volume limits
+node test-sat60-live-location.js  # 44 checks — CORONA × live location on Android
 node test-corona-europe.js        # 43 checks — catalogue proxy + coverage KML
 node test-tile-perf.js            # 83 checks — shared tile-performance budget
 ```
+
+> **2026-10-30 — Android "whole map turns green / twitches between zoom levels"
+> with live location on:** the CORONA stack now renders inside ONE composited
+> surface (the pane carries the opacity), has no dead zoom band between z11 and
+> z12, runs one manager update per gesture and backs off while the tile
+> governor is in conservation mode. See **SATELLITE_60s_LIVE_LOCATION.md**.
 
 What each one pins:
 
