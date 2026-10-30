@@ -13,17 +13,17 @@
  */
 (function (root, factory) {
     var deps = typeof module === 'object' && module.exports
-        ? { core: require('./apm-core.js'), raster: require('./apm-raster.js') }
-        : { core: root.DetectLabApmCore, raster: root.DetectLabApmRaster };
-    var api = factory(deps.core, deps.raster, typeof fetch === 'function' ? fetch : null,
+        ? { core: require('./apm-core.js'), raster: require('./apm-raster.js'), sites: require('./apm-sites.js') }
+        : { core: root.DetectLabApmCore, raster: root.DetectLabApmRaster, sites: root.DetectLabApmSites };
+    var api = factory(deps.core, deps.raster, deps.sites, typeof fetch === 'function' ? fetch : null,
         typeof indexedDB !== 'undefined' ? indexedDB : null);
     if (typeof module === 'object' && module.exports) module.exports = api;
     else root.DetectLabApmProviders = api;
-})(typeof self !== 'undefined' ? self : this, function (core, raster, fetchImpl, idb) {
+})(typeof self !== 'undefined' ? self : this, function (core, raster, sites, fetchImpl, idb) {
     'use strict';
 
     /* ── Configuration (edit here; nothing else needs changing to swap a source) ─ */
-    var APP_VERSION = 'apm-next phase 2 (UI r3)';
+    var APP_VERSION = 'apm-next settlement periods TRAIN (2026-10-30)';
 
     var CONFIG = {
         // DEM candidates in preference order. EU-DEM WCS is primary; Terrarium (last, in code) is the
@@ -787,15 +787,62 @@
         };
     }
 
-    /** Placeholder for the Ariadne provider (Phase 3). Deliberately unavailable until a documented API is verified. */
+    /** Uses the Browse / Where bbox contract, but pages only subject-filtered settlement hits.
+     * Parent inhabited-place and small-community settlement queries are unioned, never broadened to all sites.
+     * `mapq` is intentionally absent: that mode returns heatmap aggregations above 500 hits.
+     * Contract: github.com/ARIADNE-Infrastructure/portal server/classes/Elastic/{Query,QuerySettings}.php
+     */
     function createAriadneSiteProvider() {
         return {
-            id: 'ariadne',
-            label: 'Ariadne (not available yet)',
-            source: 'ARIADNE Portal — access method not yet verified',
-            available: false,
-            getSites: function () {
-                return Promise.reject(new Error('The Ariadne provider is not enabled: no verified public API has been confirmed. Use CSV upload.'));
+            id: 'ariadne', label: 'ARIADNE Portal — settlements',
+            source: 'https://ariadne-portal.d4science.org/browse/where', available: true,
+            getSites: function (centre, radiusKm, options) {
+                options = options || {};
+                var bbox = core.circleBBox(centre.lat, centre.lon, radiusKm * 1000);
+                var records = [], seen = Object.create(null), emitted = Object.create(null), page = 1, count = 0, queryIndex = 0;
+                function check() {
+                    if (options.token && options.token.cancelled) throw new Error('cancelled');
+                }
+                function next() {
+                    check();
+                    var url = new URL('https://ariadne-portal.d4science.org/api/search');
+                    // Portal order: top-left latitude, longitude, bottom-right latitude, longitude.
+                    url.search = new URLSearchParams({ q: '', bbox: [bbox.north, bbox.west, bbox.south, bbox.east].join(','),
+                        resourceType: 'Site/monument', derivedSubject: sites.ARIADNE_SETTLEMENT_FILTERS[queryIndex], size: '50', page: String(page), sort: 'issued', order: 'asc' }).toString();
+                    var controller = new AbortController();
+                    var timer = setTimeout(function () { controller.abort(); }, 20000);
+                    return fetchImpl(url.href, { signal: controller.signal }).then(function (r) {
+                        if (!r.ok) throw new Error('ARIADNE HTTP ' + r.status);
+                        return r.json();
+                    }).finally(function () { clearTimeout(timer); }).then(function (data) {
+                        check();
+                        if (!data || data.error || !Array.isArray(data.hits)) throw new Error('ARIADNE: invalid search response');
+                        var total = typeof data.total === 'object' && data.total ? data.total.value : data.total;
+                        if (!Number.isFinite(total) || total < 0) throw new Error('ARIADNE: missing result count');
+                        // Never silently train on the first page or a truncated result window.
+                        if (total > 10000 || (data.total && data.total.relation === 'gte')) throw new Error('ARIADNE: too many sites in this area (maximum 10,000).');
+                        var fresh = data.hits.filter(function (hit) {
+                            if (!hit || !hit.id || seen[hit.id]) return false;
+                            seen[hit.id] = true; return true;
+                        });
+                        if (!fresh.length && count < total) throw new Error('ARIADNE: incomplete search results');
+                        count += fresh.length;
+                        records = records.concat(sites.parseAriadneHits(fresh.filter(function (hit) {
+                            if (emitted[hit.id]) return false;
+                            emitted[hit.id] = true; return true;
+                        })));
+                        if (options.onProgress) options.onProgress(count, total);
+                        if (count < total) {
+                            if (page >= 200) throw new Error('ARIADNE: incomplete search results');
+                            page++; return next();
+                        }
+                        if (++queryIndex < sites.ARIADNE_SETTLEMENT_FILTERS.length) {
+                            page = 1; count = 0; seen = Object.create(null); return next();
+                        }
+                        return records.filter(function (r) { return core.haversineM(centre.lat, centre.lon, r.lat, r.lon) <= radiusKm * 1000; });
+                    });
+                }
+                return Promise.resolve().then(next);
             }
         };
     }

@@ -291,6 +291,8 @@
                 progress('prog.done', 100);
                 return {
                     geojson: res.geojson,
+                    heatmap: res.heatmap,
+                    thresholds: res.thresholds,
                     areaKm2: res.areaKm2,
                     scoreStats: res.scoreStats,
                     provenance: session.provenance,
@@ -359,7 +361,7 @@
 
     /* ── TRAIN ─────────────────────────────────────────────────────────────── */
     /**
-     * Known-site pool for a centre: filters out coarse positions and non-settlement types.
+     * Settlement pool for a centre: filters positions and types, retaining individual occupation phases.
      * Returns { pool, periods, dropped } — periods are offered to the user.
      */
     function sitePool(records, centre) {
@@ -380,7 +382,7 @@
     }
 
     /**
-     * params: { centre, records, period:{start,end}, radiusKm, curves?, waterClasses,
+     * params: { centre, records, period:{key,label,start,end}|null, radiusKm, curves?, waterClasses,
      *           bgCount=5000, minSlopeDeg, smoothDem, thresholds? , minAreaM2, minSites=10, warnSites=30,
      *           onProgress, token, workerUrl, rnd }
      */
@@ -399,6 +401,8 @@
             err.code = 'too_few_sites';
             return Promise.reject(err);
         }
+        var unknownAccuracy = sel.sites.filter(function (s) { return s.source === 'ariadne' && s.positionAccuracy == null; }).length;
+        if (unknownAccuracy) warnings.push(M('warn.ariadneAccuracy', { n: unknownAccuracy }, 'ARIADNE points have unverified position accuracy.'));
         if (nSites < warnSites) warnings.push(M('warn.fewSites', { n: nSites, rec: warnSites }, 'Only ' + nSites + ' sites.'));
 
         var bg = sampleBackground(centre, areaM, params.bgCount || 5000, sel.sites, BG_EXCLUDE_M, params.rnd);
@@ -508,6 +512,7 @@
                 }).then(function (res) {
                     session.analysisKey = null;
                     session.provenance = provenanceFor(dem, wgrid, water.water, water.provider, demDecision);
+                    if (params.siteSource) session.provenance.sites = params.siteSource;
                     session.stats = res.stats;
                     session.waterClasses = Object.keys(masks);
                     return t;
@@ -527,12 +532,15 @@
                 return {
                     mode: 'train',
                     geojson: res.geojson,
+                    heatmap: res.heatmap,
+                    thresholds: res.thresholds,
                     areaKm2: res.areaKm2,
                     scoreStats: res.scoreStats,
                     provenance: session.provenance,
                     warnings: t.warnings.concat(warnings),
                     diagnostics: {
                         sitesUsed: periodCount,
+                        sitesWithUnknownAccuracy: unknownAccuracy,
                         sitesInSample: t.built.counts.sites,
                         backgroundUsed: t.built.counts.background,
                         dropped: sel.dropped,

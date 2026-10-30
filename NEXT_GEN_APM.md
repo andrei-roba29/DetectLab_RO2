@@ -1,29 +1,32 @@
 # Next-Gen APM (archaeological potential model)
 
 Status: **MANUAL and TRAIN are implemented in the panel. Live data endpoints are not verified from a browser.**
-Premium-only, behind an on/off switch. Cache: `detectlab-v304-apm-next-phase4`.
+Premium-only, behind an on/off switch. Cache: `detectlab-v321-apm-pick-hidden`.
 
 ## What it does
 
 Scores the area around a point you choose on the map.
 
 - **MANUAL**: search radius **1–10 km** (default 5 km). Relief (slope, aspect, altitude percentile), water distance and an optional soil proxy, combined with weights and fixed, editable curves. Thresholded into three classes. Default weights: relief 0.6, water 0.4, **soil proxy 0**.
-- **TRAIN**: fixed 50 km area. You upload a CSV of known sites. Sites are filtered (settlement types, position accuracy ≤ 100 m, de-duplication, period). A logistic model is fitted with 5-fold cross-validation and applied over the same area. Variables redundant with slope (|r| > 0.8) are excluded and reported.
+- **TRAIN**: fixed 50 km area. Classified settlement points load automatically from the ARIADNE portal using subject-scoped searches, not an all-monuments search. The user is prompted to choose one of the local occupation periods (or explicitly All periods) before training. Actual point coordinates are filtered by radius, de-duplicated (50 m), and filtered by period. ARIADNE does not supply position accuracy; these positions remain unknown and are included with an explicit uncertainty warning, not labelled as accurate to 100 m. A logistic model is fitted with 5-fold cross-validation and applied over the same area. Variables redundant with slope (|r| > 0.8) are excluded and reported.
 
-Classes and colours (legend on the panel and on the map):
+## Hybrid result: heatmap + highest-potential polygons
 
-| Class | Colour |
-|---|---|
-| Medium probability | orange `#FFA500` |
-| High probability | green `#2E9E4F` |
-| Very high probability | baby blue `#89CFF0` |
+Both MANUAL and TRAIN show a **continuous, semi-transparent score heatmap**, with **unfilled polygon outlines only for the very-high class**. This is the model score field, not a point-density map of known settlements.
+
+- Colour is continuous: navy → teal → amber → orange → deep red. The intermediate ramp stops follow the run's medium/high/very-high thresholds; scores are **not stretched to the local minimum/maximum**. Lower-scoring areas remain visible without becoming polygons. Labels describe relative archaeological potential, not calibrated discovery probabilities.
+- Only `score >= thresholds.veryhigh` is contoured. MANUAL's default is 0.85; TRAIN uses its learned very-high threshold. The legend shows the actual cutoff. Existing minimum fragment area and boundary smoothing apply; if no hotspot survives, **no lower class is promoted** to produce a polygon.
+- All scoring and contouring stay at the original analysis resolution in the worker. Only the display texture is downsampled to at most **512 × 512** pixels, averaging valid scores with coverage alpha at masked edges. No-data cells are transparent; valid zero scores are retained. The RGBA texture is transferred to the main thread without cloning the full score raster.
+- Leaflet canvas tiles project map pixels back to geographic raster coordinates and interpolate the texture with premultiplied alpha. This avoids the north/south distortion of stretching a geographic image over Web Mercator. Heat tiles do not intercept map gestures; outlines remain clickable above them. Re-run, Clear and switching APM off remove both result layers together.
+- Medium/high/very-high areas in the panel are calculated from the **full-resolution classified score cells**, independent of contour smoothing or omitted polygon fragments. These totals should not be read as exact exported polygon areas.
+- **Export hotspot GeoJSON** contains only very-high polygon features plus provenance, chosen settlement period, thresholds and rendering metadata. It does not embed the heatmap image or full score raster. The legacy polygonisation helper still supports all-class polygons for compatibility, but the production worker requests highest-only contours.
 
 ## Using it
 
 1. Click **APM** (bottom-left). The switch (stored as `localStorage.detectlab_apm_next`, default off) must be on, and the account must be premium. Otherwise the panel shows a gate message and Run is disabled.
-2. Click **Pick point on map**, then click the map. A dashed circle shows the search radius.
-3. Choose **MANUAL** or **TRAIN**. For TRAIN, upload a CSV (see *TRAIN input* below) and choose a period or all periods.
-4. Run. Results show area per class, the sources actually used (label, version, resolution), warnings in the chosen language, and (TRAIN) model diagnostics. **Export GeoJSON** writes the polygons with provenance and diagnostics.
+2. Click **Pick point on map**. The APM settings window disappears completely and stays hidden while you pan or zoom. Select a point on the map to set the search-area centre; only then do the settings return. A dashed circle shows the search radius. Attempts to reopen the settings during selection are ignored; an explicit close or switching APM off still cancels selection.
+3. Choose **MANUAL** or **TRAIN**. For TRAIN, wait for classified settlements to load, then answer **Which settlement period would you like to analyse?** Pick a local occupation period, including a named period without numeric dates, or explicitly choose **All periods**. Each option shows the usable settlement count. TRAIN stays disabled until a choice is made and at least 10 settlements match. No CSV is required. Use **Reload ARIADNE points** to retry a failed request or refresh the data.
+4. Run. Results show area per class, the sources actually used (label, version, resolution), warnings in the chosen language, and (TRAIN) model diagnostics. **Export hotspot GeoJSON** writes only the highest-potential polygons with provenance, thresholds, rendering metadata and diagnostics.
 
 ## Premium gate: what `_dlIsPremium()` returns
 
@@ -127,25 +130,18 @@ The proxy is not built, and no request is changed until a user enables it.
 
 ## TRAIN input
 
-CSV, comma or semicolon or tab delimited. Columns are matched by name (case-insensitive, punctuation ignored):
+The panel uses [ARIADNE Browse / Where](https://ariadne-portal.d4science.org/browse/where?forceReload=true&mapq=true&q=).
 
-| Field | Accepted names (examples) |
-|---|---|
-| id | `id`, `site_id`, `name` |
-| lat, lon | `lat`, `latitude`; `lon`, `lng`, `longitude` |
-| period label | `period`, `period_label`, `culture` |
-| start year | `start`, `start_year`, `period_start` |
-| end year | `end`, `end_year`, `period_end` |
-| type | `type`, `site_type`, `category` |
-| accuracy (metres) | `accuracy`, `accuracy_m`, `position_accuracy` |
+- Source contract checked against the public [portal implementation](https://github.com/ARIADNE-Infrastructure/portal): `server/classes/Elastic/Query.php`, `QuerySettings.php`, `server/html/api/index.php` and `client/src/component/BrowseWhere/FullMap.vue`.
+- Requests go to `https://ariadne-portal.d4science.org/api/search` with `bbox=north,west,south,east`, `resourceType=Site/monument`, a settlement `derivedSubject` filter, `size=50`, and one-based `page`. The portal source declares CORS `*`; no proxy or credentials are required. `mapq` is deliberately omitted because it returns heatmap aggregations rather than individual hits for large searches.
+- Two subject-filtered queries are unioned: `inhabited places` (AAT 300008347, with descendants expanded by the portal), plus `settlements (sites of small communities)` (AAT 300444153, explicitly supported by the portal’s label fallback). **There is no unfiltered all-site fallback.** The adapter also validates controlled settlement subjects using a compact snapshot of the portal’s inhabited-place vocabulary; cemeteries, standalone monuments and unclassified records are not accepted based on title/description mentions. Records missing these classifications are deliberately omitted.
+- All pages of each scoped query are read sequentially, with a 20 s request timeout. Missing/invalid responses, incomplete paging, and per-query counts over the portal's 10,000-hit window fail visibly; no partial dataset is used for training.
+- Only `spatial.geopoint` is used. Bounding boxes, polygons and heatmap centroids are **not** invented as site locations. Non-site resources are excluded. Points outside the actual 50 km circle are removed after the bounding-box query.
+- Each `temporal` entry is retained as a separate occupation phase (`from`, `until`, `periodName`, `uri`). The period picker is populated only from usable settlement locations inside the 50 km circle, after accuracy filtering and spatial de-duplication. Duplicate locations retain the union of their phases. Selecting a listed period filters by that exact phase identity, even when numeric years are absent. Explicit numeric interval filters compare against individual phases, never the envelope between earliest and latest occupation; gaps are not invented habitation. Publication dates are never used as archaeological dates. Unlabelled and undated records are available only under All periods.
+- Points with `spatialPrecision` or `coordinatePrecision` flags are excluded as approximate, following the portal map’s approximate-marker convention. Metric position accuracy is not supplied in this search contract and remains `null`. ARIADNE sites are allowed with a visible warning, also retained in results/GeoJSON. This is an explicit relaxation of the old CSV-only 100 m rule. CSV helper functions remain for compatibility/testing and still reject unknown accuracy. Site source, subject scope, retrieval timestamp, chosen period and accuracy policy are included in result provenance.
+- Changing the centre invalidates the previous site pool and period selection; late responses from older requests are ignored. Failed loads can be retried. Below **10** usable sites, TRAIN is blocked; below **30**, reliability is warned about.
 
-Extra columns (for example `notes`) are ignored.
-
-**Years.** `N BC` / `N BCE` is stored in astronomical numbering: `1 BC` = year 0, `2200 BC` = −2199, `4000 BC` = −3999. A plain negative number is taken as already astronomical. Labels are shown as `N BC`.
-
-**Thresholds.** Below **10** usable sites the run is refused (the Run button is disabled and the panel says so). Below **30** the run goes ahead with a warning that the model will be unreliable. From 30 there is no warning.
-
-**Sample:** `samples/apm-next-SYNTHETIC-sample-sites.csv` has 36 rows. The coordinates are invented, around Marlow, England. Use it for the UI test only; it has no archaeological meaning.
+**Verification limitation:** live requests to the Ariadne host are blocked by this sandbox's network allowlist. Automated tests use realistic API fixtures, not claims of a successful live portal run. Existing DEM/water endpoint limitations still apply.
 
 ## Approximation error (distance to water)
 
@@ -163,31 +159,40 @@ Notes:
 - Relative error is not stated for points closer than 100 m to water, because the ratio becomes meaningless there. An earlier figure of "0.2 %" and a 9.6 % maximum at 5 km came from that near-zero case and is withdrawn.
 - The tests check these bounds (`test-apm-next.js`, *approximation error vs exact haversine*). The brute-force tests check the implementation against a same-metric reference with per-point latitude scaling.
 
+## ARIADNE regression tests
+
+- `node test-apm-ariadne.js`: eleven provider/conversion tests, using contract-shaped fixtures without network.
+- With externally installed `jsdom` available through `NODE_PATH`, the same command also runs a real-panel DOM integration test for automatic loading, explicit period choice (including named-only periods), period thresholds, passing records/source/period to TRAIN, retry, centre changes, stale responses and disabling the feature.
+- `node test-apm-next.js`: 60 APM tests, including the real MANUAL/TRAIN worker producing heat textures and highest-only contours.
+- `node test-apm-heatmap.js`: seven pure rendering tests: continuous/threshold-anchored ramp, transparent no-data, bounded textures, geographic interpolation, highest-only contours, no-hotspot output and raster areas.
+- `test-apm-next-browser.js`: 14 checks pass in Chromium with real Leaflet, real heatmap canvases and synthetic pipeline results. Local NSS/NSPR libraries bundled with `@sparticuz/chromium` were extracted to run Chromium here; no application dependency was added.
+
 ## Files
 
 | Path | Role |
 |---|---|
 | `js/apm-next/apm-core.js` | Curves, MANUAL score, logistic fit, validation, thresholds, keyed validation messages. UMD. |
 | `js/apm-next/apm-raster.js` | Grids, Horn slope/aspect, distance transform, rbush water distance. |
-| `js/apm-next/apm-polygonise.js` | Score grid → class polygons. Worker only. |
+| `js/apm-next/apm-polygonise.js` | Score grid → highest-only production contours and classified raster areas; legacy all-class helper. Worker only. |
+| `js/apm-next/apm-heatmap.js` | Bounded score-to-RGBA display raster, continuous ramp, geographic canvas-tile projection. |
 | `js/apm-next/apm-worker.js` | Web Worker: `setAnalysis`, `score`, `train`, sampling. |
-| `js/apm-next/apm-sites.js` | CSV parsing, filters, period grouping, BCE years. |
+| `js/apm-next/apm-sites.js` | ARIADNE hit conversion, legacy CSV parsing, filters, period grouping, BCE years. |
 | `js/apm-next/apm-providers.js` | DEM candidates, GetCapabilities parsing, water sources, Strahler map, proxy switch, step and request log. |
 | `js/apm-next/apm-pipeline.js` | `runManual`, `runTrain`, DEM and water decisions, keyed warnings, site-count status. |
-| `js/apm-next/apm-i18n.js` | Romanian and English strings (152 keys each). |
-| `js/apm-next/apm-ui.js` | Panel, pick on map, switch, premium gate, legend, curves, TRAIN CSV, results, diagnostics. |
+| `js/apm-next/apm-i18n.js` | Romanian and English panel, period-selection and hybrid-map strings. |
+| `js/apm-next/apm-ui.js` | Panel, pick on map, switch, premium gate, legend, curves, automatic TRAIN ARIADNE loading/retry, results, diagnostics. |
 | `css/next-gen-apm.css` | `.apm-*` styles. |
 | `samples/apm-next-SYNTHETIC-sample-sites.csv` | Synthetic TRAIN sample (36 rows). |
 | `test-apm-next.js` | Node test suite: `node test-apm-next.js` (60 tests). |
-| `test-apm-next-browser.js` | Browser checks (9), run with `PUPPETEER_MODULE_DIR` set. |
+| `test-apm-next-browser.js` | Browser checks (14), run with `PUPPETEER_MODULE_DIR` set. |
 | `LIVE_TEST.md` | Steps for the first live test and what to send back. |
 
-Wiring: `index.html` loads the stylesheet and seven scripts (versioned `?v=20261029-apm-next-phase4`). `sw.js` precaches the same files under `detectlab-v304-apm-next-phase4`.
+Wiring: `index.html` loads the stylesheet and eight scripts (versioned `?v=20261030-apm-pick-hidden`). `sw.js` precaches the same files, including the heatmap module used by both worker and UI, under `detectlab-v321-apm-pick-hidden`.
 
 ## Verification status
 
 - `node test-apm-next.js`: **60 tests pass.** (Browser checks: see below.) They cover terrain numerics (including the cos-latitude slope test at 65°N), distance transform, water distance (brute force at 10 km and 50 km, and the haversine error bounds), curves, logistic recovery, AUC and Kvamme, thresholds, the MANUAL score, polygonisation, CSV parsing (including BCE and the sample file), TRAIN thresholds (blocked below 10, before any download), provider parsers on fixtures (EU-Hydro layer list, Overpass, GetCapabilities), DEM candidate order, every failure reason, the fallback warnings (v1.1 → v1.0, and 25 m → Terrarium), the Strahler map, the drainage default, the proxy default, debug logging, translation key coverage (EN and RO), and the synthetic TRAIN recovery.
-- **Browser checks (`test-apm-next-browser.js`, headless Chromium 131, real Leaflet and panel, pipeline stubbed):** 9 checks, all pass. They cover: APM off (a normal map click reaches the handler); a pick click goes to APM only and the flag clears after it; a handler registered during a pick is also blocked; closing the panel cancels a pick; the legend and the panel do not overlap at 390 px with a result, the legend returns when the panel closes, and the legend is visible at 1280 px; and the Terrarium-only note is shown as an info note with status *Done*; and a free account stays gated, with no developer banner. Run with `PUPPETEER_MODULE_DIR=<dir with puppeteer-core and @sparticuz/chromium>/ node test-apm-next-browser.js`; without the variable it is skipped.
+- **Browser checks (`test-apm-next-browser.js`, headless Chromium, real Leaflet, heatmap canvases and panel, pipeline stubbed):** 14 checks, all pass. They cover: APM off (a normal map click reaches the handler); a pick click goes to APM only and the flag clears after it; a handler registered during a pick is also blocked; closing the panel cancels a pick; the legend and the panel do not overlap at 390 px with a result, the legend returns when the panel closes, and the legend is visible at 1280 px; and the Terrarium-only note is shown as an info note with status *Done*; and a free account stays gated, with no developer banner. Point-selection checks verify computed display/zero panel height on desktop and phone, in both modes, including panning, attempts to reopen settings and CSS display overrides; settings return only after a point is accepted. Hybrid checks also verify coloured canvas pixels, unfilled outlines above the heat layer, zoom/pan, replacement/cleanup, no-hotspot behaviour and highest-only GeoJSON export. Run with `PUPPETEER_MODULE_DIR=<dir with puppeteer-core and @sparticuz/chromium>/ node test-apm-next-browser.js`; without the variable it is skipped.
 - **Browser check limits:** the pipeline's `runManual` is stubbed, so no real DEM or water request is made. The map is a bare Leaflet map: the app's own click handlers (map-app.js etc.) are not loaded, because the full page needs login, Supabase and CDN scripts that the sandbox cannot reach. Their guard lines are checked by source in `test-apm-next.js`.
 - **Not verified:** all live endpoints, their CORS headers, and the appearance on the real app map.
 
@@ -199,7 +204,7 @@ Wiring: `index.html` loads the stylesheet and seven scripts (versioned `?v=20261
 
 ## Phone layout (legend)
 
-On screens up to 600 px wide the map legend (bottom-right) is hidden while the APM panel is open, because the panel (bottom-left, 340 px) would cover it. The panel lists the same three classes with their swatches and areas, so nothing is lost. The legend returns when the panel closes. Desktop widths are unchanged (checked at 1280 px).
+On screens up to 600 px wide the map legend (bottom-right) is hidden while the APM panel is open, because the panel (bottom-left, 340 px) would cover it. The panel repeats the heat gradient, very-high outline legend, score cutoff and class areas, so nothing is lost. The legend returns when the panel closes. Desktop widths are unchanged (checked at 1280 px).
 
 ## Known limitations
 

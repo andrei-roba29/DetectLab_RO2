@@ -12,7 +12,7 @@
 (function (root) {
     'use strict';
 
-    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261029-apm-next-phase4';
+    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261030-apm-pick-hidden';
     var SWITCH_KEY = 'detectlab_apm_next';         // 'on' | 'off' (default off)
     var DEBUG_KEY = 'apmDebug';                    // shared with apm-providers.js
     var TRAIN_AREA_KM = 50;
@@ -31,9 +31,12 @@
         centre: null,               // { lat, lon } picked on the map
         picking: false,
         radiusKm: 5,
-        records: null,              // parsed CSV (TRAIN)
-        csvName: '',
-        period: null,               // { start, end } or null = all periods
+        records: null,              // Ariadne points for the current TRAIN centre
+        sitesToken: null,
+        sitesLoading: false,
+        sitesRetrievedAt: null,
+        periodChosen: false,       // require an explicit period or All periods before TRAIN
+        period: null,               // { key, label, start, end } or null = all periods (if chosen)
         periods: [],                // groupPeriods() output for the chosen centre
         curveText: null,            // editable curve text per curve name
         result: null,
@@ -147,7 +150,8 @@
     function setEnabled(on) {
         state.enabled = !!on;
         try { root.localStorage.setItem(SWITCH_KEY, on ? 'on' : 'off'); } catch (e) { /* ignore */ }
-        if (!on) { stopPick(); cancelRun(); clearResult(); }
+        if (!on) { stopPick(); cancelRun(); cancelSiteLoad(); clearResult(); }
+        else if (state.mode === 'train' && state.centre && !state.records) loadAriadneSites();
         renderSwitch();
         updateGate();
     }
@@ -170,10 +174,11 @@
         els.gate.hidden = premium && on;
         els.gate.textContent = !premium ? T('gate.premium') : T('gate.off');
         var canRunNow = premium && on && !state.busy;
-        var trainBlocked = state.mode === 'train' && (!state.records || (state.siteCount != null && state.siteCount < 10));
+        var trainBlocked = state.mode === 'train' && (!state.periodChosen || !state.records || (state.siteCount != null && state.siteCount < 10));
         els.run.disabled = !canRunNow || !state.centre || trainBlocked;
         els.run.textContent = state.mode === 'train' ? T('run.train') : T('run.manual');
         els.pickBtn.disabled = !premium || !on || state.busy;
+        els.loadSites.disabled = !premium || !on || !state.centre || state.busy || state.sitesLoading;
         els.controls.classList.toggle('apm-disabled', !(premium && on));
         if (ui.btn) {
             ui.btn.setAttribute('aria-expanded', String(!ui.panel.hidden));
@@ -190,7 +195,7 @@
     function onMapPick(e) {
         if (!state.picking) return;
         if (e && e.originalEvent && e.originalEvent.target && e.originalEvent.target.closest &&
-            e.originalEvent.target.closest('.apm-panel, .apm-fab')) return;     // clicks on the panel never pick
+            e.originalEvent.target.closest('.apm-panel, .apm-fab, #apmNextBtn')) return;     // clicks on the panel never pick
         stopPick(true);
         state.centre = { lat: e.latlng.lat, lon: e.latlng.lng };
         onCentreChanged();
@@ -205,10 +210,11 @@
         map.on('click', onMapPick);
         if (map.getContainer) map.getContainer().style.cursor = 'crosshair';
         renderPickButton();
-        // Hide the window without cancelling the armed map click.
-        ui.panel.hidden = true;
-        document.body.classList.remove('apm-panel-open');
-        ui.btn.setAttribute('aria-expanded', 'false');
+        // Selection owns panel visibility until a map point is accepted or picking is cancelled.
+        // The body class also guards against global/PWA styles overriding the hidden attribute.
+        document.body.classList.add('apm-picking');
+        if (document.activeElement && ui.panel.contains(document.activeElement)) document.activeElement.blur();
+        setPanelVisible(false);
     }
 
     /* endAfterClick: called from inside the map click. The flag then stays set until that click has
@@ -216,6 +222,7 @@
     function stopPick(endAfterClick) {
         if (!state.picking) return;
         state.picking = false;
+        document.body.classList.remove('apm-picking');
         var m = getMap();
         if (m) { m.off('click', onMapPick); if (m.getContainer) m.getContainer().style.cursor = ''; }
         if (endAfterClick) setTimeout(function () { if (!state.picking) root.dlApmPicking = false; }, 0);
@@ -257,7 +264,10 @@
     function onCentreChanged() {
         renderPoint();
         drawCentre();
-        if (state.mode === 'train' && state.records) loadPeriods();
+        cancelSiteLoad();
+        state.records = null; state.periodChosen = false; state.period = null; state.siteCount = null;
+        loadPeriods();
+        if (state.mode === 'train') loadAriadneSites();
         updateGate();
     }
 
@@ -341,7 +351,7 @@
         return out;
     }
 
-    /* ── TRAIN: CSV and periods ──────────────────────────────────────────── */
+    /* ── TRAIN: Ariadne and periods ──────────────────────────────────────────── */
 
     /** Site count for the chosen centre and period, with the warning / block thresholds (TRAIN). */
     function renderSiteCount() {
@@ -360,39 +370,45 @@
         els.countNote.className = cls;
     }
 
-    function onCsvChosen(ev) {
-        var file = ev.target.files && ev.target.files[0];
-        if (!file) return;
-        state.csvName = file.name;
-        var reader = new FileReader();
-        reader.onload = function () {
-            try {
-                var parsed = sites().parseSitesCsv(String(reader.result || ''), file.name);
-                state.records = parsed.records;
-                els.csvName.textContent = file.name;
-                els.csvCount.textContent = T('train.loaded', { n: parsed.records.length });
-                setStatus('', '');
-                if (state.centre) loadPeriods();
-                updateGate();
-            } catch (e) {
-                state.records = null;
-                state.periods = [];
-                renderPeriods();
-                setStatus(T('train.csvError', { msg: errText(e) }), 'error');
-                updateGate();
-            }
-        };
-        reader.onerror = function () { setStatus(T('train.csvError', { msg: reader.error && reader.error.message }), 'error'); };
-        reader.readAsText(file);
+    function cancelSiteLoad() {
+        if (state.sitesToken) state.sitesToken.cancelled = true;
+        state.sitesToken = null;
+        state.sitesLoading = false;
+    }
+
+    function loadAriadneSites() {
+        if (!state.centre || !isRunnable() || state.busy) return;
+        cancelSiteLoad();
+        var token = { cancelled: false };
+        state.sitesToken = token;
+        state.sitesLoading = true;
+        state.records = null; state.siteCount = null; state.periodChosen = false; state.period = null;
+        loadPeriods();
+        setStatus(T('train.loading'), 'busy');
+        updateGate();
+        prov().createAriadneSiteProvider().getSites(state.centre, TRAIN_AREA_KM, { token: token }).then(function (records) {
+            if (token.cancelled) return;
+            state.records = records;
+            state.sitesRetrievedAt = new Date().toISOString();
+            loadPeriods();
+            setStatus(T('train.choosePeriod'), 'ok');
+        }).catch(function (err) {
+            if (!token.cancelled) setStatus(T('train.loadError', { msg: errText(err) }), 'error');
+        }).then(function () {
+            if (state.sitesToken !== token) return;
+            state.sitesToken = null;
+            state.sitesLoading = false;
+            updateGate();
+        });
     }
 
     function loadPeriods() {
-        if (!state.records || !state.centre) { state.periods = []; renderPeriods(); return; }
+        if (!state.records || !state.centre) { state.periods = []; renderPeriods(); renderSiteCount(); return; }
         var pool = pipe().sitePool(state.records, state.centre);
         state.periods = pool.periods;
         if (state.period) {
-            var keep = state.periods.some(function (g) { return g.start === state.period.start && g.end === state.period.end && !g.undated; });
-            if (!keep) state.period = null;
+            var keep = state.periods.some(function (g) { return g.key === state.period.key && g.selectable; });
+            if (!keep) { state.period = null; state.periodChosen = false; }
         }
         renderPeriods();
         renderSiteCount();
@@ -401,29 +417,40 @@
     function renderPeriods() {
         if (!els.period) return;
         els.period.textContent = '';
+        els.period.appendChild(h('option', { value: '', disabled: true, text: T('train.choosePeriod') }));
         els.period.appendChild(h('option', { value: 'all', text: T('train.allPeriods') }));
         state.periods.forEach(function (g, i) {
-            var usable = !g.undated && g.start != null && g.end != null;
-            var label = g.label + ' (' + g.count + ')' + (usable ? '' : ' — ' + T('train.undated'));
-            els.period.appendChild(h('option', { value: String(i), disabled: !usable, text: label }));
+            var dates = g.start != null && g.end != null ? ' · ' + formatYear(g.start) + ' – ' + formatYear(g.end) : '';
+            var label = g.label + dates + ' (' + g.count + ')' + (g.undated ? ' — ' + T('train.noNumericDates') : '');
+            els.period.appendChild(h('option', { value: String(i), disabled: !g.selectable, text: label }));
         });
-        var sel = 'all';
+        var sel = state.periodChosen ? 'all' : '';
         if (state.period) {
-            var idx = state.periods.findIndex(function (g) { return g.start === state.period.start && g.end === state.period.end; });
+            var idx = state.periods.findIndex(function (g) { return g.key === state.period.key; });
             if (idx >= 0) sel = String(idx);
         }
         els.period.value = sel;
+        els.period.disabled = !state.records || state.busy;
+        els.periodHint.textContent = state.records ? T(state.periodChosen ? 'train.periodApplied' : 'train.periodHelp') : '';
         els.periodRow.hidden = !state.records;
-        els.csvCount.textContent = state.records ? T('train.loaded', { n: state.records.length }) : '';
+        els.sitesCount.textContent = state.records ? T('train.loaded', { n: state.records.length }) : '';
     }
 
+    function formatYear(y) { return y <= 0 ? (1 - y) + ' BCE' : y + ' CE'; }
+
     function onPeriodChanged() {
+        if (state.busy) return;
         var v = els.period.value;
-        if (v === 'all') state.period = null;
-        else {
+        state.periodChosen = v === 'all';
+        state.period = null;
+        if (v !== 'all' && v !== '') {
             var g = state.periods[Number(v)];
-            state.period = g ? { start: g.start, end: g.end } : null;
+            if (g && g.selectable) {
+                state.period = { key: g.key, label: g.label, start: g.start, end: g.end };
+                state.periodChosen = true;
+            }
         }
+        els.periodHint.textContent = T(state.periodChosen ? 'train.periodApplied' : 'train.periodHelp');
         renderSiteCount();
     }
 
@@ -436,11 +463,16 @@
         try {
             if (mode === 'train') {
                 if (!state.centre) throw new Error(T('status.noPoint'));
-                if (!state.records) throw new Error(T('train.noPoint'));
+                if (!state.records) throw new Error(T('train.loading'));
+                if (!state.periodChosen) throw new Error(T('train.choosePeriod'));
                 if (state.siteCount != null && state.siteCount < 10) throw new Error(T('train.countBlock', { n: state.siteCount, min: 10 }));
                 params = {
                     centre: state.centre,
                     records: state.records,
+                    siteSource: { id: 'ariadne', label: 'ARIADNE Portal — settlements',
+                        subjectFilters: sites().ARIADNE_SETTLEMENT_FILTERS, selectedPeriod: state.period || 'all',
+                        url: 'https://ariadne-portal.d4science.org/browse/where',
+                        retrievedAt: state.sitesRetrievedAt, positionAccuracy: 'not supplied; unverified positions included' },
                     period: state.period,
                     radiusKm: TRAIN_AREA_KM,
                     minSlopeDeg: parseFloat(els.minSlope.value),
@@ -495,6 +527,7 @@
 
     function setBusyUi(busy) {
         els.cancel.hidden = !busy;
+        els.period.disabled = busy || !state.records;
         if (!busy) els.progress.hidden = true;
         updateGate();
     }
@@ -517,22 +550,53 @@
         if (layer && m) m.removeLayer(layer);
         var classById = {};
         core().CLASSES.forEach(function (c) { classById[c.id] = c; });
-        layer = root.L.geoJSON(res.geojson, {
+        // Separate panes keep outlines above the heat texture without blocking map gestures.
+        if (m && !m.getPane('apmHeat')) {
+            m.createPane('apmHeat').style.zIndex = 410;
+            m.getPane('apmHeat').style.pointerEvents = 'none';
+        }
+        if (m && !m.getPane('apmHotspots')) m.createPane('apmHotspots').style.zIndex = 420;
+        var outlines = root.L.geoJSON(res.geojson, {
+            pane: 'apmHotspots',
+            filter: function (f) { return f.properties.class === 'veryhigh'; },
             interactive: true,
-            style: function (f) { return { color: f.properties.colour, weight: 1, fillColor: f.properties.colour, fillOpacity: 0.45 }; },
+            style: function () { return { color: '#d9f5ff', weight: 2, fill: false, opacity: 0.95, className: 'apm-hotspot-outline' }; },
             onEachFeature: function (f, l) {
                 var p = f.properties;
                 var cls = p.class && classById[p.class];
-                var title = cls ? T('cls.' + p.class) : (p.label || p.class);
+                var title = cls ? T('potential.' + p.class) : (p.label || p.class);
                 var area = p.areaM2 != null ? T('result.area', { v: fmtKm2(p.areaM2 / 1e6) }) : '';
                 l.bindPopup(h('div', { class: 'apm-popup' }, [h('strong', { text: title }), h('div', { text: area })]));
             }
         });
+        var layers = [];
+        if (res.heatmap && root.DetectLabApmHeatmap) layers.push(root.DetectLabApmHeatmap.createLayer(res.heatmap, root.L, { pane: 'apmHeat' }));
+        layers.push(outlines);
+        layer = root.L.layerGroup(layers);
         if (m && layer.addTo) layer.addTo(m);
         renderLegend();
         renderResult(res);
         els.exportBtn.disabled = false;
         els.clearBtn.disabled = false;
+    }
+
+    function heatColour(classId, res) {
+        var hm = root.DetectLabApmHeatmap;
+        var thresholds = res && res.thresholds || { medium: 0.55, high: 0.7, veryhigh: 0.85 };
+        return hm ? 'rgb(' + hm.colourAt(thresholds[classId], hm.stops(thresholds)).join(',') + ')' : '#ff633d';
+    }
+
+    function appendHeatLegend(container, res) {
+        var hm = root.DetectLabApmHeatmap;
+        var thresholds = res && res.thresholds || { medium: 0.55, high: 0.7, veryhigh: 0.85 };
+        var ramp = hm ? hm.stops(thresholds) : [];
+        var background = ramp.length ? 'linear-gradient(to right,' + ramp.map(function (stop) {
+            return 'rgb(' + stop.colour.join(',') + ') ' + (stop.value * 100) + '%';
+        }).join(',') + ')' : 'linear-gradient(to right,#243b7b,#35c6b4,#ffc857,#ff633d,#a81935)';
+        container.appendChild(h('div', { class: 'apm-heat-ramp', role: 'img', 'aria-label': T('result.heatScale'), style: 'background:' + background }));
+        container.appendChild(h('div', { class: 'apm-heat-labels' }, [h('span', { text: T('result.lower') }), h('span', { text: T('result.higher') })]));
+        container.appendChild(h('div', { class: 'apm-legend-row' }, [h('span', { class: 'apm-hotspot-swatch' }), h('span', { text: T('result.hotspotsOnly') })]));
+        if (res && res.thresholds) container.appendChild(h('div', { class: 'apm-note', text: T('result.hotspotCutoff', { v: Number(thresholds.veryhigh).toPrecision(3) }) }));
     }
 
     function renderLegend() {
@@ -542,12 +606,7 @@
         }
         legendEl.textContent = '';
         legendEl.appendChild(h('div', { class: 'apm-legend-title', text: T('result.legend') }));
-        core().CLASSES.forEach(function (c) {
-            legendEl.appendChild(h('div', { class: 'apm-legend-row' }, [
-                h('span', { class: 'apm-swatch', style: 'background:' + c.colour }),
-                h('span', { text: T('cls.' + c.id) })
-            ]));
-        });
+        appendHeatLegend(legendEl, state.result);
         // The map legend is shown only while a result is on the map.
         if (m && root.L && root.L.control && state.result) {
             if (!legendControl) {
@@ -567,12 +626,16 @@
 
     function renderResult(res) {
         var C = core();
+        els.heatLegend.textContent = '';
+        appendHeatLegend(els.heatLegend, res);
+        var hotspotCount = res.geojson.features.filter(function (f) { return f.properties.class === 'veryhigh'; }).length;
+        els.hotspotNote.textContent = T(hotspotCount ? 'result.hybridHelp' : 'result.noHotspots');
         els.resultRows.textContent = '';
         C.CLASSES.forEach(function (c) {
             var v = res.areaKm2 ? res.areaKm2[c.id] : 0;
             els.resultRows.appendChild(h('div', { class: 'apm-row' }, [
-                h('span', { class: 'apm-swatch', style: 'background:' + c.colour }),
-                h('span', { class: 'apm-row-label', text: T('cls.' + c.id) }),
+                h('span', { class: 'apm-swatch', style: 'background:' + heatColour(c.id, res) }),
+                h('span', { class: 'apm-row-label', text: T('potential.' + c.id) }),
                 h('span', { class: 'apm-row-value', text: fmtKm2(v || 0) })
             ]));
         });
@@ -581,6 +644,7 @@
         if (prov.dem) parts.push(T('result.dem') + ': ' + prov.dem.label + ' · ' + prov.dem.cellM + ' m' +
             (prov.dem.version ? ' · v' + prov.dem.version : '') + (prov.dem.tier === 'fallback' ? ' · ' + T('result.fallback') : ''));
         parts.push(T('result.water') + ': ' + (prov.water ? prov.water.label : T('result.waterNone')));
+        if (prov.sites) parts.push(T('train.sitesTitle') + ': ' + prov.sites.label);
         parts.push(T('result.mode') + ': ' + (res.mode === 'train' ? T('mode.train') : T('mode.manual')));
         els.provenance.textContent = parts.join(' · ');
 
@@ -620,6 +684,7 @@
         if (!state.result) return;
         var res = state.result;
         var fc = JSON.parse(JSON.stringify(res.geojson));
+        fc.features = fc.features.filter(function (f) { return f.properties.class === 'veryhigh'; });
         fc.metadata = {
             tool: 'DetectLab Next-Gen APM',
             mode: res.mode || state.mode,
@@ -628,7 +693,12 @@
             radiusKm: state.mode === 'train' ? TRAIN_AREA_KM : state.radiusKm,
             provenance: res.provenance,
             warnings: res.warnings,
-            diagnostics: res.diagnostics || null
+            diagnostics: res.diagnostics || null,
+            rendering: { type: 'continuous-score-heatmap + veryhigh-only polygons', polygonClass: 'veryhigh',
+                thresholds: res.thresholds, areas: 'classified score raster; not filtered polygon areas',
+                heatmap: res.heatmap ? { width: res.heatmap.w, height: res.heatmap.h,
+                    west: res.heatmap.west, north: res.heatmap.north, dLon: res.heatmap.dLon, dLat: res.heatmap.dLat,
+                    aggregation: res.heatmap.aggregation } : null }
         };
         downloadBlob(JSON.stringify(fc), 'application/geo+json',
             'apm-' + (res.mode || 'manual') + '-' + new Date().toISOString().slice(0, 10) + '.geojson');
@@ -836,16 +906,17 @@
         els.curvesBox = h('div', { class: 'apm-curves' }, [h('div', { class: 'apm-note', key: 'curves.help' })].concat(curveBlocks, [els.curveNote]));
 
         // TRAIN inputs
-        els.csvInput = h('input', { type: 'file', accept: '.csv,text/csv', class: 'apm-file', onchange: onCsvChosen });
-        els.csvName = h('span', { class: 'apm-note' });
-        els.csvCount = h('span', { class: 'apm-note' });
+        els.loadSites = bind(h('button', { type: 'button', class: 'apm-btn apm-small', onclick: loadAriadneSites }), 'train.reload');
+        els.sitesCount = h('span', { class: 'apm-note' });
         els.period = h('select', { class: 'apm-select', onchange: function () { onPeriodChanged(); updateGate(); } });
         els.periodRow = h('label', { class: 'apm-field' }, [h('span', { key: 'train.period' }), els.period]);
         els.periodRow.hidden = true;
+        els.periodHint = h('div', { class: 'apm-note apm-period-hint', role: 'status' });
         els.countNote = h('div', { class: 'apm-note', role: 'status' });
         els.trainBox = h('div', { class: 'apm-train' }, [
-            h('div', { class: 'apm-file-row' }, [bind(h('span', { class: 'apm-btn apm-small apm-file-btn' }), 'train.chooseFile'), els.csvInput]),
-            els.csvName, els.csvCount, els.periodRow, els.countNote,
+            h('a', { href: 'https://ariadne-portal.d4science.org/browse/where?forceReload=true&mapq=true&q=', target: '_blank', rel: 'noopener noreferrer', text: 'ARIADNE — Browse / Where' }),
+            h('div', { class: 'apm-note', key: 'train.sourceNote' }),
+            els.loadSites, els.sitesCount, els.periodRow, els.periodHint, els.countNote,
             h('div', { class: 'apm-note', key: 'train.area' })
         ]);
 
@@ -864,10 +935,12 @@
         // Results
         els.resultRows = h('div', { class: 'apm-rows' });
         els.provenance = h('div', { class: 'apm-provenance' });
+        els.heatLegend = h('div', { class: 'apm-result-scale' });
+        els.hotspotNote = h('div', { class: 'apm-note' });
         els.warnings = h('ul', { class: 'apm-warnings', hidden: true });
         els.diag = h('div', { class: 'apm-diag' });
         els.results = h('div', { class: 'apm-results', hidden: true }, [
-            h('h4', { key: 'result.title' }), els.resultRows, els.provenance, els.warnings, els.diag
+            h('h4', { key: 'result.title' }), els.heatLegend, els.hotspotNote, els.resultRows, els.provenance, els.warnings, els.diag
         ]);
 
         // Debug
@@ -896,7 +969,7 @@
             h('details', { class: 'apm-group' }, [h('summary', { key: 'curves.title' }), els.curvesBox])
         ]);
         var trainOnly = h('div', { class: 'apm-train-only' }, [
-            h('fieldset', { class: 'apm-group' }, [h('legend', { key: 'train.csvTitle' }), els.trainBox])
+            h('fieldset', { class: 'apm-group' }, [h('legend', { key: 'train.sitesTitle' }), els.trainBox])
         ]);
         els.manualOnly = manualOnly; els.trainOnly = trainOnly;
 
@@ -924,7 +997,7 @@
             els.debugList
         ]);
 
-        var panel = h('section', { class: 'apm-panel', id: 'apmNextPanel', hidden: true, 'aria-label': 'Next-Gen APM' }, [
+        var panel = h('section', { class: 'apm-panel', id: 'apmNextPanel', hidden: true, 'aria-hidden': 'true', 'aria-label': 'Next-Gen APM' }, [
             h('header', { class: 'apm-head' }, [
                 h('h3', { key: 'panel.title' }),
                 h('div', { class: 'apm-head-right' }, [els.switch, close])
@@ -964,27 +1037,39 @@
 
     function setMode(mode) {
         if (mode === state.mode) return;
+        if (state.busy) return;
+        if (mode !== 'train' && state.sitesLoading) { cancelSiteLoad(); setStatus('', ''); }
         state.mode = mode;
         renderModeTabs();
         if (state.centre) drawCentre();
-        if (mode === 'train' && state.records) loadPeriods();
+        if (mode === 'train') {
+            if (state.records) loadPeriods();
+            else if (!state.sitesLoading) loadAriadneSites();
+        }
         updateGate();
+    }
+
+    function setPanelVisible(open) {
+        ui.panel.hidden = !open;
+        ui.panel.setAttribute('aria-hidden', String(!open));
+        // On phones the map legend steps aside only while settings are actually visible.
+        document.body.classList.toggle('apm-panel-open', open);
+        ui.btn.setAttribute('aria-expanded', String(open));
     }
 
     function togglePanel(force) {
         var open = typeof force === 'boolean' ? force : ui.panel.hidden;
-        ui.panel.hidden = !open;
-        // On phones the map legend steps aside while the panel is open (the panel lists the same classes).
-        document.body.classList.toggle('apm-panel-open', open);
-        if (!open) stopPick();                       // a pick armed with the panel closed would block other map tools
+        // Neither the layer-list button nor an external open() may cover the map mid-selection.
+        if (open && state.picking) { setPanelVisible(false); return; }
+        if (!open) stopPick();                       // explicit close cancels selection
+        setPanelVisible(open);
         if (open) { updateGate(); renderDebugLog(); }
-        ui.btn.setAttribute('aria-expanded', String(open));
     }
 
     function onLanguageChange() { refreshI18n(); }
 
     function init() {
-        var needed = [root.DetectLabApmPipeline, root.DetectLabApmCore, root.DetectLabApmSites, root.DetectLabApmProviders, root.DetectLabApmI18n];
+        var needed = [root.DetectLabApmHeatmap, root.DetectLabApmPipeline, root.DetectLabApmCore, root.DetectLabApmSites, root.DetectLabApmProviders, root.DetectLabApmI18n];
         if (needed.some(function (m) { return !m; })) return;     // a script is missing: stay silent
         if (ui.panel) return;
 
