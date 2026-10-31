@@ -31,16 +31,16 @@ assert(!source.includes('cenagis-catalog-title'), 'the catalog renderer builds n
 ['histEuRow', 'histEuSubLayers', 'histEuToggle', 'histEuExpandBtn'].forEach(id => {
     assert(!indexHtml.includes('id="' + id + '"'), 'obsolete separate group #' + id + ' is removed');
 });
-assert(indexHtml.includes('js/historical-eu-maps.js?v=20261013-flat-hist-maps'), 'versioned catalog is loaded');
-assert(indexHtml.includes('js/map-app.js?v=20261029-android-zoom-glass'), 'versioned fallback map app is loaded');
+assert(indexHtml.includes('js/historical-eu-maps.js?v=20261031-cenagis-retry'), 'versioned catalog is loaded');
+const mapAppTag = (indexHtml.match(/js\/map-app\.js\?v=[^"']+/) || [])[0];
+assert(mapAppTag && swJs.includes("'" + mapAppTag + "'"), 'versioned fallback map app is precached');
 assert(indexHtml.includes('js/subscriptions.js?v=20261024-uk-historical-maps'), 'premium guard is versioned');
 assert(subscriptions.includes('toggleCenagisLayer'), 'dynamic CENAGIS toggle is Premium-guarded');
 assert(subscriptions.includes("'toggleRomanDareCategories'"), 'DARE All/None is Premium-guarded');
 assert(subscriptions.includes("'toggleRomanSub'"), 'Roman sublayers are Premium-guarded');
 console.log('  ✓ one premium parent group, versioned scripts and entitlement guards verified');
 
-assert(swJs.includes('js/historical-eu-maps.js?v=20261013-flat-hist-maps'), 'service worker precaches the versioned catalog');
-assert(swJs.includes('js/map-app.js?v=20261029-android-zoom-glass'), 'service worker precaches the current versioned map app');
+assert(swJs.includes('js/historical-eu-maps.js?v=20261031-cenagis-retry'), 'service worker precaches the versioned catalog');
 assert(swJs.includes('js/subscriptions.js?v=20261024-uk-historical-maps'), 'service worker precaches the versioned subscription guard');
 const shellVersion = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]);
 assert(shellVersion >= 171, 'service-worker cache bumped for the merged catalog (got v' + shellVersion + ')');
@@ -117,6 +117,29 @@ assert(Object.keys(mockWindow.DetectLabLayers.cenagisCatalog()).length === 45,
 vm.runInContext(source, sandbox);
 const api = mockWindow.DetectLabEuMaps;
 assert(api, 'DetectLabEuMaps API is exported');
+
+// A real user activation must finish creating the catalog layer (and its
+// localized health-guard title), rather than throwing partway through.
+const activeLayers = new Set();
+const panes = {};
+mockWindow._dlMap = {
+    createPane(name) { panes[name] = { style: {} }; },
+    getPane(name) { return panes[name] || null; },
+    hasLayer(layer) { return activeLayers.has(layer); },
+    removeLayer(layer) { activeLayers.delete(layer); }
+};
+mockWindow.L.tileLayer.wms = (url, options) => ({
+    _url: url, options, setOpacity() {}, addTo() { activeLayers.add(this); }
+});
+api.toggleCenagisLayer('wig300k', true);
+const activated = [...activeLayers][0];
+assert(activated && activated._detectlabUiKeys[0] === 'wig300k',
+    'turning on a catalog sheet adds it to the map');
+assert.strictEqual(activated._detectlabUiTitle, api.catalog.wig300k.title.en,
+    'the health notice gets a localized, non-empty layer title');
+api.toggleCenagisLayer('wig300k', false);
+assert.strictEqual(activeLayers.size, 0, 'the layer can be turned off again');
+console.log('  ✓ CENAGIS catalog activation and localized layer title');
 
 // Rendered output: every non-shared sheet appears as a plain row, directly in
 // the Historical Maps group — no subcategory block, no heading, no separator.

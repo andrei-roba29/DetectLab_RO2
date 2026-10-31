@@ -258,6 +258,14 @@ function answerImage(img, ok, size) {
     else if (!ok && img.onerror) img.onerror();
 }
 function flush() { return new Promise((r) => setImmediate(r)); }
+async function failCenagisProbe(sandbox) {
+    answerImage(sandbox.__images[sandbox.__images.length - 1], false);
+    await new Promise((r) => setTimeout(r, 5)); // bounded backoff in the harness is immediate
+    const retry = sandbox.__images[sandbox.__images.length - 1];
+    assert(retry._src.includes('_dl_retry='), 'second chance bypasses a cached error response');
+    answerImage(retry, false);
+    await flush();
+}
 
 // ── Stub Leaflet ──
 function makeLeaflet(sandbox) {
@@ -360,7 +368,8 @@ function loadGuard(extra) {
     });
     if (extra && extra.registry) doc.registry = extra.registry;
     const sandbox = {
-        console, setTimeout, clearTimeout, setInterval, clearInterval,
+        console, setTimeout: (fn, ms) => setTimeout(fn, ms === 1500 ? 0 : ms),
+        clearTimeout, setInterval, clearInterval,
         Promise, Date, Math, JSON, encodeURIComponent, parseFloat, String, Object, Array,
         navigator: { onLine: true },
         document: doc
@@ -574,7 +583,24 @@ async function providerTests() {
         '1.3.0 uses crs=, not srs=');
     console.log('  ✓ probe builds the same GetMap the layer would');
 
-    // ── 3c. A 200 with an error body (onerror) blocks the add ──
+    // ── 3c. A temporary CENAGIS error recovers without user on/off ──
+    const transient = sandbox.L.tileLayer.wms(CENAGIS, { layers: 'ihpan:wig300k_3857' });
+    transient._detectlabUiKeys = ['wig300k'];
+    transient._detectlabUiTitle = 'WIG 1:300 000';
+    transient.onAdd(map);
+    await flush();
+    answerImage(sandbox.__images[sandbox.__images.length - 1], false);
+    await new Promise((r) => setTimeout(r, 5));
+    assert(transient.addCalls === 0 && !G.isDownFor(transient),
+        'a single temporary failure does not disable the layer');
+    answerImage(sandbox.__images[sandbox.__images.length - 1], true);
+    await flush();
+    assert(transient.addCalls === 1 && !G.isDownFor(transient),
+        'the layer loads on the automatic second chance');
+    assert(!G.noticeShown(), 'no alarming notice for a recovered request');
+    console.log('  ✓ transient CENAGIS probe errors recover without user interaction');
+
+    // ── 3d. A persistent non-image response blocks the add ──
     sandbox.L.tileLayer.wms(CENAGIS, { layers: 'ihpan:ukvme_3857' });
     const layer = G._test.peers[G._test.peers.length - 1];
     layer._detectlabUiKeys = ['mitteleuropa'];
@@ -584,8 +610,7 @@ async function providerTests() {
     await flush();
     assert(sandbox.__images.length === before + 1, 'exactly one probe request is made');
     assert(layer.addCalls === 0, 'the layer is not added while the probe is in flight');
-    answerImage(sandbox.__images[sandbox.__images.length - 1], false);
-    await flush();
+    await failCenagisProbe(sandbox);
     assert(layer.addCalls === 0, 'a failing probe never adds the layer');
     assert(G.isDownFor(layer), 'the failing layer is marked down');
     const toggle = sandbox.document.getElementById('mitteleuropaMapToggle');
@@ -596,7 +621,10 @@ async function providerTests() {
     assert(nodes && nodes.box.style.display === 'block', 'the notice is shown');
     assert(/CENAGIS/.test(nodes.body.textContent), 'the notice names the provider server');
     assert(/Mitteleuropa/.test(nodes.body.textContent), 'the notice names the map');
-    console.log('  ✓ a failed probe trips the switch, the row and the notice');
+    G._test.showNotice([], 'probe', 'CENAGIS / IH PAN');
+    assert(/selected map/.test(nodes.body.textContent) && !/[“”]{2}/.test(nodes.body.textContent),
+        'an unavailable title never produces empty quotation marks');
+    console.log('  ✓ a persistent failed probe trips the switch, the row and a named notice');
 
     // ── 3d. Cooldown: no second request while the verdict stands ──
     const requests = sandbox.__images.length;
@@ -640,9 +668,31 @@ async function providerTests() {
     goodLayer.fireTiles('tileerror');
     assert(!G.isDownFor(goodLayer), 'two failures are not enough to trip a layer');
     goodLayer.fireTiles('tileerror');
-    assert(G.isDownFor(goodLayer), 'three failures with no success trip it');
+    assert(!G.isDownFor(goodLayer), 'three transient tile errors do not immediately disable CENAGIS');
+    await flush();
+    await failCenagisProbe(sandbox);
+    assert(G.isDownFor(goodLayer), 'confirmed tile errors trip the layer');
     assert(goodLayer.removeCalls >= 0 && !map.hasLayer(goodLayer), 'tripping removes the layer from the map');
-    console.log('  ✓ tile errors trip an accepted layer after three failures');
+    console.log('  ✓ persistent tile errors trip an accepted layer after confirmation');
+
+    const recoveredTiles = sandbox.L.tileLayer.wms(CENAGIS, { layers: 'ihpan:wig25k_3857' });
+    recoveredTiles._detectlabUiKeys = ['wig25k'];
+    map.addTo(recoveredTiles);
+    recoveredTiles.onAdd(map);
+    answerImage(sandbox.__images[sandbox.__images.length - 1], true);
+    await flush();
+    recoveredTiles.fireTiles('tileerror');
+    recoveredTiles.fireTiles('tileerror');
+    recoveredTiles.fireTiles('tileerror');
+    answerImage(sandbox.__images[sandbox.__images.length - 1], true);
+    await flush();
+    assert(!G.isDownFor(recoveredTiles) && recoveredTiles._detectlabGuardState.fails === 0,
+        'a healthy confirmation keeps the active map on and clears transient failures');
+    const checks = sandbox.__images.length;
+    for (let i = 0; i < 9; i++) recoveredTiles.fireTiles('tileerror');
+    assert(sandbox.__images.length === checks && !G.isDownFor(recoveredTiles),
+        'bad edge tiles cannot start an unbounded confirmation loop');
+    console.log('  ✓ recovered mid-session tiles do not turn off the map');
 
     // ── 3g. Offline never blames the provider and remembers no cooldown ──
     G.retry();
@@ -672,6 +722,16 @@ async function providerTests() {
     await flush();
     assert(pendLayer.addCalls === 0, 'a probe that resolves after removal cannot add the layer');
     console.log('  ✓ a probe that resolves after removal does not resurrect the layer');
+
+    const cancelled = sandbox.L.tileLayer.wms(CENAGIS, { layers: 'ihpan:gaul_3857' });
+    cancelled.onAdd(map);
+    const first = sandbox.__images[sandbox.__images.length - 1];
+    answerImage(first, false);
+    cancelled.onRemove(map);
+    const count = sandbox.__images.length;
+    await new Promise((r) => setTimeout(r, 5));
+    assert(sandbox.__images.length === count && cancelled.addCalls === 0,
+        'turning off during backoff cancels the second request');
 
     // ── 3i. Keys and titles ──
     const bare = sandbox.L.tileLayer.wms(CENAGIS, { layers: 'ihpan:ukvme_3857' });
