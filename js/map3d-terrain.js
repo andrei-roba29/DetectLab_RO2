@@ -1854,8 +1854,9 @@
              * rotate, two fingers on touch, Shift+arrows on a keyboard), and the
              * DEM exaggeration is fixed at CONFIG.terrain.exaggeration.
              * No duplicate LiDAR row in the bar either (desktop or PWA): the
-             * expandable “LiDAR in 3D” window (#map3d-focus / .m3d-focus-mini)
-             * already provides the status summary and the same actions. */
+             * expandable “LiDAR in 3D” window (#map3d-focus — minimized into
+             * the shared bottom dock) already provides the status summary and
+             * the same actions. */
             '<div class="m3d-actions">',
             '<button type="button" class="m3d-reset">' + t('reset') + '</button>',
             '<button type="button" class="m3d-north">↑ N</button>',
@@ -1921,7 +1922,8 @@
     /**
      * The 3D bar no longer renders a duplicate LiDAR status/actions box on
      * either desktop or PWA: the expandable “LiDAR in 3D” window
-     * (#map3d-focus / .m3d-focus-mini) already owns that state and its actions.
+     * (#map3d-focus — minimized into the shared bottom dock) already owns
+     * that state and its actions.
      * Keep the 3D disc outline synced whenever the focus changes.
      */
     function refreshFocusRow() {

@@ -36,17 +36,20 @@
  *     exactly that, and only then lets 3D open — framed on the disc, on tiles
  *     that are already there.
  *
- *   The same dialog is reachable from the 3D pill (“expand”), where it
- *   re-prepares and re-applies the focus to the running 3D view.
+ *   The same dialog is reachable from the shared dock entry (“expand”), where
+ *   it re-prepares and re-applies the focus to the running 3D view.
  *
- *   Once the tiles are fetched and the 3D view is entered, the window does
- *   not vanish: it MINIMIZES to a slim pill at the bottom of the map (layers,
- *   scope — whole layer or 1 km — and prepared-tile count, plus an expand
- *   arrow). The pill is only painted while 3D is up (`body.is-3d`); tapping the
- *   arrow expands the full window again over the 3D view — in live mode, so it
- *   re-points the running view — and cancelling an expanded window returns it
- *   to the pill instead of dismissing it. Removing LiDAR from the 3D view
- *   takes the pill away with the focus.
+ *   Once the tiles are fetched and the decision is applied, the window does
+ *   not vanish: it MINIMIZES into the shared bottom drawer of minimized
+ *   windows (js/map-window-dock.js — the same drawer the APM panel and the
+ *   LiDAR Settings fold into). Its entry there carries the decision — layers,
+ *   scope — whole layer or 1 km — and prepared-tile count; tapping it expands
+ *   the full window again over whichever map is live (live mode with 3D up,
+ *   so it re-points the running view), and cancelling an expanded window
+ *   returns it to the drawer instead of dismissing it. Nothing of it is
+ *   painted on the map itself any more — the old bottom pill is gone.
+ *   Removing LiDAR from the 3D view takes the drawer entry away with the
+ *   focus.
  *
  * RULES THAT HOLD EVERYWHERE
  *   • Only the layers the user ticked are drawn in 3D. The 2D map may stack as
@@ -140,6 +143,10 @@
 
     var PANE_NAME = 'pane_lidar_3d_focus';
     var PANE_Z = 656;                       /* above the LiDAR panes (610–651) */
+
+    /* The minimized window lives in the shared bottom drawer of minimized
+     * tabs (DetectLabWindowDock), not in a pill of its own on the map. */
+    var DOCK_ID = 'lidar-3d-focus';
 
     /* ── copy ───────────────────────────────────────────────────────────── */
     var COPY = {
@@ -665,6 +672,10 @@
             if (focus && api && api.clearLidarFocus) {
                 try { api.clearLidarFocus(); } catch (e) {}
             }
+            /* No LiDAR left for the window to stand for: the dock entry (the
+             * minimized form) goes with the focus. A full dialog, if one is
+             * open, is left alone — it is asking, not reporting. */
+            if (dialog.minimized) closeDialog();
             return;
         }
 
@@ -683,6 +694,7 @@
             if (api && api.clearLidarFocus) {
                 try { api.clearLidarFocus(); } catch (e2) {}
             }
+            if (dialog.minimized) closeDialog();
         }
     }
 
@@ -796,8 +808,9 @@
         scope: DEFAULT_SCOPE,   /* 'full' (whole layers) or 'disc' (1 km)      */
         layers: [],             /* every LiDAR layer on the 2D map, topmost last */
         picks: {},              /* key → the entry the user ticked             */
-        chosen: null,           /* the first ticked entry (kept for the pill,
-                                 * status() and anything that wants ONE name)  */
+        chosen: null,           /* the first ticked entry (kept for the dock
+                                 * entry, status() and anything that wants ONE
+                                 * name)                                   */
         point: null,
         radiusKm: DEFAULT_RADIUS_KM,
         plans: [],              /* one plan per ticked layer (disc scope)       */
@@ -806,9 +819,9 @@
         preparing: false,
         stop: false,
         open: false,
-        minimized: false,       /* the card is folded into the pill (3D is up) */
-        expandedFromMini: false,/* this showing was expanded from the pill */
-        miniSummary: null,      /* { labels, scope, radiusKm, tiles } for the pill */
+        minimized: false,       /* the card is folded into the shared dock */
+        expandedFromMini: false,/* this showing was expanded from the dock */
+        miniSummary: null,      /* { labels, scope, radiusKm, tiles } for the dock entry */
         el: {}
     };
     /* The scope the user settled on last (in this session): opening the
@@ -878,16 +891,11 @@
             '<div class="m3d-focus-progress-text" aria-live="polite"></div>',
             '<button type="button" class="m3d-focus-stop"></button>',
             '</div>',
-            '</div>',
-            /* The minimized form of this very window: what it folds into once
-             * the tiles are fetched and the 3D view is entered. The whole
-             * pill is the expand control — the arrow says it opens upwards,
-             * back into the card above it. */
-            '<button type="button" class="m3d-focus-mini" hidden aria-expanded="false">',
-            '<span class="m3d-focus-mini-title"></span>',
-            '<span class="m3d-focus-mini-text"></span>',
-            '<span class="m3d-focus-mini-arrow" aria-hidden="true">▴</span>',
-            '</button>'
+            '</div>'
+            /* The minimized form of this window is NOT a pill on the map any
+             * more: it folds into the shared bottom drawer of minimized tabs
+             * (DetectLabWindowDock, js/map-window-dock.js), the same one the
+             * APM panel and the LiDAR Settings use. */
         ].join('');
         host.appendChild(node);
         dialog.host = node;
@@ -921,10 +929,6 @@
         el.bar = node.querySelector('.m3d-focus-bar i');
         el.progressText = node.querySelector('.m3d-focus-progress-text');
         el.stop = node.querySelector('.m3d-focus-stop');
-        el.mini = node.querySelector('.m3d-focus-mini');
-        el.miniTitle = node.querySelector('.m3d-focus-mini-title');
-        el.miniText = node.querySelector('.m3d-focus-mini-text');
-        el.miniArrow = node.querySelector('.m3d-focus-mini-arrow');
 
         if (el.scopeGroup) {
             /* The two scopes are buttons, not radios: each is a 44px touch
@@ -962,7 +966,6 @@
         el['x'] = node.querySelector('.m3d-focus-x');
         if (el['x']) el['x'].addEventListener('click', function () { cancelDialog(); });
         el.stop.addEventListener('click', function () { dialog.stop = true; });
-        if (el.mini) el.mini.addEventListener('click', function () { expandMinimized(); });
         /* The card is the description target of its own lead paragraph. */
         el.card = dialog.card;
         if (el.card.setAttribute) el.card.setAttribute('aria-describedby', 'm3d-focus-lead');
@@ -1025,7 +1028,7 @@
         el.go.disabled = !pickedEntries().length;
         el.go.hidden = dialog.preparing;
         el.cancel.hidden = dialog.preparing;
-        /* Folded out of the pill, the × folds it back; otherwise it closes. */
+        /* Folded out of the dock, the × folds it back; otherwise it closes. */
         if (el['x']) {
             var xLabel = dialog.expandedFromMini ? t('minimize') : t('close');
             el['x'].setAttribute('aria-label', xLabel);
@@ -1181,14 +1184,14 @@
         dialog.stop = false;
         dialog.report = null;
         /* A fresh showing is always the full card: whatever the window was
-         * folded into (the pill) is unfolded, never left painted alongside. */
+         * folded into (the shared dock) is unfolded, never left painted
+         * alongside — and the dock entry goes with it. (An unfolding started
+         * from the dock entry keeps `expandedFromMini`, set by expandMinimized
+         * before this call, so its × folds the card back instead of closing.) */
         dialog.minimized = false;
         node.classList.remove('is-minimized');
         if (dialog.card) dialog.card.hidden = false;
-        if (dialog.el.mini) {
-            dialog.el.mini.hidden = true;
-            dialog.el.mini.setAttribute('aria-expanded', 'false');
-        }
+        dockRemove();
         refreshPlan({ restart: true });
         paintDialog();
         node.hidden = false;
@@ -1213,57 +1216,65 @@
         dialog.open = false;
         dialog.minimized = false;
         dialog.expandedFromMini = false;
+        dockRemove();
         if (document.body && document.body.classList) document.body.classList.remove('m3d-focus-open');
     }
 
-    /* What the pill says: the window's title, then the decision it stands
-     * for — which layer, over what fetching distance, how many tiles were
-     * prepared for it. Repainted on language change like the card is. */
-    function paintMinimized() {
-        var el = dialog.el;
-        if (!el.mini) return;
-        el.mini.setAttribute('aria-label', t('expand'));
-        el.mini.setAttribute('title', t('expand'));
-        if (el.miniTitle) el.miniTitle.textContent = t('title');
+    /* ── the shared bottom drawer of minimized windows ────────────────────
+     * The window's minimized form is one entry in DetectLabWindowDock — the
+     * expandable drawer at the bottom of the map the APM panel and the LiDAR
+     * Settings already fold into. The entry carries what the old on-map pill
+     * said: the window's title, then the decision it stands for — which
+     * layers, over what fetching distance, how many tiles were prepared.
+     * Repainted on language change like the card is. */
+    function dockLabel() {
         var summary = dialog.miniSummary;
-        if (el.miniText) {
-            var labels = summary ? (summary.labels || [summary.label]).filter(Boolean) : [];
-            var scopeText = '';
-            if (summary) {
-                scopeText = summary.scope === SCOPE_DISC
-                    ? [summary.radiusKm + ' ' + t('km'),
-                       summary.tiles != null ? t('miniTiles', { tiles: summary.tiles }) : ''].filter(Boolean).join(' · ')
-                    : t('miniFull');
-            }
-            el.miniText.textContent = summary
-                ? [labels.join(', '), scopeText].filter(Boolean).join(' · ')
-                : '';
+        var labels = summary ? (summary.labels || [summary.label]).filter(Boolean) : [];
+        var scopeText = '';
+        if (summary) {
+            scopeText = summary.scope === SCOPE_DISC
+                ? [summary.radiusKm + ' ' + t('km'),
+                   summary.tiles != null ? t('miniTiles', { tiles: summary.tiles }) : ''].filter(Boolean).join(' · ')
+                : t('miniFull');
         }
+        return [t('title'), labels.join(', '), scopeText].filter(Boolean).join(' · ');
     }
 
-    /* Fold the window into its pill. The host stays in the DOM and the card
-     * is hidden; the skin only paints the folded host while the 3D view is
-     * up (`body.is-3d`), so the pill appears as the 3D view is entered and
-     * leaves with it — it is chrome of the 3D view, not of the 2D map. */
+    function dockMinimize() {
+        var dock = root.DetectLabWindowDock;
+        if (!dock || typeof dock.minimize !== 'function') return;
+        dock.minimize(DOCK_ID, dockLabel(), expandMinimized);
+    }
+
+    function dockRemove() {
+        var dock = root.DetectLabWindowDock;
+        if (!dock || typeof dock.remove !== 'function') return;
+        dock.remove(DOCK_ID);
+    }
+
+    function paintMinimized() {
+        if (!dialog.minimized) return;
+        dockMinimize();
+    }
+
+    /* Fold the window into the shared dock. The host stays in the DOM with
+     * the card hidden; the dock entry is the only thing the user sees of it,
+     * alongside every other minimized window. */
     function minimizeDialog() {
         if (!dialog.host) return;
         dialog.minimized = true;
         dialog.expandedFromMini = false;
         dialog.open = false;
         if (dialog.card) dialog.card.hidden = true;
-        if (dialog.el.mini) {
-            dialog.el.mini.hidden = false;
-            dialog.el.mini.setAttribute('aria-expanded', 'false');
-        }
         dialog.host.classList.add('is-minimized');
         dialog.host.hidden = false;
         if (document.body && document.body.classList) document.body.classList.remove('m3d-focus-open');
         paintMinimized();
     }
 
-    /* The arrow on the pill: expand the full window again, over whichever
-     * map is live. With 3D up it re-opens in live mode (confirming re-points
-     * the running view); without it, it prepares a new area and the confirm
+    /* The dock entry: expand the full window again, over whichever map is
+     * live. With 3D up it re-opens in live mode (confirming re-points the
+     * running view); without it, it prepares a new area and the confirm
      * opens 3D on it — exactly what the 3D bar's “change” button does. */
     function expandMinimized() {
         if (!dialog.minimized) return;
@@ -1279,8 +1290,8 @@
     function settle(result, options) {
         var deferred = dialog.deferred;
         dialog.deferred = null;
-        /* A fetched disc settles into the pill rather than vanishing: the
-         * window stays reachable for as long as its 3D view is up. */
+        /* A fetched disc settles into the shared dock rather than vanishing:
+         * the window stays reachable for as long as its 3D view is up. */
         if (options && options.minimize) minimizeDialog();
         else closeDialog();
         if (deferred && deferred.resolve) deferred.resolve(result || { cancelled: true });
@@ -1289,8 +1300,8 @@
     function cancelDialog() {
         dialog.stop = true;
         endPick({});
-        /* Cancelling a window that was expanded from the pill folds it back
-         * into the pill — the prepared focus is still in the 3D view, so
+        /* Cancelling a window that was expanded from the dock folds it back
+         * into the dock — the prepared focus is still in the 3D view, so
          * its window stays reachable. A fresh window cancels outright. */
         if (dialog.expandedFromMini) settle({ cancelled: true }, { minimize: true });
         else settle({ cancelled: true });
@@ -1699,7 +1710,7 @@
             focus.preparedTiles = prepared;
             focus.failedTiles = failed;
             /* The fetch is finished; everything from here is bookkeeping
-             * (the counted re-application, the “Done” line, the pill
+             * (the counted re-application, the “Done” line, the dock
              * summary), and NONE of it may strand the entry: the gate is
              * waiting on settle(), and a throw in a Leaflet restyle or a
              * bar repaint used to leave the dialog sitting at “Done” with
@@ -1711,8 +1722,8 @@
                  * exactly where they are, and only the bar's line changes. */
                 applyFocus(focus);
                 renderProgress(report, { final: true });
-                /* The pill this window is about to fold into stands for exactly
-                 * this disc: layers, fetching distance, tiles prepared. */
+                /* The dock entry this window is about to fold into stands for
+                 * exactly this disc: layers, fetching distance, tiles prepared. */
                 dialog.miniSummary = {
                     labels: focus.labels || [focus.label || 'LiDAR'],
                     scope: SCOPE_DISC,
@@ -1733,7 +1744,7 @@
             } else {
                 /* Live re-focus: the running 3D view has just been re-pointed at
                  * the new disc, so let the “done” line be read for a moment
-                 * before the dialog folds into its pill. */
+                 * before the dialog folds into the dock. */
                 root.setTimeout(function () {
                     settle({ cancelled: false, focus: focus, report: report }, { minimize: true });
                 }, 700);
@@ -1839,8 +1850,8 @@
         var api = viewer();
         if (api && typeof api.clearLidarFocus === 'function') api.clearLidarFocus();
         clearDisc();
-        /* The focus the pill stood for is gone, so the folded window goes
-         * with it (a full dialog, if one is open, is left alone). */
+        /* The focus the dock entry stood for is gone, so the folded window
+         * goes with it (a full dialog, if one is open, is left alone). */
         if (dialog.minimized) closeDialog();
         if (api && typeof api.syncLayers === 'function') api.syncLayers();
     }

@@ -80,9 +80,10 @@ for (const pwa of [false, true]) {
 }
 assert(!/\.m3d-(exag-row|pitch-row|bearing-row)/.test(skin),
     'the skin no longer reserves or hides rows that do not exist');
-assert(/body\.is-pwa\.is-3d #map3d-bar \.m3d-head \{ display: none; \}/.test(skin), 'PWA hides the extra collapse button');
-assert(/body\.is-pwa\.is-3d #map3d-bar\.collapsed \.m3d-row,\nbody\.is-pwa\.is-3d #map3d-bar\.collapsed \.m3d-actions \{ display: flex; \}/.test(skin),
-    'the PWA collapsed-bar override keeps the basemap picker and the actions visible');
+assert(/body\.is-pwa\.is-3d #map3d-bar \.m3d-head,\nbody\.is-pwa\.is-3d #map3d-bar \.m3d-basemap-row \{ display: none; \}/.test(skin),
+    'PWA hides the extra collapse button and the duplicate basemap row');
+assert(/body\.is-pwa\.is-3d #map3d-bar\.collapsed \.m3d-actions \{ display: flex; \}/.test(skin),
+    'the PWA collapsed-bar override keeps the actions visible');
 assert(!/#map3d-surface \.maplibregl-ctrl-bottom-left \{ display: none; \}/.test(skin),
     'mobile source credits are not hidden with the scale');
 assert(/body\.is-pwa\.is-3d #map3d-surface \.maplibregl-ctrl-bottom-left\s*\{[^}]*max-width: 42%;/.test(skin),
@@ -92,7 +93,7 @@ for (const action of ['reset', 'north', 'flat']) {
 }
 assert(!/\.m3d-lidar\b/.test(ensureBar) && !/\.m3d-lidar\b/.test(skin),
     'the duplicate .m3d-lidar box in #map3d-bar is removed from both desktop and PWA');
-const SLIDER_TAGS = { 'js/map3d-terrain.js': '20261026-desktop-basemap', 'css/map3d-terrain.css': '20261026-pwa-3d-button-size' };
+const SLIDER_TAGS = { 'js/map3d-terrain.js': '20261031-3d-bearing-handoff', 'css/map3d-terrain.css': '20261031-lidar-dock-minimized' };
 for (const file of ['js/map3d-terrain.js', 'css/map3d-terrain.css']) {
     const url = file + '?v=' + SLIDER_TAGS[file];
     assert(html.includes(url) && sw.includes("'" + url + "'"), 'updated asset cache wiring: ' + file);
@@ -123,7 +124,7 @@ async function browserChecks() {
                 <div id="map3d-toggle-group" class="m3d-toggle-group">
                   <button id="map3d-toggle">2D</button><button id="map3d-refresh">↻</button>
                 </div>
-                <div id="map3d-focus" class="is-minimized"><button id="map3d-focus-mini" class="m3d-focus-mini">LiDAR in 3D</button></div>
+                <div id="map3d-focus" class="is-minimized" hidden></div>
                 </div><button class="map-help-btn" id="mapHelpBtn">?</button></div></body>`);
             await page.addScriptTag({ path: path.join(__dirname, 'js/maplibre-gl.js') });
             // Use the production bar and desktop attribution placement.
@@ -179,7 +180,10 @@ async function browserChecks() {
                 const refreshHit = document.elementFromPoint(refreshRect.left + refreshRect.width / 2,
                     refreshRect.top + refreshRect.height / 2);
                 return { bar:box(bar), rows:rows.map(box), group:box(group), toggle:box(toggle), refresh:box(refresh),
-                    mini:box(document.getElementById('map3d-focus-mini')),
+                    /* The minimized “LiDAR in 3D” window has no pill on the
+                     * map any more: it folds into the shared .apm-dock drawer,
+                     * which is why the switch group has nothing to dodge. */
+                    focusHidden:getComputedStyle(document.getElementById('map3d-focus')).display === 'none',
                     toggleHit:toggleHit && toggleHit.id, refreshHit:refreshHit && refreshHit.id, help:box(document.getElementById('mapHelpBtn')),
                     zoom:document.querySelector('.maplibregl-ctrl-zoom-in') ? box(document.querySelector('.maplibregl-ctrl-zoom-in')) : null,
                     compass:!!document.querySelector('.maplibregl-ctrl-compass'),
@@ -214,10 +218,10 @@ async function browserChecks() {
                 assert(geometry.bar.top >= 56, 'PWA bar clears the top map controls');
                 assert(geometry.bar.bottom < height - 80, 'bar clears bottom toggle/actions');
                 if (width <= 720) {
-                    assert(geometry.group.bottom <= geometry.mini.top - 8,
-                        'the grouped 2D switch and raster refresh clear the minimized LiDAR pill with a 10px safe-area gap');
+                    assert(geometry.focusHidden === true,
+                        'the folded LiDAR window paints nothing on the map (it lives in the shared dock)');
                     assert.strictEqual(geometry.toggleHit, 'map3d-toggle',
-                        'the switch itself receives a tap at its centre rather than the higher-z-index pill');
+                        'the switch itself receives a tap at its centre');
                     assert.strictEqual(geometry.refreshHit, 'map3d-refresh',
                         'the adjacent refresh button receives a tap at its centre');
                 }
