@@ -872,7 +872,9 @@
 //   Josephine source crops its Commons canvases the same way, so it reports
 //   spans too.  Re-tags js/other-maps-tiles.js, js/other-maps-nls.js,
 //   js/other-maps-overlay.js and js/other-maps.js.  See OTHER_MAPS.md §8.2.
-const CACHE_NAME = 'detectlab-v338-other-maps-tile-span';
+// v339: hide Other maps catalogue dots while aligning a sheet.
+// v340: improve contrast of dark Other maps circles.
+const CACHE_NAME = 'detectlab-v340-other-maps-white-outline';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1027,7 +1029,7 @@ const PRECACHE_URLS = [
   'js/other-maps-tiles.js?v=20261031-other-maps-tile-span',
   'js/other-maps-nls.js?v=20261031-other-maps-tile-span',
   'js/other-maps-overlay.js?v=20261031-other-maps-tile-span',
-  'js/other-maps.js?v=20261031-other-maps-tile-span',
+  'js/other-maps.js?v=20261031-other-maps-white-outline',
   'css/other-maps.css?v=20261028-other-maps-fix',
   'data/other-maps-catalog.json?v=20261026-cluj-alba',
   'data/other-maps-nls-catalog.json?v=20261028-other-maps-fix',

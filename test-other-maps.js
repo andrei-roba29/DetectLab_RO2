@@ -742,6 +742,12 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
     ctx.fill = oldFill;
     ok(styles.length > 1 && styles[0] === 'rgba(0, 70, 35, 0.30)', 'dark green coverage is drawn first');
     ok(styles.slice(1).some((style) => style !== styles[0]), 'existing green dots are drawn on top');
+    const strokes = [];
+    const originalStroke = ctx.stroke;
+    ctx.stroke = function () { strokes.push(this.strokeStyle); };
+    OtherMaps.redraw();
+    ctx.stroke = originalStroke;
+    eq(strokes[0], 'rgba(255, 255, 255, 0.7)', 'dark coverage circles have a translucent white outline');
     const coverageHit = OtherMaps.state.hits.find((h) => h.coverage);
     ok(OtherMaps.mergeTapSheets([coverageHit]).sheets[0].source === 'josephine',
         'the coverage hit resolves to the selectable Josephine sheet');
@@ -1285,6 +1291,27 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
     ok(ov7b.frameEl.style.display !== 'none', 'the active sheet keeps its dashed border with align mode off');
     ok(ov7b.handles.nw.style.display === 'none', 'the resize handles stay hidden outside align mode');
     ok(ov7b.georefEl.style.display === 'none', 'the georeference square stays hidden outside align mode');
+
+    // Catalogue dots and coverage are hidden and non-interactive throughout
+    // alignment, including redraws caused by movement or opacity changes.
+    OtherMaps.redraw();
+    ok(OtherMaps.state.hits.length > 0, 'catalogue targets are present before alignment');
+    let clears = 0;
+    const originalClear = OtherMaps.state.ctx.clearRect;
+    OtherMaps.state.ctx.clearRect = function () { clears++; };
+    fmgr.setAlignMode(true);
+    eq(OtherMaps.state.hits.length, 0, 'starting alignment removes all dot and coverage targets');
+    ok(clears > 0, 'starting alignment clears the dots canvas immediately');
+    fm.fire('move');
+    OtherMaps.setOpacity(70);
+    eq(OtherMaps.state.hits.length, 0, 'redraws cannot restore dots during alignment');
+    fmgr.setAlignMode(false);
+    ok(OtherMaps.state.hits.length > 0, 'finishing alignment restores catalogue targets');
+    fmgr.setAlignMode(true);
+    fmgr.remove('TST/7');
+    ok(OtherMaps.state.hits.length > 0, 'removing the last aligned sheet restores dots');
+    OtherMaps.state.ctx.clearRect = originalClear;
+    await fmgr.add(rec7);
 
     // A tap on the sheet hits the added map (container coordinates), so the
     // panel can be reopened by clicking the map that was added.

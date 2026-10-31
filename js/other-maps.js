@@ -148,11 +148,11 @@
     var GEOREF_OPTIONS = [2, 5, 10, 20, 50, 100];
 
     var JOSEPHINE_FILL = 'rgba(0, 70, 35, 0.30)';
-    var JOSEPHINE_STROKE = 'rgba(0, 85, 40, 0.75)';
+    var JOSEPHINE_STROKE = 'rgba(255, 255, 255, 0.7)';
     var DOT_FILL = 'rgba(46, 204, 113, 0.35)';
     var DOT_STROKE = 'rgba(46, 204, 113, 0.9)';
     var CLUSTER_FILL = 'rgba(14, 64, 38, 0.88)';
-    var CLUSTER_STROKE = '#2ecc71';
+    var CLUSTER_STROKE = 'rgba(255, 255, 255, 0.7)';
 
     var STRINGS = {
         ro: {
@@ -653,7 +653,8 @@
         var canvas = state.canvas;
         var ctx = state.ctx;
         if (!canvas || !ctx) return;
-        if (!state.enabled || (!state.locations.length && !state.josephineFootprints.length)) {
+        if (!state.enabled || (state.manager && state.manager.isAlignMode()) ||
+            (!state.locations.length && !state.josephineFootprints.length)) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             state.hits = [];
             return;
@@ -1495,7 +1496,7 @@
             pane: OVERLAY_PANE,
             zIndex: 611,
             opacity: state.opacity,
-            onAlignChange: function () { paintPanel(); },
+            onAlignChange: function () { redraw(); paintPanel(); },
             onActiveChange: function () { paintPanel(); }
         });
         state.manager.onStateChange(function () {
