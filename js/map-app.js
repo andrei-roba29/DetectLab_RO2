@@ -1355,6 +1355,12 @@
                     selectedIndex = -1;
                     return;
                 }
+                if (coordinateItem && !window.DetectLabRomaniaView.contains(coordinateItem.lat, coordinateItem.lon)) {
+                    ul.innerHTML = '<li class="map-search-msg">Coordinates are outside the Romania map area.</li>';
+                    ul.classList.add('open');
+                    selectedIndex = -1;
+                    return;
+                }
                 if (coordinateItem) {
                     displaySearchResults([coordinateItem], searchTerm);
                     return;
@@ -1579,15 +1585,10 @@
                 [49.0024961993941517, 30.6713880698685237]
             ];
 
-            // Initialise Leaflet map inside DetectLab's existing container.
-            // APM_BOUNDS defines only the initial Romanian view and the APM
-            // raster coverage; it must not constrain navigation. The .eu site
-            // can therefore pan freely as European regions are added.
+            // The working map always starts in Romania; saved country choices
+            // from older versions are deliberately ignored.
             var map = L.map('detectlab-map', {
                 zoomControl: false,
-                // The first screen is a geographic selector, not a Romania-only view.
-                // Once a country is chosen the picker fits the map back to the
-                // normal working scale.
                 minZoom: 2,
                 maxZoom: 20,
                 worldCopyJump: false,
@@ -1595,37 +1596,12 @@
                 touchRotate: true,
                 keyRotate: true,
                 bearing: 0,
-                // Force zoom animation even on Android (Leaflet disables it by default
-                // on Android).  The custom Patrimoniu canvases rely on the zoomanim
-                // transform to stay glued to tiles during zoom — without animation
-                // tiles jump while the canvas is scaled, or vice-versa, which shows
-                // up as the PWA-only slide/glitch.  Threshold 10 keeps animation
-                // even for large jumps.
                 zoomAnimation: true,
                 markerZoomAnimation: true,
                 fadeAnimation: true,
                 zoomAnimationThreshold: 10
-            }).setView([51, 12], 3);
-
-            // Country selection happens in the globe gate (js/globe-country-picker.js,
-            // lazy ArcGIS SceneView renderer + canvas fallback), shown the first
-            // time an authenticated visitor reaches the map. attach() restores a
-            // previously chosen country instantly (no gate flash) or opens the gate
-            // once the user is confirmed logged in. Once a country is picked the
-            // gate hands this Leaflet instance a locked maxBounds/minZoom and
-            // calls filterLayersForCountry().
-            if (window.DetectLabGlobeGate) {
-                window.DetectLabGlobeGate.attach(map);
-            }
-
-            // Country dock (js/country-dock.js): the slide-down country
-            // switcher + World-hillshade checkbox glued under the search bar
-            // and the bottom-centre “Exit view” button of the locked country
-            // view. It reads the country list / lock state from the gate, so
-            // it must be attached after it.
-            if (window.DetectLabCountryDock) {
-                window.DetectLabCountryDock.attach(map);
-            }
+            }).setView([45.94, 24.97], 6);
+            window.DetectLabRomaniaView.attach(map);
 
             // ── GLOBAL TILE GOVERNOR ──
             // js/tile-perf.js patches every tile layer of the app (LIDAR,
@@ -14389,6 +14365,7 @@
                     compassCol.addEventListener('click', scheduleLayerVisibilityCheck);
                 }
 
+                if (window.DetectLabRomaniaView) window.filterLayersForCountry('RO');
                 window.checkLayerVisibility();
                 setTimeout(scheduleLayerVisibilityCheck, 600);
 

@@ -95,8 +95,8 @@ function testOpeningSettle() {
     frames[0]();
     assert.strictEqual(calls.length, 6, 'replacement map is not touched');
     assert(source.includes('settleOpeningView(map, generation);'));
-    assert(fs.readFileSync('index.html', 'utf8').includes('js/map3d-terrain.js?v=20261031-3d-bearing-handoff'));
-    assert(fs.readFileSync('sw.js', 'utf8').includes('js/map3d-terrain.js?v=20261031-3d-bearing-handoff'));
+    assert(fs.readFileSync('index.html', 'utf8').includes('js/map3d-terrain.js?v=20261031-romania-only'));
+    assert(fs.readFileSync('sw.js', 'utf8').includes('js/map3d-terrain.js?v=20261031-romania-only'));
 }
 (async () => {
     await testLoader(0);
