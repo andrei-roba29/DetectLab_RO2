@@ -25,12 +25,14 @@
 .apm-fab-sub { font-size: 10px; font-weight: 400; opacity: 0.8; text-transform: lowercase; }
 
 .apm-panel {
-    position: fixed;
-    left: 12px;
-    bottom: 70px;
-    z-index: 1199;
-    width: min(340px, calc(100vw - 24px));
-    max-height: min(70vh, 640px);
+    position: absolute;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    z-index: 1400;
+    box-sizing: border-box;
+    width: min(400px, calc(100% - 16px));
+    max-height: min(76vh, 620px);
     overflow-y: auto;
     /* Match the LiDAR in 3D configuration card. */
     padding: 11px 13px 13px;
@@ -184,16 +186,25 @@
 .apm-result-scale { margin-bottom: 6px; }
 .apm-map-legend { max-width: 270px; }
 
-/* Configuration and minimized windows live within the map frame, including fullscreen/PWA. */
-.apm-panel {
-    position: absolute;
-    left: 50%;
-    bottom: max(16px, env(safe-area-inset-bottom));
-    transform: translateX(-50%);
-    width: min(340px, calc(100% - 32px));
-    box-sizing: border-box;
-    max-height: calc(50% - 16px);
-    z-index: 1200;
+/* Configuration and minimized windows live within the map frame, including fullscreen/PWA.
+   Matches the dimensions, placement and responsive clearance of the LiDAR in 3D window (#map3d-focus). */
+@media (max-width: 720px) {
+    .apm-panel {
+        bottom: calc(10px + var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px)));
+        width: min(360px, calc(100% - 16px));
+        max-height: min(76vh, 560px);
+        padding: 10px 11px 12px;
+    }
+}
+
+body.is-pwa .apm-panel {
+    --apm-focus-bottom-clearance: calc(16px + max(var(--pwa-bottom-controls-clearance, 44px), var(--map3d-safe-area-bottom, env(safe-area-inset-bottom, 0px))));
+    bottom: var(--apm-focus-bottom-clearance);
+    max-height: min(76vh, 620px, calc(100% - 16px - var(--apm-focus-bottom-clearance)));
+}
+
+.map-frame.is-fullscreen .apm-panel {
+    z-index: 10005;
 }
 .apm-dock {
     position: absolute;
