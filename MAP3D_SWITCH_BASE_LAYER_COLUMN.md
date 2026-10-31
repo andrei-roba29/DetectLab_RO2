@@ -127,8 +127,9 @@ scrolls, exactly as it already did — `overflow-y: auto` is untouched.
   [PWA_3D_BUTTON_SIZE_CENTRE.md](PWA_3D_BUTTON_SIZE_CENTRE.md). The dock's
   `--layer-dock-clearance` still lifts the bottom-centre stack (APM help,
   zoom hints).
-- The folded LiDAR window `#map3d-focus .m3d-focus-mini`, which keeps the
-  bottom-centre slot to itself (`10px + inset`, 44px tall).
+- The folded LiDAR window. It no longer paints a pill on the map: it folds
+  into the shared bottom drawer of minimized tabs (`.apm-dock` /
+  `js/map-window-dock.js`), so it claims no slot in this column at all.
 
 One accepted consequence of joining the corner: while the offline-maps picker
 (`.offline-map-panel`, `z-index 1300`, bottom-left) is open it covers the

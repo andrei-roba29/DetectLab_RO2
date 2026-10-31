@@ -879,7 +879,14 @@
 //   across unconverted: a rotated 2D map swung (with the LiDAR disc on it) on
 //   every trip into and back out of 3D. The bearing is now negated at the
 //   edge (bearingFlip in js/map3d-terrain.js). See MAP3D_BEARING_HANDOFF.md.
-const CACHE_NAME = 'detectlab-v341-3d-bearing-handoff';
+// v342: the minimized “LiDAR in 3D” window joins the shared bottom drawer of
+//   minimized tabs (js/map-window-dock.js). Its slim pill on the map — the
+//   .m3d-focus-mini button painted at the bottom centre while 3D was up — is
+//   gone: the window now folds into one .apm-dock entry beside the APM panel
+//   and the LiDAR Settings, carrying the same summary (layers · fetching
+//   distance · tiles ready). Re-tags js/lidar-3d-focus.js and
+//   css/map3d-terrain.css.
+const CACHE_NAME = 'detectlab-v342-lidar-dock-minimized';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1057,6 +1064,7 @@ const PRECACHE_URLS = [
   /* LiDAR in the 3D view: the focus dialog, the prefetch and the entry gate. */
   'js/lidar-3d-focus.js?v=20261028-lidar-photo-bridge',
   'js/lidar-3d-focus.js?v=20261030-lidar-photo-3d',
+  'js/lidar-3d-focus.js?v=20261031-lidar-dock-minimized',
   'js/lidar-photo-filter.js?v=1',
   'js/lidar-photo-filter.js?v=20261030-area-first',
   'js/lidar-photo-filter.js?v=20261030-no-photo-toast',
@@ -1097,6 +1105,7 @@ const PRECACHE_URLS = [
   'css/map3d-terrain.css?v=20261029-web-3d-basemap-row',
   'css/map3d-terrain.css?v=20261030-3d-analysis-dock',
   'css/map3d-terrain.css?v=20261030-lidar-pwa-bottom',
+  'css/map3d-terrain.css?v=20261031-lidar-dock-minimized',
   'js/map3d-terrain.js?v=20261029-no-cesium',
   'js/map3d-terrain.js?v=20261029-3d-startup-repaint',
   'js/map3d-terrain.js?v=20261030-lidar-photo-3d',

@@ -57,10 +57,10 @@ const viewerSource = read('js/map3d-terrain.js');
 const focusSource = read('js/lidar-3d-focus.js');
 
 /* Every build that changes the LiDAR 3D focus path bumps its own tag. */
-const TAG = '20261028-lidar-photo-bridge';
-const TAG_MIRROR = '20261021-lidar-canvas-tiles';
-const TAG_VIEWER = '20261026-desktop-basemap';
-const TAG_CSS = '20261026-pwa-3d-button-size';
+const TAG = '20261031-lidar-dock-minimized';
+const TAG_MIRROR = '20261030-lidar-photo-3d';
+const TAG_VIEWER = '20261031-3d-bearing-handoff';
+const TAG_CSS = '20261031-lidar-dock-minimized';
 
 /* One real event-loop turn: the viewer runs its entry gate through a promise,
  * so the dialog is not in the DOM in the same tick as open(). */
@@ -344,7 +344,6 @@ const fakeCanvas = function () {
      '#map3d-focus .m3d-focus-chips', '#map3d-focus .m3d-focus-fixed',
      '#map3d-focus .m3d-focus-point-block', '#map3d-focus .m3d-focus-actions',
      '#map3d-focus .m3d-focus-progress', '#map3d-focus .m3d-focus-x',
-     '#map3d-focus .m3d-focus-mini', '#map3d-focus .m3d-focus-mini-arrow',
      '#detectlab-map.m3d-picking'].forEach(function (selector) {
         assert(skin.indexOf(selector) !== -1, 'the skin styles ' + selector);
     });
@@ -358,29 +357,33 @@ const fakeCanvas = function () {
            /max-height: min\(76vh, 560px\)/.test(skin),
         'the phone layout shrinks the dialog further and leaves more of the map visible');
 
-    /* The folded window is chrome of the 3D view only: folded on the 2D map
-     * it must not paint (or take taps) — the skin gates it on body.is-3d,
-     * with an explicit [hidden] win, the banner lesson of §1 below. */
-    assert(/body:not\(\.is-3d\) #map3d-focus\.is-minimized \{\s*display: none;/.test(skin),
-        'the minimized window only paints while the 3D view is up');
+    /* The folded window has no pill on the map any more: it is one entry in
+     * the shared bottom drawer of minimized windows (js/map-window-dock.js).
+     * The skin must keep the host hidden attribute winning, and must NOT
+     * style the retired pill. */
+    assert(!/\.m3d-focus-mini/.test(skin),
+        'no .m3d-focus-mini pill is styled — the minimized window lives in the shared dock');
+    assert(!/\.m3d-focus-mini/.test(focusSource) && !/m3d-focus-mini/.test(focusSource),
+        'and the dialog builds no pill element either');
     const pwaToggleRule = (skin.match(/body\.is-pwa \.m3d-toggle-group \{[^}]*\}/) || [''])[0];
-    const miniPillRule = (skin.match(/#map3d-focus \.m3d-focus-mini \{[^}]*\}/) || [''])[0];
-    /* The pill keeps the bottom-centre slot to itself since v254: the grouped
-     * switch/refresh heads the bottom-LEFT control column, directly above the
-     * base-layer button, placed by the anchor js/map3d-terrain.js measures
-     * (its installed-PWA fallback still rides the home-indicator inset).
-     * See MAP3D_SWITCH_BASE_LAYER_COLUMN.md. */
+    /* The switch/refresh group heads the bottom-LEFT control column, directly
+     * above the base-layer button, placed by the anchor js/map3d-terrain.js
+     * measures (its installed-PWA fallback still rides the home-indicator
+     * inset). With the pill gone it no longer has to share the bottom-centre
+     * slot with anything. See MAP3D_SWITCH_BASE_LAYER_COLUMN.md. */
     assert(/bottom: var\(--m3d-anchor-bottom, calc\(146px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\)\)\)/.test(pwaToggleRule) &&
            /body\.is-pwa \{\s*--map3d-safe-area-bottom: env\(safe-area-inset-bottom, 0px\);/.test(skin) &&
-           /padding: 10px 10px calc\(10px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\)\)/.test(skin) &&
-           /min-height: 44px/.test(miniPillRule),
-        'the PWA switch follows the measured base-layer anchor (safe-area inset in its fallback) while the 44px pill keeps the bottom centre');
-    assert(/#map3d-focus \.m3d-focus-mini\[hidden\] \{\s*display: none;/.test(skin) &&
-           /#map3d-focus\[hidden\] \{\s*display: none;/.test(skin),
-        'and the pill/host hidden attributes beat their author display');
+           /padding: 10px 10px calc\(10px \+ var\(--map3d-safe-area-bottom, env\(safe-area-inset-bottom, 0px\)\)\)/.test(skin),
+        'the PWA switch still follows the measured base-layer anchor (safe-area inset in its fallback)');
+    assert(/#map3d-focus\[hidden\] \{\s*display: none;/.test(skin) &&
+           /#map3d-focus\.is-minimized \{\s*display: none;/.test(skin),
+        'a folded-away host and a closed host stay gone');
+    assert(/DetectLabWindowDock/.test(focusSource) && /dockMinimize/.test(focusSource) &&
+           /'lidar-3d-focus'/.test(focusSource),
+        'the minimized window registers itself in the shared DetectLabWindowDock drawer');
     assert(/minimizeDialog/.test(focusSource) && /expandMinimized/.test(focusSource) &&
            /settle\(\{ cancelled: false, focus: focus, report: report \}, \{ minimize: true \}\)/.test(focusSource),
-        'a fetched disc settles into the minimized window, and the pill expands it again');
+        'a fetched disc settles into the minimized window, and the dock entry expands it again');
 
     /* The banner that told the user to tap the map is gone. It declared
      * `display: flex`, which beat the UA rule for [hidden], so it was never
@@ -879,11 +882,21 @@ function runViewerSuite() {
         });
     }
     const quiet = { log: console.log, warn: function () {}, error: console.error, info: function () {}, debug: function () {}, table: function () {} };
+    /* The shared minimized-window drawer, as the real module builds it:
+     * minimize(id, label, restore) registers/relabels, remove(id) drops. */
+    const dockEntries = Object.create(null);
     const windowStub = {
         document: doc,
         L: Leaflet,
         _dlMap: map,
         _lidarGroup: lidarGroup,
+        DetectLabWindowDock: {
+            minimize: function (id, label, restore) {
+                dockEntries[id] = { label: label, restore: restore };
+            },
+            remove: function (id) { delete dockEntries[id]; }
+        },
+        _dockEntries: dockEntries,
         fetch: fakeFetch,
         Blob: Blob,
         URL: URL,
@@ -1720,7 +1733,7 @@ function runViewerSuite() {
         /* ── 4i. “Done” must always hand over ──────────────────────────────
          * The gate is answered by settle(), and settle() sits at the END of
          * the fetch-finished bookkeeping (apply the counted focus, paint
-         * “Done”, write the pill summary). If any of that throws in a real
+         * “Done”, write the dock summary). If any of that throws in a real
          * browser — a Leaflet layer that will not restyle, a bar row that
          * is mid-teardown — the dialog used to sit at “Done” forever: the
          * fetch had finished, the gate was never answered, and nothing
@@ -1747,7 +1760,9 @@ function runViewerSuite() {
             assert(verdict && verdict.cancelled === false,
                 'and the answer is still “enter 3D” — the disc was applied before the fetch');
             assert(focus.status().dialog.minimized === true,
-                'the window still folds into its pill for the view that opens');
+                'the window still folds into the shared dock for the view that opens');
+            assert(dockEntries['lidar-3d-focus'],
+                'and the shared drawer holds its entry');
         }
         clearInterval(keepalive);
         console.log('\n✅ test-3d-basemap-picker-lidar.js passed all checks successfully.');
@@ -1898,17 +1913,20 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
         return note.reason === 'focused' && note.scope === 'full' && note.keptCount === 2;
     }), 'and the note says how many layers the decision kept, and in which scope');
     const wholePill = doc.body.querySelector('#map3d-focus');
-    assert(wholePill.classList.contains('is-minimized') && wholePill.querySelector('.m3d-focus-mini').hidden === false,
-        'a whole-layer decision still folds into its pill');
-    assert(/whole|întreg/i.test(wholePill.querySelector('.m3d-focus-mini-text').textContent),
-        'and the pill says the layers are drawn entire (' +
-        wholePill.querySelector('.m3d-focus-mini-text').textContent + ')');
+    const wholeDock = windowStub._dockEntries['lidar-3d-focus'];
+    assert(wholePill.classList.contains('is-minimized') && wholeDock,
+        'a whole-layer decision still folds into the shared dock');
+    assert(/whole|întreg/i.test(wholeDock.label),
+        'and the dock entry says the layers are drawn entire (' +
+        wholeDock.label + ')');
 
     /* ── 5c. Back to the 1 km disc, with both layers, a picked point ────── */
     const discPromise = focus.openDialog({ mode: 'gate' });
     const back = doc.body.querySelector('#map3d-focus');
     assert(back.hidden === false && back.classList.contains('is-minimized') === false,
-        'reopening unfolds the pill back into the card');
+        'reopening unfolds the dock entry back into the card');
+    assert(windowStub._dockEntries['lidar-3d-focus'] === undefined,
+        'and the shared drawer entry goes away while the card is up');
     assert(focus.status().dialog.scope === 'full',
         'and it opens on the scope that is currently applied');
     back.querySelectorAll('.m3d-focus-scope-opt')[1].click();
@@ -2022,22 +2040,23 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
     assert(doc.body.classList.contains('m3d-focus-open') === false,
         'the body marker goes with the card once the disc is ready');
     /* …and the window itself does not vanish: fetched and on its way into
-     * the 3D view, it folds into its pill (layers · radius · tiles ready,
-     * expand arrow) so it stays reachable once 3D is up. */
+     * the 3D view, it folds into the shared bottom drawer (layers · radius ·
+     * tiles ready) so it stays reachable once 3D is up. Nothing of it paints
+     * on the map itself. */
     assert(node.hidden === false && node.classList.contains('is-minimized') &&
-           node.querySelector('.m3d-focus-card').hidden === true &&
-           node.querySelector('.m3d-focus-mini').hidden === false,
-        'once the disc is ready the window minimizes into its pill instead of closing');
+           node.querySelector('.m3d-focus-card').hidden === true,
+        'once the disc is ready the window minimizes into the shared dock instead of closing');
+    const discDock = windowStub._dockEntries['lidar-3d-focus'];
+    assert(discDock, 'the shared drawer holds the minimized window');
     assert(focus.status().dialog.minimized === true && focus.status().dialog.open === false,
         'status() reports the folded window');
-    const miniText = node.querySelector('.m3d-focus-mini-text').textContent;
+    const miniText = discDock.label;
     assert(/km/.test(miniText) && /tile/i.test(miniText),
-        'the pill stands for the disc that was just fetched (' + miniText + ')');
+        'the dock entry stands for the disc that was just fetched (' + miniText + ')');
     assert(/Romania/.test(miniText) && /AB/.test(miniText),
         'naming both layers it holds (' + miniText + ')');
-    assert(node.querySelector('.m3d-focus-mini-title').textContent.length > 0 &&
-           node.querySelector('.m3d-focus-mini-arrow').textContent.trim().length > 0,
-        'and it carries the window title plus an expand arrow');
+    assert(/LiDAR/.test(miniText),
+        'and it carries the window title (' + miniText + ')');
     assert(node.querySelector('.m3d-focus-bar i').style.width === '100%', 'the progress bar finished at 100%');
     assert(/Gata|Done/.test(node.querySelector('.m3d-focus-progress-text').textContent),
         'and the last line says the disc is ready');
@@ -2050,9 +2069,10 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
     const again = doc.body.querySelector('#map3d-focus');
     assert(again.hidden === false, 'pressing 3D asks again, because a LiDAR layer is still on the 2D map');
     assert(again.classList.contains('is-minimized') === false &&
-           again.querySelector('.m3d-focus-card').hidden === false &&
-           again.querySelector('.m3d-focus-mini').hidden === true,
-        'and the full card is back — asking again unfolds the pill');
+           again.querySelector('.m3d-focus-card').hidden === false,
+        'and the full card is back — asking again unfolds the dock entry');
+    assert(windowStub._dockEntries['lidar-3d-focus'] === undefined,
+        'the drawer entry is gone while the card is unfolded');
     assert(again.querySelector('.m3d-focus-go').hidden === false && again.querySelector('.m3d-focus-go').disabled === false,
         'with both buttons back, and the go button live');
     again.querySelector('.m3d-focus-go').click();
@@ -2064,32 +2084,32 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
     assert(viewer.isOpen() === false,
         'and the failed open reads as closed, so a later tap retries instead of doing nothing');
 
-    /* The expand arrow: with the tiles fetched and 3D entered, the folded
+    /* The dock entry: with the tiles fetched and 3D entered, the folded
      * window reopens over the running view — and folds back on cancel. The
      * sandbox has no WebGL, so the “running view” is faked from here on at
      * the one seam the dialog consults — viewer.isOpen() — until the live
      * sections below are done. */
     const realIsOpen = viewer.isOpen;
     viewer.isOpen = function () { return true; };
-    const pill = again.querySelector('.m3d-focus-mini');
-    assert(pill && pill.hidden === false && again.classList.contains('is-minimized'),
-        'the window auto-minimized when the 3D view was entered');
-    assert(/tile/i.test(pill.textContent),
-        'the pill names what was fetched (' + pill.textContent.trim().slice(0, 60) + '…)');
-    pill.click();
+    const foldedDock = windowStub._dockEntries['lidar-3d-focus'];
+    assert(foldedDock && again.classList.contains('is-minimized'),
+        'the window auto-minimized into the shared dock when the 3D view was entered');
+    assert(/tile/i.test(foldedDock.label),
+        'the dock entry names what was fetched (' + foldedDock.label.slice(0, 60) + '…)');
+    foldedDock.restore();
     await tick();
     assert(again.querySelector('.m3d-focus-card').hidden === false &&
            again.classList.contains('is-minimized') === false &&
            focus.status().dialog.open === true,
-        'tapping the expand arrow opens the full window again');
+        'tapping the dock entry opens the full window again');
     assert(focus.status().dialog.mode === 'live',
         'expanded over a running 3D view, it prepares in live mode');
     again.querySelector('.m3d-focus-cancel').click();
     await tick();
     assert(again.hidden === false && again.classList.contains('is-minimized') &&
-           again.querySelector('.m3d-focus-mini').hidden === false &&
+           windowStub._dockEntries['lidar-3d-focus'] &&
            focus.status().dialog.minimized === true,
-        'cancelling an expanded window folds it back into the pill instead of dismissing it');
+        'cancelling an expanded window folds it back into the dock instead of dismissing it');
     viewer.close();
 
     /* The bar's Change button while 3D is open is the “live” mode: the same
@@ -2110,8 +2130,8 @@ async function dialogSuite(doc, windowStub, viewer, focus, mirror, map, drawn, f
         'confirming it keeps 3D open and re-points the focus');
     assert(liveBar.hidden === false && liveBar.classList.contains('is-minimized') &&
            liveBar.querySelector('.m3d-focus-card').hidden === true &&
-           liveBar.querySelector('.m3d-focus-mini').hidden === false,
-        'and the window folds into its pill over the running 3D view');
+           windowStub._dockEntries['lidar-3d-focus'],
+        'and the window folds into the shared dock over the running 3D view');
     viewer.close();
     viewer.isOpen = realIsOpen;
 
