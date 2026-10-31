@@ -1,0 +1,5 @@
+const assert=require('node:assert/strict'),r=require('./js/apm-next/apm-robust.js');
+assert.equal(r.compute(Array.from({length:19},(_,i)=>({x:i}))).status,'skipped-too-few');
+const ordinary=Array.from({length:45},(_,i)=>({x:(i%9)*.02,y:1+(i%7)*.03,z:(i%5)*.01}));const mixed=ordinary.concat(Array.from({length:5},(_,i)=>({x:10+i*3,y:20+i*7,z:30+i*5})));const got=r.compute(mixed);assert(got.flagged.length>=4,'detect at least 80% synthetic outliers');assert(got.flagged.filter(i=>i<45).length<=4,'<=10% genuine downweighted');assert(got.flagged.length<=10,'20% cap');
+const bimodal=Array.from({length:70},(_,i)=>i<49?{x:i%5*.01,y:i%7*.02}:{x:10+i%4,y:12+i%6});const b=r.compute(bimodal);assert.equal(b.status,'possible-second-pattern');assert.equal(b.flagged.length,0);
+const forty=ordinary.concat(Array.from({length:30},(_,i)=>({x:i*2+10,y:i*3+10,z:i*4+10})));assert(r.compute(forty).flagged.length<=Math.floor(forty.length*.2));console.log('Robust outlier safeguard tests pass; synthetic injected outlier recall:',got.flagged.length+'/5; genuine false-positive:',got.flagged.filter(i=>i<45).length+'/45');
