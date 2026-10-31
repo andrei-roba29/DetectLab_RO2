@@ -35,7 +35,7 @@ const css = fs.readFileSync('css/next-gen-apm.css', 'utf8');
 assert.match(css, /@media \(max-width: 768px\), \(pointer: coarse\)\s*\{\s*\.apm-dock\s*\{\s*bottom: calc\(16px \+ env\(safe-area-inset-bottom, 0px\)\);/);
 assert.match(css, /body\.is-pwa \.apm-dock\s*\{\s*bottom: calc\(4px \+ var\(--pwa-bleed, 0px\)\);/);
 assert.match(css, /\.apm-dock\s*\{[^}]*bottom: 0;/);
-const cssUrl = 'css/next-gen-apm.css?v=20261031-dock-leafleet-align';
+const cssUrl = 'css/next-gen-apm.css?v=20261031-apm-vertical-scroll';
 for (const file of ['index.html', 'sw.js']) {
     assert(fs.readFileSync(file, 'utf8').includes(cssUrl), `${file} uses the updated drawer stylesheet`);
 }

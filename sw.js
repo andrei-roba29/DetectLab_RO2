@@ -888,7 +888,8 @@
 //   css/map3d-terrain.css.
 // v343: lift the minimized-window drawer above mobile system bars and PWA bleed.
 // v344: allow historical-map alignment up to 3 km instead of 300 m.
-const CACHE_NAME = 'detectlab-v346-romania-only';
+// v347: keep the APM configuration window vertically scrollable without horizontal overflow.
+const CACHE_NAME = 'detectlab-v347-romania-only';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -930,7 +931,7 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 // ── Static assets to pre-cache on install ──
 const PRECACHE_URLS = [
   // v301: Next-Gen APM (MANUAL) — see the header note above.
-  'css/next-gen-apm.css?v=20261031-dock-leafleet-align',
+  'css/next-gen-apm.css?v=20261031-apm-vertical-scroll',
   'js/apm-next/apm-core.js?v=20261030-apm-pick-hidden',
   'js/apm-next/apm-raster.js?v=20261030-apm-pick-hidden',
   'js/apm-next/apm-heatmap.js?v=20261030-apm-pick-hidden',

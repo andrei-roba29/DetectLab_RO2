@@ -185,6 +185,61 @@ for (const mode of ['MANUAL', 'TRAIN']) test(mode + ': settings stay visually hi
     }
 });
 
+test('the reopened APM panel scrolls vertically only, without clipping its contents', async (ctx) => {
+    for (const width of [320, 375, 1280]) {
+        for (const lang of ['en', 'ro']) {
+            const { page, errors } = await openHarness(ctx.browser, width, 800);
+            await page.evaluate((language) => {
+                window._currentLang = () => language;
+                document.dispatchEvent(new Event('detectlab:langchange'));
+                window.DetectLabApmUi.open();
+                document.querySelector('.apm-point').previousElementSibling.click();
+            }, lang);
+            await mapClick(page, width - 30, 100);
+            assert.ok(await page.evaluate(() => window.DetectLabApmUi.state().centre), 'point selected');
+            // Expand all settings, including curves and debug, to exercise narrow layouts.
+            await page.evaluate(() => document.querySelectorAll('.apm-panel details').forEach(el => { el.open = true; }));
+            const check = async (mode) => {
+                const metrics = await page.evaluate(() => {
+                    const panel = document.querySelector('.apm-panel');
+                    const bounds = panel.getBoundingClientRect();
+                    const outside = [...panel.querySelectorAll('*')].filter(el => {
+                        const r = el.getBoundingClientRect();
+                        return r.width && r.height && (r.left < bounds.left - 1 || r.right > bounds.right + 1);
+                    }).map(el => el.className || el.tagName);
+                    panel.scrollLeft = 100;
+                    panel.scrollTop = 0;
+                    return { x: panel.scrollLeft, width: panel.scrollWidth, client: panel.clientWidth,
+                        height: panel.scrollHeight, visible: panel.clientHeight,
+                        overflowX: getComputedStyle(panel).overflowX, outside };
+                });
+                assert.strictEqual(metrics.overflowX, 'hidden');
+                assert.strictEqual(metrics.x, 0, `${width}px ${lang} ${mode}: no horizontal movement`);
+                assert.ok(metrics.width <= metrics.client + 1, `${width}px ${lang} ${mode}: ${JSON.stringify(metrics)}`);
+                assert.deepStrictEqual(metrics.outside, [], `${width}px ${lang} ${mode}: content must fit`);
+                assert.ok(metrics.height > metrics.visible, 'settings exceed panel height');
+                const rect = await rectOf(page, '.apm-panel');
+                await page.mouse.move((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2);
+                await page.mouse.wheel({ deltaX: 200 });
+                await sleep(60);
+                assert.strictEqual(await page.$eval('.apm-panel', el => el.scrollLeft), 0, 'wheel cannot scroll horizontally');
+                await page.mouse.wheel({ deltaY: 250 });
+                await sleep(60);
+                assert.ok(await page.$eval('.apm-panel', el => el.scrollTop > 0), 'wheel scrolls vertically');
+            };
+            await check('manual');
+            // Stub loading so TRAIN remains deterministic and does not contact ARIADNE.
+            await page.evaluate(() => {
+                window.DetectLabApmProviders.createAriadneSiteProvider = () => ({ getSites: () => new Promise(() => {}) });
+                document.querySelectorAll('.apm-tab')[1].click();
+            });
+            await check('train');
+            assert.deepStrictEqual(errors, []);
+            await page.close();
+        }
+    }
+});
+
 test('a handler registered while picking is also blocked for that click (flag clears after the click, not during)', async (ctx) => {
     const { page } = await openHarness(ctx.browser, 1280, 800);
     await page.evaluate(() => window.DetectLabApmUi.open());
