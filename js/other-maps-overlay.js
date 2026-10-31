@@ -25,7 +25,12 @@
  *   * when a zoom moves the sheet to a FINER level, the old tiles are kept
  *     as a blurred stand-in (repositioned by 2^Δ) until the new level has
  *     loaded, so the sheet never vanishes mid-zoom; going coarser just
- *     refetches the one or two coarse tiles.
+ *     refetches the one or two coarse tiles;
+ *   * every tile is painted at the level-pixel box it really covers: the
+ *     Hungaricana pyramid pads the sheet inside a full 512 px cell, while a
+ *     source that CROPS at the image edge (NLS IIIF) reports the narrower
+ *     span through Tiles.tileSpan() — stretching such a bitmap into a square
+ *     cell made the sheet change shape level by level (§8.2).
  *
  * Public API: window.DetectLabOtherMapsOverlay.createManager(map, opts) →
  *   add(record, state) / remove(id) / get(id) / list() / setActive(id)
@@ -39,6 +44,9 @@
     var L = root.L;
     var Tiles = root.DetectLabOtherMapsTiles;
     var TILE = 512;
+    /* Half-pixel bleed added to every painted tile so neighbouring tiles
+     * overlap instead of leaving a hairline seam on fractional scales. */
+    var TILE_BLEED = 0.6;
 
     /* Metres per image pixel — the slowest and the fastest sensible scale.
      * 0.02 m/px is a cadastral plan at field level, 400 m/px is a wall map of
@@ -462,19 +470,39 @@
             });
         }
 
+        /* Paint one tile at the level-pixel box it really covers.
+         *
+         * The Hungaricana pyramid always answers with a full 512 × 512 cell
+         * (the sheet is padded inside the square and the grid clip in
+         * css/other-maps.css trims the padding).  A cropped source — an NLS
+         * IIIF tile is a region clamped to the sheet edge — replies with a
+         * NARROWER bitmap, so it must be painted narrower too.  Stretching
+         * such a bitmap over a whole cell squashed the sheet by a different
+         * factor at every pyramid level, which is what made the added maps
+         * look distorted while zooming in and out. */
+        function sizeTile(img, w, h) {
+            var spanW = w > 0 ? w : TILE;
+            var spanH = h > 0 ? h : TILE;
+            img._om.w = spanW;
+            img._om.h = spanH;
+            img.style.width = (spanW + TILE_BLEED) + 'px';
+            img.style.height = (spanH + TILE_BLEED) + 'px';
+        }
+
         function addTile(ov, key, x, y, level, token) {
             var img = document.createElement('img');
             img.className = 'om-tile';
             img.style.position = 'absolute';
             img.style.left = (x * TILE) + 'px';
             img.style.top = (y * TILE) + 'px';
-            img.style.width = (TILE + 0.6) + 'px';
-            img.style.height = (TILE + 0.6) + 'px';
+            img.style.width = (TILE + TILE_BLEED) + 'px';
+            img.style.height = (TILE + TILE_BLEED) + 'px';
             img.draggable = false;
             img.alt = '';
-            /* Where this tile lives in the pyramid — the stand-in promotion
-             * repositions the old level's tiles by these coordinates. */
-            img._om = { x: x, y: y, level: level };
+            /* Where this tile lives in the pyramid, and how much of the level
+             * it covers — the stand-in promotion repositions the old level's
+             * tiles by these coordinates and keeps their own spans. */
+            img._om = { x: x, y: y, level: level, w: TILE, h: TILE };
             ov.tiles[key] = img;
             ov.gridEl.appendChild(img);
             /* Settling (loaded, or failed for good) is what retires the
@@ -497,12 +525,26 @@
                     img.src = altUrl;
                 }).catch(function () { /* a missing tile stays transparent */ });
             }
-            Tiles.tileUrl(ov.record, x, y, level).then(function (url) {
+            /* The source tells how many level pixels this tile spans (512 for
+             * a padded Hungaricana cell, less at an NLS image edge).  A span
+             * we cannot read leaves the square cell, i.e. the old behaviour. */
+            function spanPromise() {
+                if (typeof Tiles.tileSpan !== 'function') return Promise.resolve(null);
+                try {
+                    return Promise.resolve(Tiles.tileSpan(ov.record, x, y, level))
+                        .catch(function () { return null; });
+                } catch (e) {
+                    return Promise.resolve(null);
+                }
+            }
+            Promise.all([Tiles.tileUrl(ov.record, x, y, level), spanPromise()]).then(function (res) {
                 // The view may already have switched level while the hash was
                 // being computed — never paint a stale tile.
                 if (stale()) return;
+                var span = res[1];
+                if (span && span.w > 0 && span.h > 0) sizeTile(img, span.w, span.h);
                 img.addEventListener('error', fallback, { once: true });
-                img.src = url;
+                img.src = res[0];
             }).catch(fallback);
         }
 
@@ -525,8 +567,10 @@
                 img.className = 'om-tile om-tile-stale';
                 img.style.left = (img._om.x * TILE * d) + 'px';
                 img.style.top = (img._om.y * TILE * d) + 'px';
-                img.style.width = (TILE * d + 0.6) + 'px';
-                img.style.height = (TILE * d + 0.6) + 'px';
+                /* Each stand-in keeps its own span (a cropped edge tile is
+                 * narrower than a cell) scaled by 2^Δ like its position. */
+                img.style.width = (((img._om.w || TILE) * d) + TILE_BLEED) + 'px';
+                img.style.height = (((img._om.h || TILE) * d) + TILE_BLEED) + 'px';
             });
             stale.timer = root.setTimeout(function () { dropStale(ov); }, STALE_FALLBACK_MS);
             ov.stale = stale;
