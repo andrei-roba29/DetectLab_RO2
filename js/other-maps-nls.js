@@ -32,6 +32,7 @@
  *   iiifPath(imageId) / iiifBase(record) / imageIdOf(record)
  *   thumbUrl(record) / recordUrl(record)
  *   tileUrl(record, x, y, z)      → Promise<string>
+ *   tileSpan(record, x, y, z)     → Promise<{w, h}> level pixels per tile
  *   resolve(record, hint)         → Promise<{w, h, maxZoom, probed}>
  *   wfsBBoxUrl(bbox) / featureToRecord(feature) / queryBBox(bbox)
  *   findUrl(lat, lng) / inCoverage(lat, lng) / intersectsCoverage(bbox)
@@ -338,6 +339,30 @@
         });
     }
 
+    /**
+     * Level-pixel box covered by tile (x, y) at `level`, in the same grid the
+     * overlay paints: level L is meta.w / 2^(maxZoom−L) pixels wide, split in
+     * 512 px cells.
+     *
+     * IIIF regions are clamped to the image edge, so the last column / row of
+     * every level comes back narrower than 512 px.  The overlay paints a tile
+     * at the span reported here instead of stretching its bitmap over a whole
+     * 512 px cell (`Tiles.tileSpan`, see OTHER_MAPS.md §8.2): without that, a
+     * narrower bitmap was blown up to a square cell — vertical stretch of
+     * 512/384 at one level, 512/256 at the next — so the sheet looked
+     * distorted and cropped, differently at every zoom.
+     */
+    function tileSpan(record, x, y, level) {
+        return resolve(record).then(function (meta) {
+            /* The same maths the Josephine source uses, shared through the
+             * dispatcher so the two cropped sources cannot drift apart. */
+            if (Tiles && typeof Tiles.tileSpanFor === 'function') {
+                return Tiles.tileSpanFor(meta, x, y, level);
+            }
+            return { w: TILE_SIZE, h: TILE_SIZE };
+        });
+    }
+
     /* ── Map Finder WFS ───────────────────────────────────────────────── */
     function layerName(featureId) {
         return String((featureId || '').split('.')[0] || '');
@@ -510,6 +535,7 @@
         recordUrl: recordUrl,
         thumbUrl: thumbUrl,
         tileUrl: tileUrl,
+        tileSpan: tileSpan,
         resolve: resolve,
         parseInfo: parseInfo,
         maxZoomFor: maxZoomFor,

@@ -231,6 +231,7 @@ let fakeNlsCatalogJson = null;
 let fakeJosephineJson = null;
 let fakeNlsInfoJson = null;
 let fakeWfsJson = null;
+let fakeCommonsJson = null;
 sandbox.fetch = (url) => {
     const u = String(url || '');
     let body = fakeCatalogJson;
@@ -238,6 +239,7 @@ sandbox.fetch = (url) => {
     else if (u.indexOf('iosfree_db.json') !== -1) body = fakeJosephineJson;
     else if (u.indexOf('info.json') !== -1) body = fakeNlsInfoJson;
     else if (u.indexOf('geoserver') !== -1 || u.indexOf('wfs') !== -1) body = fakeWfsJson;
+    else if (u.indexOf('en.wikipedia.org') !== -1) body = fakeCommonsJson;
     return Promise.resolve({ ok: body != null, json: () => Promise.resolve(body) });
 };
 sandbox.window = sandbox;
@@ -1027,6 +1029,45 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
     ok(/\/12800,0,376,512\/376,512\/0\/default\.jpg$/.test(edgeTile), 'edge tiles are clamped to the image width');
     eq(await Nls.tileUrl(nlsRec, 26, 0, 5), '', 'a tile outside the grid resolves to an empty URL');
 
+    /* ── tile spans (§8.2): what a tile really covers ────────────────────
+     * IIIF clamps the region at the sheet edge, so the bitmap of the last
+     * column / row is narrower than 512 px.  The overlay paints a tile at
+     * the span reported here; stretching those bitmaps over a full square
+     * cell distorted the sheet — by 512/384 at one level, 512/256 at the
+     * next — which is what the user saw as “the maps distort on zoom”. */
+    const rootSpan = await Nls.tileSpan(nlsRec, 0, 0, 0);
+    ok(Math.abs(rootSpan.w - 13176 / 32) < 1e-9 && Math.abs(rootSpan.h - 10110 / 32) < 1e-9,
+        'the pyramid root tile spans the whole sheet at its level size (411.75 × 315.94 px)');
+    const nativeSpan = await Nls.tileSpan(nlsRec, 0, 0, 5);
+    eq(nativeSpan.w, 512, 'an interior native tile spans a full 512 px cell (width)');
+    eq(nativeSpan.h, 512, 'an interior native tile spans a full 512 px cell (height)');
+    const edgeSpan = await Nls.tileSpan(nlsRec, 25, 0, 5);
+    eq(edgeSpan.w, 376, 'the last native column spans only its clamped width');
+    eq(edgeSpan.h, 512, '…and a full cell in height');
+    const bottomSpan = await Nls.tileSpan(nlsRec, 0, 19, 5);
+    eq(bottomSpan.h, 382, 'the last native row spans only its clamped height');
+    eq((await Nls.tileSpan(nlsRec, 25, 19, 5)).w, 376, 'a corner tile is clamped on both axes');
+
+    /* The free Josephine source crops its Wikimedia canvases the same way
+     * and reports the same spans (one Commons metadata lookup, shared by
+     * the tile URL and the span). */
+    fakeCommonsJson = {
+        query: { pages: { '-1': { imageinfo: [{
+            url: 'https://upload.wikimedia.org/scan.jpg', width: 6000, height: 4000
+        }] } } }
+    };
+    const josRecord = {
+        id: 'josephine:scan.jpg', source: 'josephine',
+        josephineEntry: { l: 'https://commons.wikimedia.org/wiki/File:Scan.jpg' }
+    };
+    const josRoot = await JosephineTiles.tileSpan(josRecord, 0, 0, 0);
+    eq(josRoot.w, 375, 'a Josephine root tile spans the whole 6000 px sheet at its level width');
+    eq(josRoot.h, 250, '…and its level height, not a 512 px square');
+    const josEdge = await JosephineTiles.tileSpan(josRecord, 11, 0, 4);
+    eq(josEdge.w, 368, 'a Josephine edge tile is clipped to the scan width');
+    eq((await JosephineTiles.tileSpan(josRecord, 0, 7, 4)).h, 416, '…and the last row to its height');
+    fakeCommonsJson = null;
+
     fakeNlsInfoJson = {
         width: 2048, height: 1024,
         tiles: [{ width: 512, height: 512, scaleFactors: [1, 2, 4, 8] }]
@@ -1099,6 +1140,25 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
     /* ══ 11. the multi-source dispatcher ═══════════════════════════════ */
     eq(Tiles.source('nls'), Nls, 'the NLS adapter registered itself with the tile dispatcher');
     eq(await Tiles.tileUrl(nlsRec, 0, 0, 5), nativeTile, 'record objects route to the NLS adapter');
+    eq((await Tiles.tileSpan(nlsRec, 25, 0, 5)).w, 376, 'tile spans route to the NLS adapter');
+    const hungSpan = await Tiles.tileSpan({ path: 'maps/mol/x/y.ecw' }, 3, 2, 4);
+    eq(hungSpan.w, 512, 'a Hungaricana tile keeps the full square cell (the sheet is padded inside it)');
+    eq(hungSpan.h, 512, '…on both axes, so the grid clip trims the padding');
+
+    /* The span maths every CROPPED source shares (NLS IIIF regions and the
+     * Josephine Commons canvases), independent of any network. */
+    const spanMeta = { w: 13176, h: 10110, maxZoom: 5 };
+    eq(Tiles.tileSpanFor(spanMeta, 0, 0, 5).w, 512, 'an interior cell spans a full 512 px');
+    eq(Tiles.tileSpanFor(spanMeta, 0, 0, 5).h, 512, '…on both axes');
+    eq(Tiles.tileSpanFor(spanMeta, 25, 0, 5).w, 376, 'the last column is clipped to the image width');
+    eq(Tiles.tileSpanFor(spanMeta, 0, 19, 5).h, 382, 'the last row is clipped to the image height');
+    eq(Tiles.tileSpanFor(spanMeta, 25, 19, 5).w, 376, 'a corner cell is clipped on both axes');
+    eq(Tiles.tileSpanFor(spanMeta, 0, 0, 0).w, 13176 / 32, 'the pyramid root spans the whole sheet (width)');
+    eq(Tiles.tileSpanFor(spanMeta, 0, 0, 0).h, 10110 / 32, '…and the whole sheet (height)');
+    ok(Math.abs(Tiles.tileSpanFor({ w: 4096, h: 3072, maxZoom: 3 }, 0, 0, 0).h - 384) < 1e-9,
+        'a 4:3 sheet at its root level spans 512 × 384, not a square');
+    ok(typeof (Tiles.source('josephine') || {}).tileSpan === 'function',
+        'the Josephine source reports tile spans too (its Commons canvases are cropped at the edge)');
     eq(Tiles.thumbUrl(nlsRec), Nls.thumbUrl(nlsRec), 'thumbnails route to the NLS adapter');
     eq(Tiles.recordUrl(nlsRec), Nls.recordUrl(nlsRec), 'record links route to the NLS adapter');
     eq(Tiles.thumbUrl({ path: 'maps/mol/x/y.ecw' }),
@@ -1173,6 +1233,30 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
         'every NLS tile src is an IIIF region URL');
     const nlsFit = Overlay.fitScale(4096, 3072, Overlay.resolutionAt(53.754, 12), 400, 800);
     ok(Math.abs(nlsOv.state.mpp - nlsFit) / nlsFit < 1e-9, 'a fresh NLS sheet is framed into the viewport like any other');
+
+    /* Every tile is painted at the level-pixel span it covers.  At the
+     * framing zoom the whole 4096 × 3072 NLS sheet arrives as one 512 × 384
+     * IIIF bitmap; painting it in a 512 × 512 square cell stretched the
+     * sheet 33 % vertically (and cropped it), and each finer level stretched
+     * its edge tiles by another factor — the “maps distort on zoom” report. */
+    const nlsGridImgs = () => nlsOv.gridEl.children.filter((el) => el.tagName === 'IMG');
+    eq(nlsGridImgs().length, 1, 'the framed NLS sheet is one tile');
+    eq(nlsGridImgs()[0].style.width, '512.6px', 'the tile spans the sheet width in level pixels');
+    eq(nlsGridImgs()[0].style.height, '384.6px', '…and the sheet height, not a stretched 512 px square');
+
+    nlsMap._state.zoom = 13;
+    nlsMap.fire('zoomend');
+    await new Promise((r) => setImmediate(r));
+    eq(nlsOv.geom.level, 1, 'zooming in moves the NLS sheet to the finer level');
+    const staleTiles = nlsGridImgs().filter((img) => img.className.indexOf('stale') >= 0);
+    ok(staleTiles.length === 1 && staleTiles[0].style.width === '1024.6px' && staleTiles[0].style.height === '768.6px',
+        'the outgoing tile keeps its own span, scaled by 2^Δ, while the finer level loads');
+    const bottomRow = nlsGridImgs().filter((img) => img.style.top === '512px' && img.className.indexOf('stale') < 0);
+    ok(bottomRow.length > 0 && bottomRow.every((img) => img.style.height === '256.6px'),
+        'the finer level paints its bottom row at its own 256 px span (no square stretch)');
+    const rightColumn = nlsGridImgs().filter((img) => img.style.left === '512px' && img.className.indexOf('stale') < 0);
+    ok(rightColumn.length > 0 && rightColumn.every((img) => img.style.width === '512.6px'),
+        'the right column of a 1024 px level is still a full cell');
     nlsMgr.remove('nls/930000003');
 
     const hungMap = fakeMap({ zoom: 12, size: { x: 400, y: 800 }, center: { lat: 47.933, lng: 23.892 } });

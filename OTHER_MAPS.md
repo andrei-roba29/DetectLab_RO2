@@ -285,7 +285,7 @@ Alinierea supraviețuiește reîncărcării paginii și repornirii stratului. C�
 | `tools/build-nls-catalog.mjs` | construiește catalogul NLS din WFS (live sau `--json-dir` offline); `--self-test` |
 | `test-other-maps.js` | regresia (rulează fără rețea) |
 | `index.html` | rîndul din panoul „Hărți istorice” + tagurile de asset |
-| `sw.js` | cache `detectlab-v284-nls-find` |
+| `sw.js` | cache `detectlab-v338-other-maps-tile-span` |
 
 ## 7. Cum extinzi catalogul
 
@@ -380,6 +380,49 @@ doar mai mare sau mai mică. Trei lucruri făceau să nu fie așa:
 Versiunea: `js/other-maps-overlay.js?v=20261029-other-maps-stable`, cache
 `detectlab-v306-other-maps-stable`.
 
+## 8.2 Forma foii la zoom — fiecare tile se pictează la măsura lui (v338)
+
+O foie adăugată trebuie să arate ca o poză lipită pe teren: aceeași formă la orice
+zoom, doar mai mare sau mai mică. §8.1 a reparat matematica transformării, dar
+pictarea tile-urilor avea încă o scăpare: **fiecare bitmap era întins într-o celulă
+pătrată de 512 × 512 px, oricît de lat era**.
+
+* Piramida Hungaricana răspunde mereu cu un pătrat de 512 px, cu foia „în interior”
+  (margini în afara foii, în dreapta/jos), iar `css/other-maps.css` taie marginile la
+  caseta foii — deci acolo celula pătrată e corectă.
+* Serviciul IIIF al NLS **decupează** tile-ul la marginea imaginii: cererea pentru
+  ultima coloană / ultimul rînd se întoarce mai îngustă (ex. 376 × 512). Întinsă
+  peste 512 px, ea era lungită pe verticală cu 512/376 iar, la nivelul rădăcină
+  (toată foia într-un singur bitmap 512 × 384), cu 512/384 = 33 %. Cum fiecare nivel
+  are altă margine, foia își schimba forma și era tăiată altfel la fiecare zoom —
+  „hărțile se distorsionează la zoom in/out”.
+* Sursa gratuită **Josephine** (`js/other-maps.js`, scanările Wikimedia Commons)
+  decupează la fel: tile-urile sînt desenate pe un canvas de `tw × th`, cu marginea
+  tăiată la capătul foii, deci aveau aceeași soartă.
+
+Acum dispatcherul spune **cît acoperă fiecare tile** în pixelii nivelului
+(`Tiles.tileSpan(record, x, y, level)`): 512 × 512 pe drumul Hungaricana (neschimbat),
+iar la sursele care decupează — NLS și Josephine — măsura calculată o singură dată în
+`Tiles.tileSpanFor(meta, x, y, level)`:
+`{w: min(512, wL − x·512), h: min(512, hL − y·512)}`, unde
+`wL = w / 2^(maxZoom−level)`. `js/other-maps-overlay.js` pictează bitmap-ul exact la
+această măsură (`sizeTile`, plus cei 0,6 px de suprapunere care acoperă cusăturile),
+iar tile-ul de trecere (stand-in-ul nivelului precedent) își păstrează propria
+măsură, scalată cu 2^Δ — deci nici în timpul schimbării de nivel foia nu se întinde.
+Un tile a cărui sursă nu raportează nimic rămîne pe celula pătrată, adică pe
+comportamentul de dinainte.
+
+Testul verifică `Tiles.tileSpanFor` (rădăcină 411,75 × 315,94 px; coloană
+marginală 376 × 512; rînd marginal 512 × 382; colț 376 × 382; 512 × 512 în interior;
+o foie 4:3 = 512 × 384 la rădăcină), măsurile surselor (Hungaricana rămîne pe celula
+pătrată, NLS și Josephine raportează span-uri),
+pictarea la încadrare (512 × 384, nu un pătrat de 512), rîndul de jos al nivelului
+următor (256 px) și stand-in-ul (1024,6 × 768,6 după 2^Δ).
+
+Versiunea: `js/other-maps-tiles.js`, `js/other-maps-nls.js`,
+`js/other-maps-overlay.js` și `js/other-maps.js` sînt versionate
+`20261031-other-maps-tile-span`, cache `detectlab-v338-other-maps-tile-span`.
+
 ## 8. Regresie
 
 ```bash
@@ -428,6 +471,12 @@ peste 3 100 de verificări, fără rețea:
   Polygon și MultiPolygon, filtrele de id invalid și dedublarea, cutia de
   acoperire și deep-link-ul finder-ului, eșecul de rețea care întoarce lista
   goală;
+* **măsura fiecărui tile** (§8.2): `Tiles.tileSpanFor` dă 512 × 512 în interiorul foii
+  și lățimea / înălțimea tăiată pe muchie (376 × 512, 512 × 382, 376 × 382),
+  `Nls.tileSpan` o folosește, sursa Josephine își expune `tileSpan`, iar
+  `Tiles.tileSpan` păstrează celula pătrată pe Hungaricana; managerul pictează
+  bitmap-ul NLS la 512 × 384 (nu într-un pătrat de 512), rîndul de jos al nivelului
+  următor la 256 px, iar stand-in-ul își păstrează măsura scalată cu 2^Δ;
 * **dispatcherul multi-sursă**: recordurile `{source:"nls"}` sînt rutate spre
   adapterul NLS pentru tile/thumb/record/resolve, iar stringurile și recordurile
   fără sursă rămîn pe Hungaricana — verificat și prin managerul de overlay, care
@@ -438,9 +487,10 @@ peste 3 100 de verificări, fără rețea:
   `combineCatalogMaps` etichetează corect cele două surse și îmbinarea live
   (`mergeLiveRecords`/`rebuildRecords`) crește indexul comun fără dubluri.
 
-`js/other-maps-tiles.js`, `js/other-maps-nls.js`, `js/other-maps-overlay.js`,
-`js/other-maps.js` și `css/other-maps.css` sînt versionate `20261028-other-maps-fix`;
-catalogul Hungaricana (`data/other-maps-catalog.json`) rămîne la
-`20261026-cluj-alba`, iar catalogul NLS (`data/other-maps-nls-catalog.json`) e
-la `20261028-other-maps-fix`; cache-ul service-worker-ului e
-`detectlab-v291-other-maps-fix`.
+`js/other-maps.js`, `js/other-maps-tiles.js`, `js/other-maps-nls.js` și
+`js/other-maps-overlay.js` sînt versionate `20261031-other-maps-tile-span` (vezi
+§8.2), iar `css/other-maps.css` rămîne la `20261028-other-maps-fix`; catalogul
+Hungaricana
+(`data/other-maps-catalog.json`) rămîne la `20261026-cluj-alba`, iar catalogul NLS
+(`data/other-maps-nls-catalog.json`) e la `20261028-other-maps-fix`; cache-ul
+service-worker-ului e `detectlab-v338-other-maps-tile-span`.

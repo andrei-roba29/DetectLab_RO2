@@ -49,6 +49,10 @@
     (function registerJosephineTiles() {
         if (!Tiles || !Tiles.registerSource) return;
         var metaCache = Object.create(null), imageCache = Object.create(null);
+        /* One Commons metadata request at a time per file: a tile asks for
+         * its URL and its span in parallel, and every tile of the first frame
+         * hits the same pending lookup. */
+        var metaInflight = Object.create(null);
         function filename(record) {
             var entry = record && record.josephineEntry;
             var m = entry && String(entry.l || '').match(/File:([^/?#]+)/i);
@@ -58,9 +62,10 @@
             var file = filename(record);
             if (!file) return Promise.reject(new Error('Josephine file name missing'));
             if (metaCache[file]) return Promise.resolve(metaCache[file]);
+            if (metaInflight[file]) return metaInflight[file];
             var url = 'https://en.wikipedia.org/w/api.php?action=query&titles=' +
                 encodeURIComponent('File:' + file) + '&prop=imageinfo&iiprop=url|size&iiurlwidth=320&format=json&origin=*';
-            return fetch(url).then(function (r) { return r.json(); }).then(function (data) {
+            var task = fetch(url).then(function (r) { return r.json(); }).then(function (data) {
                 var pages = data.query && data.query.pages;
                 var page = pages && Object.keys(pages).map(function (k) { return pages[k]; })[0];
                 var ii = page && page.imageinfo && page.imageinfo[0];
@@ -69,6 +74,10 @@
                     w: Number(ii.width), h: Number(ii.height),
                     maxZoom: Tiles.maxZoomFor(Number(ii.width), Number(ii.height)) });
             });
+            metaInflight[file] = task;
+            task.then(function () { delete metaInflight[file]; },
+                function () { delete metaInflight[file]; });
+            return task;
         }
         function image(record) {
             var file = filename(record);
@@ -89,6 +98,17 @@
             thumbUrl: function (record) {
                 return 'https://commons.wikimedia.org/wiki/Special:FilePath/' +
                     encodeURIComponent(filename(record)) + '?width=360';
+            },
+            /* A Commons scan is turned into 512 px canvas tiles on demand and
+             * the edge tiles are CROPPED, so they must be painted at their own
+             * span instead of a stretched square cell (OTHER_MAPS.md §8.2). */
+            tileSpan: function (record, x, y, level) {
+                return info(record).then(function (meta) {
+                    if (Tiles && typeof Tiles.tileSpanFor === 'function') {
+                        return Tiles.tileSpanFor(meta, x, y, level);
+                    }
+                    return { w: 512, h: 512 };
+                });
             },
             tileUrl: function (record, x, y, level) {
                 return image(record).then(function (loaded) {

@@ -38,6 +38,8 @@
  *   thumbUrl(path)              → small preview (no hash needed)
  *   recordUrl(id)               → human-readable Hungaricana page
  *   tileUrl(path, x, y, z)      → Promise<string>
+ *   tileSpan(record, x, y, z)   → {w,h} level pixels a tile really covers
+ *   tileSpanFor(meta, x, y, z)  → the same maths for a cropped-tile source
  *   resolve(path, hint)         → Promise<{w, h, maxZoom, probed}>
  *   clearCache()
  * ===================================================================== */
@@ -328,6 +330,31 @@
         return task;
     }
 
+    /**
+     * Level-pixel box covered by tile (x, y) of a `meta` pyramid.
+     *
+     * Level `level` is `w / 2^(maxZoom − level)` pixels wide and split into
+     * TILE_SIZE cells; the last column / row is clipped to the image, so its
+     * bitmap comes back narrower than a cell.  Sources that CROP their tiles
+     * (NLS IIIF regions, the Josephine Wikimedia canvases) report this span
+     * through their `tileSpan`, and the overlay paints the bitmap at exactly
+     * that size — stretching it into a square cell distorted the sheet by a
+     * different factor at every pyramid level (see OTHER_MAPS.md §8.2).
+     *
+     * @param {{w:number,h:number,maxZoom:number}} meta pyramid size
+     * @returns {{w:number,h:number}} span in level pixels, both axes
+     */
+    function tileSpanFor(meta, x, y, level) {
+        var zoomDelta = (Number(meta && meta.maxZoom) || 0) - (Number(level) || 0);
+        var scale = Math.pow(2, zoomDelta);
+        var wLevel = Math.max(1, (Number(meta && meta.w) || 0) / scale);
+        var hLevel = Math.max(1, (Number(meta && meta.h) || 0) / scale);
+        return {
+            w: Math.max(0, Math.min(TILE_SIZE, wLevel - (Number(x) || 0) * TILE_SIZE)),
+            h: Math.max(0, Math.min(TILE_SIZE, hLevel - (Number(y) || 0) * TILE_SIZE))
+        };
+    }
+
     /* ── multi-source registry ──────────────────────────────────────────
      * Other maps can be served by more than one portal.  Each source
      * registers an adapter implementing tileUrl / thumbUrl / recordUrl /
@@ -372,6 +399,23 @@
         return tileUrlAlt(asPath(arg), x, y, z);
     }
 
+    /* Level-pixel box that one tile really covers.  The Hungaricana ECW
+     * pyramid always answers with a full 512 × 512 square (the sheet is
+     * padded inside it, and the overlay's grid clip trims that padding), so
+     * its span is the grid cell itself.  A source that CROPS its tiles at
+     * the image edge must report the smaller span — an NLS IIIF region is
+     * clamped to the sheet, so the last column / row comes back narrower;
+     * stretching such a bitmap over a whole 512 px cell squashed the sheet
+     * by a different factor at every pyramid level, which is what made the
+     * added maps look distorted while zooming in and out. */
+    function dispatchTileSpan(arg, x, y, z) {
+        var adapter = sourceAdapter(arg);
+        if (adapter && typeof adapter.tileSpan === 'function') {
+            return adapter.tileSpan(arg, x, y, z);
+        }
+        return { w: TILE_SIZE, h: TILE_SIZE };
+    }
+
     function dispatchThumbUrl(arg) {
         var adapter = sourceAdapter(arg);
         if (adapter) return adapter.thumbUrl(arg);
@@ -406,6 +450,8 @@
         recordUrl: dispatchRecordUrl,
         tileUrl: dispatchTileUrl,
         tileUrlAlt: dispatchTileUrlAlt,
+        tileSpan: dispatchTileSpan,
+        tileSpanFor: tileSpanFor,
         preferredOrder: preferredOrder,
         alternateOrder: alternateOrder,
         noteOrder: noteOrder,

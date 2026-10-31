@@ -858,7 +858,21 @@
 // v333: remove the hillshade controls from below the search bar.
 // v334: paint the free Josephine coverage below the other map dots.
 // v337: remove Pleiades sites and AWMC regional names from the Roman layer.
-const CACHE_NAME = 'detectlab-v337-roman-layer-cleanup';
+// v338: “Alte hărți / Other maps” sheets keep their natural proportions at
+//   every zoom.  A tile used to be painted in a full 512 × 512 square cell
+//   whatever its bitmap was; the National Library of Scotland IIIF service
+//   crops a tile at the sheet edge, so the whole sheet (one 512 × 384 bitmap
+//   at the framing zoom) was stretched vertically, and every finer level
+//   stretched its edge column / row by another factor — the map appeared to
+//   distort while zooming in and out.  The tile dispatcher now reports the
+//   level-pixel span each tile really covers (Tiles.tileSpan): 512 px for a
+//   padded Hungaricana cell, the clamped width / height for an NLS edge
+//   tile, and the overlay paints the bitmap at exactly that span — including
+//   the outgoing stand-in, which keeps its own span scaled by 2^Δ.  The free
+//   Josephine source crops its Commons canvases the same way, so it reports
+//   spans too.  Re-tags js/other-maps-tiles.js, js/other-maps-nls.js,
+//   js/other-maps-overlay.js and js/other-maps.js.  See OTHER_MAPS.md §8.2.
+const CACHE_NAME = 'detectlab-v338-other-maps-tile-span';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1010,10 +1024,10 @@ const PRECACHE_URLS = [
   'js/hist-shift.js?v=20261020-hist-shift-docked-slider',
   'js/hist-shift.js?v=20261014-hist-shift',
   'css/hist-shift.css?v=20261014-hist-shift',
-  'js/other-maps-tiles.js?v=20261028-other-maps-fix',
-  'js/other-maps-nls.js?v=20261028-other-maps-fix',
-  'js/other-maps-overlay.js?v=20261029-other-maps-stable',
-  'js/other-maps.js?v=20261030-josephine-coverage',
+  'js/other-maps-tiles.js?v=20261031-other-maps-tile-span',
+  'js/other-maps-nls.js?v=20261031-other-maps-tile-span',
+  'js/other-maps-overlay.js?v=20261031-other-maps-tile-span',
+  'js/other-maps.js?v=20261031-other-maps-tile-span',
   'css/other-maps.css?v=20261028-other-maps-fix',
   'data/other-maps-catalog.json?v=20261026-cluj-alba',
   'data/other-maps-nls-catalog.json?v=20261028-other-maps-fix',
