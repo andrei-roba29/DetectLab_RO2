@@ -930,7 +930,7 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 // ── Static assets to pre-cache on install ──
 const PRECACHE_URLS = [
   // v301: Next-Gen APM (MANUAL) — see the header note above.
-  'css/next-gen-apm.css?v=20261031-dock-safe-area',
+  'css/next-gen-apm.css?v=20261031-dock-leafleet-align',
   'js/apm-next/apm-core.js?v=20261030-apm-pick-hidden',
   'js/apm-next/apm-raster.js?v=20261030-apm-pick-hidden',
   'js/apm-next/apm-heatmap.js?v=20261030-apm-pick-hidden',

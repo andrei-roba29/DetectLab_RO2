@@ -268,8 +268,9 @@ body.is-pwa .apm-panel {
     .apm-dock { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
 }
 /* The PWA map can extend below the measured viewport: lift the entire
-   drawer (collapsed arrow AND expanded list) out of that bleed as well. */
+   drawer (collapsed arrow AND expanded list) out of that bleed as well,
+   aligned with the Leaflet copyright tag (4px + var(--pwa-bleed)). */
 body.is-pwa .apm-dock {
-    bottom: calc(16px + env(safe-area-inset-bottom, 0px) + var(--pwa-bleed, 0px));
+    bottom: calc(4px + var(--pwa-bleed, 0px));
 }
 .apm-dock-list { overscroll-behavior: contain; touch-action: pan-x; -webkit-overflow-scrolling: touch; }
