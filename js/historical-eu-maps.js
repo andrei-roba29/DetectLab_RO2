@@ -510,6 +510,7 @@
         // layer belongs to (.cenagis-map-row[data-map-id] / .cenagis-toggle),
         // and the title to name it in the “server is down” notice.
         layer._detectlabUiKeys = [mapKey];
+        var lang = getLang();
         layer._detectlabUiTitle = mapMeta.title[lang] || mapMeta.title.en || mapMeta.title.ro || mapKey;
         _leafletLayers[mapKey] = layer;
         return layer;

@@ -132,15 +132,28 @@ or no answer within 9 s. Modules that hide the error from Leaflet
 `done(null, tile)`) call `DetectLabWmsHealth.noteFailure(layer)` for every
 failed fetch instead — same threshold, same outcome.
 
+**Transient CENAGIS errors (2026-10-31).** The first bad image/timeout no
+longer immediately disables the selected map. After 1.5 s, the guard retries
+once with a cache-busting query parameter; a valid second image loads the layer
+without requiring on/off. Three failing tiles on an already active CENAGIS
+layer are likewise confirmed by a probe (with one retry) before switching it
+off. Turning the layer off while the retry is pending cancels the new request.
+Other providers retain their existing single-probe behavior. The dynamic
+catalog also now resolves its localized layer title *before* adding the layer,
+so activation no longer stops on an undefined `lang` variable.
+
 **Verdicts** are keyed `<host>|<layers>`, so the rasters of a server fail and
-recover independently of its other layers. A down verdict is sticky for 60 s:
-re-toggling inside the cooldown sends **no** request and re-shows the notice.
+recover independently of its other layers. A confirmed down verdict is sticky
+for 60 s: re-toggling inside the cooldown sends **no** request and re-shows the
+notice.
 
 **The UI says what happened.** The row gets `data-wms-state="down"`, is dimmed,
 its switch is turned back off, and a dismissible notice names **the provider
 that failed** and the layer(s), in RO/EN via `_currentLang`/`<html lang>`:
-“This map cannot be loaded … The map provider’s server (**IGN France /
-Géoplateforme**) answers with an error instead of an image …”. Offline
+“This map cannot be loaded … The map service (**IGN France /
+Géoplateforme**) did not deliver a valid image … This may be temporary …”.
+If the title is unavailable, the notice says “the selected map” instead of
+printing empty quotation marks. Offline
 (`navigator.onLine === false`) is reported as a connection problem and leaves no
 cooldown behind.
 

@@ -29,8 +29,9 @@
 
      • a watched layer probes ONE GetMap URL before it is added — the exact
        URL Leaflet would request for the first visible tile;
-     • a non-image answer (or a timeout) marks that layer down for a cooldown,
-       so re-toggling it inside the cooldown makes no request at all;
+     • a non-image answer (or a timeout) marks that layer down for a cooldown
+       (after one automatic retry on CENAGIS), so re-toggling it inside the
+       cooldown makes no request at all;
      • hosts configured as “watch” keep their probe-free behaviour: they are
        added, and only a run of failed tiles (a mid-session outage) trips them;
      • the layer's row is marked unavailable, its switch is switched back off
@@ -140,6 +141,8 @@
 
     var COOLDOWN_MS = 60000;        // a down verdict is trusted this long
     var PROBE_TIMEOUT_MS = 9000;    // no answer → treated as unavailable
+    var CENAGIS_RETRY_MS = 1500;   // one bounded second chance for intermittent WMS errors
+    var HEALTHY_CHECK_MS = 10000;   // avoid repeatedly probing a healthy sheet's bad edge tiles
     var MIN_TILE_FAILURES = 3;      // tile failures that trip a healthy layer…
     var HARD_TILE_FAILURES = 8;     // …and the count that trips even with hits
     var NOTICE_ID = 'detectlabWmsNotice';
@@ -465,6 +468,24 @@
         });
     }
 
+    /* CENAGIS occasionally returns a temporary error/timeout and then a valid
+       image seconds later. Don't switch the user's layer off on that first
+       failure. Only this host gets a second probe; the retry has a fresh URL
+       so a cached HTTP-200 error body cannot be mistaken for a second outage.
+       If the user turned the layer off meanwhile, do not send the retry. */
+    function probeWithRetry(url, layer, stillWanted) {
+        return probe(url).then(function (ok) {
+            if (ok || hostOf(layer._url) !== 'pastmaps.cenagis.edu.pl' || !stillWanted()
+                    || (navigator && navigator.onLine === false)) return ok;
+            return new Promise(function (resolve) {
+                window.setTimeout(resolve, CENAGIS_RETRY_MS);
+            }).then(function () {
+                if (!stillWanted()) return false;
+                return probe(url + (url.indexOf('?') === -1 ? '?' : '&') + '_dl_retry=' + Date.now());
+            });
+        });
+    }
+
     function setVerdict(key, state, reason) {
         verdicts[key] = { state: state, at: Date.now(), reason: reason || '' };
     }
@@ -496,13 +517,35 @@
     function countTileFailure(layer, state) {
         state.fails = (state.fails || 0) + 1;
         if (!((state.fails >= MIN_TILE_FAILURES && !state.oks) || state.fails >= HARD_TILE_FAILURES)) return;
-        if (!state.watching) return;
-        state.watching = false;
-        detachTileWatcher(layer, state);
-        var offline = navigator && navigator.onLine === false;
-        if (!offline) setVerdict(verdictKey(layer), 'down', 'tiles');
-        removeQuietly(layer);
-        trip(layer, offline ? 'offline' : 'tiles', state.opts || {});
+        if (!state.watching || state.confirming) return;
+        function fail() {
+            if (!state.watching) return;
+            state.watching = false;
+            detachTileWatcher(layer, state);
+            var offline = navigator && navigator.onLine === false;
+            if (!offline) setVerdict(verdictKey(layer), 'down', 'tiles');
+            removeQuietly(layer);
+            trip(layer, offline ? 'offline' : 'tiles', state.opts || {});
+        }
+        // A handful of failed tiles may be a temporary CENAGIS gateway error
+        // or a bad edge-of-sheet tile. Confirm with a fresh image before
+        // disabling a layer that was already drawing successfully.
+        if (hostOf(layer._url) !== 'pastmaps.cenagis.edu.pl') { fail(); return; }
+        if (state.healthyCheckAt && Date.now() - state.healthyCheckAt < HEALTHY_CHECK_MS) {
+            state.fails = 0;
+            return;
+        }
+        var sample = probeUrlFor(layer, layer._map);
+        if (!sample) { fail(); return; }
+        state.confirming = true;
+        var token = state.token;
+        probeWithRetry(sample, layer, function () { return state.watching && token === state.token; })
+            .then(function (ok) {
+                if (token !== state.token || !state.watching) return;
+                state.confirming = false;
+                if (ok) { state.fails = 0; state.healthyCheckAt = Date.now(); return; }
+                fail();
+            });
     }
 
     /* Tiles of an accepted layer: a mid-session outage trips the same path. */
@@ -511,6 +554,7 @@
         state.watching = true;
         state.fails = 0;
         state.oks = 0;
+        state.healthyCheckAt = 0;
         state.onTileLoad = function () { state.oks++; state.fails = 0; };
         state.onTileError = function () { countTileFailure(layer, state); };
         layer.on('tileload', state.onTileLoad);
@@ -549,7 +593,7 @@
             markRows(t.rows, true, title);
         });
         if (!names.length) names = layerNames(layer, keysFor(layer));
-        showNotice(names, reason, provider);
+        showNotice(names, reason, provider || providerFor(layer && layer._url));
     }
 
     /* Human name for a key: the layer's own title, the registry title, the
@@ -629,13 +673,13 @@
         }
 
         var offline = reason === 'offline';
-        var who = provider || 'CENAGIS / IH PAN';
+        var who = provider || (ro() ? 'furnizorul hărții' : 'the map provider');
         noticeNodes.title.textContent = offline
             ? (ro() ? 'Ești offline' : 'You are offline')
             : (customMessage ? (ro() ? 'Hartă indisponibilă' : 'Map unavailable')
                 : (ro() ? 'Harta nu poate fi încărcată' : 'This map cannot be loaded'));
         var list = (names || []).filter(function (n, i) { return n && (names || []).indexOf(n) === i; })
-            .slice(0, 3).join(', ');
+            .slice(0, 3).join(', ') || (ro() ? 'harta selectată' : 'the selected map');
         noticeNodes.body.textContent = customMessage
             ? customMessage
             : offline
@@ -643,10 +687,10 @@
                     ? 'Conexiunea la internet pare întreruptă, deci „' + list + '” nu poate fi descărcată acum. Reîncearcă după ce revii online.'
                     : 'Your internet connection appears to be down, so “' + list + '” cannot be downloaded right now. Retry once you are back online.')
                 : (ro()
-                    ? 'Serverul de hărți al furnizorului (' + who + ') răspunde cu o eroare în loc de imagine, deci „' + list
-                        + '” nu se poate afișa. Este o problemă la sursă, nu la conexiunea sau browserul tău — restul hărții funcționează normal.'
-                    : 'The map provider’s server (' + who + ') answers with an error instead of an image, so “' + list
-                        + '” cannot be displayed. This is a problem at the source, not your connection or browser — the rest of the map keeps working.');
+                    ? 'Serviciul de hărți (' + who + ') nu a livrat o imagine validă pentru „' + list
+                        + '”. Poate fi o întrerupere temporară; reîncearcă peste câteva momente. Restul hărții funcționează normal.'
+                    : 'The map service (' + who + ') did not deliver a valid image for “' + list
+                        + '”. This may be temporary; please try again shortly. The rest of the map keeps working.');
         noticeNodes.retry.textContent = ro() ? 'Reîncearcă' : 'Retry';
         noticeNodes.close.textContent = ro() ? 'Închide' : 'Close';
         noticeNodes.box.style.display = 'block';
@@ -671,7 +715,7 @@
         layer._detectlabGuardMode = mode;
         var originalAdd = layer.onAdd;
         var originalRemove = layer.onRemove;
-        var state = { token: 0, pending: false, watching: false, opts: opts, fails: 0, oks: 0 };
+        var state = { token: 0, pending: false, watching: false, confirming: false, opts: opts, fails: 0, oks: 0 };
         layer._detectlabGuardState = state;
 
         layer.onAdd = function (map) {
@@ -690,7 +734,7 @@
                 return;
             }
             state.pending = true;
-            probe(sample).then(function (ok) {
+            probeWithRetry(sample, self, function () { return token === state.token; }).then(function (ok) {
                 if (token !== state.token) return;       // removed while probing
                 if (ok) {
                     state.pending = false;
@@ -707,7 +751,12 @@
         };
 
         layer.onRemove = function (map) {
-            state.token++;                     // a pending probe no longer counts
+            state.token++;                     // cancel pending probe/confirmation
+            if (state.watching) {
+                detachTileWatcher(this, state);
+                state.watching = false;
+                state.confirming = false;
+            }
             if (state.pending) {
                 state.pending = false;         // original onAdd never ran
                 return;
