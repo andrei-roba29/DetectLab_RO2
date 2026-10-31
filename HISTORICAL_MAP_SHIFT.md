@@ -13,8 +13,8 @@ exagerat; ții apăsat din nou și oprești switch-ul → LOCK, poziția rămân
 2. **Switch ON (mod mutare):** handler-ul `dragging` al hărții de bază e
    dezactivat, iar drag-ul pe ecran mută harta istorică selectată (implicit
    cea de deasupra; poate fi aleasă din lista din panou). Deplasarea maximă
-   e **300 m** (magnitudine, EPSG:3857) — suficient pentru erorile reale de
-   georeferențiere, imposibil să „pierzi" foaia.
+   e **3 km** (magnitudine, EPSG:3857) — permite corecții mai mari de
+   georeferențiere, păstrând o limită de siguranță.
 3. **Long-press din nou / switch OFF / × = LOCK:** drag-ul revine la harta de
    bază, iar poziția rămâne. Deplasarea e salvată per strat în
    `localStorage` (`dlHistShift.v1`) și reaplicată la pornirea stratului și
@@ -33,7 +33,7 @@ ArcGIS sau imagine. Deplasarea e ținută în **metri proiectați**, nu pixeli,
 așa că poziția geografică rămâne aceeași la orice zoom.
 
 API: `window.DetectLabHistShift` — `attach/activeTargets/setEnabled/
-isEnabled/getOffset/setOffset/reset/showPanel`, `MAX_OFFSET_M = 300`.
+isEnabled/getOffset/setOffset/reset/showPanel`, `MAX_OFFSET_M = 3000`.
 
 Regresie: `node test-hist-shift.js` (descoperire gratuit+premium, clamp,
 persistență, long-press, drag, lock, reset). Asset-uri versionate
@@ -45,3 +45,8 @@ stratului era adăugat pe ecranul principal — `isUiTarget()` potrivea cu
 oglinzile verticale, deci orice apăsare pe hartă era tratată drept UI.
 Vezi `HIST_SHIFT_DOCKED_SLIDER.md` (asset
 `20261020-hist-shift-docked-slider`, cache SW `v241`).
+
+**Extindere (2026-10-31):** limita crește de la 300 m la 3 km (metri
+proiectați EPSG:3857), în orice direcție. Pozițiile deja salvate rămân
+valabile; lock-ul și resetarea nu se schimbă. Asset JS
+`20261031-hist-shift-range`, cache SW `v344-hist-shift-range`.

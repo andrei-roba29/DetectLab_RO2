@@ -262,5 +262,14 @@ body.is-pwa .apm-panel {
 
 /* Keep the shared drawer above the LiDAR panel and the PWA safe area. */
 .apm-dock { z-index: 1300; }
-body.is-pwa .apm-dock { bottom: max(0px, env(safe-area-inset-bottom, 0px)); }
+/* Leave a visible gap above the phone's navigation/home bar, even when
+   Android reports a zero safe-area inset. Keep desktop browser placement. */
+@media (max-width: 768px), (pointer: coarse) {
+    .apm-dock { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+}
+/* The PWA map can extend below the measured viewport: lift the entire
+   drawer (collapsed arrow AND expanded list) out of that bleed as well. */
+body.is-pwa .apm-dock {
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px) + var(--pwa-bleed, 0px));
+}
 .apm-dock-list { overscroll-behavior: contain; touch-action: pan-x; -webkit-overflow-scrolling: touch; }

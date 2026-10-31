@@ -886,7 +886,9 @@
 //   and the LiDAR Settings, carrying the same summary (layers · fetching
 //   distance · tiles ready). Re-tags js/lidar-3d-focus.js and
 //   css/map3d-terrain.css.
-const CACHE_NAME = 'detectlab-v342-lidar-dock-minimized';
+// v343: lift the minimized-window drawer above mobile system bars and PWA bleed.
+// v344: allow historical-map alignment up to 3 km instead of 300 m.
+const CACHE_NAME = 'detectlab-v344-hist-shift-range';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -928,7 +930,7 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 // ── Static assets to pre-cache on install ──
 const PRECACHE_URLS = [
   // v301: Next-Gen APM (MANUAL) — see the header note above.
-  'css/next-gen-apm.css?v=20261030-shared-dock',
+  'css/next-gen-apm.css?v=20261031-dock-safe-area',
   'js/apm-next/apm-core.js?v=20261030-apm-pick-hidden',
   'js/apm-next/apm-raster.js?v=20261030-apm-pick-hidden',
   'js/apm-next/apm-heatmap.js?v=20261030-apm-pick-hidden',
@@ -1035,7 +1037,7 @@ const PRECACHE_URLS = [
   'js/layer-registry.js?v=20261013-3d-mobile',
   'js/layer-registry.js?v=20261013-3d-mirror',
   'js/layer-registry.js',
-  'js/hist-shift.js?v=20261020-hist-shift-docked-slider',
+  'js/hist-shift.js?v=20261031-hist-shift-range',
   'js/hist-shift.js?v=20261014-hist-shift',
   'css/hist-shift.css?v=20261014-hist-shift',
   'js/other-maps-tiles.js?v=20261031-other-maps-tile-span',
