@@ -1951,14 +1951,33 @@
     function cameraPitch() { return map && map.getPitch ? map.getPitch() : (CONFIG.camera.pitch || 0); }
     function cameraBearing() { return map && map.getBearing ? map.getBearing() : 0; }
 
-    /** Centre/zoom/bearing of the 2D map (source of truth when 3D opens). */
+    /*
+     * THE BEARING HAND-OFF — the two engines turn in opposite directions.
+     *
+     * MapLibre's bearing is counter-clockwise from north (+30° shows north
+     * up-LEFT). Leaflet's map pane is turned with CSS rotate(+30deg), which is
+     * clockwise (north up-RIGHT; js/map-rotate.js). Copying the number across
+     * made every 2D ⇄ 3D hand-off MIRROR the map: a 2D map at +30° entered 3D
+     * at −30° on screen, and on return came back at +30° the other way round,
+     * so the whole 2D map — and the LiDAR disc drawn on it — swung about the
+     * pivot. The 2D number is the one the app speaks everywhere (the Leaflet
+     * bearing, the compass, the tests), so the 3D side converts at the edge:
+     * the two bearings are each other's negation.
+     */
+    function bearingFlip(deg) {
+        var value = -(Number(deg) || 0);
+        return value === 0 ? 0 : value;     /* never −0 */
+    }
+
+    /** Centre/zoom/bearing of the 2D map (source of truth when 3D opens).
+     *  The bearing returned is MapLibre's (the camera is handed to it). */
     function cameraFrom2D() {
         var lmap = leafletMap();
         var c = CONFIG.camera || {};
         if (!lmap) return { center: [12, 51], zoom: 3, bearing: 0 };
         var center = lmap.getCenter();
         var bearing = 0;
-        try { if (typeof lmap.getBearing === 'function') bearing = lmap.getBearing() || 0; } catch (e) { bearing = 0; }
+        try { if (typeof lmap.getBearing === 'function') bearing = bearingFlip(lmap.getBearing()); } catch (e) { bearing = 0; }
         return {
             center: [center.lng, center.lat],
             zoom: lmap.getZoom(),
@@ -1994,7 +2013,8 @@
         try {
             var center = map.getCenter();
             if (typeof lmap.setBearing === 'function' && map.getBearing) {
-                lmap.setBearing(map.getBearing(), { noMove: true });
+                /* MapLibre counts the bearing the other way: see bearingFlip. */
+                lmap.setBearing(bearingFlip(map.getBearing()), { noMove: true });
             }
             lmap.setView([center.lat, center.lng], map.getZoom(), { animate: false });
         } catch (e) {
@@ -4590,7 +4610,7 @@
             camera: map ? {
                 center: [map.getCenter().lng, map.getCenter().lat],
                 zoom: map.getZoom(),
-                bearing: map.getBearing(),
+                bearing: bearingFlip(map.getBearing()),
                 pitch: map.getPitch()
             } : null,
             terrain: terrainSource(),
@@ -4725,7 +4745,8 @@
         setExaggeration: setExaggeration,
         getExaggeration: function () { return state.exaggeration; },
         setPitch: function (v) { if (map) map.setPitch(Number(v) || 0); },
-        setBearing: function (v) { if (map) map.setBearing(Number(v) || 0); },
+        /* Public bearing is the 2D (Leaflet) convention, like status().camera. */
+        setBearing: function (v) { if (map) map.setBearing(bearingFlip(v)); },
         resetView: function () { resetView(true); },
         status: status,
         report: report,

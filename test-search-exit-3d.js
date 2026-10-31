@@ -17,6 +17,8 @@ const select = grab(app, /function selectResult\(item\) \{[\s\S]*?\n {12}\}/);
 const close = grab(viewer, /function close\(\) \{[\s\S]*?\n {4}\}/);
 const settleMotion = grab(viewer, /function settleLeafletMotion\(lmap\) \{[\s\S]*?\n {4}\}/);
 const camera = grab(viewer, /function cameraTo2D\(\) \{[\s\S]*?\n {4}\}/);
+/* cameraTo2D converts the bearing through bearingFlip (map3d-terrain.js). */
+const bearingFlip = grab(viewer, /function bearingFlip\(deg\) \{[\s\S]*?\n {4}\}/);
 const keyboard = grab(app, /searchInput\.addEventListener\('keydown', function \(e\) \{[\s\S]*?\n {16}\}\);/);
 const display = grab(app, /function displaySearchResults\(data, searchTerm\) \{[\s\S]*?\n {12}\}/);
 
@@ -86,7 +88,7 @@ function boot(mode) {
     vm.runInContext(`DetectLabMap3D = (function () {
         var map = threeDMap, popup = null, cesiumViewer = null;
         function deactivateCesium() {}
-        ${settleMotion}\n${camera}\n${close}
+        ${settleMotion}\n${bearingFlip}\n${camera}\n${close}
         return { isOpen: function () { return state.open; }, close: function () { events.push('close'); return close(); } };
     })();\n${select}\n${display}\n${keyboard}`, context);
     if (mode === 'absent') delete context.DetectLabMap3D;
@@ -157,7 +159,7 @@ for (const coordinateItem of [null, { valid: false }]) {
     assert(pending.context.state.open && !pending.events.includes('fly'),
         'pending place lookup and invalid coordinates do not exit 3D');
 }
-const viewerUrl = 'js/map3d-terrain.js?v=20261026-desktop-basemap';
+const viewerUrl = 'js/map3d-terrain.js?v=20261031-3d-bearing-handoff';
 assert(read('index.html').includes(viewerUrl) && read('sw.js').includes("'" + viewerUrl + "'"),
     'the 3D camera hand-off fix is cache-busted and precached');
 assert(Number(read('sw.js').match(/CACHE_NAME = 'detectlab-v(\d+)-/)[1]) >= 245);

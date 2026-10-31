@@ -874,7 +874,12 @@
 //   js/other-maps-overlay.js and js/other-maps.js.  See OTHER_MAPS.md §8.2.
 // v339: hide Other maps catalogue dots while aligning a sheet.
 // v340: improve contrast of dark Other maps circles.
-const CACHE_NAME = 'detectlab-v340-other-maps-white-outline';
+// v341: the 2D ⇄ 3D hand-off stops mirroring the map. MapLibre counts the
+//   bearing counter-clockwise and Leaflet clockwise, and the camera was copied
+//   across unconverted: a rotated 2D map swung (with the LiDAR disc on it) on
+//   every trip into and back out of 3D. The bearing is now negated at the
+//   edge (bearingFlip in js/map3d-terrain.js). See MAP3D_BEARING_HANDOFF.md.
+const CACHE_NAME = 'detectlab-v341-3d-bearing-handoff';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1096,6 +1101,7 @@ const PRECACHE_URLS = [
   'js/map3d-terrain.js?v=20261029-3d-startup-repaint',
   'js/map3d-terrain.js?v=20261030-lidar-photo-3d',
   'js/map3d-terrain.js?v=20261030-3d-analysis-dock',
+  'js/map3d-terrain.js?v=20261031-3d-bearing-handoff',
   'js/map-app.js?v=20261026-lidar-whole-or-disc',
   'js/lidar-3d-focus.js?v=20261026-lidar-whole-or-disc',
   'js/map3d-terrain.js?v=20261024-gesture-only-camera',
