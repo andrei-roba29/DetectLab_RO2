@@ -888,7 +888,7 @@
 //   css/map3d-terrain.css.
 // v343: lift the minimized-window drawer above mobile system bars and PWA bleed.
 // v344: allow historical-map alignment up to 3 km instead of 300 m.
-const CACHE_NAME = 'detectlab-v345-cenagis-retry';
+const CACHE_NAME = 'detectlab-v346-romania-only';
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
 const OFFLINE_TILE_CACHE_NAME = 'detectlab-offline-tiles-v1';
@@ -1870,7 +1870,10 @@ const PRECACHE_URLS = [
   'js/corona-wms-layer.js?v=20261030-sat60-live-location',
   'js/tile-perf.js?v=20261030-sat60-live-location',
   'js/map-app.js?v=20261030-roman-layer-cleanup',
-  'js/map-app.js?v=20261030-walachia'
+  'js/map-app.js?v=20261030-walachia',
+  'js/romania-view.js?v=20261031-romania-only',
+  'js/map-app.js?v=20261031-romania-only',
+  'js/map3d-terrain.js?v=20261031-romania-only'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──

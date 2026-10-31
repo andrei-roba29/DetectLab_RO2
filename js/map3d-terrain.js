@@ -4090,6 +4090,13 @@
             hash: false,
             cooperativeGestures: false
         };
+        // Match the Romania-only Leaflet navigation lock in the terrain view.
+        // Other pages using this module can still supply their own camera limits.
+        if (root.DetectLabRomaniaView) {
+            options.maxBounds = root.DetectLabRomaniaView.mapLibreBounds();
+            var lmap = leafletMap();
+            if (lmap && typeof lmap.getMinZoom === 'function') options.minZoom = lmap.getMinZoom();
+        }
         /* Only set the ones we have a value for: MapLibre has its own defaults
          * (devicePixelRatio and a 4096² ceiling) and `undefined` would override
          * them with nothing. */
