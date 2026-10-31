@@ -31,7 +31,7 @@
 
     var LONG_PRESS_MS = 550;
     var MOVE_TOLERANCE_PX = 10;
-    var MAX_OFFSET_M = 300;               /* „nu exagerat de tare" */
+    var MAX_OFFSET_M = 3000;               /* 3 km projected: room for larger alignment corrections */
     var STORAGE_KEY = 'dlHistShift.v1';
     var HIST_GROUPS = { 'hist-free': true, 'hist-premium': true, 'hist-sat': true };
     /* Layers that are historical but whose live URL is not the registry URL
@@ -425,7 +425,7 @@
     }
 
     var api = {
-        VERSION: '2026-10-20-hist-shift-v2',
+        VERSION: '2026-10-31-hist-shift-v3',
         MAX_OFFSET_M: MAX_OFFSET_M,
         LONG_PRESS_MS: LONG_PRESS_MS,
         attach: attach,

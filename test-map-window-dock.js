@@ -27,3 +27,15 @@ assert.equal(tab.attrs['aria-expanded'], 'false');
 api.minimize('apm-next', 'APM Next-Gen', () => restored.push('apm'));
 assert.equal(list.hidden, true, 'drawer starts collapsed after all entries were restored');
 console.log('Shared minimized-window drawer: multi-window, restore, removal and collapse OK.');
+
+// The arrow and expanded list move together above mobile system UI. Desktop
+// browser placement stays flush with the map; PWA also compensates map bleed.
+const css = fs.readFileSync('css/next-gen-apm.css', 'utf8');
+assert.match(css, /@media \(max-width: 768px\), \(pointer: coarse\)\s*\{\s*\.apm-dock\s*\{\s*bottom: calc\(16px \+ env\(safe-area-inset-bottom, 0px\)\);/);
+assert.match(css, /body\.is-pwa \.apm-dock\s*\{\s*bottom: calc\(16px \+ env\(safe-area-inset-bottom, 0px\) \+ var\(--pwa-bleed, 0px\)\);/);
+assert.match(css, /\.apm-dock\s*\{[^}]*bottom: 0;/);
+const cssUrl = 'css/next-gen-apm.css?v=20261031-dock-safe-area';
+for (const file of ['index.html', 'sw.js']) {
+    assert(fs.readFileSync(file, 'utf8').includes(cssUrl), `${file} uses the updated drawer stylesheet`);
+}
+console.log('Mobile drawer clears safe area and PWA bleed; cache tags match.');

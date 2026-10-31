@@ -128,9 +128,23 @@ assert.ok(HS, 'DetectLabHistShift exported');
     assert.strictEqual(targets[1].defId, 'hist.austrian');
     console.log('  ✓ free + premium historical layers discovered from the live map');
 
-    // Clamp: "not excessively" — magnitude capped at MAX_OFFSET_M
+    // Larger corrections now work unchanged beyond the old 300 m limit.
+    assert.strictEqual(HS.MAX_OFFSET_M, 3000, 'alignment range increased to 3 km');
+    const larger = HS.setOffset('pane_wig100k', 1200, -1600);
+    assert.strictEqual(JSON.stringify(larger), JSON.stringify({ x: 1200, y: -1600 }));
+    assert.strictEqual(JSON.stringify(JSON.parse(store['dlHistShift.v1'])['pane_wig100k']),
+        JSON.stringify(larger), 'larger correction persists without truncation');
+    const diagonal = HS.setOffset('pane_wig100k', -6000, 8000);
+    assert.ok(Math.abs(diagonal.x + 1800) < 1e-9 && Math.abs(diagonal.y - 2400) < 1e-9,
+        'diagonal clamp preserves direction and caps magnitude, not individual axes');
+    for (const file of ['index.html', 'sw.js']) {
+        assert.ok(read(file).includes('js/hist-shift.js?v=20261031-hist-shift-range'),
+            file + ' loads the extended-range module');
+    }
+
+    // Excessive offsets are still capped at MAX_OFFSET_M.
     const clamped = HS.setOffset('pane_wig100k', 10000, 0);
-    assert.ok(Math.abs(Math.hypot(clamped.x, clamped.y) - HS.MAX_OFFSET_M) < 1e-9, 'offset clamped to 300 m');
+    assert.ok(Math.abs(Math.hypot(clamped.x, clamped.y) - HS.MAX_OFFSET_M) < 1e-9, 'offset clamped to 3 km');
     HS.setOffset('pane_wig100k', 100, -50);
     const saved = JSON.parse(store['dlHistShift.v1']);
     assert.strictEqual(JSON.stringify(saved['pane_wig100k']), JSON.stringify({ x: 100, y: -50 }), 'offset persisted to localStorage');
@@ -232,9 +246,9 @@ assert.ok(HS, 'DetectLabHistShift exported');
 
     // Static wiring
     const index = read('index.html'), sw = read('sw.js'), css = read('css/hist-shift.css');
-    assert.ok(index.includes('js/hist-shift.js?v=20261020-hist-shift-docked-slider'), 'index loads hist-shift');
+    assert.ok(index.includes('js/hist-shift.js?v=20261031-hist-shift-range'), 'index loads hist-shift');
     assert.ok(index.includes('css/hist-shift.css?v=20261014-hist-shift'), 'index loads hist-shift css');
-    assert.ok(sw.includes("'js/hist-shift.js?v=20261020-hist-shift-docked-slider'"), 'sw precaches hist-shift');
+    assert.ok(sw.includes("'js/hist-shift.js?v=20261031-hist-shift-range'"), 'sw precaches hist-shift');
     assert.ok(css.includes('.hist-shift-panel'), 'panel styles present');
     console.log('  ✓ wiring (index / service worker / css)');
     console.log('✅ test-hist-shift.js passed');
