@@ -91,22 +91,49 @@
      */
     function createLayer(raster, L, options) {
         var HeatLayer = L.GridLayer.extend({
-            createTile: function (coords) {
+            // Pixel sampling used to run synchronously inside createTile. At high zoom levels a
+            // single wheel gesture can request many 256x256 tiles, monopolising the UI thread.
+            // Process a few rows per animation frame so Leaflet can paint/handle gestures between
+            // chunks. Closed-over geographic coordinates use the EPSG:3857 inverse directly rather
+            // than allocating 65k L.Points and calling map.unproject for every tile.
+            createTile: function (coords, done) {
                 var size = this.getTileSize(), tile = L.DomUtil.create('canvas', 'apm-heatmap-tile');
                 tile.width = size.x; tile.height = size.y;
                 tile.setAttribute('role', 'presentation');
                 var context = tile.getContext('2d'), image = context.createImageData(size.x, size.y);
-                var map = this._map, lons = [], lats = [], x, y;
-                for (x = 0; x < size.x; x++) lons[x] = map.unproject(L.point(coords.x * size.x + x + 0.5, coords.y * size.y), coords.z).lng;
-                for (y = 0; y < size.y; y++) lats[y] = map.unproject(L.point(coords.x * size.x, coords.y * size.y + y + 0.5), coords.z).lat;
-                for (y = 0; y < size.y; y++) for (x = 0; x < size.x; x++) {
-                    sampleRGBA(raster, lons[x], lats[y], image.data, 4 * (y * size.x + x));
+                var world = size.x * Math.pow(2, coords.z), x0 = coords.x * size.x, y0 = coords.y * size.y;
+                var lons = new Float64Array(size.x), lats = new Float64Array(size.y);
+                var x, y;
+                for (x = 0; x < size.x; x++) lons[x] = ((x0 + x + 0.5) / world) * 360 - 180;
+                for (y = 0; y < size.y; y++) {
+                    var mercatorY = Math.PI * (1 - 2 * (y0 + y + 0.5) / world);
+                    lats[y] = Math.atan(Math.sinh(mercatorY)) * 180 / Math.PI;
                 }
-                context.putImageData(image, 0, 0);
+                var row = 0, rowsPerFrame = 8, layer = this;
+
+                function paintChunk() {
+                    // A zoom/pan may discard a pending tile. Do no more work for a removed layer.
+                    if (!layer._map || !tile.parentNode) return;
+                    var end = Math.min(size.y, row + rowsPerFrame);
+                    for (; row < end; row++) {
+                        var offset = 4 * row * size.x;
+                        for (var col = 0; col < size.x; col++) sampleRGBA(raster, lons[col], lats[row], image.data, offset + 4 * col);
+                    }
+                    if (row < size.y) schedule(paintChunk);
+                    else {
+                        context.putImageData(image, 0, 0);
+                        if (done) done(null, tile);
+                    }
+                }
+                function schedule(fn) {
+                    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(fn);
+                    else setTimeout(fn, 0);
+                }
+                schedule(paintChunk);
                 return tile;
             }
         });
-        return new HeatLayer(Object.assign({ tileSize: 256, updateWhenIdle: true, keepBuffer: 1, opacity: 1,
+        return new HeatLayer(Object.assign({ tileSize: 256, updateWhenIdle: true, updateWhenZooming: false, keepBuffer: 1, opacity: 1,
             bounds: L.latLngBounds([raster.north - raster.h * raster.dLat, raster.west],
                 [raster.north, raster.west + raster.w * raster.dLon]) }, options));
     }

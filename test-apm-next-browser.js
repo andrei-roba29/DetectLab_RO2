@@ -219,7 +219,10 @@ async function runWithResult(page) {
     await mapClick(page, 200, 120);                                  // top-left area, not under the panel
     await clickButtonByText(page, '.apm-panel button', 'Run MANUAL model');
     await page.waitForSelector('.apm-panel .apm-results:not([hidden]) .apm-result-scale .apm-heat-ramp', { timeout: 5000 });
-    await sleep(100);
+    await page.waitForFunction(() => [...document.querySelectorAll('.apm-heatmap-tile')].some(tile => {
+        const pixels = tile.getContext('2d').getImageData(0, 0, tile.width, tile.height).data;
+        return pixels.some((v, i) => i % 4 === 3 && v > 0);
+    }), { timeout: 5000 });
 }
 
 for (const [width, height] of [[390, 844], [1280, 800]]) {
@@ -258,6 +261,22 @@ test('hybrid output renders coloured heat tiles and unfilled very-high-only outl
     assert.ok(result.tiles > 0 && result.coloured, 'canvas tiles carry real model-score colour pixels');
     assert.deepStrictEqual(result.outlines, ['none'], 'hotspot is an outline, not another opaque fill');
     assert.strictEqual(result.heatLayers, 1);
+    await page.$eval('.apm-results .apm-check input', el => el.click());
+    await sleep(50);
+    const polygonOnly = await page.evaluate(() => ({
+        checked: document.querySelector('.apm-results .apm-check input').checked,
+        heatLayers: Object.values(window._dlMap._layers).filter(l => l instanceof L.GridLayer).length,
+        fill: document.querySelector('.apm-hotspot-outline').getAttribute('fill'),
+        fillOpacity: document.querySelector('.apm-hotspot-outline').getAttribute('fill-opacity'),
+    }));
+    assert.strictEqual(polygonOnly.checked, true);
+    assert.strictEqual(polygonOnly.heatLayers, 0, 'highest-only mode removes heat tiles rather than merely hiding them');
+    assert.notStrictEqual(polygonOnly.fill, 'none', 'highest-potential zones are filled polygons');
+    assert.ok(Number(polygonOnly.fillOpacity) > 0);
+    assert.strictEqual(await page.$eval('.apm-heat-ramp', el => el.hidden), true, 'heat legend is hidden in polygon-only mode');
+    await page.$eval('.apm-results .apm-check input', el => el.click());
+    await sleep(50);
+    assert.strictEqual(await page.evaluate(() => Object.values(window._dlMap._layers).filter(l => l instanceof L.GridLayer).length), 1, 'heatmap can be restored');
     assert.strictEqual(result.pointerEvents, 'none', 'heatmap cannot intercept gestures');
     assert.ok(result.outlineOrder > result.heatOrder);
     await page.evaluate(() => window._dlMap.setView([51.50, -0.50], 13, { animate: false }));
@@ -284,6 +303,9 @@ test('no very-high polygons still shows the heatmap and never falls back to lowe
     assert.ok(await page.$('.apm-heatmap-tile'));
     assert.strictEqual(await page.$('.apm-hotspot-outline'), null);
     assert.match(await page.$eval('.apm-results', el => el.textContent), /no very-high area/);
+    await page.$eval('.apm-results .apm-check input', el => el.click());
+    assert.strictEqual(await page.evaluate(() => Object.values(window._dlMap._layers).filter(l => l instanceof L.GridLayer).length), 0, 'highest-only mode hides the heatmap even without hotspots');
+    assert.match(await page.$eval('.apm-results .apm-note', el => el.textContent), /No zones meet/);
     await page.evaluate(() => window.DetectLabApmUi.setEnabled(false));
     assert.strictEqual(await page.$('.apm-heatmap-tile'), null, 'disabling removes the heatmap too');
     assert.deepStrictEqual(errors, []);

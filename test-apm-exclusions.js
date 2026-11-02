@@ -246,17 +246,21 @@ function workerHarness() {
     console.log('  ok  tiny holes survive area filtering, smoothing, heat downsampling and interpolation');
     const html = read('index.html'), sw = read('sw.js');
     const TAG = '20261102-apm-train-bounded-grid';
-    for (const [file, version] of [['apm-heatmap', '20261101-train-source'],
-        ['apm-raster', TAG], ['apm-i18n', TAG], ['apm-pipeline', TAG], ['apm-ui', TAG]]) {
+    for (const [file, version] of [['apm-heatmap', '20261102-apm-async-tiles'],
+        ['apm-raster', TAG], ['apm-pipeline', TAG]]) {
         const tag = 'js/apm-next/' + file + '.js?v=' + version;
+        assert.ok(sw.includes(tag), file + ' is versioned and precached');
+    }
+    for (const file of ['apm-i18n', 'apm-ui']) {
+        const tag = 'js/apm-next/' + file + '.js?v=20261102-apm-highest-only-view';
         assert.ok(html.includes(tag) && sw.includes(tag), file + ' is versioned and precached');
     }
     assert.ok(sw.includes('js/apm-next/apm-polygonise.js?v=20261101-train-source'));
-    assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + TAG));
-    assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=' + TAG));
+    assert.ok(sw.includes('js/apm-next/apm-worker.js?v=20261102-apm-highest-only-view'));
+    assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=20261102-apm-highest-only-view'));
     assert.ok(html.includes('js/archeo-potential.js?v=' + TAG));
     assert.ok(sw.includes('js/archeo-potential.js?v=' + TAG));
-    assert.match(sw, /const CACHE_NAME = 'detectlab-v380-apm-train-bounded-grid'/);
+    assert.match(sw, /const CACHE_NAME = 'detectlab-v385-apm-highest-only'/);
     console.log('  ok  updated prediction, mask, worker and display assets are wired into the PWA cache');
     console.log('\nAll APM spatial-exclusion checks passed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

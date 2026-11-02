@@ -280,15 +280,20 @@ function redTileData(size, alpha = 255) {
 
     test('changed assets are re-tagged for the browser and the PWA shell cache', () => {
         const html = read('index.html'), sw = read('sw.js');
-        for (const f of ['apm-raster.js', 'apm-i18n.js', 'apm-pipeline.js', 'apm-ui.js']) {
+        for (const f of ['apm-raster.js', 'apm-pipeline.js']) {
             const tag = 'js/apm-next/' + f + '?v=' + TAG;
             assert.ok(html.includes(tag) && sw.includes(tag), tag);
         }
+        for (const [file, tag] of [['apm-i18n.js', '20261102-apm-highest-only-view'],
+            ['apm-ui.js', '20261102-apm-highest-only-view']]) {
+            const path = 'js/apm-next/' + file + '?v=' + tag;
+            assert.ok(html.includes(path) && sw.includes(path), path);
+        }
         assert.ok(html.includes('js/archeo-potential.js?v=' + TAG));
         assert.ok(sw.includes('js/archeo-potential.js?v=' + TAG));
-        assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + TAG));
-        assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=' + TAG));
-        assert.match(sw, /const CACHE_NAME = 'detectlab-v380-apm-train-bounded-grid'/);
+        assert.ok(sw.includes('js/apm-next/apm-worker.js?v=20261102-apm-highest-only-view'));
+        assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=20261102-apm-highest-only-view'));
+        assert.match(sw, /const CACHE_NAME = 'detectlab-v385-apm-highest-only'/);
         assert.match(read('js/apm-next/apm-worker.js'), /MAX_SCORE_CELLS/);
         assert.match(read('js/apm-next/apm-pipeline.js'), /boundedGridForBBox/);
     });

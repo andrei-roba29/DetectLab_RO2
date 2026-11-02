@@ -12,7 +12,7 @@
 (function (root) {
     'use strict';
 
-    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261102-apm-train-bounded-grid';
+    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261102-apm-highest-only-view';
     var SWITCH_KEY = 'detectlab_apm_next';         // 'on' | 'off' (default off)
     var DEBUG_KEY = 'apmDebug';                    // shared with apm-providers.js
     var TRAIN_AREA_KM = 50;
@@ -29,6 +29,7 @@
         mode: 'manual',
         enabled: false,
         opacity: 1,
+        highestOnly: false,
         centre: null,               // { lat, lon } picked on the map
         picking: false,
         radiusKm: 5,
@@ -49,7 +50,7 @@
         trainSession: { worker: null, analysisKey: null, provenance: null, stats: null, waterClasses: [] }
     };
 
-    var map = null, layer = null, centreMarker = null, radiusCircle = null, downweightedLayer = null;
+    var map = null, layer = null, heatLayer = null, hotspotLayer = null, centreMarker = null, radiusCircle = null, downweightedLayer = null;
     var els = {}, ui = { panel: null, btn: null };
     var i18nBindings = [];          // [{ el, key, attr }] refreshed on language change
 
@@ -124,7 +125,7 @@
         i18nBindings.forEach(applyBinding);
         renderPoint();
         renderModeTabs();
-        if (state.result) renderResult(state.result);
+        if (state.result) { renderResult(state.result); applyHighestOnlyView(); }
         renderPeriods();
         updateGate();
     }
@@ -603,7 +604,7 @@
         var m = getMap();
         if (layer && m) m.removeLayer(layer);
         if (downweightedLayer && m) m.removeLayer(downweightedLayer);
-        downweightedLayer = null; layer = null;
+        downweightedLayer = null; layer = null; heatLayer = null; hotspotLayer = null;
         state.result = null;
         els.results.hidden = true;
         els.exportBtn.disabled = true;
@@ -621,11 +622,11 @@
             m.getPane('apmHeat').style.pointerEvents = 'none';
         }
         if (m && !m.getPane('apmHotspots')) m.createPane('apmHotspots').style.zIndex = 420;
-        var outlines = root.L.geoJSON(res.geojson, {
+        hotspotLayer = root.L.geoJSON(res.geojson, {
             pane: 'apmHotspots',
             filter: function (f) { return f.properties.class === 'veryhigh'; },
             interactive: true,
-            style: function () { return { color: '#d9f5ff', weight: 2, fill: false, opacity: 0.95, className: 'apm-hotspot-outline' }; },
+            style: function () { return { color: '#d9f5ff', weight: 2, fill: !!state.highestOnly, fillColor: '#ff633d', fillOpacity: 0.34, opacity: 0.95, className: 'apm-hotspot-outline' }; },
             onEachFeature: function (f, l) {
                 var p = f.properties;
                 var cls = p.class && classById[p.class];
@@ -635,15 +636,42 @@
             }
         });
         var layers = [];
-        if (res.heatmap && root.DetectLabApmHeatmap) layers.push(root.DetectLabApmHeatmap.createLayer(res.heatmap, root.L, { pane: 'apmHeat' }));
-        layers.push(outlines);
+        heatLayer = res.heatmap && root.DetectLabApmHeatmap
+            ? root.DetectLabApmHeatmap.createLayer(res.heatmap, root.L, { pane: 'apmHeat' }) : null;
+        if (heatLayer) layers.push(heatLayer);
+        layers.push(hotspotLayer);
         layer = root.L.layerGroup(layers);
         if (m && layer.addTo) layer.addTo(m);
         applyOpacity();
         renderResult(res);
+        applyHighestOnlyView();
         renderDownweightedSites(res);
         els.exportBtn.disabled = false;
         els.clearBtn.disabled = false;
+    }
+
+    function applyHighestOnlyView() {
+        var m = getMap();
+        if (m && heatLayer) {
+            var onMap = m.hasLayer ? m.hasLayer(heatLayer) : !!heatLayer._map;
+            if (state.highestOnly && onMap) m.removeLayer(heatLayer);
+            else if (!state.highestOnly && !onMap) heatLayer.addTo(m);
+        }
+        if (hotspotLayer && hotspotLayer.setStyle) hotspotLayer.setStyle({
+            fill: !!state.highestOnly, fillColor: '#ff633d', fillOpacity: 0.34
+        });
+        if (els.highestOnly) els.highestOnly.checked = !!state.highestOnly;
+        if (els.heatLegend) {
+            [els.heatLegend.querySelector('.apm-heat-ramp'), els.heatLegend.querySelector('.apm-heat-labels')].forEach(function (el) {
+                if (el) el.hidden = !!state.highestOnly;
+            });
+        }
+        if (state.result && els.hotspotNote) {
+            var count = state.result.geojson.features.filter(function (f) { return f.properties.class === 'veryhigh'; }).length;
+            var noteKey = count ? (state.highestOnly ? 'result.highestOnlyHelp' : 'result.hybridHelp')
+                : (state.highestOnly ? 'result.noHotspotsOnly' : 'result.noHotspots');
+            els.hotspotNote.textContent = T(noteKey);
+        }
     }
 
     function renderDownweightedSites(res) {
@@ -702,7 +730,9 @@
         els.heatLegend.textContent = '';
         appendHeatLegend(els.heatLegend, res);
         var hotspotCount = res.geojson.features.filter(function (f) { return f.properties.class === 'veryhigh'; }).length;
-        els.hotspotNote.textContent = T(hotspotCount ? 'result.hybridHelp' : 'result.noHotspots');
+        els.hotspotNote.textContent = T(hotspotCount
+            ? (state.highestOnly ? 'result.highestOnlyHelp' : 'result.hybridHelp')
+            : (state.highestOnly ? 'result.noHotspotsOnly' : 'result.noHotspots'));
         els.resultRows.textContent = '';
         C.CLASSES.forEach(function (c) {
             var v = res.areaKm2 ? res.areaKm2[c.id] : 0;
@@ -1022,8 +1052,14 @@
         els.hotspotNote = h('div', { class: 'apm-note' });
         els.warnings = h('ul', { class: 'apm-warnings', hidden: true });
         els.diag = h('div', { class: 'apm-diag' });
+        var highestOnly = checkbox('result.highestOnly', false);
+        els.highestOnly = highestOnly.cb;
+        els.highestOnly.addEventListener('change', function () {
+            state.highestOnly = els.highestOnly.checked;
+            applyHighestOnlyView();
+        });
         els.results = h('div', { class: 'apm-results', hidden: true }, [
-            h('h4', { key: 'result.title' }), els.heatLegend, els.hotspotNote, els.resultRows, els.provenance, els.warnings, els.diag
+            h('h4', { key: 'result.title' }), highestOnly.row, els.heatLegend, els.hotspotNote, els.resultRows, els.provenance, els.warnings, els.diag
         ]);
 
         // Debug

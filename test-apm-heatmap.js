@@ -2,6 +2,7 @@
 'use strict';
 // Pure score-display and highest-only contour checks. No DOM or network dependencies.
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const heat = require('./js/apm-next/apm-heatmap.js');
 const polygons = require('./js/apm-next/apm-polygonise.js');
 const core = require('./js/apm-next/apm-core.js');
@@ -79,5 +80,13 @@ test('class area is counted on valid full-resolution score cells independently o
     const areas = polygons.areaByScores(scores, g, thresholds);
     const mpd = core.metresPerDegree(49.995), expected = g.dLon * mpd.lon * g.dLat * mpd.lat / 1e6;
     for (const id of ['medium', 'high', 'veryhigh']) assert.ok(Math.abs(areas[id] - expected) < 1e-8);
+});
+test('Leaflet heat tiles yield during rendering and defer refresh until zoom settles', () => {
+    const source = fs.readFileSync('./js/apm-next/apm-heatmap.js', 'utf8');
+    assert.match(source, /createTile: function \(coords, done\)/);
+    assert.match(source, /rowsPerFrame = 8/);
+    assert.match(source, /schedule\(paintChunk\)/);
+    assert.match(source, /updateWhenZooming: false/);
+    assert.match(source, /Math\.atan\(Math\.sinh\(mercatorY\)\)/);
 });
 console.log(`\n${passed} passed`);

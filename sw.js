@@ -955,7 +955,8 @@
 // lock idle document scrolling so no empty bottom tail survives text entry.
 // v384: 3D is available only with active Premium; hide its controls otherwise
 // and recheck entitlement before/after async entry and on auth changes.
-const CACHE_NAME = 'detectlab-v384-premium-3d';
+// v385: render APM heat tiles asynchronously and add the highest-only polygon view.
+const CACHE_NAME = 'detectlab-v385-apm-highest-only';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -999,6 +1000,10 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 const PRECACHE_URLS = [
   // v301: Next-Gen APM (MANUAL) — see the header note above.
   'css/next-gen-apm.css?v=20261101-dock-lower-1mm',
+  'js/apm-next/apm-heatmap.js?v=20261102-apm-async-tiles',
+  'js/apm-next/apm-i18n.js?v=20261102-apm-highest-only-view',
+  'js/apm-next/apm-ui.js?v=20261102-apm-highest-only-view',
+  'js/apm-next/apm-worker.js?v=20261102-apm-highest-only-view',
   'css/map-window-layers.css?v=20261101-window-stacking',
   'css/window-resize.css?v=20261101-account-social-no-grip',
   'js/window-resize.js?v=20261101-account-social-no-grip',

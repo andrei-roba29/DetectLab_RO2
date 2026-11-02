@@ -1059,6 +1059,16 @@ test('APM legend is rendered only inside the results window, never as a map cont
     assert.ok(/els.results = h\([\s\S]*?els.heatLegend/.test(src), 'legend belongs to the results section');
 });
 
+test('highest-only view removes the heatmap and fills only the very-high polygons', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'js', 'apm-next', 'apm-ui.js'), 'utf8');
+    assert.ok(src.includes("checkbox('result.highestOnly', false)"), 'unchecked hybrid mode remains the default');
+    assert.ok(src.includes("filter: function (f) { return f.properties.class === 'veryhigh'; }"), 'only hotspot features render');
+    assert.ok(src.includes('if (state.highestOnly && onMap) m.removeLayer(heatLayer)'), 'checkbox detaches the heatmap layer');
+    assert.ok(src.includes("fillColor: '#ff633d', fillOpacity: 0.34"), 'hotspot polygons get a translucent fill');
+    const translations = fs.readFileSync(path.join(ROOT, 'js', 'apm-next', 'apm-i18n.js'), 'utf8');
+    assert.equal((translations.match(/'result\.highestOnly':/g) || []).length, 2, 'English and Romanian labels exist');
+});
+
 /* ── Terrarium only (outside Europe): an info note, not a warning ───────── */
 testAsync('Terrarium is the only source outside Europe: an info note, no warning', async () => {
     const realGeo = global.GeoTIFF, realBmp = global.createImageBitmap, realOff = global.OffscreenCanvas;
