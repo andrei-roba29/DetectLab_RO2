@@ -468,6 +468,17 @@
     function hasImageHook(layer) {
         return !!(layer && typeof layer._dl3dImage === 'function');
     }
+    /* The georeferenced picture a layer hands over, or null. Called while
+     * classifying, so a hook that has nothing to give (a result that was
+     * cleared, a browser with no canvas) still mirrors through the layer's own
+     * tile renderer instead of vanishing from 3D. */
+    function imageOf(layer) {
+        if (!hasImageHook(layer)) return null;
+        var picture = null;
+        try { picture = layer._dl3dImage(); } catch (e) { picture = null; }
+        if (!picture || !picture.url || !picture.coordinates) return null;
+        return picture;
+    }
     function isRotatedOverlay(layer) {
         return layer && layer._rotation != null && layer._img && layer._canvas;
     }
@@ -488,11 +499,18 @@
          * its features explicitly; it is mirrored as per-feature vector. */
         if (typeof layer._dl3dFeatures === 'function') return 'vector';
         if (isTileLayer(layer, Leaflet)) return 'raster';
+        /* A layer that can hand over its own georeferenced picture is draped as
+         * ONE image — before the createTile() check below, because the Next-Gen
+         * APM heatmap is both: a custom L.GridLayer (canvas tiles in 2D) that
+         * also offers the SAME finished texture as a picture (`_dl3dImage`).
+         * Repainting that layer tile by tile in 3D rebuilt the whole 1024²
+         * texture for every 3D tile on the main thread, and the result is
+         * exactly what an image source drapes over the terrain in one go. */
+        if (imageOf(layer)) return 'image';
         /* Not an L.TileLayer, but it paints its own tiles (a custom L.Layer with
          * createTile: the country LiDAR canvases, the heritage canvas). */
         if (typeof layer.createTile === 'function') return 'raster';
         if (isMarkerCluster(layer)) return 'cluster';
-        if (hasImageHook(layer)) return 'image';
         if (isHeatLayer(layer)) return 'heat';
         /* The app's own rotated overlay (L.RotatedImageOverlay in js/map-app.js)
          * is an L.Layer, not an L.ImageOverlay — it is still a georeferenced
@@ -799,6 +817,15 @@
     /* Leaflet path options → MapLibre paint properties (pixel units match). */
     function pathPaints(layer) {
         var o = layer.options || {};
+        /* A layer may publish the 3D paint itself (`_dl3dPaint()`), which is how
+         * the Next-Gen APM hotspot outlines stay line-only and follow the panel
+         * opacity slider even though their 2D style lives in a style function
+         * (and their 2D fade lives on a pane). Only the keys the hook returns
+         * are overridden — the rest still comes from the layer's own options. */
+        var hook = null;
+        if (typeof layer._dl3dPaint === 'function') {
+            try { hook = layer._dl3dPaint() || null; } catch (e) { hook = null; }
+        }
         var color = o.color || '#3388ff';
         var weight = o.weight == null ? 3 : Number(o.weight);
         var lineOpacity = o.opacity == null ? 1 : Number(o.opacity);
@@ -836,13 +863,22 @@
         /* The mirrored paint is exact: the quantised copy below is only ever
          * used to decide what may be merged, so the app's own colours survive
          * the trip into MapLibre unchanged. */
-        return {
+        var paints = {
             line: line,
             fill: fill,
             circle: circle,
             layout: layout,
             dashed: !!dash
         };
+        if (hook) {
+            ['line', 'fill', 'circle', 'layout'].forEach(function (set) {
+                if (!hook[set] || typeof hook[set] !== 'object') return;
+                Object.keys(hook[set]).forEach(function (key) {
+                    if (hook[set][key] != null) paints[set][key] = hook[set][key];
+                });
+            });
+        }
+        return paints;
     }
 
     function geometryTypes(geojson) {
@@ -981,6 +1017,14 @@
     /* ── the descriptor of one layer ──────────────────────────────────────── */
     function opacityOf(layer) {
         try {
+            /* A layer whose 2D opacity lives on a pane (the Next-Gen APM result
+             * panes are faded by the panel slider, not by the layer) publishes
+             * the value the 3D deck should use. Without it, a 35 % heatmap in 2D
+             * came back at 100 % in 3D. */
+            if (layer && typeof layer._dl3dOpacity === 'number' &&
+                    !isNaN(layer._dl3dOpacity)) {
+                return Math.max(0, Math.min(1, layer._dl3dOpacity));
+            }
             if (typeof layer.getOpacity === 'function') {
                 var v = layer.getOpacity();
                 if (v != null && !isNaN(v)) return Math.max(0, Math.min(1, Number(v)));
@@ -1435,14 +1479,17 @@
         }
 
         if (kind === 'image' && hasImageHook(layer)) {
-            var picture = null;
-            try { picture = layer._dl3dImage(); } catch (e) { picture = null; }
-            if (!picture || !picture.url || !picture.coordinates) return null;
-            return Object.assign(base, {
+            var picture = imageOf(layer);
+            if (!picture) return null;
+            var imageItem = Object.assign(base, {
                 url: String(picture.url),
                 coordinates: picture.coordinates,
                 label: base.label || 'image overlay'
             });
+            if (picture.opacity != null && !isNaN(Number(picture.opacity))) {
+                imageItem.opacity = Math.max(0, Math.min(1, Number(picture.opacity)));
+            }
+            return imageItem;
         }
 
         if (kind === 'image') {

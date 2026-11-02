@@ -14,7 +14,7 @@
 importScripts(
     'apm-core.js',
     'apm-raster.js',
-    'apm-heatmap.js?v=20261102-apm-continuous-heat',
+    'apm-heatmap.js?v=20261102-apm-3d-drape',
     '../d3.min.js',
     '../vendor/polygon-clipping.umd.min.js',
     'apm-polygonise.js?v=20261101-train-source',

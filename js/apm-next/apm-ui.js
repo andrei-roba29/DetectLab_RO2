@@ -12,7 +12,7 @@
 (function (root) {
     'use strict';
 
-    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261102-apm-continuous-heat';
+    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261102-apm-3d-drape';
     var SWITCH_KEY = 'detectlab_apm_next';         // 'on' | 'off' (default off)
     var DEBUG_KEY = 'apmDebug';                    // shared with apm-providers.js
     var TRAIN_AREA_KM = 50;
@@ -51,6 +51,10 @@
 
     var map = null, layer = null, centreMarker = null, radiusCircle = null, downweightedLayer = null;
     var els = {}, ui = { panel: null, btn: null };
+    /* The two result layers, kept so the 3D deck (js/map3d-mirror.js →
+     * js/map3d-terrain.js) can paint the SAME result and follow the panel
+     * opacity slider. */
+    var resultLayers = { heat: null, outlines: null };
     var i18nBindings = [];          // [{ el, key, attr }] refreshed on language change
 
     /* ── small helpers ───────────────────────────────────────────────────── */
@@ -604,6 +608,7 @@
         if (layer && m) m.removeLayer(layer);
         if (downweightedLayer && m) m.removeLayer(downweightedLayer);
         downweightedLayer = null; layer = null;
+        resultLayers.heat = null; resultLayers.outlines = null;
         state.result = null;
         els.results.hidden = true;
         els.exportBtn.disabled = true;
@@ -621,8 +626,13 @@
             m.getPane('apmHeat').style.pointerEvents = 'none';
         }
         if (m && !m.getPane('apmHotspots')) m.createPane('apmHotspots').style.zIndex = 420;
+        /* The same path options the style function returns are also declared at
+         * layer level: the 3D view reads them (js/map3d-mirror.js pathPaints)
+         * and, without them, the very-high outlines came out as translucent
+         * BLUE FILLED polygons that hid the draped heatmap underneath. */
         var outlines = root.L.geoJSON(res.geojson, {
             pane: 'apmHotspots',
+            color: '#d9f5ff', weight: 2, opacity: 0.95, fill: false,
             filter: function (f) { return f.properties.class === 'veryhigh'; },
             interactive: true,
             // Simplify the contour per zoom level: fewer path vertices to
@@ -638,7 +648,18 @@
             }
         });
         var layers = [];
-        if (res.heatmap && root.DetectLabApmHeatmap) layers.push(root.DetectLabApmHeatmap.createLayer(res.heatmap, root.L, { pane: 'apmHeat' }));
+        resultLayers.heat = null;
+        if (res.heatmap && root.DetectLabApmHeatmap) {
+            resultLayers.heat = root.DetectLabApmHeatmap.createLayer(res.heatmap, root.L, { pane: 'apmHeat' });
+            layers.push(resultLayers.heat);
+        }
+        resultLayers.outlines = outlines;
+        /* 3D: the outlines keep their line-only look and are faded with the same
+         * slider as the 2D panes (see applyOpacity). */
+        outlines._dl3dPaint = function () {
+            var opacity = Math.max(0, Math.min(1, Number(state.opacity)));
+            return { line: { 'line-opacity': 0.95 * opacity }, fill: { 'fill-opacity': 0 } };
+        };
         layers.push(outlines);
         layer = root.L.layerGroup(layers);
         if (m && layer.addTo) layer.addTo(m);
@@ -670,11 +691,33 @@
 
     function applyOpacity() {
         var m = getMap();
-        if (!m || !m.getPane) return;
-        ['apmHeat', 'apmHotspots'].forEach(function (name) {
-            var pane = m.getPane(name);
-            if (pane) pane.style.opacity = String(state.opacity);
-        });
+        var opacity = Math.max(0, Math.min(1, Number(state.opacity)));
+        if (!isNaN(opacity)) {
+            /* The 3D deck paints the same heat picture and outlines itself, so
+             * the slider has to reach it too: the heat carries its own opacity
+             * (`_dl3dOpacity`, read by the mirror) and the outlines scale their
+             * line-opacity through `_dl3dPaint`. */
+            if (resultLayers.heat) resultLayers.heat._dl3dOpacity = opacity;
+            if (resultLayers.outlines) resultLayers.outlines._dl3dOpacity = opacity;
+        }
+        if (m && m.getPane) {
+            ['apmHeat', 'apmHotspots'].forEach(function (name) {
+                var pane = m.getPane(name);
+                if (pane) pane.style.opacity = String(state.opacity);
+            });
+        }
+        sync3d();
+    }
+
+    /** Re-plan the 3D deck after a result or its opacity changed (no-op when 3D
+     * is closed — the deck is mirrored again when it opens). */
+    function sync3d() {
+        try {
+            var viewer = root.DetectLabMap3D;
+            if (!viewer || typeof viewer.syncLayers !== 'function') return;
+            if (typeof viewer.isOpen === 'function' && !viewer.isOpen()) return;
+            viewer.syncLayers();
+        } catch (e) { /* the 3D view is optional */ }
     }
 
     function heatColour(classId, res) {

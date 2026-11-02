@@ -8,10 +8,10 @@
  * continuous), any other non-zero value = hidden (transparent) in the heatmap.
  */
 (function (root, factory) {
-    var api = factory();
+    var api = factory(root);
     if (typeof module === 'object' && module.exports) module.exports = api;
     else root.DetectLabApmHeatmap = api;
-})(typeof self !== 'undefined' ? self : this, function () {
+})(typeof self !== 'undefined' ? self : this, function (root) {
     'use strict';
 
     function stops(thresholds) {
@@ -171,6 +171,8 @@
      */
     function createLayer(raster, L, options) {
         var texture = raster.texture && raster.texture.rgba ? raster.texture : null;
+        /* The 3D picture is encoded once per result (see _dl3dImage below). */
+        var drapedUrl;
         var HeatLayer = L.GridLayer.extend({
             onRemove: function (map) {
                 L.GridLayer.prototype.onRemove.call(this, map);
@@ -224,6 +226,76 @@
                 }
                 context.putImageData(image, 0, 0);
                 return tile;
+            },
+
+            /* ── 3D view (js/map3d-mirror.js → MapLibre) ─────────────────────
+             * The final heatmap is draped over the 3D base map / terrain as ONE
+             * georeferenced picture, not repainted tile by tile.
+             *
+             * WHY: the mirror would otherwise treat this custom L.GridLayer as a
+             * canvas tile source and re-run createTile() for every 3D tile at
+             * every zoom. That rebuilds a 1024² canvas (and a new ImageBitmap)
+             * per tile on the main thread — the exact work that made zooming
+             * over a result stutter on Android — and it is unnecessary: the
+             * Web-Mercator texture this layer already holds IS the finished
+             * picture. Encoded once as a PNG, the mirror's image contract drapes
+             * it over the terrain with the colours and per-cell alpha of the 2D
+             * heatmap.
+             *
+             * Coordinates are [NW, NE, SE, SW] taken from the texture's own
+             * Web-Mercator rectangle (x0..x1, y0..y1), converted back to
+             * latitude, so every texel lands on the same lon/lat it has in 2D.
+             * The texture is only produced by the worker; the geographic raster
+             * is the fallback for callers that pass a bare display raster. That
+             * fallback stretches rows evenly in latitude (the legacy 2D
+             * image-overlay path), which is slightly off in Mercator but never
+             * empty.
+             */
+            _dlApmHeat: true,
+            /* Opacity of the APM panel slider. The 2D view applies it to the
+             * result panes; this is the same value for the 3D deck (the mirror's
+             * opacityOf() reads it), so both views fade together. */
+            _dl3dOpacity: 1,
+            _dl3dImage: function () {
+                var width, height, west, east, north, south, rgba;
+                if (texture) {
+                    width = texture.w; height = texture.h;
+                    west = texture.west; east = texture.east;
+                    north = latFromMercatorY(texture.y0); south = latFromMercatorY(texture.y1);
+                    rgba = texture.rgba;
+                } else {
+                    width = raster.w; height = raster.h;
+                    west = raster.west; east = raster.west + raster.w * raster.dLon;
+                    north = raster.north; south = raster.north - raster.h * raster.dLat;
+                    rgba = raster.rgba;
+                }
+                if (!(width > 0) || !(height > 0) || !rgba || rgba.length !== width * height * 4) return null;
+                if (drapedUrl === undefined) {
+                    drapedUrl = null;
+                    try {
+                        var doc = (root && root.document) || null;
+                        var canvas = doc && typeof doc.createElement === 'function' ? doc.createElement('canvas') : null;
+                        var context = canvas && typeof canvas.getContext === 'function' ? canvas.getContext('2d') : null;
+                        if (canvas && context && typeof context.createImageData === 'function' &&
+                                typeof canvas.toDataURL === 'function') {
+                            canvas.width = width; canvas.height = height;
+                            var frame = context.createImageData(width, height);
+                            frame.data.set(rgba);
+                            context.putImageData(frame, 0, 0);
+                            drapedUrl = canvas.toDataURL('image/png');
+                            /* Release the pixels the moment they are encoded. */
+                            canvas.width = 0; canvas.height = 0;
+                        }
+                    } catch (e) { drapedUrl = null; }
+                }
+                if (!drapedUrl) return null;
+                var opacity = typeof this._dl3dOpacity === 'number' ? this._dl3dOpacity : 1;
+                return {
+                    url: drapedUrl,
+                    coordinates: [[west, north], [east, north], [east, south], [west, south]],
+                    opacity: Math.max(0, Math.min(1, opacity)),
+                    label: 'APM heatmap'
+                };
             }
         });
         return new HeatLayer(Object.assign({ tileSize: 256, updateWhenIdle: true, updateWhenZooming: false,
@@ -233,5 +305,6 @@
     }
     return { stops: stops, colourAt: colourAt, buildRaster: buildRaster, sampleRGBA: sampleRGBA,
         hiddenCell: hiddenCell, buildMercatorTexture: buildMercatorTexture, sampleTexture: sampleTexture,
-        texelCentre: texelCentre, displayPayload: displayPayload, mercatorY: mercatorY, createLayer: createLayer };
+        texelCentre: texelCentre, displayPayload: displayPayload, mercatorY: mercatorY,
+        latFromMercatorY: latFromMercatorY, createLayer: createLayer };
 });

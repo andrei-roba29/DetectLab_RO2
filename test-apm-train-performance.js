@@ -286,20 +286,22 @@ function redTileData(size, alpha = 255) {
         }
         // Later fixes re-tag the UI, worker and mask under the newer HEAT_TAG.
         const HEAT_TAG = '20261102-apm-continuous-heat';
-        const uiTag = 'js/apm-next/apm-ui.js?v=' + HEAT_TAG;
+        // v389 re-tags the heat module, the UI and the worker for the 3D draping.
+        const DRAPE = '20261102-apm-3d-drape';
+        const uiTag = 'js/apm-next/apm-ui.js?v=' + DRAPE;
         assert.ok(html.includes(uiTag) && sw.includes(uiTag), uiTag);
         assert.ok(sw.includes('js/apm-next/apm-ui.js?v=' + TAG), 'older UI tag stays precached for older shells');
         assert.ok(html.includes('js/archeo-potential.js?v=' + HEAT_TAG));
         assert.ok(sw.includes('js/archeo-potential.js?v=' + HEAT_TAG));
-        assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + HEAT_TAG));
-        assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=' + HEAT_TAG));
+        assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + DRAPE));
+        assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=' + DRAPE));
         // Latest fix: the pipeline's DEM/water/UAT-mask fetches run in parallel
         // instead of in sequence (TRAIN's "run" step no longer sums their times).
         const PARALLEL_TAG = '20261102-apm-parallel-fetch';
         const pipelineTag = 'js/apm-next/apm-pipeline.js?v=' + PARALLEL_TAG;
         assert.ok(html.includes(pipelineTag) && sw.includes(pipelineTag), pipelineTag);
         assert.ok(sw.includes('js/apm-next/apm-pipeline.js?v=' + TAG), 'older pipeline tag stays precached for older shells');
-        assert.match(sw, /const CACHE_NAME = 'detectlab-v388-apm-parallel-fetch'/);
+        assert.match(sw, /const CACHE_NAME = 'detectlab-v389-apm-3d-drape'/);
         assert.match(read('js/apm-next/apm-worker.js'), /MAX_SCORE_CELLS/);
         assert.match(read('js/apm-next/apm-pipeline.js'), /boundedGridForBBox/);
         assert.match(read('js/apm-next/apm-pipeline.js'), /startExclusionMask/,

@@ -310,22 +310,28 @@ function assertTextureMasked(heatmap, sourceMask, label) {
     const html = read('index.html'), sw = read('sw.js');
     const TAG = '20261102-apm-continuous-heat', BOUNDED = '20261102-apm-train-bounded-grid';
     const PARALLEL = '20261102-apm-parallel-fetch';
-    for (const [file, version] of [['apm-heatmap', TAG],
-        ['apm-raster', BOUNDED], ['apm-i18n', BOUNDED], ['apm-pipeline', PARALLEL], ['apm-ui', TAG]]) {
+    // The 3D draping release re-tagged the heat module, the UI and the worker
+    // (the worker imports the heat module under its new tag).
+    const DRAPE = '20261102-apm-3d-drape';
+    for (const [file, version] of [['apm-heatmap', DRAPE],
+        ['apm-raster', BOUNDED], ['apm-i18n', BOUNDED], ['apm-pipeline', PARALLEL], ['apm-ui', DRAPE]]) {
         const tag = 'js/apm-next/' + file + '.js?v=' + version;
         assert.ok(html.includes(tag) && sw.includes(tag), file + ' is versioned and precached');
     }
+    assert.ok(sw.includes('js/apm-next/apm-heatmap.js?v=' + TAG) &&
+        sw.includes('js/apm-next/apm-ui.js?v=' + TAG),
+        'the previous heat/UI tag stays precached for installed shells');
     // The prediction-path DEM/water/UAT-mask fetches were re-tagged to run in
     // parallel instead of in sequence; the older BOUNDED tag still stays
     // precached for shells that have not refreshed yet.
     assert.ok(sw.includes('js/apm-next/apm-pipeline.js?v=' + BOUNDED), 'older pipeline tag stays precached for older shells');
     assert.ok(sw.includes('js/apm-next/apm-polygonise.js?v=20261101-train-source'));
-    assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + TAG));
-    assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=' + TAG));
+    assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + DRAPE));
+    assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=' + DRAPE));
     assert.ok(html.includes('js/archeo-potential.js?v=' + TAG));
     assert.ok(sw.includes('js/archeo-potential.js?v=' + TAG));
-    assert.ok(read('js/apm-next/apm-worker.js').includes("'apm-heatmap.js?v=" + TAG + "'"), 'worker imports the new heat module');
-    assert.match(sw, /const CACHE_NAME = 'detectlab-v388-apm-parallel-fetch'/);
+    assert.ok(read('js/apm-next/apm-worker.js').includes("'apm-heatmap.js?v=" + DRAPE + "'"), 'worker imports the new heat module');
+    assert.match(sw, /const CACHE_NAME = 'detectlab-v389-apm-3d-drape'/);
     console.log('  ok  updated prediction, mask, worker and display assets are wired into the PWA cache');
     console.log('\nAll APM spatial-exclusion checks passed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

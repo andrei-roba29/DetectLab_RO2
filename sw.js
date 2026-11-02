@@ -977,7 +977,14 @@
 //   the prediction DEM download to finish first; it now starts at the same
 //   time, which is what made the run step feel like it loaded forever.
 //   Re-tags apm-pipeline.js.
-const CACHE_NAME = 'detectlab-v388-apm-parallel-fetch';
+// v389: the FINISHED Next-Gen APM result now reaches the 3D view. The heatmap
+//   is handed to the 2D→3D mirror as one georeferenced picture (the Web-Mercator
+//   texture the worker already built) and draped as a MapLibre image source over
+//   the 3D base map/terrain, instead of being repainted tile by tile; the
+//   very-high polygons keep their line-only look (colour/weight/fill from layer
+//   options instead of Leaflet's blue default) and both follow the result
+//   opacity slider. Re-tags js/map3d-mirror.js and apm-heatmap/apm-ui/apm-worker.
+const CACHE_NAME = 'detectlab-v389-apm-3d-drape';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1063,6 +1070,11 @@ const PRECACHE_URLS = [
   'js/archeo-potential.js?v=20261102-apm-continuous-heat',
   // v388: DEM/water/UAT-mask fetches run in parallel instead of in sequence.
   'js/apm-next/apm-pipeline.js?v=20261102-apm-parallel-fetch',
+  // v389: the final APM heatmap + very-high polygons are draped in 3D.
+  'js/apm-next/apm-heatmap.js?v=20261102-apm-3d-drape',
+  'js/apm-next/apm-ui.js?v=20261102-apm-3d-drape',
+  'js/apm-next/apm-worker.js?v=20261102-apm-3d-drape',
+  'js/map3d-mirror.js?v=20261102-apm-3d-drape',
   'js/d3.min.js',
   'js/rbush.min.js',
   'js/vendor/polygon-clipping.umd.min.js',
