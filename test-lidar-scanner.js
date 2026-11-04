@@ -158,7 +158,8 @@ const removedScannerRows = [
     '46.09201,23.54846,anomalie necunoscută',
     '46.09234,23.54366,anomalie necunoscută',
     '46.12036,23.52000,anomalie necunoscută',
-    '46.01570,23.49656,anomalie necunoscută'
+    '46.01570,23.49656,anomalie necunoscută',
+    '45.90249,23.56876,fortificație'
 ];
 /* Inject the retired coordinates into the fetched payload: the production CSV
    no longer contains them, but stale PWA caches and future regenerated files
@@ -280,8 +281,8 @@ async function main() {
     assert.match(
         domElements.lidarScannerStatus.textContent,
         new RegExp('^' + expectedLoadedRows + ' points loaded'),
-        'valid Romanian CSV rows should load except the five explicitly retired coordinates (' +
-            expectedLoadedRows + ' expected)'
+        'valid Romanian CSV rows should load except the ' + removedScannerRows.length +
+            ' explicitly retired coordinates (' + expectedLoadedRows + ' expected)'
     );
 
     // 2. Click directly on the first CSV point.

@@ -259,11 +259,14 @@ console.log('\n[Cache busting]');
        ?v=20260922-vo-actions-both-slots), so read the live tag instead of a
        frozen one; the check below still requires sw.js to pre-cache it. */
     const stylesV = ((html.match(/href="css\/styles\.css\?v=([^"]+)"/) || [])[1]) || '';
-    const archeoV = '20261020-3d-analysis-points';
+    /* archeo-potential.js is re-versioned by later releases too (now
+       ?v=20261102-apm-continuous-heat), so read its live tag the same way;
+       the check below still requires sw.js to pre-cache that exact build. */
+    const archeoV = ((html.match(/src="js\/archeo-potential\.js\?v=([^"]+)"/) || [])[1]) || '';
     check('index.html requests the bumped styles.css', !!stylesV);
     const translationUrl = (html.match(/src="(js\/translations\.js\?v=[^"]+)"/) || [])[1];
     check('index.html requests versioned translations.js', !!translationUrl);
-    check('index.html requests the bumped archeo-potential.js', html.includes('js/archeo-potential.js?v=' + archeoV));
+    check('index.html requests the bumped archeo-potential.js', !!archeoV);
     const sw = read('sw.js');
     check('sw.js precaches the bumped app shell',
         sw.includes('js/archeo-potential.js?v=' + archeoV) &&
