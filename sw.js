@@ -996,7 +996,12 @@
 // precached. Shell assets are updated for installed PWAs.
 // v400: the PWA minimized-window drawer (arrow + panel) sits 1 mm lower than
 // on the web. Web placement is unchanged.
-const CACHE_NAME = 'detectlab-v400-pwa-dock-1mm';
+// v401: one more LIDAR Scanner coordinate is withdrawn — the fortification at
+//   45.90249, 23.56876 is dropped from data/lidar_scanner_points.csv and added
+//   to the persistent REMOVED_SCANNER_POINTS filter (same mechanism as the
+//   five of v150, so stale CSV copies and later regenerations cannot bring it
+//   back). Re-tags js/lidar-scanner.js (script + DATA_URL) and CACHE_NAME.
+const CACHE_NAME = 'detectlab-v401-remove-fortificatie';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1903,6 +1908,9 @@ const PRECACHE_URLS = [
   // v150: blacklist persistent pentru cele cinci coordonate retrase.
   'js/lidar-scanner.js?v=20261002-remove-five-points',
   'js/lidar-scanner.js?v=20261020-3d-analysis-points',
+  // v401: o coordonată retrasă în plus (fortificația 45.90249, 23.56876);
+  // DATA_URL din script e re-versionat, deci PWA-ul reia CSV-ul filtrat.
+  'js/lidar-scanner.js?v=20261104-remove-fortificatie',
   // v140: „Amprenta Vegetației / Vegetation Fingerprint” (premium) — primul
   // substrat PPI din CLMS HR-VPP, cu tile-uri WMTS limitate la România.
   // v141: + substratul SGU (VPP LSLOPE, anual); v142: + SGD (VPP RSLOPE).

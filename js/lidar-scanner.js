@@ -5,7 +5,7 @@
  */
 (function () {
     'use strict';
-    var DATA_URL = 'data/lidar_scanner_points.csv?v=20261002-remove-five-points';
+    var DATA_URL = 'data/lidar_scanner_points.csv?v=20261104-remove-fortificatie';
     var HERITAGE_RADIUS_M = 600;
 
     /* Coordonate retrase explicit din catalogul LIDAR Scanner. Filtrul rămâne
@@ -18,7 +18,8 @@
         [46.09201, 23.54846],
         [46.09234, 23.54366],
         [46.12036, 23.52000],
-        [46.01570, 23.49656]
+        [46.01570, 23.49656],
+        [45.90249, 23.56876]
     ];
     var REMOVED_POINT_TOLERANCE_DEG = 0.00001;
 

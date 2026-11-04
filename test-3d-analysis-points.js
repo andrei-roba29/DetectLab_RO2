@@ -318,22 +318,34 @@ function viewerChecks() {
     const index = read('index.html');
     const sw = read('sw.js');
     const TAG = '20261020-3d-analysis-points';
-    const VIEWER_TAG = '20261026-desktop-basemap';
-    ['js/lidar-scanner.js',
-        'js/archeo-potential.js', 'js/archeo-report.js', 'js/battles-layer.js'].forEach((file) => {
-        assert.ok(index.includes(file + '?v=' + TAG), 'index.html loads ' + file + ' at the analysis-points tag');
-        assert.ok(sw.includes("'" + file + '?v=' + TAG + "'"), 'sw.js pre-caches ' + file + ' at the analysis-points tag');
+    const SCANNER_TAG = '20261104-remove-fortificatie';
+    /* archeo-potential.js and archeo-report.js are re-versioned by later
+     * releases (…apm-continuous-heat, …arch-report-focus), so read their live
+     * tags the way the styles.css check does — sw.js must pre-cache each build
+     * index.html actually loads. battles-layer.js still ships at the
+     * analysis-points tag; the loop keeps it honest either way. */
+    ['js/archeo-potential.js', 'js/archeo-report.js', 'js/battles-layer.js'].forEach((file) => {
+        const url = (index.match(new RegExp(file.replace(/\//g, '\\/') + '\\?v=[^"\']+')) || [])[0];
+        assert.ok(url, 'index.html loads ' + file + ' at a cache tag');
+        assert.ok(sw.includes("'" + url + "'"), 'sw.js pre-caches the ' + file + ' build index.html loads (' + url + ')');
     });
-    /* The mirror ships its own tag since the canvas-tile fix
-     * (DENMARK_LIDAR_3D_CANVAS.md); the old tag stays in sw.js for installed
-     * shells that are still running the previous index.html. */
-    const MIRROR_TAG = '20261021-lidar-canvas-tiles';
-    assert.ok(index.includes('js/map3d-mirror.js?v=' + MIRROR_TAG), 'index.html loads the mirror at its canvas-tiles tag');
-    assert.ok(sw.includes("'js/map3d-mirror.js?v=" + MIRROR_TAG + "'"), 'sw.js pre-caches the mirror at its canvas-tiles tag');
+    /* js/lidar-scanner.js ships its own tag since the fortification point at
+     * 45.90249, 23.56876 was withdrawn from the catalogue (the same mechanism
+     * as the five of v150); the analysis-points tag stays in sw.js for
+     * installed shells that are still running the previous index.html. */
+    assert.ok(index.includes('js/lidar-scanner.js?v=' + SCANNER_TAG), 'index.html loads the scanner at its remove-fortificatie tag');
+    assert.ok(sw.includes("'js/lidar-scanner.js?v=" + SCANNER_TAG + "'"), 'sw.js pre-caches the scanner at its remove-fortificatie tag');
+    assert.ok(sw.includes("'js/lidar-scanner.js?v=" + TAG + "'"), '…and keeps the previous scanner tag for installed shells');
+    /* The mirror and the terrain viewer have been re-tagged by later releases
+     * (canvas tiles → photo 3D, desktop basemap → gray backing), so read their
+     * live tags the same way; sw.js must pre-cache each build index.html loads
+     * and keeps the analysis-points mirror entry for installed shells. */
+    ['js/map3d-mirror.js', 'js/map3d-terrain.js'].forEach((file) => {
+        const url = (index.match(new RegExp(file.replace(/\//g, '\\/') + '\\?v=[^"\']+')) || [])[0];
+        assert.ok(url, 'index.html loads ' + file + ' at a cache tag');
+        assert.ok(sw.includes("'" + url + "'"), 'sw.js pre-caches the ' + file + ' build index.html loads (' + url + ')');
+    });
     assert.ok(sw.includes("'js/map3d-mirror.js?v=" + TAG + "'"), '…and keeps the previous mirror tag for installed shells');
-    assert.ok(index.includes('js/map3d-terrain.js?v=' + VIEWER_TAG) &&
-        sw.includes("'js/map3d-terrain.js?v=" + VIEWER_TAG + "'"),
-        'the updated terrain viewer has its own cache-busting tag');
     assert.ok(Number((sw.match(/CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1]) >= 240,
         'the shell cache is v240 or later (bumped again since — currently v243 PWA-hide-exaggeration)');
     ok('cache: changed assets re-tagged and pre-cached, shell cache v240+');
@@ -344,4 +356,5 @@ function viewerChecks() {
     potentialChecks();
     viewerChecks();
     console.log('\n✅ 3D analysis points: ' + passed + ' checks passed.');
+    process.exit(0); // jsdom keeps handles open; end cleanly on success too.
 })().catch((e) => { console.error(e); process.exit(1); });
