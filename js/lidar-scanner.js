@@ -5,7 +5,7 @@
  */
 (function () {
     'use strict';
-    var DATA_URL = 'data/lidar_scanner_points.csv?v=20261002-remove-five-points';
+    var DATA_URL = 'data/lidar_scanner_points.csv?v=20261104-remove-point';
     var HERITAGE_RADIUS_M = 600;
 
     /* Coordonate retrase explicit din catalogul LIDAR Scanner. Filtrul rămâne
