@@ -13,18 +13,18 @@
  *      decoded, kept and re-clipped on every gesture.
  *
  * WHAT
- *   One `L.GridLayer` whose tiles are small canvases. All ingest happens in
- *   `js/roman-roads-worker.js` (see `js/roman-roads-parser.js` for the binary
- *   format); the main thread only appends finished typed arrays and paints
- *   the tiles the viewport actually shows:
+ *   One `L.GridLayer` whose tiles are small canvases. Normally ingest happens
+ *   in `js/roman-roads-worker.js` (see `js/roman-roads-parser.js` for the
+ *   binary format); the no-worker fallback yields between groups of records.
+ *   The main thread paints only the tiles the viewport actually shows:
  *
  *     • spatial grid per batch → a tile visits only the segments inside it;
  *     • sub-pixel segments are drawn as dots, long ones through a decimated
  *       vertex loop, everything in ONE canvas path per tile;
- *     • a per-tile item budget plus uniform stride sampling keeps the work
- *       bounded no matter how big the network is;
- *     • painting is scheduled in animation frames with a millisecond budget,
- *       so a burst of new data can never block the UI;
+ *     • a per-tile item budget samples only tiles whose visible candidates
+ *       exceed that budget, bounding the drawing work;
+ *     • tile paints are scheduled in animation frames with a millisecond
+ *       budget between tiles, keeping bursts of new data responsive;
  *     • the 3D mirror keeps its roads: `_dl3dFeatures()` hands MapLibre a
  *       bounded GeoJSON view of the same geometry (see MAP_3D_TERRAIN.md §6).
  *
@@ -41,7 +41,7 @@
     'use strict';
     if (!root || !root.document) return;
 
-    var VERSION = '20261015-roman-roads-v1';
+    var VERSION = '20261104-roman-roads-v2';
 
     function parser() { return root.DetectLabRomanRoadsParser; }
 
@@ -52,8 +52,8 @@
     /* ── budgets ───────────────────────────────────────────────────────────
        Geometry is typed arrays: ~36 B per segment + 8 B per vertex. A phone
        gets a smaller allowance than a desktop, and the collector samples
-       (uniform stride, long roads always kept) once the allowance is spent
-       instead of growing until the renderer kills the tab. */
+       when an estimate exceeds the allowance. Long roads get priority up to
+       a hard safety ceiling instead of growing until the renderer kills the tab. */
     function configForDevice() {
         var ua = String(root.navigator && root.navigator.userAgent || '');
         var coarse = !!(root.matchMedia && root.matchMedia('(pointer: coarse)').matches);
@@ -178,9 +178,9 @@
     }
 
     /* Same parser, same binary format — just without a worker (no separate
-     * thread available). The chunk loop yields between chunks so the page
-     * stays responsive even here. */
-        function mainThread(url, opts, cfg, state, emitDone, emitError, report) {
+     * thread available). Yield during and between chunks so the page stays
+     * responsive even when the whole response arrives at once. */
+    function mainThread(url, opts, cfg, state, emitDone, emitError, report) {
         var P = parser();
         var collector = P.createCollector(cfg);
         var lines = 0, bytes = 0, total = 0, lastProgress = 0, started = now();
@@ -217,19 +217,58 @@
         function handleLine(line) {
             lines++;
             var rec;
-            if (line.charCodeAt(0) === 123) {
-                try { rec = JSON.parse(line); } catch (e) { return; }
-            } else if (/^(LINESTRING|MULTILINESTRING|\[)/i.test(line)) {
+            if (line.charCodeAt(0) === 123 || line.charCodeAt(0) === 91) {
+                try { rec = JSON.parse(line); } catch (e) { collector.addRecord(null); return; }
+            } else if (/^(LINESTRING|MULTILINESTRING)/i.test(line)) {
                 rec = line;
-            } else return;
+            } else { collector.addRecord(null); return; }
             collector.addRecord(rec);
         }
         function yieldToPage() {
             return new Promise(function (resolve) { root.setTimeout(resolve, 0); });
         }
 
-        if (typeof root.fetch !== 'function' || typeof root.TextDecoder !== 'function') {
-            emitError('streaming fetch unavailable');
+        /* Consume complete lines and flush between records, regardless of
+         * network chunk size. Yield during large chunks / text fallbacks so a
+         * no-worker browser remains interactive. */
+        var buffer = '';
+        function processBuffer(final) {
+            var startAt = 0, processed = 0, sliceStarted = now();
+            function advance() {
+                if (state.cancelled) { buffer = ''; return Promise.resolve(); }
+                var i;
+                while ((i = buffer.indexOf('\n', startAt)) >= 0) {
+                    var line = buffer.slice(startAt, i).trim();
+                    startAt = i + 1;
+                    if (line) handleLine(line);
+                    if (collector.shouldFlush()) flush(false);
+                    if (state.cancelled) { buffer = ''; return Promise.resolve(); }
+                    if (++processed >= 250 || now() - sliceStarted >= 6) {
+                        buffer = buffer.slice(startAt);
+                        startAt = 0;
+                        progress(false);
+                        return yieldToPage().then(function () {
+                            processed = 0;
+                            sliceStarted = now();
+                            return advance();
+                        });
+                    }
+                }
+                var tail = buffer.slice(startAt);
+                buffer = '';
+                if (final) {
+                    if (tail.trim()) handleLine(tail.trim());
+                    if (collector.shouldFlush()) flush(false);
+                } else {
+                    buffer = tail;
+                }
+                return Promise.resolve();
+            }
+            return advance();
+        }
+
+        if (typeof root.fetch !== 'function') {
+            emitError('fetch unavailable');
             return;
         }
 
@@ -239,36 +278,32 @@
                 total = +resp.headers.get('content-length') || 0;
                 progress(true);
                 collector.setSourceTotal && collector.setSourceTotal(total);
-                if (!resp.body || !resp.body.getReader) {
+                if (!resp.body || !resp.body.getReader || typeof root.TextDecoder !== 'function') {
                     return resp.text().then(function (text) {
-                        text.split('\n').forEach(function (l) { if (l.trim()) handleLine(l.trim()); });
+                        if (state.cancelled) return;
+                        /* When no length header is available, avoid another
+                         * large buffer and report an approximate byte count. */
+                        noteChunk(total || text.length);
+                        buffer = text;
+                        return processBuffer(true);
                     });
                 }
                 var reader = resp.body.getReader();
                 var decoder = new root.TextDecoder();
-                var buf = '';
                 function pump() {
+                    if (state.cancelled) { try { reader.cancel(); } catch (e) {} return Promise.resolve(); }
                     return reader.read().then(function (res) {
                         if (state.cancelled) { try { reader.cancel(); } catch (e) {} return; }
                         if (res.done) {
-                            buf += decoder.decode();
-                            if (buf.trim()) handleLine(buf.trim());
-                            return;
+                            buffer += decoder.decode();
+                            return processBuffer(true);
                         }
                         noteChunk(res.value.length);
-                        buf += decoder.decode(res.value, { stream: true });
-                        var i, start = 0;
-                        while ((i = buf.indexOf('\n', start)) >= 0) {
-                            var line = buf.slice(start, i).trim();
-                            start = i + 1;
-                            if (line) handleLine(line);
-                        }
-                        buf = buf.slice(start);
-                        flush(false);
-                        progress(false);
-                        /* A yield keeps the main thread free for the map even
-                         * in the no-worker fallback. */
-                        return yieldToPage().then(pump);
+                        buffer += decoder.decode(res.value, { stream: true });
+                        return processBuffer(false).then(function () {
+                            progress(false);
+                            return yieldToPage().then(pump);
+                        });
                     });
                 }
                 return pump();
@@ -294,7 +329,7 @@
             options: {
                 pane: 'pane_roman',
                 name: 'Roman roads',
-                attribution: '© AWMC / DARMC',
+                attribution: '<a href="https://doi.org/10.1038/s41597-025-06140-z">Itiner-e (de Soto et al., 2025)</a>, simplified · <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>',
                 color: '#FF5A36',
                 weight: 1.8,
                 opacity: 0.7,
@@ -389,7 +424,8 @@
                 this._stats.vertices = this._vertices;
                 this._stats.bytes = this._geometryBytes();
                 var s = payload.stats || {};
-                this._stats.skipped += s.skipped || 0;
+                /* Parser stats are cumulative across batches. */
+                this._stats.skipped = Math.max(this._stats.skipped, s.skipped || 0);
                 this._stats.sampled = Math.max(this._stats.sampled, s.sampled || 0);
                 if (s.stride) this._stats.stride = s.stride;
                 this._markDirty(payload.extent);
@@ -408,6 +444,9 @@
                 this._stats.vertices = 0;
                 this._stats.pages = 0;
                 this._stats.bytes = 0;
+                this._stats.skipped = 0;
+                this._stats.sampled = 0;
+                this._stats.stride = 1;
                 this._dirty = null;
                 if (this._map) this.redraw();
                 return this;
@@ -582,11 +621,8 @@
 
                 var dotMode = z <= opts.dotMaxZoom;
                 var minPx = opts.minPixelStep;
-                var stride = z < opts.gridUseZoom
-                    ? Math.max(1, Math.round(this._segments / Math.max(1, this._itemBudget)))
-                    : 1;
-                var itemBudget = this._itemBudget;
-                var drawn = 0;
+                var itemBudget = Math.max(1, Math.floor(this._itemBudget));
+                var candidates = 0, candidateIndex = 0;
                 var capped = false;
                 var self = this;
 
@@ -611,44 +647,35 @@
                         if (!page.extent) continue;
                         if (page.extent[2] < q.minX || page.extent[0] > q.maxX ||
                             page.extent[3] < q.minY || page.extent[1] > q.maxY) continue;
-                        var seen = 0;
-                        self._forEachPageRange(z, page, q, function (from, to, items) {
+                        self._forEachPageRange(z, page, q, function (from, to, items, skipSpans) {
                             var bounds = page.bounds;
                             for (var s = from; s < to; s++) {
                                 var i = items[s];
-                                if (stride > 1 && (seen++ % stride) !== 0) continue;
+                                if (skipSpans && skipSpans[i]) continue;
                                 var b0 = i * 4;
                                 var loX = bounds[b0], loY = bounds[b0 + 1];
                                 var hiX = bounds[b0 + 2], hiY = bounds[b0 + 3];
                                 if (hiX < q.minX || loX > q.maxX || hiY < q.minY || loY > q.maxY) continue;
-                                if (draw) {
-                                    if (drawn >= itemBudget) { capped = true; continue; }
-                                    drawn++;
-                                    self._drawSegment(ctx, page, i, k, ox, oy, minPx, dotMode, opts);
-                                } else {
-                                    drawn++;
-                                }
+                                if (!draw) { candidates++; continue; }
+                                /* Only sample roads that actually touch THIS
+                                 * tile, never the global dataset or other grid
+                                 * cells. Spread exactly the budget over all
+                                 * candidates, rather than dropping half when
+                                 * a tile is just one road over its limit. */
+                                var index = candidateIndex++;
+                                if (capped && Math.floor((index + 1) * itemBudget / candidates) ===
+                                    Math.floor(index * itemBudget / candidates)) continue;
+                                self._drawSegment(ctx, page, i, k, ox, oy, minPx, dotMode, opts);
                             }
                         });
                     }
                 };
 
-                /* Pass 1 sizes the work (so the per-tile budget can sample it
-                 * uniformly), pass 2 draws. When the global stride already
-                 * caps the work at low zoom, one pass is enough. */
-                if (stride > 1) {
-                    pass(true);
-                } else {
-                    drawn = 0;
-                    pass(false);
-                    if (drawn > itemBudget) {
-                        stride = Math.ceil(drawn / itemBudget);
-                        drawn = 0;
-                    } else {
-                        drawn = 0;
-                    }
-                    pass(true);
-                }
+                /* Size the actual tile first; the device budget applies to
+                 * visible candidates, not the whole continental network. */
+                pass(false);
+                capped = candidates > itemBudget;
+                pass(true);
                 ctx.stroke();
                 ctx.restore();
 
@@ -740,9 +767,23 @@
                 var P = parser();
                 var cellSize = page.cellSize || (P.WORLD / Math.pow(2, page.cellZoom || 11));
                 var gridN = Math.pow(2, page.cellZoom || 11);
+                if (z < (this.options.gridUseZoom || 9) && page.cellItems) {
+                    /* All segments, including spans, already occur once in
+                     * cellItems. Scanning spans too would count them twice. */
+                    fn(0, page.cellItems.length, page.cellItems);
+                    return;
+                }
+                var spanMask = null;
                 if (page.spanItems && page.spanItems.length) {
-                    /* Long roads: always bbox-tested individually. */
+                    /* Long roads are separately bbox-tested so their ends are
+                     * found even when their centre cell is outside the query.
+                     * Skip them in the cell ranges below to avoid duplicates. */
                     var spans = page.spanItems, bounds = page.bounds;
+                    spanMask = page._spanMask;
+                    if (!spanMask) {
+                        spanMask = page._spanMask = new Uint8Array(page.n);
+                        for (var mi = 0; mi < spans.length; mi++) spanMask[spans[mi]] = 1;
+                    }
                     var list = [];
                     for (var si = 0; si < spans.length; si++) {
                         var i = spans[si], b0 = i * 4;
@@ -759,11 +800,6 @@
                     }
                 }
                 if (!page.cellItems || !page.cellKeys) return;
-                if (z < (this.options.gridUseZoom || 9)) {
-                    /* Low zoom: the padded query covers the whole batch. */
-                    fn(0, page.cellItems.length, page.cellItems);
-                    return;
-                }
                 var pad = cellSize * 0.5 + 1;      /* see `spanRatio` in the parser */
                 var minCy = Math.floor((q.minY - pad + P.WORLD / 2) / cellSize);
                 var maxCy = Math.floor((q.maxY + pad + P.WORLD / 2) / cellSize);
@@ -778,7 +814,7 @@
                     var rowBase = cy * gridN;
                     var lo = this._lowerBound(keys, rowBase + minCx);
                     var hi = this._upperBound(keys, rowBase + maxCx);
-                    if (hi > lo) fn(start[lo], start[hi], page.cellItems);
+                    if (hi > lo) fn(start[lo], start[hi], page.cellItems, spanMask);
                 }
             },
 
@@ -866,10 +902,12 @@
                     if (!page.extent) continue;
                     if (page.extent[2] < q.minX || page.extent[0] > q.maxX ||
                         page.extent[3] < q.minY || page.extent[1] > q.maxY) continue;
-                    this._forEachPageRange(12, page, q, function (from, to, items) {
+                    this._forEachPageRange(12, page, q, function (from, to, items, skipSpans) {
                         var bounds = page.bounds;
                         for (var s = from; s < to; s++) {
-                            var i = items[s], b0 = i * 4;
+                            var i = items[s];
+                            if (skipSpans && skipSpans[i]) continue;
+                            var b0 = i * 4;
                             if (bounds[b0 + 2] < q.minX || bounds[b0] > q.maxX) continue;
                             if (bounds[b0 + 3] < q.minY || bounds[b0 + 1] > q.maxY) continue;
                             count++;
@@ -897,10 +935,12 @@
                     if (!page.extent) continue;
                     if (page.extent[2] < q.minX || page.extent[0] > q.maxX ||
                         page.extent[3] < q.minY || page.extent[1] > q.maxY) continue;
-                    this._forEachPageRange(12, page, q, function (from, to, items) {
+                    this._forEachPageRange(12, page, q, function (from, to, items, skipSpans) {
                         var bounds = page.bounds, origins = page.origins, starts = page.starts, deltas = page.deltas;
                         for (var s = from; s < to; s++) {
-                            var i = items[s], b0 = i * 4;
+                            var i = items[s];
+                            if (skipSpans && skipSpans[i]) continue;
+                            var b0 = i * 4;
                             if (bounds[b0 + 2] < q.minX - 0.1 || bounds[b0] > q.maxX + 0.1) continue;
                             if (bounds[b0 + 3] < q.minY - 0.1 || bounds[b0 + 1] > q.maxY + 0.1) continue;
                             var ox = origins[i * 2], oy = origins[i * 2 + 1];

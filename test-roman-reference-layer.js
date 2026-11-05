@@ -80,12 +80,14 @@ console.log('  ✓ worker/canvas road loading and visible progress preserved');
 assert(subscriptions.includes("'toggleRomanSub'"), 'Roman sublayer API is premium-gated');
 assert(subscriptions.includes("'toggleRomanDareCategories'"), 'DARE All/None API is premium-gated');
 assert(subscriptions.includes('euMaps.toggleCenagisLayer = function (mapKey, on)'), 'CENAGIS catalog toggle is premium-gated');
-assert(html.includes('js/map-app.js?v=20261101-walachia-coverage'), 'index.html loads the 2D compatibility map-app script');
-assert(sw.includes('js/map-app.js?v=20261101-walachia-coverage'), 'current map-app script is in the service-worker cache');
-assert(html.includes('js/roman-roads.js?v=20261015-roman-roads'), 'index.html loads the Roman-roads canvas layer');
-assert(sw.includes('js/roman-roads.js?v=20261015-roman-roads'), 'the Roman-roads layer is in the service-worker cache');
-assert(sw.includes('js/subscriptions.js?v=20261101-profile-entitlement'), 'premium guard script is in the service-worker cache');
-assert(sw.includes('css/styles.css?v=20261024-asig-catalogue'), 'DARE marker CSS is in the service-worker cache');
+// Check the versions actually loaded by the shell instead of pinning unrelated
+// assets to the dates they happened to have when this test was first written.
+const shellAssets = [...html.matchAll(/(?:src|href)="([^"]+\?v=[^"]+)"/g)].map(match => match[1]);
+for (const asset of ['js/map-app.js', 'js/roman-roads.js', 'js/subscriptions.js', 'css/styles.css']) {
+    const url = shellAssets.find(value => value.startsWith(asset + '?v='));
+    assert(url, 'index.html loads versioned ' + asset);
+    assert(sw.includes("'" + url + "'"), 'service worker precaches the version of ' + asset + ' used by the shell');
+}
 console.log('  ✓ Premium guards and PWA asset versions verified');
 
 console.log('✅ test-roman-reference-layer.js passed all checks successfully.');

@@ -121,12 +121,13 @@ function start(msg) {
     function handleLine(line) {
         lines++;
         var rec;
-        if (line.charCodeAt(0) === 123 /* { */) {
-            try { rec = JSON.parse(line); } catch (e) { return; }
-        } else if (/^(LINESTRING|MULTILINESTRING|\[)/i.test(line)) {
+        if (line.charCodeAt(0) === 123 /* { */ || line.charCodeAt(0) === 91 /* [ */) {
+            try { rec = JSON.parse(line); } catch (e) { collector.addRecord(null); return; }
+        } else if (/^(LINESTRING|MULTILINESTRING)/i.test(line)) {
             rec = line;
         } else {
-            return;                       /* not a record this layer understands */
+            collector.addRecord(null);     /* malformed or unsupported record */
+            return;
         }
         collector.addRecord(rec);
     }
@@ -139,24 +140,62 @@ function start(msg) {
         post({ type: 'error', message: String((err && err.message) || err) });
     }
 
+    /* Drain complete records within each response chunk. A chunk (or a
+     * response.text() body) can contain the entire file: flushing only after
+     * the chunk used to overflow a batch and discard perfectly valid roads.
+     * Pause even in the middle of a chunk when four transfers await an ack. */
+    var buffer = '';
+    function processBuffer(final) {
+        var startAt = 0;
+        function advance() {
+            if (state.cancelled) { buffer = ''; return Promise.resolve(); }
+            var i;
+            while ((i = buffer.indexOf('\n', startAt)) >= 0) {
+                var line = buffer.slice(startAt, i).trim();
+                startAt = i + 1;
+                if (line) handleLine(line);
+                if (collector.shouldFlush()) {
+                    flushBatch(false);
+                    progress(false);
+                    if (state.outstanding >= MAX_OUTSTANDING) {
+                        buffer = buffer.slice(startAt);
+                        startAt = 0;
+                        return waitForAck().then(advance);
+                    }
+                }
+            }
+            var tail = buffer.slice(startAt);
+            buffer = '';
+            if (final) {
+                if (tail.trim()) handleLine(tail.trim());
+                if (collector.shouldFlush()) flushBatch(false);
+            } else {
+                buffer = tail;
+            }
+            return state.outstanding >= MAX_OUTSTANDING ? waitForAck() : Promise.resolve();
+        }
+        return advance();
+    }
+
     fetch(url, { credentials: 'omit', cache: 'default' })
         .then(function (resp) {
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             total = +resp.headers.get('content-length') || 0;
-            /* The collector thins arrivals by estimate/total; only this side
-             * of the socket knows the total. */
             if (collector.setSourceTotal) collector.setSourceTotal(total);
             progress(true);
-            if (!resp.body || !resp.body.getReader) {
-                /* No streaming body (very old browser / opaque response): fall
-                 * back to a single text pass — still parsed off-thread. */
+            if (!resp.body || !resp.body.getReader || typeof TextDecoder !== 'function') {
                 return resp.text().then(function (text) {
-                    text.split('\n').forEach(function (l) { if (l.trim()) handleLine(l.trim()); });
+                    if (state.cancelled) return;
+                    /* Without a content length this is an approximate byte
+                     * count; no additional 40 MB encoding buffer is needed. */
+                    bytes = total || text.length;
+                    if (collector.noteSourceBytes) collector.noteSourceBytes(bytes);
+                    buffer = text;
+                    return processBuffer(true);
                 });
             }
             var reader = resp.body.getReader();
             var decoder = new TextDecoder();
-            var buf = '';
 
             function pump() {
                 if (state.cancelled) {
@@ -164,25 +203,22 @@ function start(msg) {
                     return Promise.resolve();
                 }
                 return waitForAck().then(function () {
+                    if (state.cancelled) {
+                        try { reader.cancel(); } catch (e) {}
+                        return;
+                    }
                     return reader.read().then(function (res) {
                         if (res.done) {
-                            buf += decoder.decode();
-                            if (buf.trim()) handleLine(buf.trim());
-                            return;
+                            buffer += decoder.decode();
+                            return processBuffer(true);
                         }
                         bytes += res.value.length;
                         if (collector.noteSourceBytes) collector.noteSourceBytes(res.value.length);
-                        buf += decoder.decode(res.value, { stream: true });
-                        var i, start = 0;
-                        while ((i = buf.indexOf('\n', start)) >= 0) {
-                            var line = buf.slice(start, i).trim();
-                            start = i + 1;
-                            if (line) handleLine(line);
-                        }
-                        buf = buf.slice(start);
-                        flushBatch(false);
-                        progress(false);
-                        return pump();
+                        buffer += decoder.decode(res.value, { stream: true });
+                        return processBuffer(false).then(function () {
+                            progress(false);
+                            return pump();
+                        });
                     });
                 });
             }

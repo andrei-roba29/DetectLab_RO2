@@ -6347,8 +6347,9 @@
             //   js/roman-roads-worker.js  reads + parses the stream off-thread,
             //   js/roman-roads-parser.js  turns records into typed arrays,
             //   js/roman-roads.js         paints the tiles the viewport shows.
-            // Nothing is parsed on the main thread any more, no road segment
-            // becomes a DOM node, nothing outside the viewport is drawn, and
+            // In normal operation parsing is off-thread; the fallback yields
+            // while parsing. No road segment becomes a DOM node, nothing
+            // outside the viewport is drawn, and
             // the item budget keeps the per-tile work flat. This is what the
             // old per-segment `L.polyline` loop cost us: the stream stalled at
             // a few percent, the tab froze and (mobile / installed PWA) the
@@ -6395,8 +6396,8 @@
                 } else {
                     parts.push(_roadsMb(ev.bytes) + ' read');
                 }
-                if (ev.stride && ev.stride > 1) parts.push('sampled 1:' + ev.stride);
-                else if (ev.sampled) parts.push(ev.sampled.toLocaleString() + ' dropped');
+                if (ev.sampled) parts.push(ev.sampled.toLocaleString() + ' omitted (memory limit)');
+                else if (ev.stride && ev.stride > 1) parts.push('sampled 1:' + ev.stride);
                 if (ev.elapsed > 4000) parts.push(Math.round(ev.elapsed / 1000) + 's');
                 _romanStatus('roads', 'Roads: ' + parts.join(' · '));
             }
@@ -6429,17 +6430,29 @@
                         var segs = (stats && stats.segments) || layer.getStats().segments;
                         var elapsed = Math.round(((window.performance && performance.now) ? performance.now() : Date.now()) - startedAt);
                         if (segs) {
-                            _romanStatus('roads', 'Roads: ' + segs.toLocaleString() + ' segments loaded.');
+                            var summary = 'Roads: ' + segs.toLocaleString() + ' segments loaded.';
+                            if (stats && stats.sampled) {
+                                summary += ' ' + stats.sampled.toLocaleString() + ' omitted (memory limit).';
+                            }
+                            if (stats && stats.skipped) {
+                                summary += ' ' + stats.skipped.toLocaleString() + ' invalid or unsupported.';
+                            }
+                            _romanStatus('roads', summary);
                             console.info('[Roman] roads ready: ' + segs.toLocaleString() + ' segments, ' +
                                 (layer.getStats().vertices || 0).toLocaleString() + ' vertices, ' +
                                 _roadsMb(layer.getStats().bytes) + ' geometry in ' + (elapsed / 1000).toFixed(1) + 's' +
                                 (stats && stats.sampled ? ' (' + stats.sampled.toLocaleString() + ' segment(s) sampled out to fit the memory budget)' : ''));
                         } else {
-                            _romanStatus('roads', 'Roads: no geometry recognised in ' + ((stats && stats.seen) || 0) + ' lines.');
+                            var empty = 'Roads: no geometry recognised.';
+                            if (stats && stats.skipped) empty += ' ' + stats.skipped.toLocaleString() + ' invalid or unsupported.';
+                            _romanStatus('roads', empty);
                         }
                     },
                     onError: function (message) {
                         _roadsLoading = false;
+                        /* Do not leave a partial stream on the map or append
+                         * it a second time when the user retries. */
+                        layer.clearData();
                         console.warn('[Roman] roads failed:', message);
                         _romanStatus('roads', 'Roads: could not load (' + message + ').');
                     }

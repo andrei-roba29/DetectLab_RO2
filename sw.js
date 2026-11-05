@@ -996,7 +996,9 @@
 // precached. Shell assets are updated for installed PWAs.
 // v400: the PWA minimized-window drawer (arrow + panel) sits 1 mm lower than
 // on the web. Web placement is unchanged.
-const CACHE_NAME = 'detectlab-v400-pwa-dock-1mm';
+// v401: keep the full under-budget Roman road network, including Aiton, in
+// large-response and reduced-tile-budget paths. Re-tag the worker and layer.
+const CACHE_NAME = 'detectlab-v401-roman-roads-complete';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1039,7 +1041,8 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 // ── Static assets to pre-cache on install ──
 const PRECACHE_URLS = [
   // v399: Romanian Heritage sublayers (reader dependencies are local).
-  'js/map-app.js?v=20261102-ro-heritage',
+  'js/map-app.js?v=20261104-roman-roads-complete',
+  'js/map-app.js?v=20261102-ro-heritage', // older installed shells
   'css/romania-heritage.css?v=20261102-ro-heritage',
   'js/romania-heritage.js?v=20261102-ro-heritage',
   'js/geopackage-reader.js?v=20261102-ro-heritage',
@@ -1215,6 +1218,9 @@ const PRECACHE_URLS = [
    * an older index.html keeps working offline through its own URL. */
   'js/map-app.js?v=20261015-danish-layers',
   'js/map-app.js?v=20261014-3d-vectors',
+  'js/roman-roads-parser.js?v=20261104-roman-roads-complete',
+  'js/roman-roads.js?v=20261104-roman-roads-complete',
+  'js/roman-roads-worker.js?v=20261104-roman-roads-complete',
   'js/roman-roads-parser.js?v=20261015-roman-roads',
   'js/roman-roads.js?v=20261015-roman-roads',
   'js/roman-roads-worker.js?v=20261015-roman-roads',
