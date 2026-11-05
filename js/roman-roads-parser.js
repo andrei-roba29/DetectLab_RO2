@@ -41,9 +41,9 @@
  * MEMORY
  *   A segment costs ~36 bytes + 8 bytes per vertex here, against roughly
  *   250+ bytes per vertex for the LatLng/Path objects it replaces. The
- *   collector enforces a hard byte budget anyway: when it is reached the
- *   geometry is *sampled* (uniform stride, long roads always kept) instead of
- *   growing without bound, and the caller is told how much was left out.
+ *   collector estimates the source size and samples when needed, prioritising
+ *   long roads up to a hard safety ceiling. The caller is told how many paths
+ *   were left out; batching alone never triggers sampling.
  *
  * Exposes `DetectLabRomanRoadsParser` (worker: imported with importScripts,
  * page: a plain <script>; node: attached to the vm global).
@@ -52,7 +52,7 @@
     'use strict';
     if (!root) return;
 
-    var VERSION = '20261015-roman-roads-v1';
+    var VERSION = '20261104-roman-roads-v2';
 
     /* ── Web Mercator (EPSG:3857) ──────────────────────────────────────────
        Everything downstream works in Mercator metres: the trigonometry is
@@ -151,9 +151,9 @@
         'path', 'coordinates', 'coords', 'paths', 'st_astext', 'wkb_geometry'];
 
     function recordPaths(o) {
-        if (!o || typeof o !== 'object') return [];
         var p = toPaths(o);
         if (p.length) return p;
+        if (!o || typeof o !== 'object') return [];
         var srcs = [o, o.properties || {}];
         for (var s = 0; s < srcs.length; s++) {
             for (var k = 0; k < RECORD_KEYS.length; k++) {
@@ -280,38 +280,6 @@
         function heldSegments() { return emittedN + n; }
         function heldVertices() { return emittedVn + vn; }
 
-        /* Uniform sampling: keep every `stride`-th record (and every long
-         * road). Called when the byte budget is reached — memory stays flat
-         * instead of the tab dying, and what is kept stays representative
-         * instead of being "the first N km of the file". */
-        function compact(newStride) {
-            var w = 0, wv = 0;
-            for (var i = 0; i < n; i++) {
-                var keepSeg = isSpan[i] ? 1 : ((i % newStride) === 0 ? 1 : 0);
-                if (!keepSeg) { sampled++; continue; }
-                var from = starts[i], to = starts[i + 1], cnt = to - from;
-                if (w !== i) {
-                    origins[w * 2] = origins[i * 2];
-                    origins[w * 2 + 1] = origins[i * 2 + 1];
-                    bounds[w * 4] = bounds[i * 4];
-                    bounds[w * 4 + 1] = bounds[i * 4 + 1];
-                    bounds[w * 4 + 2] = bounds[i * 4 + 2];
-                    bounds[w * 4 + 3] = bounds[i * 4 + 3];
-                    isSpan[w] = isSpan[i];
-                }
-                if (wv !== from) {
-                    deltas.copyWithin(wv * 2, from * 2, to * 2);
-                }
-                starts[w] = wv;
-                wv += cnt;
-                w++;
-            }
-            starts[w] = wv;
-            n = w;
-            vn = wv;
-            stride = newStride;
-        }
-
         function underBudget() {
             return heldSegments() < cfg.maxSegments && heldVertices() < cfg.maxVertices &&
                 totalBytes() < cfg.maxBytes;
@@ -354,8 +322,8 @@
 
             /* project + drop noise/dedup in one pass */
             var flat = new Float64Array(pts.length * 2);
-            var m = 0;
-            var px = 0, py = 0;
+            var m = 0, valid = 0;
+            var px = 0, py = 0, lastX = 0, lastY = 0;
             for (var i = 0; i < pts.length; i++) {
                 var c = pts[i];
                 if (!c || c.length < 2) continue;
@@ -363,6 +331,8 @@
                 if (!isFinite(a) || !isFinite(b)) continue;
                 var x = projected ? a : mercX(a);
                 var y = projected ? b : mercY(b);
+                valid++;
+                lastX = x; lastY = y;
                 if (m > 0) {
                     var ddx = x - px, ddy = y - py;
                     if (ddx * ddx + ddy * ddy < cfg.minVertexDistMeters * cfg.minVertexDistMeters) continue;
@@ -370,6 +340,14 @@
                 flat[m * 2] = x;
                 flat[m * 2 + 1] = y;
                 px = x; py = y;
+                m++;
+            }
+            /* Retain the last valid endpoint even when it is within the
+             * deduplication distance. Otherwise sub-metre segments disappear
+             * and junctions can acquire gaps. A point becomes [point,point]. */
+            if (m && valid > 1 && (m === 1 || px !== lastX || py !== lastY)) {
+                flat[m * 2] = lastX;
+                flat[m * 2 + 1] = lastY;
                 m++;
             }
             if (m < 2) return false;
@@ -418,8 +396,9 @@
             if (loY < minY) minY = loY;
             if (hiY > maxY) maxY = hiY;
 
-            /* grid cell: by bbox centre, so a segment lives in exactly one
-             * cell and never gets drawn twice; long ones go to `spanItems`. */
+            /* Grid by bbox centre. Every segment has one cell entry; long
+             * ones also go to `spanItems` so queries can reach their ends.
+             * The layer suppresses that overlap when visiting both lists. */
             var halfW = (hiX - loX) / 2, halfH = (hiY - loY) / 2;
             var cx = Math.floor((loX + halfW + HALF_WORLD) / cellSize);
             var cy = Math.floor((loY + halfH + HALF_WORLD) / cellSize);
@@ -436,7 +415,7 @@
 
         /* One source record or one geometry object. */
         function addRecord(record) {
-            if (!record) return 0;
+            if (!record) { skipped++; return 0; }
             var paths = recordPaths(record);
             if (!paths.length) {
                 var pt = toPoint(record);
@@ -453,8 +432,15 @@
             for (var i = 0; i < paths.length; i++) {
                 seen++;
                 var pts = paths[i];
-                /* Long roads — the ones that still read at low zoom — always
-                 * get through, whatever the budget says. */
+                /* Long roads get priority, but not an unlimited exemption: a
+                 * very large single record must still respect a hard ceiling.
+                 * The small batch allowance leaves room for a few long roads
+                 * after ordinary arrivals have reached the sampling limit. */
+                if (heldSegments() >= cfg.maxSegments * 2 + cfg.maxBatchSegments ||
+                    heldVertices() >= cfg.maxVertices * 2 || totalBytes() >= cfg.maxBytes * 2) {
+                    sampled++;
+                    continue;
+                }
                 if (!longPath(pts)) {
                     if (heldSegments() > cfg.maxSegments * 2 ||
                         heldVertices() > cfg.maxVertices * 2) { sampled++; continue; }
@@ -467,11 +453,11 @@
                     }
                 }
                 if (addPath(pts, seen)) stored++;
+                else skipped++;
             }
-            /* A single batch that has grown past the flush size on its own
-             * (very long features) is thinned in place — earlier batches
-             * already belong to the caller and cannot be compacted. */
-            if (n > cfg.maxBatchSegments * 2 && stride < 64) compact(stride * 2);
+            /* Batch size is a transfer threshold, not a memory budget. The
+             * caller flushes between records; one MultiLineString can exceed
+             * the threshold without losing its constituent paths. */
             return stored;
         }
 

@@ -39,10 +39,10 @@ const parserSrc = read('js/roman-roads-parser.js');
 const layerSrc = read('js/roman-roads.js');
 const workerSrc = read('js/roman-roads-worker.js');
 
-/* The roads' own assets were last touched by the roads work; map-app.js was
- * re-tagged since — most recently by the collapsible ArcGIS base-map list. */
-const VERSION_TAG = '20261015-roman-roads';
-const MAP_APP_TAG = '20261029-android-zoom-glass';
+/* All three road modules and the map wiring must be re-tagged together so
+ * installed PWAs cannot pair an old worker with the corrected layer. */
+const VERSION_TAG = '20261104-roman-roads-complete';
+const MAP_APP_TAG = '20261104-roman-roads-complete';
 console.log('[Test] Roman roads — worker parser, canvas layer, no per-segment DOM...');
 
 /* ── 1. wiring ─────────────────────────────────────────────────────────────
