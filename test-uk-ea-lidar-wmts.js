@@ -355,7 +355,7 @@ check('index.html loads ea-lidar-wmts-layer.js before map-app.js',
     scriptSrcs.indexOf('js/ea-lidar-wmts-layer.js') < scriptSrcs.indexOf('js/map-app.js'));
 check('the service worker pre-caches it', sw.indexOf('js/ea-lidar-wmts-layer.js') !== -1);
 check('the service worker cache name was bumped',
-    /detectlab-v402-google-callback-bypass/.test(sw));
+    /detectlab-v403-corona-catalog-validation/.test(sw));
 check('the UK layer is built by the module', /EaLidarWmts\.createLayer/.test(mapApp));
 check('the UK row no longer renders tiles through the WMS',
     !/_createFreeLidarWmsLayer\(UK_LIDAR_WMS_URL/.test(mapApp));

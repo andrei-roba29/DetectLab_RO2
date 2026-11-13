@@ -277,7 +277,7 @@ async function run() {
   assert.match(html, /js\/auth\.js\?v=20261101-safari-direct-oauth/);
   assert.match(sw, /js\/auth\.js\?v=20261101-safari-direct-oauth/);
   assert.match(sw, /pathname === '\/google-auth-callback\.html'[\s\S]*pathname === '\/google-auth-callback'/);
-  assert.match(sw, /CACHE_NAME = 'detectlab-v402-google-callback-bypass'/);
+  assert.match(sw, /CACHE_NAME = 'detectlab-v403-corona-catalog-validation'/);
   assert.match(callback, /history\.replaceState\(null, '', location\.pathname\)/);
   assert.match(callback, /event\.origin !== location\.origin/);
   assert.match(callback, /Close and return to DetectLab/);

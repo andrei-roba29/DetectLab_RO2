@@ -170,13 +170,11 @@
      * cannot read it directly. The catalogue therefore arrives through one of
      * these, in order (all same-origin or CORS-enabled):
      *
-     *   1. window.CORONA_CATALOG_URL      — explicit override (e.g. Supabase);
-     *   2. data/corona-europe-catalog.json — static snapshot committed/produced
-     *      by tools/build-corona-europe-catalog.mjs (fastest, cacheable, PWA);
-     *   3. /api/corona/rasters            — Netlify function that proxies and
-     *      filters the live CAST catalogue (always fresh, same origin);
-     *   4. the built-in minimal list below — last-resort so the layer still
-     *      draws something if 1–3 are all unavailable.
+     *   1. data/corona-europe-catalog.json — static build snapshot (fast,
+     *      cacheable, and available offline when the PWA has cached it);
+     *   2. /api/corona/rasters            — same-origin live catalogue proxy;
+     *   3. window.CORONA_CATALOG_URL      — optional explicit override;
+     *   4. the built-in minimal list below — last resort if all sources fail.
      *
      * Every source yields the same normalised shape.
      * ═══════════════════════════════════════════════════════════════════════ */
@@ -420,21 +418,115 @@
         return out;
     }
 
+    function validExtent(extent) {
+        return Object.prototype.toString.call(extent) === '[object Array]' && extent.length === 4 &&
+            extent.every(function (n) { return typeof n === 'number' && isFinite(n); }) &&
+            extent[0] >= -180 && extent[2] <= 180 && extent[1] >= -90 && extent[3] <= 90 &&
+            extent[0] <= extent[2] && extent[1] <= extent[3];
+    }
+
+    function validProduct(entry, key) {
+        if (!entry || typeof entry !== 'object' || Object.prototype.toString.call(entry) === '[object Array]') return false;
+        var product = normalizeProduct(entry, key);
+        if (!product || !validExtent(product.extent) || !product.location) return false;
+        var rings = product.rings;
+        if (!rings || !rings.length) return false;
+        for (var r = 0; r < rings.length; r++) {
+            if (!rings[r] || rings[r].length < 4) return false;
+            for (var p = 0; p < rings[r].length; p++) {
+                var point = rings[r][p];
+                if (!point || point.length < 2 || !isFinite(point[0]) || !isFinite(point[1]) ||
+                    point[0] < -180 || point[0] > 180 || point[1] < -90 || point[1] > 90) return false;
+            }
+        }
+        return true;
+    }
+
+    /* Reject HTML, empty JSON, partial blocks and count mismatches before the
+     * payload can be treated as a successful source or cached by the PWA. */
+    function validateCatalogPayload(payload) {
+        if (!payload || typeof payload !== 'object' || Object.prototype.toString.call(payload) === '[object Array]') {
+            throw new Error('catalogue is not a JSON object');
+        }
+        if (payload.blocks !== undefined && Object.prototype.toString.call(payload.blocks) !== '[object Array]') {
+            throw new Error('catalogue blocks must be an array');
+        }
+        if (payload.blocks !== undefined &&
+            (typeof payload.generated !== 'string' || !isFinite(Date.parse(payload.generated)) ||
+             !validExtent(payload.bbox))) throw new Error('catalogue metadata is incomplete');
+        var raw = payload.blocks || payload;
+        var isArray = Object.prototype.toString.call(raw) === '[object Array]';
+        var keys = isArray ? raw.map(function (_, i) { return i; }) : Object.keys(raw);
+        if (!keys.length) throw new Error('catalogue contains no passes');
+        var frames = 0;
+        for (var i = 0; i < keys.length; i++) {
+            var key = keys[i];
+            var block = raw[key];
+            var blockKey = isArray ? (block && (block.id || block.location)) : key;
+            if (!validProduct(block, blockKey) || Object.prototype.toString.call(block.images) !== '[object Array]') {
+                throw new Error('catalogue contains an incomplete pass');
+            }
+            for (var j = 0; j < block.images.length; j++) {
+                if (!validProduct(block.images[j], block.images[j] && block.images[j].location)) {
+                    throw new Error('catalogue contains an incomplete frame');
+                }
+                frames += 1;
+            }
+        }
+        if (!frames) throw new Error('catalogue contains no image frames');
+        if (payload.passes !== undefined && payload.passes !== keys.length) throw new Error('catalogue pass count mismatch');
+        if (payload.frames !== undefined && payload.frames !== frames) throw new Error('catalogue frame count mismatch');
+        if (payload.bbox !== undefined && !validExtent(payload.bbox)) throw new Error('catalogue bbox is invalid');
+        return { passes: keys.length, frames: frames };
+    }
+
     /* ── catalogue loading ────────────────────────────────────────────────── */
 
     function catalogSources() {
-        var sources = [];
-        if (root.CORONA_CATALOG_URL) sources.push(root.CORONA_CATALOG_URL);
-        sources.push('data/corona-europe-catalog.json');
-        sources.push('/api/corona/rasters?bbox=' + EUROPE_BBOX.join(','));
+        var sources = ['data/corona-europe-catalog.json', '/api/corona/rasters?bbox=' + EUROPE_BBOX.join(',')];
+        if (root.CORONA_CATALOG_URL && sources.indexOf(root.CORONA_CATALOG_URL) === -1) {
+            sources.push(root.CORONA_CATALOG_URL);
+        }
         return sources;
     }
 
     var _catalogPromise = null;
 
+    function showCatalogFallbackNotice() {
+        console.error('[Corona] no catalogue source reachable or valid. Showing the limited built-in fallback list; other map layers remain available.');
+        var doc = root.document;
+        if (!doc || !doc.body || !doc.createElement) return;
+        var notice = doc.getElementById && doc.getElementById('corona-catalog-warning');
+        if (!notice) {
+            notice = doc.createElement('div');
+            notice.id = 'corona-catalog-warning';
+            notice.setAttribute('role', 'status');
+            notice.setAttribute('aria-live', 'polite');
+            notice.textContent = 'Corona catalogue unavailable. Showing limited fallback coverage; other map layers are unaffected.';
+            notice.style.position = 'fixed';
+            notice.style.left = '50%';
+            notice.style.bottom = '76px';
+            notice.style.transform = 'translateX(-50%)';
+            notice.style.zIndex = '2147483000';
+            notice.style.maxWidth = 'min(92vw, 34rem)';
+            notice.style.padding = '10px 14px';
+            notice.style.borderRadius = '8px';
+            notice.style.background = '#5c2f00';
+            notice.style.color = '#fff';
+            notice.style.font = '600 13px/1.4 system-ui, sans-serif';
+            notice.style.boxShadow = '0 2px 12px rgba(0,0,0,.3)';
+            doc.body.appendChild(notice);
+        }
+        if (notice._coronaTimer) root.clearTimeout(notice._coronaTimer);
+        notice._coronaTimer = root.setTimeout(function () {
+            if (notice.parentNode) notice.parentNode.removeChild(notice);
+        }, 10000);
+    }
+
     function loadCatalog(options) {
         options = options || {};
         if (_catalogPromise && !options.force) return _catalogPromise;
+        if (options.force) _catalogPromise = null;
 
         var bbox = options.bbox || EUROPE_BBOX;
         var sources = options.sources || catalogSources();
@@ -443,7 +535,7 @@
             var index = 0;
 
             function finish(blocks, source) {
-                if (blocks && blocks.length) {
+                if (blocks) {
                     console.info('[Corona] catalogue: ' + blocks.length + ' passes from ' + source);
                     resolve({ blocks: blocks, source: source });
                 } else {
@@ -453,8 +545,12 @@
 
             function next() {
                 if (index >= sources.length) {
-                    console.warn('[Corona] no catalogue source reachable — using the built-in fallback list');
-                    resolve({ blocks: FALLBACK_BLOCKS.slice(), source: 'fallback' });
+                    showCatalogFallbackNotice();
+                    resolve({
+                        blocks: FALLBACK_BLOCKS.slice(),
+                        source: 'fallback',
+                        warning: 'Static catalogue and live API are unavailable or invalid.'
+                    });
                     return;
                 }
                 var url = sources[index++];
@@ -462,13 +558,17 @@
                 try {
                     request = fetch(url, { credentials: 'omit' });
                 } catch (err) {
+                    console.warn('[Corona] catalogue source failed (' + url + '): ' + (err && err.message));
                     next();
                     return;
                 }
                 request.then(function (response) {
                     if (!response.ok) throw new Error('HTTP ' + response.status);
+                    var contentType = response.headers && response.headers.get && response.headers.get('content-type');
+                    if (contentType && /text\/html/i.test(contentType)) throw new Error('received HTML instead of JSON');
                     return response.json();
                 }).then(function (json) {
+                    validateCatalogPayload(json);
                     finish(normalizeCatalog(json, bbox), url);
                 })['catch'](function (err) {
                     console.warn('[Corona] catalogue source failed (' + url + '): ' + (err && err.message));
@@ -819,6 +919,7 @@
         FALLBACK_BLOCKS: FALLBACK_BLOCKS,
         catalogSources: catalogSources,
         normalizeCatalog: normalizeCatalog,
+        validateCatalogPayload: validateCatalogPayload,
         loadCatalog: loadCatalog,
         bboxIntersects: bboxIntersects,
         ringsIntersectBbox: ringsIntersectBbox,

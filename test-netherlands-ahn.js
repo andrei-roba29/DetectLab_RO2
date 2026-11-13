@@ -414,7 +414,7 @@ function finish() {
         scriptSrcs.indexOf('js/ahn-layer.js') < scriptSrcs.indexOf('js/map-app.js'));
     check('the service worker pre-caches it', sw.indexOf('js/ahn-layer.js') !== -1);
     check('the service worker cache name was bumped',
-        /detectlab-v402-google-callback-bypass/.test(sw));
+        /detectlab-v403-corona-catalog-validation/.test(sw));
     check('the Netherlands layer is built by the module', /AhnLidar\.createLayer/.test(mapApp));
     check('the product dropdown is in the panel',
         /id="netherlandsLidarModeSelect"/.test(indexHtml) &&
