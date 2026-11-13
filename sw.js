@@ -1000,7 +1000,10 @@
 // large-response and reduced-tile-budget paths. Re-tag the worker and layer.
 // v403: Corona static/API catalogues use network-first validation; only valid
 // pass/frame JSON is cached, and a validated cache copy remains available offline.
-const CACHE_NAME = 'detectlab-v403-corona-catalog-validation';
+// v404: Corona WMS tiles bypass Cache Storage because cross-origin opaque
+// responses cannot be distinguished from cached 502/503/504 HTML error pages.
+// The browser's ordinary HTTP cache remains governed by CAST response headers.
+const CACHE_NAME = 'detectlab-v404-corona-tile-retries';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -2041,7 +2044,7 @@ const PRECACHE_URLS = [
   //   the GPS pin updates in place instead of being re-created on every fix.
   //   The three URLs below are the live ones index.html requests.
   //   See SATELLITE_60s_LIVE_LOCATION.md.
-  'js/corona-wms-layer.js?v=20261112-corona-catalog-fallback',
+  'js/corona-wms-layer.js?v=20261112-corona-tile-retries',
   'js/tile-perf.js?v=20261030-sat60-live-location',
   'js/map-app.js?v=20261030-roman-layer-cleanup',
   'js/map-app.js?v=20261030-walachia',
@@ -2161,6 +2164,13 @@ function isCoronaCatalogRequest(url) {
     (url.pathname === '/data/corona-europe-catalog.json' || url.pathname === '/api/corona/rasters');
 }
 
+function isCoronaWmsTile(url) {
+  if (url.hostname !== 'geoserve.cast.uark.edu' ||
+      url.pathname !== '/geoserver/gwc/service/wms') return false;
+  var layerName = url.searchParams && (url.searchParams.get('LAYERS') || url.searchParams.get('layers'));
+  return typeof layerName === 'string' && /^corona:/i.test(layerName);
+}
+
 function validCoronaCachedResponse(response) {
   if (!response || !response.ok) return Promise.resolve(false);
   var contentType = response.headers && response.headers.get('content-type');
@@ -2221,6 +2231,16 @@ function fetchCoronaCatalogRequest(request) {
 }
 
 function cacheOfflineTileFromMessage(url) {
+  var requestURL;
+  try { requestURL = new URL(url, location.origin); } catch (err) {
+    return Promise.reject(new Error('Invalid offline tile URL'));
+  }
+  // CAST has no CORS/Timing-Allow-Origin headers. A no-cors response is
+  // opaque, so Cache Storage cannot tell a valid PNG from a 504 HTML page.
+  // Do not persist Corona WMS responses; leave HTTP caching to the browser.
+  if (isCoronaWmsTile(requestURL)) {
+    return Promise.reject(new Error('CORONA WMS responses cannot be safely validated for offline caching'));
+  }
   return caches.open(OFFLINE_TILE_CACHE_NAME).then(function (cache) {
     return fetch(new Request(url, { method: 'GET', mode: 'no-cors', cache: 'no-store' })).then(function (response) {
       return cache.put(url, response.clone()).then(function () { return true; });
@@ -2257,6 +2277,15 @@ self.addEventListener('fetch', function (event) {
   // HTML fallback, invalid JSON, 404, or upstream error is never cached.
   if (isCoronaCatalogRequest(requestURL)) {
     event.respondWith(fetchCoronaCatalogRequest(request));
+    return;
+  }
+
+  // CAST Corona tile responses are cross-origin opaque: Cache Storage cannot
+  // validate PNG versus an HTTP 502/503/504 HTML response. Bypass the offline
+  // Cache Storage lookup entirely; the native browser HTTP cache still follows
+  // the server's own cache headers and policies.
+  if (requestURL.origin !== location.origin && isCoronaWmsTile(requestURL)) {
+    event.respondWith(fetch(request));
     return;
   }
 

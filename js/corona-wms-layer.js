@@ -127,6 +127,87 @@
     }
 
     /* ───────────────────────────────────────────────────────────────────────
+     * Tile error handling. Leaflet's normal <img> tile loader reports a failed
+     * decode, but does not retry it. Since CAST does not expose CORS response
+     * headers, browsers normally hide the HTTP status from the image element;
+     * Resource Timing can expose it when the server sends Timing-Allow-Origin.
+     * An unknown status is treated as transient, with a strict retry cap.
+     * ───────────────────────────────────────────────────────────────────── */
+    var CORONA_TILE_MAX_RETRIES = 2;
+    var CORONA_TILE_RETRY_DELAYS = [500, 1500];
+    var coronaUnavailableNotice = null;
+    var coronaNoticeTimer = null;
+    var coronaNoticeLastShown = 0;
+
+    function observedTileStatus(url, event) {
+        var candidates = [event, event && event.target];
+        for (var i = 0; i < candidates.length; i++) {
+            var status = candidates[i] && Number(candidates[i].status);
+            if (status > 0) return status;
+        }
+        try {
+            var entries = root.performance && root.performance.getEntriesByName(url, 'resource');
+            if (entries && entries.length) {
+                var responseStatus = Number(entries[entries.length - 1].responseStatus);
+                if (responseStatus > 0) return responseStatus;
+            }
+        } catch (err) { /* cross-origin timing data is commonly restricted */ }
+        return null;
+    }
+
+    function isRetryableTileFailure(status) {
+        // A missing status is normal for cross-origin <img> requests without
+        // Timing-Allow-Origin. Status 0 is an opaque/network failure. A 2xx
+        // response that cannot decode is typically an HTML gateway page.
+        if (status === null || status === 0) return true;
+        if (status >= 200 && status < 300) return true;
+        return status === 408 || status === 425 || status === 429 || (status >= 500 && status <= 599);
+    }
+
+    function showCoronaUnavailableNotice() {
+        var doc = root.document;
+        if (!doc || !doc.body || !doc.createElement) return;
+        if (coronaUnavailableNotice && coronaUnavailableNotice.parentNode) return;
+        var now = Date.now();
+        if (now - coronaNoticeLastShown < 30000) return;
+        coronaNoticeLastShown = now;
+        var notice = doc.createElement('div');
+        notice.id = 'corona-tile-unavailable-notice';
+        notice.setAttribute('role', 'status');
+        notice.setAttribute('aria-live', 'polite');
+        notice.textContent = 'CORONA imagery is temporarily unavailable. Retrying; loaded tiles remain visible.';
+        notice.style.position = 'fixed';
+        notice.style.left = '50%';
+        notice.style.bottom = '76px';
+        notice.style.transform = 'translateX(-50%)';
+        notice.style.zIndex = '2147483000';
+        notice.style.maxWidth = 'min(92vw, 34rem)';
+        notice.style.padding = '8px 12px';
+        notice.style.borderRadius = '8px';
+        notice.style.background = 'rgba(45, 35, 20, .94)';
+        notice.style.color = '#fff';
+        notice.style.font = '500 12px/1.4 system-ui, sans-serif';
+        notice.style.boxShadow = '0 2px 10px rgba(0,0,0,.25)';
+        doc.body.appendChild(notice);
+        coronaUnavailableNotice = notice;
+        if (coronaNoticeTimer !== null) root.clearTimeout(coronaNoticeTimer);
+        coronaNoticeTimer = root.setTimeout(function () {
+            if (notice.parentNode) notice.parentNode.removeChild(notice);
+            if (coronaUnavailableNotice === notice) coronaUnavailableNotice = null;
+            coronaNoticeTimer = null;
+        }, 8000);
+    }
+
+    function clearCoronaUnavailableNotice() {
+        if (coronaNoticeTimer !== null) root.clearTimeout(coronaNoticeTimer);
+        coronaNoticeTimer = null;
+        if (coronaUnavailableNotice && coronaUnavailableNotice.parentNode) {
+            coronaUnavailableNotice.parentNode.removeChild(coronaUnavailableNotice);
+        }
+        coronaUnavailableNotice = null;
+    }
+
+    /* ───────────────────────────────────────────────────────────────────────
      * The tile layer. One instance per Corona product (pass mosaic or frame),
      * so each tile request carries exactly one LAYERS= value — the same way
      * the original atlas issues its requests.
@@ -147,8 +228,135 @@
 
             this._coronaLayer = options.layers || options.coronaLayer || 'corona';
             this._coronaBaseUrl = url;
+            this._coronaRetryJobs = Object.create(null);
 
             L.TileLayer.WMS.prototype.initialize.call(this, url, options);
+        },
+
+        // Use Leaflet's normal image-tile path and exact WMS URL, but hold the
+        // tile open for at most two transient retries before reporting failure.
+        // Successful sibling tiles are independent and remain attached.
+        createTile: function (coords, done) {
+            var layer = this;
+            var tile = root.document.createElement('img');
+            var url = this.getTileUrl(coords);
+            var state = {
+                layer: layer,
+                tile: tile,
+                url: url,
+                done: done,
+                retries: 0,
+                settled: false,
+                retrying: false,
+                job: null
+            };
+
+            tile.alt = '';
+            tile.setAttribute('role', 'presentation');
+            tile.className = 'leaflet-tile';
+            if (this.options.crossOrigin) {
+                tile.crossOrigin = this.options.crossOrigin === true ? '' : this.options.crossOrigin;
+            }
+
+            function removeFromRetryJob() {
+                var job = state.job;
+                if (!job) return;
+                var memberAt = job.members.indexOf(state);
+                if (memberAt !== -1) job.members.splice(memberAt, 1);
+                var waitingAt = job.waiting.indexOf(state);
+                if (waitingAt !== -1) job.waiting.splice(waitingAt, 1);
+                state.job = null;
+                if (!job.members.length) {
+                    if (job.timer !== null) root.clearTimeout(job.timer);
+                    delete layer._coronaRetryJobs[url];
+                }
+            }
+
+            function finish(error) {
+                if (state.settled) return;
+                state.settled = true;
+                tile.onload = null;
+                tile.onerror = null;
+                removeFromRetryJob();
+                if (typeof done === 'function') done(error || null, tile);
+            }
+
+            function scheduleWaiting(job) {
+                if (job.timer !== null || job.active > 0 || !job.waiting.length) return;
+                var delay = 0;
+                for (var i = 0; i < job.waiting.length; i++) {
+                    var retryIndex = Math.min(job.waiting[i].retries, CORONA_TILE_RETRY_DELAYS.length - 1);
+                    delay = Math.max(delay, CORONA_TILE_RETRY_DELAYS[retryIndex]);
+                }
+                job.timer = root.setTimeout(function () {
+                    job.timer = null;
+                    var waiting = job.waiting.slice();
+                    job.waiting.length = 0;
+                    for (var j = 0; j < waiting.length; j++) {
+                        var waitingState = waiting[j];
+                        if (waitingState.settled) continue;
+                        waitingState.retries += 1;
+                        waitingState.retrying = true;
+                        job.active += 1;
+                        // Reset the image to force a fresh load, then reuse the
+                        // exact URL: no WMS parameters or cache-busting query
+                        // strings are added to CAST requests.
+                        waitingState.tile.removeAttribute('src');
+                        waitingState.tile.src = waitingState.url;
+                    }
+                }, delay);
+            }
+
+            function queueRetry(status) {
+                if (state.retrying && state.job) {
+                    state.retrying = false;
+                    state.job.active = Math.max(0, state.job.active - 1);
+                }
+                if (!isRetryableTileFailure(status) || state.retries >= CORONA_TILE_MAX_RETRIES) {
+                    var retryJob = state.job;
+                    finish(new Error('CORONA tile failed' + (status ? ' (HTTP ' + status + ')' : '')));
+                    if (retryJob) scheduleWaiting(retryJob);
+                    return;
+                }
+
+                showCoronaUnavailableNotice();
+                var job = layer._coronaRetryJobs[url];
+                if (!job) {
+                    job = layer._coronaRetryJobs[url] = { members: [], waiting: [], active: 0, timer: null };
+                }
+                if (state.job !== job) {
+                    state.job = job;
+                    job.members.push(state);
+                }
+                if (job.waiting.indexOf(state) === -1) job.waiting.push(state);
+                scheduleWaiting(job);
+            }
+
+            tile.onload = function (event) {
+                var status = observedTileStatus(url, event);
+                if (status !== null && status >= 400) {
+                    queueRetry(status);
+                    return;
+                }
+                if (!(tile.naturalWidth > 0 && tile.naturalHeight > 0)) {
+                    queueRetry(status === null ? 200 : status);
+                    return;
+                }
+                if (state.retrying) {
+                    state.retrying = false;
+                    if (state.job) {
+                        state.job.active = Math.max(0, state.job.active - 1);
+                        scheduleWaiting(state.job);
+                    }
+                    clearCoronaUnavailableNotice();
+                }
+                finish(null);
+            };
+            tile.onerror = function (event) {
+                queueRetry(observedTileStatus(url, event));
+            };
+            tile.src = url;
+            return tile;
         },
 
         // The ONLY thing that differs from a normal basemap: the URL format.
@@ -743,14 +951,10 @@
                 ? root.createCoronaWmsLayer(this.options.url, opts)
                 : L.tileLayer.wms(this.options.url, opts);
 
-            // A tile the server refuses (renamed/retired product → GeoWebCache
-            // answers "400 Unknown layer …") must not leave a broken <img>.
+            // Hide only the failed image after bounded retries. Leaflet keeps
+            // this tile isolated from already-loaded siblings and other layers.
             layer.on('tileerror', function (e) {
                 if (e && e.tile) e.tile.style.display = 'none';
-                if (!layer._coronaErrorLogged) {
-                    layer._coronaErrorLogged = true;
-                    console.warn('[Corona] product unavailable on the CAST server: ' + name);
-                }
             });
 
             layer._coronaDescriptor = descriptor;
