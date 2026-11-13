@@ -84,10 +84,10 @@ async function runSources(sourceMap, options) {
 test('PWA shell requests and precaches the versioned Corona fallback code', async () => {
   const index = await fs.readFile(new URL('../index.html', import.meta.url), 'utf8');
   const worker = await fs.readFile(new URL('../sw.js', import.meta.url), 'utf8');
-  const asset = 'js/corona-wms-layer.js?v=20261112-corona-catalog-fallback';
+  const asset = 'js/corona-wms-layer.js?v=20261112-corona-tile-retries';
   assert.ok(index.includes(asset));
   assert.ok(worker.includes(`'${asset}'`));
-  assert.match(worker, /CACHE_NAME = 'detectlab-v403-corona-catalog-validation'/);
+  assert.match(worker, /CACHE_NAME = 'detectlab-v404-corona-tile-retries'/);
 });
 
 test('static snapshot is preferred and concurrent requests share one fetch', async () => {
@@ -296,7 +296,7 @@ test('service worker upgrades migrate only validated cached Corona responses', a
   handlers.activate[0]({ waitUntil(promise) { activation = promise; } });
   await activation;
   assert.equal(stores.has(oldName), false);
-  const currentCache = stores.get('detectlab-v403-corona-catalog-validation');
+  const currentCache = stores.get('detectlab-v404-corona-tile-retries');
   assert.ok(currentCache);
   assert.equal((await currentCache.match(new Request(staticUrl)))?.status, 200);
   assert.equal(await currentCache.match(new Request(invalidUrl)), null);
