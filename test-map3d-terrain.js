@@ -80,9 +80,9 @@ const skin = read('css/map3d-terrain.css');
 
 const TAG = '20261019-tile-order';              /* MapLibre itself (coveringTiles patch) */
 const TAG_3D = '20261030-lidar-photo-3d';       /* mirror (canvas tiles)          */
-const TAG_VIEWER = '20261101-lidar-settings-reset'; /* viewer (js)                     */
-const TAG_CSS = '20261031-lidar-dock-minimized';      /* viewer skin (css)              */
-const TAG_FOCUS = '20261031-lidar-dock-minimized'; /* LiDAR focus (3D, one disc)   */
+const TAG_VIEWER = '20261102-lidar-gray-backing'; /* viewer (js)                     */
+const TAG_CSS = '20261102-report-lidar-window';      /* viewer skin (css)              */
+const TAG_FOCUS = '20261102-lidar-disc-zoom-anchor'; /* LiDAR focus (3D, one disc)   */
 const TAG_REGISTRY = '20261030-walachia';       /* shared registry (historical maps) */
 
 // ══════════════════════════════════════════════════════════════
@@ -891,8 +891,8 @@ const TAG_REGISTRY = '20261030-walachia';       /* shared registry (historical m
         'a host healed to the proxy still forces the reload — the template is unchanged but must be re-resolved');
     assert(viewApi._setSourceTiles('m3d-2d-2d.R1-src', ['dl2d://2d.R1/{z}/{x}/{y}']) === false,
         'setSourceTiles() is inert while no 3D map is open');
-    assert((viewer.match(/state\.sourceData\[sourceId\] = /g) || []).length === 5,
-        'the upload cache is written by setSourceData() and by each of the four GeoJSON renderers');
+    assert((viewer.match(/state\.sourceData\[sourceId\] = /g) || []).length === 6,
+        'the upload cache is written by setSourceData() and by each of the five GeoJSON renderers (including image overlays)');
     console.log('  ✓ the blended LiDAR hillshades are repainted (and cached), not painted as a white sheet');
 
     // ══════════════════════════════════════════════════════════

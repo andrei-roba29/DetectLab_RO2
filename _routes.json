@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "include": ["/api/*", "/google-auth-callback", "/google-auth-callback.html"],
+  "exclude": []
+}

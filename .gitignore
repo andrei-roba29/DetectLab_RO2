@@ -1,10 +1,13 @@
 # Secrets — never commit these
 .env
 backend/.env
+.dev.vars
+.dev.vars.*
 
 # Dependencies (tracked legacy — new installs should not be committed)
 node_modules/
 backend/node_modules/
+.wrangler/
 
 # Logs / OS junk
 *.log
@@ -14,10 +17,11 @@ backend/node_modules/
 __pycache__/
 *.pyc
 
-# Build artefacts — generated at deploy time (see netlify.toml [build]):
-# the CORONA Europe catalogue snapshot is baked fresh on every deploy by
-# tools/build-corona-europe-catalog.mjs.
-data/corona-europe-catalog.json
+# Build artefact — generated at deploy time (see netlify.toml [build]).
+# Keep a checked-in snapshot when available so a Cloudflare build can still
+# publish the last good catalogue during a CAST outage; Netlify still refreshes
+# it with the existing best-effort build command.
+!data/corona-europe-catalog.json
 
 # Geocoding cache written by tools/build-hungaricana-catalog.mjs —
 # per-machine answers from Nominatim, never part of the catalogue.
