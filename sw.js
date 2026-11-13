@@ -998,7 +998,7 @@
 // on the web. Web placement is unchanged.
 // v401: keep the full under-budget Roman road network, including Aiton, in
 // large-response and reduced-tile-budget paths. Re-tag the worker and layer.
-const CACHE_NAME = 'detectlab-v401-roman-roads-complete';
+const CACHE_NAME = 'detectlab-v402-google-callback-bypass';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -2166,7 +2166,9 @@ self.addEventListener('fetch', function (event) {
   }
 
   // OAuth callbacks carry one-time codes. Never put their URLs in Cache Storage.
-  if (requestURL.origin === location.origin && requestURL.pathname === '/google-auth-callback.html') return;
+  if (requestURL.origin === location.origin &&
+      (requestURL.pathname === '/google-auth-callback.html' ||
+       requestURL.pathname === '/google-auth-callback')) return;
 
   // ── Cross-origin tile lookup ──
   // Cache.match is cheap for normal requests and only returns a response when
