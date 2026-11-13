@@ -127,87 +127,6 @@
     }
 
     /* ───────────────────────────────────────────────────────────────────────
-     * Tile error handling. Leaflet's normal <img> tile loader reports a failed
-     * decode, but does not retry it. Since CAST does not expose CORS response
-     * headers, browsers normally hide the HTTP status from the image element;
-     * Resource Timing can expose it when the server sends Timing-Allow-Origin.
-     * An unknown status is treated as transient, with a strict retry cap.
-     * ───────────────────────────────────────────────────────────────────── */
-    var CORONA_TILE_MAX_RETRIES = 2;
-    var CORONA_TILE_RETRY_DELAYS = [500, 1500];
-    var coronaUnavailableNotice = null;
-    var coronaNoticeTimer = null;
-    var coronaNoticeLastShown = 0;
-
-    function observedTileStatus(url, event) {
-        var candidates = [event, event && event.target];
-        for (var i = 0; i < candidates.length; i++) {
-            var status = candidates[i] && Number(candidates[i].status);
-            if (status > 0) return status;
-        }
-        try {
-            var entries = root.performance && root.performance.getEntriesByName(url, 'resource');
-            if (entries && entries.length) {
-                var responseStatus = Number(entries[entries.length - 1].responseStatus);
-                if (responseStatus > 0) return responseStatus;
-            }
-        } catch (err) { /* cross-origin timing data is commonly restricted */ }
-        return null;
-    }
-
-    function isRetryableTileFailure(status) {
-        // A missing status is normal for cross-origin <img> requests without
-        // Timing-Allow-Origin. Status 0 is an opaque/network failure. A 2xx
-        // response that cannot decode is typically an HTML gateway page.
-        if (status === null || status === 0) return true;
-        if (status >= 200 && status < 300) return true;
-        return status === 408 || status === 425 || status === 429 || (status >= 500 && status <= 599);
-    }
-
-    function showCoronaUnavailableNotice() {
-        var doc = root.document;
-        if (!doc || !doc.body || !doc.createElement) return;
-        if (coronaUnavailableNotice && coronaUnavailableNotice.parentNode) return;
-        var now = Date.now();
-        if (now - coronaNoticeLastShown < 30000) return;
-        coronaNoticeLastShown = now;
-        var notice = doc.createElement('div');
-        notice.id = 'corona-tile-unavailable-notice';
-        notice.setAttribute('role', 'status');
-        notice.setAttribute('aria-live', 'polite');
-        notice.textContent = 'CORONA imagery is temporarily unavailable. Retrying; loaded tiles remain visible.';
-        notice.style.position = 'fixed';
-        notice.style.left = '50%';
-        notice.style.bottom = '76px';
-        notice.style.transform = 'translateX(-50%)';
-        notice.style.zIndex = '2147483000';
-        notice.style.maxWidth = 'min(92vw, 34rem)';
-        notice.style.padding = '8px 12px';
-        notice.style.borderRadius = '8px';
-        notice.style.background = 'rgba(45, 35, 20, .94)';
-        notice.style.color = '#fff';
-        notice.style.font = '500 12px/1.4 system-ui, sans-serif';
-        notice.style.boxShadow = '0 2px 10px rgba(0,0,0,.25)';
-        doc.body.appendChild(notice);
-        coronaUnavailableNotice = notice;
-        if (coronaNoticeTimer !== null) root.clearTimeout(coronaNoticeTimer);
-        coronaNoticeTimer = root.setTimeout(function () {
-            if (notice.parentNode) notice.parentNode.removeChild(notice);
-            if (coronaUnavailableNotice === notice) coronaUnavailableNotice = null;
-            coronaNoticeTimer = null;
-        }, 8000);
-    }
-
-    function clearCoronaUnavailableNotice() {
-        if (coronaNoticeTimer !== null) root.clearTimeout(coronaNoticeTimer);
-        coronaNoticeTimer = null;
-        if (coronaUnavailableNotice && coronaUnavailableNotice.parentNode) {
-            coronaUnavailableNotice.parentNode.removeChild(coronaUnavailableNotice);
-        }
-        coronaUnavailableNotice = null;
-    }
-
-    /* ───────────────────────────────────────────────────────────────────────
      * The tile layer. One instance per Corona product (pass mosaic or frame),
      * so each tile request carries exactly one LAYERS= value — the same way
      * the original atlas issues its requests.
@@ -228,135 +147,8 @@
 
             this._coronaLayer = options.layers || options.coronaLayer || 'corona';
             this._coronaBaseUrl = url;
-            this._coronaRetryJobs = Object.create(null);
 
             L.TileLayer.WMS.prototype.initialize.call(this, url, options);
-        },
-
-        // Use Leaflet's normal image-tile path and exact WMS URL, but hold the
-        // tile open for at most two transient retries before reporting failure.
-        // Successful sibling tiles are independent and remain attached.
-        createTile: function (coords, done) {
-            var layer = this;
-            var tile = root.document.createElement('img');
-            var url = this.getTileUrl(coords);
-            var state = {
-                layer: layer,
-                tile: tile,
-                url: url,
-                done: done,
-                retries: 0,
-                settled: false,
-                retrying: false,
-                job: null
-            };
-
-            tile.alt = '';
-            tile.setAttribute('role', 'presentation');
-            tile.className = 'leaflet-tile';
-            if (this.options.crossOrigin) {
-                tile.crossOrigin = this.options.crossOrigin === true ? '' : this.options.crossOrigin;
-            }
-
-            function removeFromRetryJob() {
-                var job = state.job;
-                if (!job) return;
-                var memberAt = job.members.indexOf(state);
-                if (memberAt !== -1) job.members.splice(memberAt, 1);
-                var waitingAt = job.waiting.indexOf(state);
-                if (waitingAt !== -1) job.waiting.splice(waitingAt, 1);
-                state.job = null;
-                if (!job.members.length) {
-                    if (job.timer !== null) root.clearTimeout(job.timer);
-                    delete layer._coronaRetryJobs[url];
-                }
-            }
-
-            function finish(error) {
-                if (state.settled) return;
-                state.settled = true;
-                tile.onload = null;
-                tile.onerror = null;
-                removeFromRetryJob();
-                if (typeof done === 'function') done(error || null, tile);
-            }
-
-            function scheduleWaiting(job) {
-                if (job.timer !== null || job.active > 0 || !job.waiting.length) return;
-                var delay = 0;
-                for (var i = 0; i < job.waiting.length; i++) {
-                    var retryIndex = Math.min(job.waiting[i].retries, CORONA_TILE_RETRY_DELAYS.length - 1);
-                    delay = Math.max(delay, CORONA_TILE_RETRY_DELAYS[retryIndex]);
-                }
-                job.timer = root.setTimeout(function () {
-                    job.timer = null;
-                    var waiting = job.waiting.slice();
-                    job.waiting.length = 0;
-                    for (var j = 0; j < waiting.length; j++) {
-                        var waitingState = waiting[j];
-                        if (waitingState.settled) continue;
-                        waitingState.retries += 1;
-                        waitingState.retrying = true;
-                        job.active += 1;
-                        // Reset the image to force a fresh load, then reuse the
-                        // exact URL: no WMS parameters or cache-busting query
-                        // strings are added to CAST requests.
-                        waitingState.tile.removeAttribute('src');
-                        waitingState.tile.src = waitingState.url;
-                    }
-                }, delay);
-            }
-
-            function queueRetry(status) {
-                if (state.retrying && state.job) {
-                    state.retrying = false;
-                    state.job.active = Math.max(0, state.job.active - 1);
-                }
-                if (!isRetryableTileFailure(status) || state.retries >= CORONA_TILE_MAX_RETRIES) {
-                    var retryJob = state.job;
-                    finish(new Error('CORONA tile failed' + (status ? ' (HTTP ' + status + ')' : '')));
-                    if (retryJob) scheduleWaiting(retryJob);
-                    return;
-                }
-
-                showCoronaUnavailableNotice();
-                var job = layer._coronaRetryJobs[url];
-                if (!job) {
-                    job = layer._coronaRetryJobs[url] = { members: [], waiting: [], active: 0, timer: null };
-                }
-                if (state.job !== job) {
-                    state.job = job;
-                    job.members.push(state);
-                }
-                if (job.waiting.indexOf(state) === -1) job.waiting.push(state);
-                scheduleWaiting(job);
-            }
-
-            tile.onload = function (event) {
-                var status = observedTileStatus(url, event);
-                if (status !== null && status >= 400) {
-                    queueRetry(status);
-                    return;
-                }
-                if (!(tile.naturalWidth > 0 && tile.naturalHeight > 0)) {
-                    queueRetry(status === null ? 200 : status);
-                    return;
-                }
-                if (state.retrying) {
-                    state.retrying = false;
-                    if (state.job) {
-                        state.job.active = Math.max(0, state.job.active - 1);
-                        scheduleWaiting(state.job);
-                    }
-                    clearCoronaUnavailableNotice();
-                }
-                finish(null);
-            };
-            tile.onerror = function (event) {
-                queueRetry(observedTileStatus(url, event));
-            };
-            tile.src = url;
-            return tile;
         },
 
         // The ONLY thing that differs from a normal basemap: the URL format.
@@ -378,11 +170,13 @@
      * cannot read it directly. The catalogue therefore arrives through one of
      * these, in order (all same-origin or CORS-enabled):
      *
-     *   1. data/corona-europe-catalog.json — static build snapshot (fast,
-     *      cacheable, and available offline when the PWA has cached it);
-     *   2. /api/corona/rasters            — same-origin live catalogue proxy;
-     *   3. window.CORONA_CATALOG_URL      — optional explicit override;
-     *   4. the built-in minimal list below — last resort if all sources fail.
+     *   1. window.CORONA_CATALOG_URL      — explicit override (e.g. Supabase);
+     *   2. data/corona-europe-catalog.json — static snapshot committed/produced
+     *      by tools/build-corona-europe-catalog.mjs (fastest, cacheable, PWA);
+     *   3. /api/corona/rasters            — Netlify function that proxies and
+     *      filters the live CAST catalogue (always fresh, same origin);
+     *   4. the built-in minimal list below — last-resort so the layer still
+     *      draws something if 1–3 are all unavailable.
      *
      * Every source yields the same normalised shape.
      * ═══════════════════════════════════════════════════════════════════════ */
@@ -626,115 +420,21 @@
         return out;
     }
 
-    function validExtent(extent) {
-        return Object.prototype.toString.call(extent) === '[object Array]' && extent.length === 4 &&
-            extent.every(function (n) { return typeof n === 'number' && isFinite(n); }) &&
-            extent[0] >= -180 && extent[2] <= 180 && extent[1] >= -90 && extent[3] <= 90 &&
-            extent[0] <= extent[2] && extent[1] <= extent[3];
-    }
-
-    function validProduct(entry, key) {
-        if (!entry || typeof entry !== 'object' || Object.prototype.toString.call(entry) === '[object Array]') return false;
-        var product = normalizeProduct(entry, key);
-        if (!product || !validExtent(product.extent) || !product.location) return false;
-        var rings = product.rings;
-        if (!rings || !rings.length) return false;
-        for (var r = 0; r < rings.length; r++) {
-            if (!rings[r] || rings[r].length < 4) return false;
-            for (var p = 0; p < rings[r].length; p++) {
-                var point = rings[r][p];
-                if (!point || point.length < 2 || !isFinite(point[0]) || !isFinite(point[1]) ||
-                    point[0] < -180 || point[0] > 180 || point[1] < -90 || point[1] > 90) return false;
-            }
-        }
-        return true;
-    }
-
-    /* Reject HTML, empty JSON, partial blocks and count mismatches before the
-     * payload can be treated as a successful source or cached by the PWA. */
-    function validateCatalogPayload(payload) {
-        if (!payload || typeof payload !== 'object' || Object.prototype.toString.call(payload) === '[object Array]') {
-            throw new Error('catalogue is not a JSON object');
-        }
-        if (payload.blocks !== undefined && Object.prototype.toString.call(payload.blocks) !== '[object Array]') {
-            throw new Error('catalogue blocks must be an array');
-        }
-        if (payload.blocks !== undefined &&
-            (typeof payload.generated !== 'string' || !isFinite(Date.parse(payload.generated)) ||
-             !validExtent(payload.bbox))) throw new Error('catalogue metadata is incomplete');
-        var raw = payload.blocks || payload;
-        var isArray = Object.prototype.toString.call(raw) === '[object Array]';
-        var keys = isArray ? raw.map(function (_, i) { return i; }) : Object.keys(raw);
-        if (!keys.length) throw new Error('catalogue contains no passes');
-        var frames = 0;
-        for (var i = 0; i < keys.length; i++) {
-            var key = keys[i];
-            var block = raw[key];
-            var blockKey = isArray ? (block && (block.id || block.location)) : key;
-            if (!validProduct(block, blockKey) || Object.prototype.toString.call(block.images) !== '[object Array]') {
-                throw new Error('catalogue contains an incomplete pass');
-            }
-            for (var j = 0; j < block.images.length; j++) {
-                if (!validProduct(block.images[j], block.images[j] && block.images[j].location)) {
-                    throw new Error('catalogue contains an incomplete frame');
-                }
-                frames += 1;
-            }
-        }
-        if (!frames) throw new Error('catalogue contains no image frames');
-        if (payload.passes !== undefined && payload.passes !== keys.length) throw new Error('catalogue pass count mismatch');
-        if (payload.frames !== undefined && payload.frames !== frames) throw new Error('catalogue frame count mismatch');
-        if (payload.bbox !== undefined && !validExtent(payload.bbox)) throw new Error('catalogue bbox is invalid');
-        return { passes: keys.length, frames: frames };
-    }
-
     /* ── catalogue loading ────────────────────────────────────────────────── */
 
     function catalogSources() {
-        var sources = ['data/corona-europe-catalog.json', '/api/corona/rasters?bbox=' + EUROPE_BBOX.join(',')];
-        if (root.CORONA_CATALOG_URL && sources.indexOf(root.CORONA_CATALOG_URL) === -1) {
-            sources.push(root.CORONA_CATALOG_URL);
-        }
+        var sources = [];
+        if (root.CORONA_CATALOG_URL) sources.push(root.CORONA_CATALOG_URL);
+        sources.push('data/corona-europe-catalog.json');
+        sources.push('/api/corona/rasters?bbox=' + EUROPE_BBOX.join(','));
         return sources;
     }
 
     var _catalogPromise = null;
 
-    function showCatalogFallbackNotice() {
-        console.error('[Corona] no catalogue source reachable or valid. Showing the limited built-in fallback list; other map layers remain available.');
-        var doc = root.document;
-        if (!doc || !doc.body || !doc.createElement) return;
-        var notice = doc.getElementById && doc.getElementById('corona-catalog-warning');
-        if (!notice) {
-            notice = doc.createElement('div');
-            notice.id = 'corona-catalog-warning';
-            notice.setAttribute('role', 'status');
-            notice.setAttribute('aria-live', 'polite');
-            notice.textContent = 'Corona catalogue unavailable. Showing limited fallback coverage; other map layers are unaffected.';
-            notice.style.position = 'fixed';
-            notice.style.left = '50%';
-            notice.style.bottom = '76px';
-            notice.style.transform = 'translateX(-50%)';
-            notice.style.zIndex = '2147483000';
-            notice.style.maxWidth = 'min(92vw, 34rem)';
-            notice.style.padding = '10px 14px';
-            notice.style.borderRadius = '8px';
-            notice.style.background = '#5c2f00';
-            notice.style.color = '#fff';
-            notice.style.font = '600 13px/1.4 system-ui, sans-serif';
-            notice.style.boxShadow = '0 2px 12px rgba(0,0,0,.3)';
-            doc.body.appendChild(notice);
-        }
-        if (notice._coronaTimer) root.clearTimeout(notice._coronaTimer);
-        notice._coronaTimer = root.setTimeout(function () {
-            if (notice.parentNode) notice.parentNode.removeChild(notice);
-        }, 10000);
-    }
-
     function loadCatalog(options) {
         options = options || {};
         if (_catalogPromise && !options.force) return _catalogPromise;
-        if (options.force) _catalogPromise = null;
 
         var bbox = options.bbox || EUROPE_BBOX;
         var sources = options.sources || catalogSources();
@@ -743,7 +443,7 @@
             var index = 0;
 
             function finish(blocks, source) {
-                if (blocks) {
+                if (blocks && blocks.length) {
                     console.info('[Corona] catalogue: ' + blocks.length + ' passes from ' + source);
                     resolve({ blocks: blocks, source: source });
                 } else {
@@ -753,12 +453,8 @@
 
             function next() {
                 if (index >= sources.length) {
-                    showCatalogFallbackNotice();
-                    resolve({
-                        blocks: FALLBACK_BLOCKS.slice(),
-                        source: 'fallback',
-                        warning: 'Static catalogue and live API are unavailable or invalid.'
-                    });
+                    console.warn('[Corona] no catalogue source reachable — using the built-in fallback list');
+                    resolve({ blocks: FALLBACK_BLOCKS.slice(), source: 'fallback' });
                     return;
                 }
                 var url = sources[index++];
@@ -766,17 +462,13 @@
                 try {
                     request = fetch(url, { credentials: 'omit' });
                 } catch (err) {
-                    console.warn('[Corona] catalogue source failed (' + url + '): ' + (err && err.message));
                     next();
                     return;
                 }
                 request.then(function (response) {
                     if (!response.ok) throw new Error('HTTP ' + response.status);
-                    var contentType = response.headers && response.headers.get && response.headers.get('content-type');
-                    if (contentType && /text\/html/i.test(contentType)) throw new Error('received HTML instead of JSON');
                     return response.json();
                 }).then(function (json) {
-                    validateCatalogPayload(json);
                     finish(normalizeCatalog(json, bbox), url);
                 })['catch'](function (err) {
                     console.warn('[Corona] catalogue source failed (' + url + '): ' + (err && err.message));
@@ -951,10 +643,14 @@
                 ? root.createCoronaWmsLayer(this.options.url, opts)
                 : L.tileLayer.wms(this.options.url, opts);
 
-            // Hide only the failed image after bounded retries. Leaflet keeps
-            // this tile isolated from already-loaded siblings and other layers.
+            // A tile the server refuses (renamed/retired product → GeoWebCache
+            // answers "400 Unknown layer …") must not leave a broken <img>.
             layer.on('tileerror', function (e) {
                 if (e && e.tile) e.tile.style.display = 'none';
+                if (!layer._coronaErrorLogged) {
+                    layer._coronaErrorLogged = true;
+                    console.warn('[Corona] product unavailable on the CAST server: ' + name);
+                }
             });
 
             layer._coronaDescriptor = descriptor;
@@ -1123,7 +819,6 @@
         FALLBACK_BLOCKS: FALLBACK_BLOCKS,
         catalogSources: catalogSources,
         normalizeCatalog: normalizeCatalog,
-        validateCatalogPayload: validateCatalogPayload,
         loadCatalog: loadCatalog,
         bboxIntersects: bboxIntersects,
         ringsIntersectBbox: ringsIntersectBbox,

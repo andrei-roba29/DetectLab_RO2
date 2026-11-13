@@ -998,12 +998,7 @@
 // on the web. Web placement is unchanged.
 // v401: keep the full under-budget Roman road network, including Aiton, in
 // large-response and reduced-tile-budget paths. Re-tag the worker and layer.
-// v403: Corona static/API catalogues use network-first validation; only valid
-// pass/frame JSON is cached, and a validated cache copy remains available offline.
-// v404: Corona WMS tiles bypass Cache Storage because cross-origin opaque
-// responses cannot be distinguished from cached 502/503/504 HTML error pages.
-// The browser's ordinary HTTP cache remains governed by CAST response headers.
-const CACHE_NAME = 'detectlab-v404-corona-tile-retries';
+const CACHE_NAME = 'detectlab-v402-google-callback-bypass';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -2044,7 +2039,7 @@ const PRECACHE_URLS = [
   //   the GPS pin updates in place instead of being re-created on every fix.
   //   The three URLs below are the live ones index.html requests.
   //   See SATELLITE_60s_LIVE_LOCATION.md.
-  'js/corona-wms-layer.js?v=20261112-corona-tile-retries',
+  'js/corona-wms-layer.js?v=20261030-sat60-live-location',
   'js/tile-perf.js?v=20261030-sat60-live-location',
   'js/map-app.js?v=20261030-roman-layer-cleanup',
   'js/map-app.js?v=20261030-walachia',
@@ -2108,35 +2103,19 @@ self.addEventListener('install', function (event) {
   );
 });
 
-// ── Activate event: migrate valid Corona data, then clean old shell caches ──
+// ── Activate event: clean old caches ──
 self.addEventListener('activate', function (event) {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(function (currentCache) {
-      return caches.keys().then(function (cacheNames) {
-        return Promise.all(cacheNames.map(function (name) {
-          if (name === CACHE_NAME || name === OFFLINE_TILE_CACHE_NAME || name === ROMAN_ROADS_CACHE_NAME) {
-            return Promise.resolve();
-          }
-          return caches.open(name).then(function (oldCache) {
-            return oldCache.keys().then(function (requests) {
-              return Promise.all(requests.map(function (request) {
-                var requestURL;
-                try { requestURL = new URL(request.url); } catch (err) { return Promise.resolve(); }
-                if (!isCoronaCatalogRequest(requestURL)) return Promise.resolve();
-                return oldCache.match(request).then(function (response) {
-                  return validCoronaCachedResponse(response).then(function (valid) {
-                    if (valid) return currentCache.put(request, response.clone()).catch(function () {});
-                    return Promise.resolve();
-                  });
-                });
-              }));
-            });
-          }).catch(function () {}).then(function () {
+    caches.keys().then(function (cacheNames) {
+      return Promise.all(
+        cacheNames.map(function (name) {
+          if (name !== CACHE_NAME && name !== OFFLINE_TILE_CACHE_NAME &&
+              name !== ROMAN_ROADS_CACHE_NAME) {
             console.log('[SW] Removing old cache:', name);
             return caches.delete(name);
-          });
-        }));
-      });
+          }
+        })
+      );
     }).then(function () {
       return self.clients.claim();
     })
@@ -2159,88 +2138,7 @@ function isOfflineTileRequest(url) {
   return /\/\d+\/\d+\/\d+\.(png|jpg|jpeg)(?:$|\?)/i.test(path + url.search);
 }
 
-function isCoronaCatalogRequest(url) {
-  return url.origin === location.origin &&
-    (url.pathname === '/data/corona-europe-catalog.json' || url.pathname === '/api/corona/rasters');
-}
-
-function isCoronaWmsTile(url) {
-  if (url.hostname !== 'geoserve.cast.uark.edu' ||
-      url.pathname !== '/geoserver/gwc/service/wms') return false;
-  var layerName = url.searchParams && (url.searchParams.get('LAYERS') || url.searchParams.get('layers'));
-  return typeof layerName === 'string' && /^corona:/i.test(layerName);
-}
-
-function validCoronaCachedResponse(response) {
-  if (!response || !response.ok) return Promise.resolve(false);
-  var contentType = response.headers && response.headers.get('content-type');
-  if (contentType && !/json/i.test(contentType)) return Promise.resolve(false);
-  return response.clone().json().then(function (payload) {
-    if (!payload || typeof payload !== 'object' || !Array.isArray(payload.blocks) || !payload.blocks.length ||
-        typeof payload.generated !== 'string' || !Number.isFinite(Date.parse(payload.generated)) ||
-        !Number.isInteger(payload.passes) || payload.passes !== payload.blocks.length ||
-        !Number.isInteger(payload.frames) || payload.frames < 1) return false;
-    var frames = 0;
-    function validExtent(extent) {
-      return Array.isArray(extent) && extent.length === 4 && extent.every(Number.isFinite) &&
-        extent[0] >= -180 && extent[2] <= 180 && extent[1] >= -90 && extent[3] <= 90 &&
-        extent[0] <= extent[2] && extent[1] <= extent[3];
-    }
-    if (!validExtent(payload.bbox)) return false;
-    for (var i = 0; i < payload.blocks.length; i++) {
-      var block = payload.blocks[i];
-      if (!block || typeof block.id !== 'string' || !block.id ||
-          typeof block.location !== 'string' || !block.location || !validExtent(block.extent) ||
-          !Array.isArray(block.images)) return false;
-      for (var j = 0; j < block.images.length; j++) {
-        var image = block.images[j];
-        if (!image || typeof image.location !== 'string' || !image.location || !validExtent(image.extent)) return false;
-        frames++;
-      }
-    }
-    return frames === payload.frames;
-  }).catch(function () { return false; });
-}
-
-function fetchCoronaCatalogRequest(request) {
-  function unavailable() {
-    return new Response('Corona catalogue unavailable', {
-      status: 503,
-      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
-    });
-  }
-  return caches.open(CACHE_NAME).then(function (cache) {
-    return fetch(request).then(function (response) {
-      return validCoronaCachedResponse(response).then(function (valid) {
-        if (valid) cache.put(request, response.clone()).catch(function () {});
-        return response;
-      });
-    }).catch(function () {
-      return cache.match(request).then(function (cached) {
-        if (!cached) return unavailable();
-        return validCoronaCachedResponse(cached).then(function (valid) {
-          if (valid) return cached;
-          return cache.delete(request).then(unavailable, unavailable);
-        });
-      }).catch(unavailable);
-    });
-  }, function () {
-    // Cache Storage may be disabled; keep network loading functional.
-    return fetch(request).catch(unavailable);
-  });
-}
-
 function cacheOfflineTileFromMessage(url) {
-  var requestURL;
-  try { requestURL = new URL(url, location.origin); } catch (err) {
-    return Promise.reject(new Error('Invalid offline tile URL'));
-  }
-  // CAST has no CORS/Timing-Allow-Origin headers. A no-cors response is
-  // opaque, so Cache Storage cannot tell a valid PNG from a 504 HTML page.
-  // Do not persist Corona WMS responses; leave HTTP caching to the browser.
-  if (isCoronaWmsTile(requestURL)) {
-    return Promise.reject(new Error('CORONA WMS responses cannot be safely validated for offline caching'));
-  }
   return caches.open(OFFLINE_TILE_CACHE_NAME).then(function (cache) {
     return fetch(new Request(url, { method: 'GET', mode: 'no-cors', cache: 'no-store' })).then(function (response) {
       return cache.put(url, response.clone()).then(function () { return true; });
@@ -2271,23 +2169,6 @@ self.addEventListener('fetch', function (event) {
   if (requestURL.origin === location.origin &&
       (requestURL.pathname === '/google-auth-callback.html' ||
        requestURL.pathname === '/google-auth-callback')) return;
-
-  // Corona catalogue JSON is validated before being stored. A generated
-  // snapshot or a successful API payload remains available offline; an SPA
-  // HTML fallback, invalid JSON, 404, or upstream error is never cached.
-  if (isCoronaCatalogRequest(requestURL)) {
-    event.respondWith(fetchCoronaCatalogRequest(request));
-    return;
-  }
-
-  // CAST Corona tile responses are cross-origin opaque: Cache Storage cannot
-  // validate PNG versus an HTTP 502/503/504 HTML response. Bypass the offline
-  // Cache Storage lookup entirely; the native browser HTTP cache still follows
-  // the server's own cache headers and policies.
-  if (requestURL.origin !== location.origin && isCoronaWmsTile(requestURL)) {
-    event.respondWith(fetch(request));
-    return;
-  }
 
   // ── Cross-origin tile lookup ──
   // Cache.match is cheap for normal requests and only returns a response when

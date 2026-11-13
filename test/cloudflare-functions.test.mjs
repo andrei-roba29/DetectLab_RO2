@@ -1,11 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
-import path from 'node:path';
 import { onRequest as asig } from '../functions/api/geo/asig-heritage.js';
-import { onRequest as corona } from '../functions/api/corona/rasters.js';
 import { onRequest as dkDhm } from '../functions/api/geo/dk-dhm.js';
 import { onRequest as dkDtk25 } from '../functions/api/geo/dk-dtk25.js';
 import { onRequest as dkOrto } from '../functions/api/geo/dk-orto.js';
@@ -15,12 +12,10 @@ import { onRequest as map3d } from '../functions/api/map3d/tile.js';
 import { onRequest as seHojdmodell } from '../functions/api/geo/se-hojdmodell.js';
 import { registry } from '../functions/_shared/map3d-tile.mjs';
 import { map3dCountryTileUrl, moduleModes } from '../functions/_shared/map3d-country-urls.mjs';
-import { refreshCoronaSnapshot, validateCoronaSnapshot } from '../functions/_shared/corona-snapshot.mjs';
 import { onRequest as callbackHtml } from '../functions/google-auth-callback.html.js';
 import { onRequest as callbackExtensionless } from '../functions/google-auth-callback.js';
 
 const routes = [
-  ['/api/corona/rasters', 'functions/api/corona/rasters.js', corona],
   ['/api/geo/se-hojdmodell', 'functions/api/geo/se-hojdmodell.js', seHojdmodell],
   ['/api/map3d/tile', 'functions/api/map3d/tile.js', map3d],
   ['/api/geo/dk-dhm', 'functions/api/geo/dk-dhm.js', dkDhm],
@@ -226,79 +221,6 @@ test('Lantmäteriet URL override cannot turn the proxy into an arbitrary-host re
   });
   assert.equal(response.status, 500);
   assert.equal((await response.text()).includes('synthetic-test-token'), false);
-});
-
-test('Corona frontend retains its static/API URLs and generator validates before atomic publication', () => {
-  const frontend = readFileSync(new URL('../js/corona-wms-layer.js', import.meta.url), 'utf8');
-  assert.match(frontend, /data\/corona-europe-catalog\.json/);
-  assert.match(frontend, /\/api\/corona\/rasters\?bbox=/);
-  assert.match(frontend, /validateCatalogPayload\(json\)/);
-  const generator = readFileSync(new URL('../tools/build-corona-europe-catalog.mjs', import.meta.url), 'utf8');
-  assert.match(generator, /validateCatalogSnapshot\(payload\)/);
-  assert.match(generator, /await fs\.rename\(temporaryPath, outputPath\)/);
-  assert.match(generator, /CAST refresh skipped/);
-});
-
-test('Cloudflare snapshot refresh validates non-empty catalogue data and atomically preserves last-good snapshots', async (t) => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'detectlab-corona-snapshot-'));
-  t.after(() => rm(dir, { recursive: true, force: true }));
-  const filePath = path.join(dir, 'corona-europe-catalog.json');
-  const catalogue = {
-    'pass-fixture': {
-      location: 'fixture pass', extent: [10, 40, 12, 42],
-      images: [{ location: 'fixture frame', extent: [10, 40, 11, 41] }]
-    }
-  };
-  const first = await refreshCoronaSnapshot({
-    filePath,
-    fetchCatalog: async () => catalogue,
-    now: () => new Date('2026-11-12T00:00:00.000Z')
-  });
-  assert.deepEqual({ refreshed: first.refreshed, passes: first.passes, frames: first.frames },
-    { refreshed: true, passes: 1, frames: 1 });
-  const oldBytes = await readFile(filePath);
-  const oldStat = await stat(filePath);
-  assert.deepEqual(validateCoronaSnapshot(JSON.parse(oldBytes)), { passes: 1, frames: 1 });
-
-  const failedRefresh = await refreshCoronaSnapshot({ filePath, fetchCatalog: async () => { throw new Error('TLS reset'); } });
-  assert.equal(failedRefresh.retained, true);
-  assert.deepEqual(await readFile(filePath), oldBytes);
-  assert.equal((await stat(filePath)).size, oldStat.size);
-
-  const emptyRefresh = await refreshCoronaSnapshot({ filePath, fetchCatalog: async () => ({}) });
-  assert.equal(emptyRefresh.retained, true);
-  assert.deepEqual(await readFile(filePath), oldBytes);
-
-  const absentPath = path.join(dir, 'absent', 'snapshot.json');
-  await assert.rejects(refreshCoronaSnapshot({ filePath: absentPath, fetchCatalog: async () => { throw new Error('upstream unavailable'); } }));
-  assert.equal(existsSync(absentPath), false);
-});
-
-test('Corona endpoint falls back to the static snapshot when CAST is unavailable', async (t) => {
-  const originalFetch = globalThis.fetch;
-  const snapshot = {
-    source: 'snapshot', generated: '2026-01-01T00:00:00.000Z', bbox: [-25, 34, 60, 72],
-    blocks: [
-      { id: 'inside', extent: [10, 40, 12, 42], images: [{ extent: [10, 40, 11, 41] }] },
-      { id: 'outside', extent: [-100, -50, -90, -40], images: [] }
-    ]
-  };
-  globalThis.fetch = async (input) => {
-    const url = new URL(input);
-    if (url.hostname === 'corona.cast.uark.edu') throw new Error('simulated CAST outage');
-    throw new Error(`unexpected fetch target: ${url}`);
-  };
-  t.after(() => { globalThis.fetch = originalFetch; });
-  const response = await call(corona, '/api/corona/rasters?bbox=9,39,13,43', 'GET', {
-    ASSETS: { fetch: async (input) => new URL(input).pathname === '/data/corona-europe-catalog.json'
-      ? Response.json(snapshot)
-      : new Response('not found', { status: 404 }) }
-  });
-  assert.equal(response.status, 200);
-  const payload = await response.json();
-  assert.deepEqual(payload.blocks.map((block) => block.id), ['inside']);
-  assert.equal(payload.passes, 1);
-  assert.equal(payload.frames, 1);
 });
 
 test('3D registry tile response is binary and fetched only from the registered source', async (t) => {
