@@ -998,7 +998,9 @@
 // on the web. Web placement is unchanged.
 // v401: keep the full under-budget Roman road network, including Aiton, in
 // large-response and reduced-tile-budget paths. Re-tag the worker and layer.
-const CACHE_NAME = 'detectlab-v402-google-callback-bypass';
+// v403: Corona static/API catalogues use network-first validation; only valid
+// pass/frame JSON is cached, and a validated cache copy remains available offline.
+const CACHE_NAME = 'detectlab-v403-corona-catalog-validation';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -2039,7 +2041,7 @@ const PRECACHE_URLS = [
   //   the GPS pin updates in place instead of being re-created on every fix.
   //   The three URLs below are the live ones index.html requests.
   //   See SATELLITE_60s_LIVE_LOCATION.md.
-  'js/corona-wms-layer.js?v=20261030-sat60-live-location',
+  'js/corona-wms-layer.js?v=20261112-corona-catalog-fallback',
   'js/tile-perf.js?v=20261030-sat60-live-location',
   'js/map-app.js?v=20261030-roman-layer-cleanup',
   'js/map-app.js?v=20261030-walachia',
@@ -2103,19 +2105,35 @@ self.addEventListener('install', function (event) {
   );
 });
 
-// ── Activate event: clean old caches ──
+// ── Activate event: migrate valid Corona data, then clean old shell caches ──
 self.addEventListener('activate', function (event) {
   event.waitUntil(
-    caches.keys().then(function (cacheNames) {
-      return Promise.all(
-        cacheNames.map(function (name) {
-          if (name !== CACHE_NAME && name !== OFFLINE_TILE_CACHE_NAME &&
-              name !== ROMAN_ROADS_CACHE_NAME) {
+    caches.open(CACHE_NAME).then(function (currentCache) {
+      return caches.keys().then(function (cacheNames) {
+        return Promise.all(cacheNames.map(function (name) {
+          if (name === CACHE_NAME || name === OFFLINE_TILE_CACHE_NAME || name === ROMAN_ROADS_CACHE_NAME) {
+            return Promise.resolve();
+          }
+          return caches.open(name).then(function (oldCache) {
+            return oldCache.keys().then(function (requests) {
+              return Promise.all(requests.map(function (request) {
+                var requestURL;
+                try { requestURL = new URL(request.url); } catch (err) { return Promise.resolve(); }
+                if (!isCoronaCatalogRequest(requestURL)) return Promise.resolve();
+                return oldCache.match(request).then(function (response) {
+                  return validCoronaCachedResponse(response).then(function (valid) {
+                    if (valid) return currentCache.put(request, response.clone()).catch(function () {});
+                    return Promise.resolve();
+                  });
+                });
+              }));
+            });
+          }).catch(function () {}).then(function () {
             console.log('[SW] Removing old cache:', name);
             return caches.delete(name);
-          }
-        })
-      );
+          });
+        }));
+      });
     }).then(function () {
       return self.clients.claim();
     })
@@ -2136,6 +2154,70 @@ function isOfflineTileRequest(url) {
   if (query.indexOf('request=getmap') !== -1) return true;
   if (path.indexOf('/tile/') !== -1 || path.indexOf('/APM_TILES/') !== -1 || path.indexOf('/UAT/') !== -1) return true;
   return /\/\d+\/\d+\/\d+\.(png|jpg|jpeg)(?:$|\?)/i.test(path + url.search);
+}
+
+function isCoronaCatalogRequest(url) {
+  return url.origin === location.origin &&
+    (url.pathname === '/data/corona-europe-catalog.json' || url.pathname === '/api/corona/rasters');
+}
+
+function validCoronaCachedResponse(response) {
+  if (!response || !response.ok) return Promise.resolve(false);
+  var contentType = response.headers && response.headers.get('content-type');
+  if (contentType && !/json/i.test(contentType)) return Promise.resolve(false);
+  return response.clone().json().then(function (payload) {
+    if (!payload || typeof payload !== 'object' || !Array.isArray(payload.blocks) || !payload.blocks.length ||
+        typeof payload.generated !== 'string' || !Number.isFinite(Date.parse(payload.generated)) ||
+        !Number.isInteger(payload.passes) || payload.passes !== payload.blocks.length ||
+        !Number.isInteger(payload.frames) || payload.frames < 1) return false;
+    var frames = 0;
+    function validExtent(extent) {
+      return Array.isArray(extent) && extent.length === 4 && extent.every(Number.isFinite) &&
+        extent[0] >= -180 && extent[2] <= 180 && extent[1] >= -90 && extent[3] <= 90 &&
+        extent[0] <= extent[2] && extent[1] <= extent[3];
+    }
+    if (!validExtent(payload.bbox)) return false;
+    for (var i = 0; i < payload.blocks.length; i++) {
+      var block = payload.blocks[i];
+      if (!block || typeof block.id !== 'string' || !block.id ||
+          typeof block.location !== 'string' || !block.location || !validExtent(block.extent) ||
+          !Array.isArray(block.images)) return false;
+      for (var j = 0; j < block.images.length; j++) {
+        var image = block.images[j];
+        if (!image || typeof image.location !== 'string' || !image.location || !validExtent(image.extent)) return false;
+        frames++;
+      }
+    }
+    return frames === payload.frames;
+  }).catch(function () { return false; });
+}
+
+function fetchCoronaCatalogRequest(request) {
+  function unavailable() {
+    return new Response('Corona catalogue unavailable', {
+      status: 503,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
+    });
+  }
+  return caches.open(CACHE_NAME).then(function (cache) {
+    return fetch(request).then(function (response) {
+      return validCoronaCachedResponse(response).then(function (valid) {
+        if (valid) cache.put(request, response.clone()).catch(function () {});
+        return response;
+      });
+    }).catch(function () {
+      return cache.match(request).then(function (cached) {
+        if (!cached) return unavailable();
+        return validCoronaCachedResponse(cached).then(function (valid) {
+          if (valid) return cached;
+          return cache.delete(request).then(unavailable, unavailable);
+        });
+      }).catch(unavailable);
+    });
+  }, function () {
+    // Cache Storage may be disabled; keep network loading functional.
+    return fetch(request).catch(unavailable);
+  });
 }
 
 function cacheOfflineTileFromMessage(url) {
@@ -2169,6 +2251,14 @@ self.addEventListener('fetch', function (event) {
   if (requestURL.origin === location.origin &&
       (requestURL.pathname === '/google-auth-callback.html' ||
        requestURL.pathname === '/google-auth-callback')) return;
+
+  // Corona catalogue JSON is validated before being stored. A generated
+  // snapshot or a successful API payload remains available offline; an SPA
+  // HTML fallback, invalid JSON, 404, or upstream error is never cached.
+  if (isCoronaCatalogRequest(requestURL)) {
+    event.respondWith(fetchCoronaCatalogRequest(request));
+    return;
+  }
 
   // ── Cross-origin tile lookup ──
   // Cache.match is cheap for normal requests and only returns a response when

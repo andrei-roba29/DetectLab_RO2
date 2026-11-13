@@ -29,7 +29,7 @@ This is an additive Pages Functions implementation. It does not deploy anything,
 - `_routes.json`, `_headers`, `wrangler.jsonc`
 - `functions/_shared/asig-heritage.mjs`, `functions/_shared/danish-layers.mjs`, `functions/_shared/finland-geo.mjs` (Cloudflare-only helper copies)
 - `functions/_shared/map3d-country-urls.mjs` (Workers-compatible URL builders, differentially tested against the Netlify VM)
-- `functions/_shared/corona-snapshot.mjs` (Cloudflare-only validation and atomic snapshot refresh runner)
+- `functions/_shared/corona-snapshot.mjs` (retained legacy helper; the Pages build now uses the shared `tools/build-corona-europe-catalog.mjs` generator instead)
 - `functions/_shared/google-auth-callback.js`, `functions/google-auth-callback.html.js`, `functions/google-auth-callback.js`
 - `test/cloudflare-functions.test.mjs`
 - This document.
@@ -77,13 +77,15 @@ This is an additive Pages Functions implementation. It does not deploy anything,
 
 For all eight layers, invalid/unregistered IDs and invalid coordinates are rejected; public upstream errors now return explicit `502` JSON with `Cache-Control: no-store`, never a transparent substitute. Successful public tiles pass through unmodified bytes with browser and Cloudflare CDN cache headers; the Danish/Swedish internal routes retain their seven-day cache policy. The fixtures verify 256×256 image headers and exact byte pass-through, but actual provider status codes, content types and tile images remain unverified because this sandbox cannot reach those hosts. Netlify's map3D implementation remains untouched. The Cloudflare adapter is limited to the registry allow-list and does not add an arbitrary proxy.
 
-## Corona snapshot state and fallback
+## Corona static catalogue and runtime fallback
 
-`data/corona-europe-catalog.json` is **not present in this checkout**, and no usable asset was found elsewhere in the repository or its history. `git log --all` / the local object database contain no snapshot; the GitHub API reported zero commits for that path and a 404 for `main`'s contents endpoint. DNS resolves `corona.cast.uark.edu` to `130.184.54.1` (`accio.cast.uark.edu`), but the earlier generator request ended with `ECONNRESET` before TLS establishment. The sandbox's outbound-host policy does not permit direct requests to CAST, so this does not distinguish a sandbox egress restriction from a CAST-side TLS problem. No alternate proxy or untrusted mirror was used. The snapshot has no measured size, entries or generated date because no authentic source payload was available.
+The confirmed deployment issue is that `data/corona-europe-catalog.json` is absent from the current Git tree, so `/data/corona-europe-catalog.json` can fall through to the Pages SPA HTML. Per the deploy operator's live check, `/api/corona/rasters` returns valid JSON from CAST (95 passes, 742 frames); this implementation deliberately leaves that Pages Function and its route unchanged.
 
-The existing Netlify command and `tools/build-corona-europe-catalog.mjs` are unchanged. Cloudflare gets a separate safe refresh runner in `functions/_shared/corona-snapshot.mjs` (invoked with Node during a Pages build): it validates non-empty, consistent pass/frame entries, writes to a same-directory temporary file, revalidates and atomically renames only after a successful fetch. If fetch/parse/validation fails, it retains an existing validated snapshot; with no valid snapshot it exits non-zero rather than writing an empty file. The suggested Pages build command tolerates that non-zero result so the static app can still build, but without a prior snapshot there is no offline Corona fallback. Regression tests exercise failed refresh, empty response and no-existing-snapshot cases using temporary files only.
+The frontend loader in `js/corona-wms-layer.js` now tries the static JSON first, then `/api/corona/rasters`, then the optional explicit `CORONA_CATALOG_URL`. It checks HTTP success, rejects HTML, parses JSON and validates non-empty passes/frames, geographic extents, metadata, and counters before normalization. Concurrent loads share one promise. If all sources fail or are invalid, the existing six verified local fallback passes still let the rest of the map run, and a non-blocking accessible notice explains that Corona coverage is limited.
 
-The Pages Corona Function tries the live catalogue first and, on failure, reads `/data/corona-europe-catalog.json` from `context.env.ASSETS.fetch` and clips it to the requested bbox. Its mocked fallback test passes, but this checkout has no snapshot, so the real Pages asset fallback is not yet available during an upstream outage. In the already-running local Wrangler preview, `/` returned HTTP 200, while `/api/corona/rasters` returned HTTP 502 after receiving HTML where JSON was expected; with no snapshot present, this preview does not demonstrate working Corona parity. The result does not establish whether CAST itself, sandbox egress, or Wrangler's outbound path supplied that HTML response. The frontend continues to request the same-origin static snapshot and `/api/corona/rasters`; no API URL was changed. Do not create or commit a fabricated catalogue.
+The existing `tools/build-corona-europe-catalog.mjs` is the build generator for both hosts. It has no npm dependencies and uses the existing shared catalogue transformation. It now validates the shaped Europe payload and serialized output, writes a same-directory temporary file and atomically renames only after successful validation. CAST/network/JSON/empty-catalogue failure leaves any previous file byte-for-byte untouched; if no prior file exists, it logs a warning and exits successfully without creating one, so the Pages static build can complete and the frontend uses the API. A write/rename filesystem error remains a build error. The generated path is `data/corona-europe-catalog.json`, inside the configured Pages publish root (`.`).
+
+Service worker handling is explicitly network-first for both Corona URLs. Only structurally valid pass/frame JSON is stored; HTML SPA fallbacks, invalid/empty JSON and error responses are never added to Cache Storage. The shell-cache version bump migrates only validated Corona responses from the prior cache before cleanup. On network failure, a previously validated static/API response remains available to the PWA offline. No endpoint URL, raster style, geometry, projection, or Cloudflare API Function was changed for this fix.
 
 ## Environment variables for Cloudflare
 
@@ -111,15 +113,16 @@ Set these under the Pages project's build settings (repository root as the proje
 
 - **Framework preset:** None
 - **Root directory:** `/` (repository root)
-- **Build command:** `node functions/_shared/corona-snapshot.mjs || true`
+- **Build command:** `node tools/build-corona-europe-catalog.mjs`
 - **Build output directory:** `.`
+- **Node.js version:** 22 (set Pages build environment variable `NODE_VERSION=22`; the generator checks for Node.js 18+ at runtime)
 - **Functions directory:** `functions/` (default Pages convention)
 - **Compatibility date:** `2026-11-12`
 - **Node compatibility flag:** none
 
 `wrangler.jsonc` records the Pages output directory and compatibility date for local Wrangler use. The actual Pages project slug could not be confirmed in the Cloudflare Dashboard (no Dashboard connector is available, and deployed-host checks were inconclusive). The current config name `detectlab-pages` is not treated as confirmation of the project slug; neither config nor project name has been aligned based on a guess.
 
-The static catalogue build is the same script already used by Netlify. `netlify.toml` and its `[build]` command have not been edited.
+The same generator is used by Netlify, but only its implementation was hardened; `netlify.toml`, `netlify/functions/`, and `netlify/lib/` are unchanged. In Cloudflare Pages, the Git-connected project must have the build command above configured in its Pages build settings and `NODE_VERSION=22` set as a build environment variable; these dashboard settings cannot be changed from this repository.
 
 ## Redirects and headers
 
@@ -136,20 +139,20 @@ These dashboard rules are intentionally **not** created or enabled by this repos
 Run the migration-focused local tests from the repository root:
 
 ```sh
-node --test test/map3d-adapters.test.mjs test/cloudflare-functions.test.mjs
-node test-map3d-terrain.js
+node --test test/corona-catalog-fallback.test.mjs test/cloudflare-functions.test.mjs
+node test-sat60-layers.js
 node test-corona-europe.js
 ```
 
 Also run each country's existing module regression test before changing an adapter. Backend tests remain separate (`npm --prefix backend test`); backend implementation is outside this migration.
 
-Run the Cloudflare-safe catalogue refresh from the repository root when CAST is reachable:
+Run the snapshot generator from the repository root (a local CAST failure is non-fatal and never overwrites the prior snapshot):
 
 ```sh
-node functions/_shared/corona-snapshot.mjs
+node tools/build-corona-europe-catalog.mjs
 ```
 
-This exits non-zero if no valid snapshot exists and a refresh fails. It preserves an existing valid snapshot on failure and never writes an empty catalogue. The unchanged Netlify generator remains `node tools/build-corona-europe-catalog.mjs`.
+The generator writes only a validated non-empty catalogue, atomically. It uses Node's built-in fetch and has no package dependencies.
 
 Optional local Pages preview (requires Wrangler; it may be invoked with `npx` without adding a project dependency):
 
@@ -171,7 +174,7 @@ Do not deploy as part of this preparation. No deployment command is provided her
 
 ### Test coverage in this repository
 
-`test/cloudflare-functions.test.mjs` verifies all nine API routes plus both callback routes, callback headers/service-worker bypass, methods, missing secrets, allow-lists, binary responses, secret handling, cache headers, all eight Map3D layers, and safe Corona snapshot fallback/refresh behavior. `test/map3d-adapters.test.mjs` differentially checks each module builder's URLs against Netlify's original Node VM for every advertised mode and three tile coordinates. The provider response tests use synthetic 256×256 PNG/JPEG bytes and mocked fetches; live external imagery/status and Cloudflare's edge cache are not verified here.
+`test/corona-catalog-fallback.test.mjs` covers static-valid, 404, HTML, malformed/incomplete JSON, API fallback, offline cache behavior, controlled dual-source failure, build validation, atomic writes, and last-good preservation using mocks/temp directories. `test/cloudflare-functions.test.mjs` covers all nine API routes plus both callback routes, auth/cache boundaries, and all eight Map3D layers. `test/map3d-adapters.test.mjs` differentially checks each module builder's URLs against Netlify's original Node VM. The provider response tests use synthetic 256×256 PNG/JPEG bytes and mocked fetches; live external imagery/status and Cloudflare's edge cache are not verified here.
 
 ## Manual Cloudflare Dashboard checklist
 

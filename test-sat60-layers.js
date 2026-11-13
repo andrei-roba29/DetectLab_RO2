@@ -369,7 +369,7 @@ check('the browser never calls corona.cast.uark.edu directly',
     sources.every(function (s) { return s.indexOf('corona.cast.uark.edu') === -1; }) &&
     libCode.indexOf('corona.cast.uark.edu') === -1);
 check('an unreachable catalogue falls back to the verified list, not to nothing',
-    /FALLBACK_BLOCKS/.test(coronaLib) && /no catalogue source reachable/.test(coronaLib));
+    /FALLBACK_BLOCKS/.test(coronaLib) && /no catalogue source reachable or valid/.test(coronaLib));
 
 /* ───────────────────────────────────────────────────────────────────────── */
 console.log('\n' + (checks - failures) + '/' + checks + ' checks passed');

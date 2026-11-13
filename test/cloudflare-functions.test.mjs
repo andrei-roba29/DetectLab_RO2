@@ -228,13 +228,15 @@ test('Lantmäteriet URL override cannot turn the proxy into an arbitrary-host re
   assert.equal((await response.text()).includes('synthetic-test-token'), false);
 });
 
-test('Corona frontend keeps its same-origin snapshot/API fallback and generator writes only after CAST succeeds', () => {
+test('Corona frontend retains its static/API URLs and generator validates before atomic publication', () => {
   const frontend = readFileSync(new URL('../js/corona-wms-layer.js', import.meta.url), 'utf8');
-  assert.match(frontend, /sources\.push\('data\/corona-europe-catalog\.json'\)/);
-  assert.match(frontend, /sources\.push\('\/api\/corona\/rasters\?bbox='/);
+  assert.match(frontend, /data\/corona-europe-catalog\.json/);
+  assert.match(frontend, /\/api\/corona\/rasters\?bbox=/);
+  assert.match(frontend, /validateCatalogPayload\(json\)/);
   const generator = readFileSync(new URL('../tools/build-corona-europe-catalog.mjs', import.meta.url), 'utf8');
-  assert.ok(generator.indexOf('await fetchCoronaCatalog') < generator.indexOf('fs.writeFileSync'),
-    'the output file is only written after the upstream catalogue fetch succeeds');
+  assert.match(generator, /validateCatalogSnapshot\(payload\)/);
+  assert.match(generator, /await fs\.rename\(temporaryPath, outputPath\)/);
+  assert.match(generator, /CAST refresh skipped/);
 });
 
 test('Cloudflare snapshot refresh validates non-empty catalogue data and atomically preserves last-good snapshots', async (t) => {
