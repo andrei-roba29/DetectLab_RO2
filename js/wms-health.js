@@ -515,6 +515,138 @@
         try { if (map.hasLayer(layer)) map.removeLayer(layer); } catch (e) {}
     }
 
+    /* ── “Zoom in” hint for the maps DetectLab hosts itself ──────────────
+       The tile pyramids in the Supabase bucket and on Cloudflare R2 do not
+       start at zoom 0: below their first level the bucket answers 404 for
+       every tile (or Leaflet does not ask at all, below `minZoom`). That is
+       not an outage, so it must not switch the map off with the “cannot be
+       loaded” notice. Instead a plain centred “Zoom in” box stays on screen
+       until the view reaches a zoom level the map actually contains.
+       The first level is learned from the tiles themselves (per layer: the
+       lowest zoom that ever delivered a tile, and the failures per zoom), so
+       no zoom range has to be maintained by hand for each bucket folder. */
+    var ZOOM_HINT_ID = 'detectlabZoomInHint';
+    var ZOOM_HINT_MIN_FAILS = 2;
+    var ZOOM_HINT_TEXT = {
+        en: 'Zoom in', ro: 'Zoom in', de: 'Hineinzoomen', fr: 'Zoomez', it: 'Ingrandisci',
+        es: 'Acerca el mapa', pl: 'Przybliż', uk: 'Наблизьте', hu: 'Nagyítson', cs: 'Přibližte',
+        sk: 'Priblížte', nl: 'Zoom in', pt: 'Aproxime', ru: 'Приблизьте', bg: 'Приближете',
+        hr: 'Uvećajte', sr: 'Uvećajte', el: 'Μεγεθύνετε', da: 'Zoom ind', sv: 'Zooma in',
+        no: 'Zoom inn', fi: 'Lähennä', lt: 'Priartinkite', lv: 'Tuviniet', et: 'Suumige sisse'
+    };
+    var hostedLayers = [];
+    var hostedMaps = [];
+
+    function isHostedTileUrl(url) {
+        var host = hostOf(url);
+        return host === 'dacboefvooxgsngxkavx.supabase.co' || /\.r2\.dev$/.test(host);
+    }
+    function hostedUrlOf(layer) {
+        return (layer && (layer._url || (layer.options && (layer.options.url || layer.options.template)))) || '';
+    }
+    /* Zoom of the tiles Leaflet requests for a given map zoom. */
+    function tileZoomFor(layer, zoom) {
+        var o = (layer && layer.options) || {};
+        var z = Math.round(zoom);
+        if (typeof o.maxNativeZoom === 'number' && z > o.maxNativeZoom) z = o.maxNativeZoom;
+        if (typeof o.minNativeZoom === 'number' && z < o.minNativeZoom) z = o.minNativeZoom;
+        return z;
+    }
+    /* True while the view is below the first zoom level the hosted map has. */
+    function belowHostedRange(layer, requireFailures) {
+        var map = layer && layer._map;
+        var st = layer && layer._detectlabHostedStats;
+        if (!map || !st || typeof map.getZoom !== 'function') return false;
+        var o = layer.options || {};
+        var zoom = Math.round(map.getZoom());
+        if (typeof o.minZoom === 'number' && zoom < o.minZoom) return true;
+        var tz = tileZoomFor(layer, zoom);
+        var top = typeof o.maxNativeZoom === 'number' ? o.maxNativeZoom
+            : (typeof o.maxZoom === 'number' ? o.maxZoom : 22);
+        if (tz >= top) return false;                       // deepest level: a real failure
+        if (st.minOk != null && st.minOk <= tz) return false;   // this level is known to exist
+        return requireFailures ? (st.fails[tz] || 0) >= ZOOM_HINT_MIN_FAILS : true;
+    }
+    function hostedHintWanted(layer) {
+        var map = layer && layer._map;
+        if (!map) return false;
+        var o = layer.options || {};
+        if (typeof o.opacity === 'number' && o.opacity <= 0) return false;
+        try {
+            if (o.bounds && typeof map.getBounds === 'function') {
+                var b = window.L.latLngBounds(o.bounds);
+                if (!map.getBounds().intersects(b)) return false;   // map is not in view at all
+            }
+        } catch (e) {}
+        return belowHostedRange(layer, true);
+    }
+    function zoomHintText() {
+        return ZOOM_HINT_TEXT[lang()] || ZOOM_HINT_TEXT.en;
+    }
+    function updateZoomHint() {
+        var byMap = [];
+        hostedLayers.forEach(function (layer) {
+            var wanted = false;
+            try { wanted = hostedHintWanted(layer); } catch (e) {}
+            if (wanted && byMap.indexOf(layer._map) === -1) byMap.push(layer._map);
+        });
+        hostedMaps.forEach(function (map) {
+            var host = null;
+            try { host = map.getContainer(); } catch (e) {}
+            if (!host) return;
+            var box = map._detectlabZoomHintEl;
+            var show = byMap.indexOf(map) !== -1;
+            if (!box) {
+                if (!show) return;
+                box = document.createElement('div');
+                box.id = ZOOM_HINT_ID;
+                box.setAttribute('role', 'status');
+                box.setAttribute('aria-live', 'polite');
+                box.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);'
+                    + 'z-index:900;pointer-events:none;display:none;padding:10px 22px;border-radius:8px;'
+                    + 'background:rgba(6,14,30,0.6);color:#F5F0EB;font-family:Outfit,sans-serif;'
+                    + 'font-size:1rem;font-weight:500;letter-spacing:0.02em;text-align:center;white-space:nowrap;';
+                host.appendChild(box);
+                map._detectlabZoomHintEl = box;
+            }
+            box.textContent = zoomHintText();
+            box.style.display = show ? 'block' : 'none';
+        });
+    }
+    function trackHostedLayer(layer, map) {
+        if (!layer || typeof layer.on !== 'function') return;
+        if (map && hostedMaps.indexOf(map) === -1 && typeof map.on === 'function') {
+            hostedMaps.push(map);
+            map.on('zoomend moveend', updateZoomHint);
+        }
+        if (layer._detectlabHostedStats || !isHostedTileUrl(hostedUrlOf(layer))) return;
+        var st = layer._detectlabHostedStats = { minOk: null, fails: {} };
+        layer.on('tileload', function (e) {
+            var z = e && e.coords ? e.coords.z : null;
+            if (z == null) return;
+            if (st.minOk == null || z < st.minOk) { st.minOk = z; updateZoomHint(); }
+        });
+        layer.on('tileerror', function (e) {
+            var z = e && e.coords ? e.coords.z : null;
+            if (z == null) return;
+            st.fails[z] = (st.fails[z] || 0) + 1;
+            updateZoomHint();
+        });
+        layer.on('add', function () {
+            if (hostedLayers.indexOf(layer) === -1) hostedLayers.push(layer);
+            updateZoomHint();
+        });
+        layer.on('remove', function () {
+            var i = hostedLayers.indexOf(layer);
+            if (i !== -1) hostedLayers.splice(i, 1);
+            updateZoomHint();
+        });
+        if (layer._map && hostedLayers.indexOf(layer) === -1) hostedLayers.push(layer);
+    }
+    if (typeof document.addEventListener === 'function') {
+        document.addEventListener('detectlab:langchange', updateZoomHint);
+    }
+
     function detachTileWatcher(layer, state) {
         try {
             if (state.onTileLoad) layer.off('tileload', state.onTileLoad);
@@ -533,6 +665,9 @@
         state.fails = (state.fails || 0) + 1;
         if (!((state.fails >= MIN_TILE_FAILURES && !state.oks) || state.fails >= HARD_TILE_FAILURES)) return;
         if (!state.watching || state.confirming) return;
+        // A hosted pyramid viewed below its first zoom level answers 404 for
+        // every tile: that is a “Zoom in” hint, not an outage.
+        if (belowHostedRange(layer, false)) { state.fails = 0; return; }
         function fail() {
             if (!state.watching) return;
             state.watching = false;
@@ -884,6 +1019,7 @@
                the guard (probe or watch), and not only on the second toggle. */
             var originalAddLayer = L.Map.prototype.addLayer;
             var wrappedAddLayer = function (layer) {
+                try { trackHostedLayer(layer, this); } catch (e) {}
                 try { adopt(layer); } catch (e) {}
                 return originalAddLayer.call(this, layer);
             };
@@ -892,7 +1028,8 @@
         }
         var map = window._dlMap;
         if (map && typeof map.eachLayer === 'function') {
-            try { map.eachLayer(function (l) { try { adopt(l); } catch (e) {} }); } catch (e) {}
+            try { map.eachLayer(function (l) { try { trackHostedLayer(l, map); adopt(l); } catch (e) {} }); } catch (e) {}
+            try { updateZoomHint(); } catch (e) {}
         }
         return true;
     }
@@ -964,7 +1101,10 @@
             defForLayer: defForLayer,
             providerFor: providerFor,
             markUnavailable: markUnavailable,
-            probeUrlFor: probeUrlFor
+            probeUrlFor: probeUrlFor,
+            trackHostedLayer: trackHostedLayer,
+            belowHostedRange: belowHostedRange,
+            updateZoomHint: updateZoomHint
         }
     };
 

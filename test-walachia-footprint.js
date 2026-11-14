@@ -142,7 +142,7 @@ function setup(delays) {
 /* ── 3. Shipped: the new script tag and service-worker entry ─────────── */
 assert(html.includes('<script src="js/map-app.js?v=20261101-walachia-coverage"></script>'));
 assert(sw.includes("'js/map-app.js?v=20261101-walachia-coverage'"));
-assert(html.includes('js/wms-health.js?v=20261101-supabase-provider') && sw.includes("'js/wms-health.js?v=20261101-supabase-provider'"));
+assert(html.includes('js/wms-health.js?v=20261114-zoom-in-hint') && sw.includes("'js/wms-health.js?v=20261114-zoom-in-hint'"));
 assert(read('js/wms-health.js').includes("'DetectLab hosted map data (Supabase)'") && !read('js/wms-health.js').includes('Finnish layer data (Supabase)'));
 assert(sw.includes("const CACHE_NAME = 'detectlab-v363-romania-train-only';"));
 

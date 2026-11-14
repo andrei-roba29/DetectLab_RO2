@@ -998,7 +998,7 @@
 // on the web. Web placement is unchanged.
 // v401: keep the full under-budget Roman road network, including Aiton, in
 // large-response and reduced-tile-budget paths. Re-tag the worker and layer.
-const CACHE_NAME = 'detectlab-v402-google-callback-bypass';
+const CACHE_NAME = 'detectlab-v403-zoom-in-hint';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1041,7 +1041,7 @@ const PROTECTED_SITES_CACHE_KEY = 'protected-sites';
 // ── Static assets to pre-cache on install ──
 const PRECACHE_URLS = [
   // v399: Romanian Heritage sublayers (reader dependencies are local).
-  'js/map-app.js?v=20261104-roman-roads-complete',
+  'js/map-app.js?v=20261114-pin-popup-fix',
   'js/map-app.js?v=20261102-ro-heritage', // older installed shells
   'css/romania-heritage.css?v=20261102-ro-heritage',
   'js/romania-heritage.js?v=20261102-ro-heritage',
@@ -1179,6 +1179,7 @@ const PRECACHE_URLS = [
   'js/wms-health.js?v=20261021-albania-country-group',
   'js/wms-health.js?v=20261101-cenagis-patience',
   'js/wms-health.js?v=20261101-supabase-provider',
+  'js/wms-health.js?v=20261114-zoom-in-hint',
   'js/finland-tm35.js?v=20261019-finland-filter',
   'js/finland-layers.config.js?v=20261019-finland-filter',
   'js/finland-layers.js?v=20261019-finland-filter',
