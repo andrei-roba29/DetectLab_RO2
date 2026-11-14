@@ -2576,6 +2576,8 @@
                     var save = content.querySelector('.coord-popup-save:not(.saved):not(.error):not(:disabled) .coord-popup-save-label');
                     if (save) save.textContent = pinText('pin_save');
                 }
+                // Shared with the saved-locations module below (separate closure).
+                window._translatePinPopup = translatePinPopup;
                 document.addEventListener('detectlab:langchange', function () {
                     document.querySelectorAll('.pin-popup').forEach(translatePinPopup);
                 });
@@ -2775,6 +2777,11 @@
                 var savedPathsLoading = false;
                 var savedSwitchesContainer = null;
                 var savedSwitchesStatus = null;
+
+                // translatePinPopup lives in the pin-drop closure above; reach it via window.
+                function translatePinPopup(content) {
+                    if (typeof window._translatePinPopup === 'function') window._translatePinPopup(content);
+                }
 
                 function setControlState(active) {
                     // Desktop keeps its .map-controls button; PWA answers through
