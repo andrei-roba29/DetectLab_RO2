@@ -998,7 +998,7 @@
 // on the web. Web placement is unchanged.
 // v401: keep the full under-budget Roman road network, including Aiton, in
 // large-response and reduced-tile-budget paths. Re-tag the worker and layer.
-const CACHE_NAME = 'detectlab-v403-zoom-in-hint';
+const CACHE_NAME = 'detectlab-v404-hosted-no-trip';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1180,6 +1180,7 @@ const PRECACHE_URLS = [
   'js/wms-health.js?v=20261101-cenagis-patience',
   'js/wms-health.js?v=20261101-supabase-provider',
   'js/wms-health.js?v=20261114-zoom-in-hint',
+  'js/wms-health.js?v=20261114-hosted-no-trip',
   'js/finland-tm35.js?v=20261019-finland-filter',
   'js/finland-layers.config.js?v=20261019-finland-filter',
   'js/finland-layers.js?v=20261019-finland-filter',

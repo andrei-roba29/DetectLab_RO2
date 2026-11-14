@@ -665,9 +665,10 @@
         state.fails = (state.fails || 0) + 1;
         if (!((state.fails >= MIN_TILE_FAILURES && !state.oks) || state.fails >= HARD_TILE_FAILURES)) return;
         if (!state.watching || state.confirming) return;
-        // A hosted pyramid viewed below its first zoom level answers 404 for
-        // every tile: that is a “Zoom in” hint, not an outage.
-        if (belowHostedRange(layer, false)) { state.fails = 0; return; }
+        // DetectLab's own buckets are sparse static pyramids: a 404 is a tile
+        // that does not exist (below the first zoom level, or past the edge of
+        // the scanned sheet), never an outage. Such layers are never tripped.
+        if (isHostedTileUrl(hostedUrlOf(layer)) || belowHostedRange(layer, false)) { state.fails = 0; return; }
         function fail() {
             if (!state.watching) return;
             state.watching = false;
@@ -858,6 +859,11 @@
     function guard(layer, opts) {
         opts = opts || {};
         if (!layer || layer._detectlabWmsGuard) return layer;
+        /* Hosted tile pyramids (Supabase bucket / Cloudflare R2) are left alone:
+           missing tiles are normal there (sparse coverage, limited zoom range),
+           so neither a probe nor a run of 404s may switch the map off or raise
+           the “cannot be loaded” notice. The “Zoom in” hint covers the rest. */
+        if (isHostedTileUrl(hostedUrlOf(layer))) return layer;
         var explicit = opts.explicit === true;
         if (!explicit && !isGuardedUrl(layer._url)) return layer;
         var mode = opts.mode || (layer._detectlabWatchOnly ? 'watch' : modeForUrl(layer._url));
@@ -1004,6 +1010,7 @@
         var def = (!url || !guardedUrl) ? defForLayer(layer) : null;
         if (!guardedUrl && !(def && isGuardedUrl(def.url))) return null;
         if (def && def.guard === false) return null;
+        if (isHostedTileUrl(url || (def && def.url))) return null;
         return guard(layer, {
             explicit: true, mode: 'watch', def: def,
             provider: providerFor(url || (def && def.url))
