@@ -720,7 +720,13 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
     fakeJosephineJson = {
         centre: { d: 'Centre', l: 'https://commons.wikimedia.org/wiki/File:Test.jpg', c: { lat: 47.933, lng: 23.892 } },
         nearby: { d: 'Nearby', l: 'https://commons.wikimedia.org/wiki/File:Test.jpg', c: { lat: 47.93305, lng: 23.892 } },
-        homonym: { d: 'Distant homonym', l: 'https://commons.wikimedia.org/wiki/File:Test.jpg', c: { lat: 45, lng: 25 } }
+        /* Inside the Transylvania window but ~200 km from the sheet: the
+         * spread guard drops it instead of splitting a second disc off. */
+        homonym: { d: 'Distant homonym', l: 'https://commons.wikimedia.org/wiki/File:Test.jpg', c: { lat: 46.2, lng: 24.6 } },
+        /* Bocșa in Caraș-Severin — the real mis-geocode from iosfree_db.json:
+         * outside the region, so the window guard drops it (Transylvania
+         * sheets must never cover the Banat). */
+        banat: { d: 'Out-of-region homonym', l: 'https://commons.wikimedia.org/wiki/File:Test.jpg', c: { lat: 45.3781756, lng: 21.7312589 } }
     };
     OtherMaps.attach(projMap);
     OtherMaps.setEnabled(true);
@@ -731,8 +737,12 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
     ok(OtherMaps.state.hits.length > 0, 'dots are painted at the settled zoom');
     ok(OtherMaps.records().some((r) => r.source === 'josephine'), 'enable loads the Josephine catalogue');
     const foot = OtherMaps.state.josephineFootprints;
-    eq(foot.length, 2, 'distant homonyms do not create a country-wide coverage disc');
-    eq(foot[0].sheet.id, foot[1].sheet.id, 'separated coverage groups select the same sheet');
+    eq(foot.length, 1, 'neither an out-of-region nor a distant in-region homonym gets a coverage disc');
+    const josSheet = OtherMaps.records().find((r) => r.source === 'josephine');
+    eq(josSheet.josephinePlaces.length, 2, "only the sheet's own localities are indexed");
+    ok(josSheet.josephinePlaces.every((p) => Math.abs(p.lat - 47.933) < 0.01),
+        'both homonyms (Bocșa, Caraș-Severin and the far in-region name) are dropped from the sheet');
+    ok(!/homonym/i.test(josSheet.subject), 'neither homonym appears in the sheet subject');
     ok(OtherMaps.state.hits.some((h) => h.coverage), 'coverage appears below zoom 13');
     const styles = [];
     const ctx = OtherMaps.state.ctx;
@@ -1350,6 +1360,42 @@ assert(JosephineTiles && typeof JosephineTiles.resolve === 'function' &&
             return metres <= record.coverageRadiusMeters;
         });
         ok(enclosing, 'Josephine coverage circles enclose all places assigned to each scan');
+    });
+
+    /* Transylvania only: every indexed locality sits inside the region
+     * window, and the pg017 sheet (Chieșd, Șamșud, Coseiu … — all Sălaj)
+     * no longer carries Bocșa geocoded to Caraș-Severin; its real Sălaj
+     * Bocșa stays on the sheet. */
+    const region = OtherMaps.josephineRegion;
+    let outsideRegion = 0;
+    josephineRecords.forEach((record) => record.josephinePlaces.forEach((p) => {
+        if (p.lat < region.south || p.lat > region.north ||
+            p.lng < region.west || p.lng > region.east) outsideRegion++;
+    }));
+    eq(outsideRegion, 0, 'no Josephine locality lies outside the Transylvania window');
+    const pg017 = josephineRecords.find((r) => r.path.indexOf('pg017') >= 0);
+    ok(pg017, 'the Sălaj sheet pg017 is still indexed');
+    ok(pg017.josephinePlaces.every((p) =>
+        Math.abs(p.lat - 45.3781756) > 0.5 || Math.abs(p.lng - 21.7312589) > 0.5),
+    'Bocșa in Caraș-Severin (outside Transylvania) is not part of pg017');
+    ok(pg017.josephinePlaces.some((p) => p.name === 'Bocsa' && p.lat > 47),
+        'the sheet keeps its real Bocșa (Sălaj) locality');
+    ok(pg017.josephinePlaces.some((p) => p.name === 'Chiesd'),
+        'the sheet keeps its Sălaj localities');
+    /* Mis-geocoded names that used to drag a sheet's coverage across the
+     * country — Gherman/Dumbravita sit west of the window (region guard),
+     * Bicaz is inside the window but 223 km from its sheet (spread guard). */
+    const stillWrong = [
+        { name: 'Orsova', lat: 44.7234689, lng: 22.3982754 },
+        { name: 'Uricani', lat: 47.156943, lng: 27.4861112 },
+        { name: 'Bicaz', lat: 46.9112275, lng: 26.0903478 },
+        { name: 'Gherman', lat: 45.2729129, lng: 21.3621736 },
+        { name: 'Paltinis', lat: 48.2216679, lng: 26.6820026 }
+    ];
+    stillWrong.forEach((bad) => {
+        const present = josephineRecords.some((r) => r.josephinePlaces.some((p) =>
+            p.name === bad.name && Math.abs(p.lat - bad.lat) < 0.01 && Math.abs(p.lng - bad.lng) < 0.01));
+        ok(!present, bad.name + ' at its mis-geocoded coordinates is not indexed');
     });
 
     // Every catalogue locality must belong to an estimated, compact footprint.
