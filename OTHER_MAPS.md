@@ -301,7 +301,7 @@ Alinierea supraviețuiește reîncărcării paginii și repornirii stratului. C�
 | `tools/build-nls-catalog.mjs` | construiește catalogul NLS din WFS (live sau `--json-dir` offline); `--self-test` |
 | `test-other-maps.js` | regresia (rulează fără rețea) |
 | `index.html` | rîndul din panoul „Hărți istorice” + tagurile de asset |
-| `sw.js` | cache `detectlab-v405-josephine-transylvania` |
+| `sw.js` | cache `detectlab-v406-josephine-transylvania` |
 
 ## 7. Cum extinzi catalogul
 
@@ -439,7 +439,7 @@ Versiunea: `js/other-maps-tiles.js`, `js/other-maps-nls.js` și
 `js/other-maps-overlay.js` sînt versionate `20261031-other-maps-tile-span`,
 iar `js/other-maps.js` (gardurile Iosefine pentru Transilvania) și
 `iosfree_db.json` sînt versionate `20261115-josephine-transylvania`,
-cache `detectlab-v405-josephine-transylvania`.
+cache `detectlab-v406-josephine-transylvania`.
 
 ## 8. Regresie
 
@@ -520,4 +520,4 @@ sînt versionate `20261031-other-maps-tile-span` (vezi §8.2), iar
 Hungaricana
 (`data/other-maps-catalog.json`) rămîne la `20261026-cluj-alba`, iar catalogul NLS
 (`data/other-maps-nls-catalog.json`) e la `20261028-other-maps-fix`; cache-ul
-service-worker-ului e `detectlab-v405-josephine-transylvania`.
+service-worker-ului e `detectlab-v406-josephine-transylvania`.

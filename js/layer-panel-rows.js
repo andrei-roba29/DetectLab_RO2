@@ -13,7 +13,9 @@
  *      (js/historical-eu-maps.js) still writes its own dark inline box, which
  *      is removed here instead of being fought with `!important`.
  *
- *   2. TILE PHOTO — every historical-map sublayer row carries a photo of one
+ *   2. TILE PHOTO — every historical-map sublayer row (Romania's free and
+ *      premium groups, the CENAGIS catalogue, and the Danish “Historical
+ *      maps” section of js/danish-layers.config.js) carries a photo of one
  *      of its OWN tiles as the row background, mean-ed out under a violet
  *      wash so the switch, the slider, the info button and the labels stay
  *      readable on top of it. The URL comes from the layer's own definition
@@ -61,7 +63,18 @@
         'premium.reymann':             { lat: 52.406, lng: 16.925 },   /* Poznań */
         'premium.kdr-100k':            { lat: 52.520, lng: 13.405 },   /* Berlin */
         'premium.kdr-gb':              { lat: 52.232, lng: 21.006 },   /* Warsaw */
-        'premium.wig-100k':            { lat: 52.232, lng: 21.006 }    /* Warsaw */
+        'premium.wig-100k':            { lat: 52.232, lng: 21.006 },   /* Warsaw */
+
+        /* ── Denmark · Historical maps (js/danish-layers.config.js) ─────────
+         * The Danish sheets are WMS mosaics over the whole country, so their
+         * bounding box centre is open water in the Kattegat: each row is given
+         * a town that is genuinely inside that sheet's own coverage. */
+        'danish.dtk25':                { lat: 56.1629, lng: 10.2039 }, /* Aarhus */
+        'danish.topo4cm_1980_2001':    { lat: 57.0488, lng: 9.9217 },  /* Aalborg */
+        'danish.topo4cm_1953_1976':    { lat: 55.4670, lng: 8.4520 },  /* Esbjerg */
+        'danish.hist_lave':            { lat: 55.3959, lng: 10.3883 }, /* Odense */
+        'danish.hist_hoeje':           { lat: 55.6761, lng: 12.5683 }, /* Copenhagen */
+        'danish.hist_preussen':        { lat: 55.0444, lng: 9.4181 }   /* Aabenraa (Sønderjylland) */
     };
 
     /* A full sheet scan used as the row photo when the XYZ pyramid has no
@@ -136,11 +149,32 @@
     }
 
     /* ── the row photo URL ─────────────────────────────────────────────── */
+    /* The Danish `danish-overlay` group holds Heritage, Historical maps and
+     * Ortophoto rows alike, so the group alone cannot decide: the CONFIG's
+     * `panelGroup` does. A catalogue entry counts as a historical sheet when
+     * its own definition in js/danish-layers.config.js sits in the
+     * `historical` section — the config stays the single source of truth, and
+     * only rows that opt in with `data-preview-layer` are ever asked for a
+     * tile anyway. */
+    function isDanishHistorical(id) {
+        var cfg = root && root.DANISH_LAYERS_CONFIG;
+        if (!cfg || typeof cfg.byId !== 'function') return false;
+        var parts = String(id || '').split('.');
+        if (parts.length < 2 || parts[0] !== 'danish') return false;
+        var layer = cfg.byId(parts.slice(1).join('.'));
+        return !!(layer && layer.panelGroup === 'historical');
+    }
+
+    function isHistorical(def) {
+        if (HISTORICAL_GROUPS[def.group]) return true;
+        return isDanishHistorical(def.id);
+    }
+
     function urlsFor(id) {
         var reg = registry();
         if (!reg) return [];
         var def = reg.get(id);
-        if (!def || !HISTORICAL_GROUPS[def.group]) return [];
+        if (!def || !isHistorical(def)) return [];
         /* An explicit sheet scan is the preview. Do not fall through to an
            XYZ tile that may 404 or come back transparent. */
         if (SHEET_PHOTOS[id]) return [SHEET_PHOTOS[id]];
@@ -194,10 +228,15 @@
 
         if (def.kind === 'wms') {
             var m = mercator(centre.lat, centre.lng);
-            var half = SPAN_METERS / 2;
+            /* Keep the requested window's aspect ratio equal to the image's
+               (WMS_WIDTH × WMS_HEIGHT): a square window squashed into the
+               wide row backdrop stretches every road and coastline. The
+               horizontal span stays one town wide. */
+            var halfX = SPAN_METERS / 2;
+            var halfY = halfX * (WMS_HEIGHT / WMS_WIDTH);
             var version = String(def.version || '1.1.1');
             var axis = version.indexOf('1.3') === 0 ? 'crs' : 'srs';
-            var bbox = [m.x - half, m.y - half, m.x + half, m.y + half].map(function (n) {
+            var bbox = [m.x - halfX, m.y - halfY, m.x + halfX, m.y + halfY].map(function (n) {
                 return n.toFixed(1);
             }).join(',');
             var params = [

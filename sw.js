@@ -998,7 +998,11 @@
 // on the web. Web placement is unchanged.
 // v401: keep the full under-budget Roman road network, including Aiton, in
 // large-response and reduced-tile-budget paths. Re-tag the worker and layer.
-// v405: the free Josephine sheets cover only Transylvania. The place database
+// v405: the Danish sections draw no icon any more (the header title is the
+// disclosure), and the Danish Historical maps rows carry their own tile photo
+// like the Romanian historical sublayers — js/danish-layers.js,
+// js/layer-panel-rows.js and css/styles.css are re-tagged.
+// v406: the free Josephine sheets cover only Transylvania. The place database
 //   geocodes by name, so a homonym outside the region used to join a sheet and
 //   stretch its coverage over the wrong ground: the pg017 sheet (Chieșd,
 //   Șamșud, Coseiu … — all Sălaj) also listed „Bocsa” geocoded to Bocșa in
@@ -1007,7 +1011,7 @@
 //   onto its dominant compact cluster; iosfree_db.json carries the corrected
 //   Bocșa (Sălaj) coordinate. Re-tags js/other-maps.js, iosfree_db.json and
 //   CACHE_NAME. See OTHER_MAPS.md.
-const CACHE_NAME = 'detectlab-v405-josephine-transylvania';
+const CACHE_NAME = 'detectlab-v406-josephine-transylvania';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -2060,7 +2064,15 @@ const PRECACHE_URLS = [
   'js/lidar-photo-filter.js?v=20261101-lidar-service-levels',
   'js/lidar-photo-filter.js?v=20261101-lidar-geographic-mask',
   'js/lidar-photo-filter.js?v=20261101-lidar-deep-zoom',
-  'js/lidar-photo-filter.js?v=20261101-desktop-3d-hint'
+  'js/lidar-photo-filter.js?v=20261101-desktop-3d-hint',
+  /* v405: the Danish Heritage / Historical maps / Ortophoto section headers
+   * draw no icon (the title is the disclosure), and every Danish Historical
+   * maps row now carries a photo of one of its own tiles as the row
+   * background, like the Romanian historical sublayers. Re-tags the Danish
+   * module, the row chrome and the shared skin. */
+  'js/danish-layers.js?v=20261115-danish-rows',
+  'js/layer-panel-rows.js?v=20261115-danish-rows',
+  'css/styles.css?v=20261115-danish-rows'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──

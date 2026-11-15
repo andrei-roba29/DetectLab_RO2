@@ -294,7 +294,7 @@ const TAGS = {
     'js/map3d-terrain.js': '20261026-desktop-basemap',
     'css/map3d-terrain.css': '20261026-pwa-3d-button-size',
     'js/danish-layers.config.js': '20261028-kulturarv-sublayers',
-    'js/danish-layers.js': '20261028-kulturarv-sublayers'
+    'js/danish-layers.js': '20261115-danish-rows'
 };
 ['js/map3d-terrain.js', 'js/layer-registry.js', 'css/map3d-terrain.css',
     'js/danish-layers.config.js'].forEach(function (asset) {

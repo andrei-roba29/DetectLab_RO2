@@ -21,9 +21,13 @@
  *     Danish LiDAR overlays sit in the shared LiDAR accordion (after the
  *     global “Hillshade LiDAR derivate” row), and Heritage, Historical maps
  *     and Ortophoto are Romania-style sections — a `.transp-layer-row`
- *     header with an expand chevron and a master on/off switch over a
- *     bordered `…SubLayers` column. There is no “Base map” section any
- *     more, and only the layers in `CONFIG.panelGroups` are rendered; the
+ *     header with a master on/off switch over a bordered `…SubLayers`
+ *     column. The header draws NO icon: its title is the disclosure, so a
+ *     click (or Enter/Space) opens and closes the section. The Historical
+ *     maps rows carry a photo of one of their own tiles as the row
+ *     background, like every Romanian historical sublayer. There is no
+ *     “Base map” section any more, and only the layers in
+ *     `CONFIG.panelGroups` are rendered; the
  *     remaining catalogue entries (the spring-orthophoto years, the Danish
  *     OSM base) stay available to the proxy, the registry and the API but
  *     have no panel row, so a stored preference can never resurrect a
@@ -186,7 +190,7 @@
         active: {},         /* id → true when it is on the map     */
         opacity: {},        /* id → 0–100                          */
         rows: {},           /* id → { row, input, slider, pct, status } */
-        groupRows: {},      /* panelGroup id → { row, body, master, icon, button } */
+        groupRows: {},      /* panelGroup id → { row, body, master, button } */
         expandedGroups: {}, /* panelGroup id → true when its section is unfolded */
         expanded: true,
         wfs: { timer: null, controller: null, running: false, dirty: false, last: '', layer: null },
@@ -989,12 +993,21 @@
     function buildRow(layer) {
         var title = tr(layer.title);
         var isLidar = layer.panelGroup === 'lidar' || layer.id.indexOf('lidar_') === 0;
-        var row = el('div', {
+        var rowAttrs = {
             class: 'danish-layer-row dl-sublayer-row is-overlay' + (isLidar ? ' lidar-country-row' : ''),
             id: 'danishRow_' + layer.id,
             'data-category': 'free',
             'data-danish-row': layer.id
-        });
+        };
+        /* The Historical maps section carries a photo of one of the sheet's own
+         * tiles as the row background, exactly like every Romanian historical
+         * sublayer: js/layer-panel-rows.js paints `--row-preview` once the tile
+         * really loads (a dead service or a missing proxy credential leaves the
+         * plain glass row behind). The id is the shared catalogue's
+         * (`danish.<id>`), which is where the preview URL comes from — the layer
+         * definition is never copied here. */
+        if (layer.panelGroup === 'historical') rowAttrs['data-preview-layer'] = 'danish.' + layer.id;
+        var row = el('div', rowAttrs);
 
         var input = el('input', {
             type: 'checkbox',
@@ -1102,7 +1115,8 @@
             entry.body.style.opacity = expanded ? '1' : '0';
             entry.body.style.marginTop = expanded ? '8px' : '0';
         }
-        if (entry.icon) entry.icon.style.transform = expanded ? 'rotate(0deg)' : 'rotate(-90deg)';
+        /* No icon to rotate any more — the header keeps only its text; the
+         * state is announced through aria-expanded on the disclosure button. */
         if (entry.button) entry.button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
     }
 
@@ -1121,10 +1135,15 @@
 
     /* One thematic section (Heritage / Historical maps / Ortophoto) in the
      * shape of Romania's Historical Maps group: a glass `.transp-layer-row`
-     * whose `.transp-layer-label` header carries the section title, an
-     * expand chevron and the master `.apm-toggle-switch`, over a
-     * left-bordered `…SubLayers` column of buildRow() rows. Sections start
-     * collapsed, like the Romanian group. */
+     * whose `.transp-layer-label` header carries the section title and the
+     * master `.apm-toggle-switch`, over a left-bordered `…SubLayers` column of
+     * buildRow() rows. Sections start collapsed, like the Romanian group.
+     *
+     * The header carries NO icon. It used to draw a “▾” glyph in a small
+     * button next to the switch; the title itself is the disclosure now —
+     * clicking / activating it opens and closes the section, and
+     * `danishGroupExpandBtn_<id>` is the (text-only) button that does it, so
+     * the row reads as plain text and stays fully keyboard-operable. */
     function buildGroup(group) {
         var title = tr(group.title);
         var expanded = !!runtime.expandedGroups[group.id];
@@ -1147,20 +1166,21 @@
             style: 'flex-shrink:0;'
         }, [master, el('span', { class: 'apm-toggle-track' })]);
 
-        var icon = el('span', {
-            id: 'danishGroupExpandIcon_' + group.id,
-            style: 'display:inline-block;transition:transform 0.25s ease;font-size:0.72rem;line-height:1;',
-            text: '▾'
-        });
-        icon.style.transform = expanded ? 'rotate(0deg)' : 'rotate(-90deg)';
+        /* The title is the disclosure: no glyph, no extra button box — the only
+         * things on the header line are the section name and the master
+         * switch. `aria-expanded` lives on the button so a screen reader still
+         * announces the section state; the body id is its `aria-controls`. */
         var expandBtn = el('button', {
             type: 'button',
             id: 'danishGroupExpandBtn_' + group.id,
+            class: 'danish-group-disclosure',
             title: tr(TEXT.expand),
             'aria-expanded': expanded ? 'true' : 'false',
-            style: 'background:none;border:none;cursor:pointer;padding:2px 4px;' +
-                'color:rgba(214,69,80,0.85);display:flex;align-items:center;'
-        }, [icon]);
+            'aria-controls': groupSubLayersId(group),
+            style: 'background:none;border:none;padding:0;margin:0;cursor:pointer;' +
+                'color:inherit;font:inherit;text-align:left;display:flex;align-items:center;' +
+                'gap:7px;min-width:0;flex:1 1 auto;'
+        }, [el('span', { class: 'danish-group-title', text: title })]);
         expandBtn.addEventListener('click', function (event) {
             if (event && event.preventDefault) event.preventDefault();
             if (event && event.stopPropagation) event.stopPropagation();
@@ -1168,11 +1188,9 @@
         });
 
         var head = el('div', { class: 'transp-layer-label', style: 'margin-bottom:6px' }, [
-            el('span', { style: 'display:flex;align-items:center;gap:7px;min-width:0;' }, [
-                el('span', { text: title })
-            ]),
+            expandBtn,
             el('span', { style: 'display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0;' },
-                [expandBtn, masterSwitch])
+                [masterSwitch])
         ]);
         wrap.appendChild(head);
 
@@ -1192,7 +1210,7 @@
         wrap.appendChild(body);
 
         runtime.groupRows[group.id] = {
-            row: wrap, body: body, master: master, icon: icon, button: expandBtn
+            row: wrap, body: body, master: master, button: expandBtn
         };
         syncGroupMaster(group);
         return wrap;
