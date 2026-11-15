@@ -601,9 +601,39 @@ async function testMapModule() {
             group.id + ' contains exactly the requested sublayers in order');
         assert.ok(dom.byId['danishGroupToggle_' + group.id], group.id + ' has a master on/off switch');
         assert.strictEqual(dom.byId['danishGroupToggle_' + group.id].type, 'checkbox');
-        assert.ok(dom.byId['danishGroupExpandBtn_' + group.id], group.id + ' has an expand chevron');
+        /* No icon in the header: the section title IS the disclosure. */
+        const disclosure = dom.byId['danishGroupExpandBtn_' + group.id];
+        assert.ok(disclosure, group.id + ' has a title disclosure');
+        assert.strictEqual(disclosure.tagName, 'BUTTON', group.id + ' disclosure is a real button');
+        assert.strictEqual(disclosure.attributes['class'], 'danish-group-disclosure');
+        assert.strictEqual(disclosure.attributes['aria-controls'], groupBodyId(group),
+            group.id + ' disclosure points at its sublayer column');
+        assert.strictEqual(disclosure.children.length, 1, group.id + ' disclosure holds only its label');
+        assert.strictEqual(disclosure.children[0].textContent, group.title.en,
+            group.id + ' header reads as plain text — Patrimoniu / Historical maps / Ortophoto, no glyph');
+        assert.ok(!/^[\u25B4-\u25BE]/.test(disclosure.children[0].textContent), group.id + ' draws no chevron');
+        assert.ok(!dom.byId['danishGroupExpandIcon_' + group.id], group.id + ' draws no expand icon');
+        const header = wrap.children[0];
+        assert.strictEqual(header.children.length, 2,
+            group.id + ' header is only the title disclosure plus the master switch');
+        assert.strictEqual(header.children[0], disclosure);
+        assert.ok(!/▾|▸|►|ⓘ/.test(header.children.map((child) => child.textContent).join(' ')),
+            group.id + ' header carries no icon glyph');
         assert.strictEqual(dom.byId[groupBodyId(group)].style.maxHeight, '0',
             group.id + ' starts collapsed, like the Romanian Historical Maps group');
+
+        /* The Historical maps rows carry a photo of one of their own tiles as
+         * the row background (js/layer-panel-rows.js); the Heritage and
+         * Ortophoto rows of the very same panel stay plain glass. */
+        (group.layers || []).forEach((id) => {
+            const row = dom.byId['danishRow_' + id];
+            const preview = row.attributes['data-preview-layer'];
+            if (group.id === 'historical') {
+                assert.strictEqual(preview, 'danish.' + id, id + ' opts into its own tile photo');
+            } else {
+                assert.strictEqual(preview, undefined, id + ' stays a plain glass row');
+            }
+        });
     }
 
     /* Every rendered row has the shared Romania style: a glass sublayer
@@ -784,7 +814,7 @@ async function testMapModule() {
     assert.strictEqual(API.isActive('dtk25'), false, 'a missing proxy leaves the protected layer off');
     ok('no client-side Dataforsyningen token fallback is permitted');
 
-    /* A section's master switch and chevron (Romania-style sections):
+    /* A section's master switch and its (icon-free) title disclosure:
        expanding unfolds the sublayer column; the master turns the whole
        section on and off and reflects partial states as indeterminate. */
     sandbox.fetch = () => Promise.resolve(new Response('<WMS_Capabilities/>', {
@@ -793,7 +823,7 @@ async function testMapModule() {
     const heritageBody = dom.byId['danishHeritageSubLayers'];
     assert.strictEqual(heritageBody.style.maxHeight, '0', 'Heritage starts collapsed');
     dom.byId['danishGroupExpandBtn_heritage'].dispatch('click');
-    assert.strictEqual(heritageBody.style.maxHeight, '6000px', 'the chevron expands the section');
+    assert.strictEqual(heritageBody.style.maxHeight, '6000px', 'the title disclosure expands the section');
     assert.strictEqual(dom.byId['danishGroupExpandBtn_heritage'].getAttribute('aria-expanded'), 'true');
     assert.strictEqual(API.isActive('naturtyper'), true, 'naturtyper is already on');
     const heritageMaster = dom.byId['danishGroupToggle_heritage'];
@@ -811,7 +841,7 @@ async function testMapModule() {
     heritageMaster.checked = false;
     heritageMaster.dispatch('change');
     API.activate('naturtyper');
-    ok('section chevron + master switch unfold and toggle the whole group');
+    ok('the icon-free section title + master switch unfold and toggle the whole group');
 
     delete API.state.guard.lidar_quickdhm_exaggerated;
     API.activate('lidar_quickdhm_exaggerated');
