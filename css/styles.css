@@ -8625,6 +8625,25 @@
     outline-offset: 1px;
 }
 
+/* The Danish section headers draw no icon: the title itself is the
+   disclosure (js/danish-layers.js `buildGroup`), so it takes the trigger's
+   affordances — a pointer, a hover lift on the label and the focus ring
+   above — instead of a “▾” glyph next to the master switch. */
+#transpPanel .danish-group-row .danish-group-disclosure {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+#transpPanel .danish-group-row .danish-group-disclosure:hover,
+#transpPanel .danish-group-row .danish-group-disclosure:focus-visible {
+    color: rgba(255, 255, 255, 0.98);
+}
+
 /* The Danish bases mirrored into the existing basemap control. */
 .danish-basemap-btn {
     display: inline-flex;

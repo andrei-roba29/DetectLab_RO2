@@ -16,6 +16,7 @@ const html = read('index.html');
 const sw = read('sw.js');
 const moduleSource = read('js/layer-panel-rows.js');
 const registrySource = read('js/layer-registry.js');
+const readDanishRows = () => read('js/danish-layers.js');
 
 const flatHtml = html.replace(/\n\s*/g, ' ');
 function ruleOf(source, selector) {
@@ -84,7 +85,11 @@ const fakeDocument = {
     querySelectorAll: () => [],
     addEventListener: () => {}
 };
-const sandboxWindow = { document: fakeDocument };
+/* The Danish layers describe themselves in js/danish-layers.config.js; the
+ * row chrome reads that config (never a copy) to know which Danish rows are
+ * historical sheets. In the page the config script runs before this one. */
+const DANISH_CONFIG = require('./js/danish-layers.config.js');
+const sandboxWindow = { document: fakeDocument, DANISH_LAYERS_CONFIG: DANISH_CONFIG };
 const sandbox = {
     window: sandboxWindow,
     document: fakeDocument,
@@ -235,7 +240,44 @@ assert(/layers=ihpan%3Awig100k_3857/.test(cenagisUrl),
 /* Non-historical layers are left alone. */
 assert.strictEqual(api.urlFor('premium.josephine') && api.urlFor('basemap.osm'), null,
     'only historical layers get a row photo');
-console.log('  ✓ WMS mosaics preview through GetMap; XYZ/ArcGIS through their own tile template');
+
+/* ── Denmark · Historical maps — the same row photo as the Romanian sheets ──
+ * js/danish-layers.js tags exactly the rows of its `historical` panel group
+ * with `data-preview-layer="danish.<id>"`; the URL is built from the shared
+ * catalogue entry (same-origin proxy path, the layer's own LAYERS value and
+ * CRS), and the Heritage / Ortophoto sections of the same registry group are
+ * deliberately left plain. */
+const DANISH_HISTORICAL = ['danish.dtk25', 'danish.topo4cm_1980_2001', 'danish.topo4cm_1953_1976',
+    'danish.hist_lave', 'danish.hist_hoeje', 'danish.hist_preussen'];
+assert.deepStrictEqual(DANISH_HISTORICAL.map(id => DANISH_CONFIG.byId(id.split('.')[1]).panelGroup),
+    DANISH_HISTORICAL.map(() => 'historical'), 'the six sheets are the Historical maps section');
+DANISH_HISTORICAL.forEach(id => {
+    const def = sandboxWindow.DetectLabLayers.get(id);
+    assert(def, 'the Danish sheet is in the shared catalogue: ' + id);
+    assert(api.anchors[id], 'the Danish sheet has an anchor town inside its coverage: ' + id);
+    const url = api.urlFor(id);
+    assert(url, 'the Danish historical row gets a tile photo: ' + id);
+    assert(url.startsWith(def.url), 'the preview asks the row\'s own endpoint: ' + id);
+    if (def.url.includes('?layer=')) {
+        assert(url.includes('layer=' + id.split('.')[1]),
+            'the proxy is told which Danish layer it is: ' + id);
+    }
+    ['service=WMS', 'request=GetMap', 'version=1.3.0', 'layers=' + encodeURIComponent(def.layer),
+        'crs=EPSG:3857', 'bbox=', 'width=168', 'height=96'].forEach(part => {
+        assert(url.includes(part), id + ' preview carries ' + part);
+    });
+    assert(/bbox=[-\d.]+,[-\d.]+,[-\d.]+,[-\d.]+/.test(url),
+        id + ' preview asks a Mercator window');
+});
+assert.strictEqual(api.urlFor('danish.orto_sommer_1999'), null,
+    'the Ortophoto section stays a plain glass row');
+assert.strictEqual(api.urlFor('danish.fortidsminder'), null,
+    'the Heritage section stays a plain glass row');
+assert(/panelGroup === 'historical'/.test(readDanishRows()) &&
+    /data-preview-layer'\] = 'danish\.'/.test(readDanishRows()),
+    'js/danish-layers.js opts in the Historical maps rows only');
+console.log('  ✓ ' + DANISH_HISTORICAL.length + ' Danish historical rows preview their own sheet, '
+    + 'Heritage and Ortophoto do not');
 
 /* ── 5. Loading is lazy, greedy-free and failure-tolerant ──────────────── */
 assert(/data-row-preview-state/.test(moduleSource),
@@ -274,8 +316,8 @@ console.log('  ✓ previews load only for visible rows, once, and fail soft');
 }
 
 /* ── 6. Wiring: cache-busting, precache, shell version ─────────────────── */
-const TAG = '20261101-walachia-sheet';
-const STYLES_TAG = '20261102-report-lidar-window';
+const TAG = '20261115-danish-rows';
+const STYLES_TAG = '20261115-danish-rows';
 assert(html.includes('js/layer-panel-rows.js?v=' + TAG), 'index.html loads the row chrome, versioned');
 assert(sw.includes("'js/layer-panel-rows.js?v=" + TAG + "'"), 'sw.js precaches the row chrome');
 const stylesUrl = (html.match(/href="(css\/styles\.css\?v=[^"]+)"/) || [])[1];

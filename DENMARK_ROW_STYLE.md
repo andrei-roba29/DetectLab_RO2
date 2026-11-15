@@ -36,10 +36,39 @@ Only `CONFIG.panelGroups` (`js/danish-layers.config.js`) is rendered:
 | **Ortophoto** | Denmark mount | 2008 · 2005 · 2002 · 1999 |
 
 Heritage / Historical maps / Ortophoto are Romania-style sections: a
-`.transp-layer-row` header (`danishGroup_<id>`) with title, expand chevron
-(`danishGroupExpandBtn_<id>`, collapsed by default) and a master on/off
-switch (`danishGroupToggle_<id>`, indeterminate for partial states) over a
-bordered `danish<Group>SubLayers` column.
+`.transp-layer-row` header (`danishGroup_<id>`) with the section title, no
+icon at all, and a master on/off switch (`danishGroupToggle_<id>`,
+indeterminate for partial states) over a bordered
+`danish<Group>SubLayers` column. Sections start collapsed.
+
+The header carries **no icon** (2026-11-15). It used to draw a `▾` glyph in
+a small red button next to the switch; that button is gone and the title
+itself is the disclosure: `danishGroupExpandBtn_<id>` is now a text-only
+`.danish-group-disclosure` button wrapping the label, with
+`aria-expanded` / `aria-controls` and the same click behaviour, so the row
+reads as plain text (Patrimoniu · Hărți istorice · Ortophoto) and stays
+keyboard-operable. `css/styles.css` gives it the pointer + hover lift
+instead of the removed glyph.
+
+## Row photo
+
+Every row of the **Historical maps** section carries a photo of one of its
+own sheets as its background, exactly like the Romanian historical
+sublayers (`js/layer-panel-rows.js`):
+
+- `js/danish-layers.js` (`buildRow`) tags those rows
+  `data-preview-layer="danish.<id>"` — the `historical` `panelGroup` only,
+  so the Heritage and Ortophoto sections stay plain glass;
+- the URL is built from the shared catalogue entry, never from a copy:
+  `…/api/geo/dk-dtk25` (or `?layer=<id>`) + a small WMS `GetMap`
+  (168 × 96, `EPSG:3857`, the layer's own `LAYERS` value, a 9 km window
+  whose aspect ratio matches the image), through the same server-side proxy
+  the layer itself uses;
+- `js/layer-panel-rows.js` gives each sheet an anchor town inside its own
+  coverage — the country bbox centre is open water in the Kattegat — and
+  paints `--row-preview` only once the tile really loaded. A missing
+  credential / dead service leaves the plain glass row behind and is never
+  retried.
 
 ## Removed
 
@@ -65,7 +94,8 @@ bordered `danish<Group>SubLayers` column.
 ## Verification
 
 ```sh
-node test-danish-layers.js            # row shape, groups, removal, proxy, registry
+node test-danish-layers.js            # row shape, groups (icon-free headers), removal, proxy, registry
+node test-layer-panel-rows.js         # the Danish historical rows resolve their own tile photo
 node test-danish-wms-layers.js        # proxy allow-lists unchanged (14 token / 11 basic)
 node test-denmark-dataforsyningen-dhm.js
 node tools/sync-danish-config.mjs --check
@@ -74,7 +104,8 @@ node tools/sync-danish-config.mjs --check
 `test-danish-layers.js` asserts for every rendered layer: checkbox (never
 radio) inside an `.apm-toggle-switch` with the track as its next sibling,
 a `.transp-slider`, a `.pct` badge, the glass row classes, a working
-switch/slider round-trip for DTK25, section master/chevron behaviour, and
-that the removed rows/dropdown do not come back. As before, live provider
+switch/slider round-trip for DTK25, the icon-free section header (title
+disclosure + master switch, no glyph), which rows opt into the tile photo,
+and that the removed rows/dropdown do not come back. As before, live provider
 tiles still need the server-side credentials (see `DENMARK_LAYERS.md`);
 nothing about endpoints, proxies or credentials changed.
