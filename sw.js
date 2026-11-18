@@ -1002,7 +1002,16 @@
 // disclosure), and the Danish Historical maps rows carry their own tile photo
 // like the Romanian historical sublayers — js/danish-layers.js,
 // js/layer-panel-rows.js and css/styles.css are re-tagged.
-const CACHE_NAME = 'detectlab-v405-danish-rows';
+// v406: the free Josephine sheets cover only Transylvania. The place database
+//   geocodes by name, so a homonym outside the region used to join a sheet and
+//   stretch its coverage over the wrong ground: the pg017 sheet (Chieșd,
+//   Șamșud, Coseiu … — all Sălaj) also listed „Bocsa” geocoded to Bocșa in
+//   Caraș-Severin and its disc reached the Banat. js/other-maps.js now indexes
+//   only localities inside the Transylvania window and collapses each sheet
+//   onto its dominant compact cluster; iosfree_db.json carries the corrected
+//   Bocșa (Sălaj) coordinate. Re-tags js/other-maps.js, iosfree_db.json and
+//   CACHE_NAME. See OTHER_MAPS.md.
+const CACHE_NAME = 'detectlab-v406-josephine-transylvania';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1207,11 +1216,11 @@ const PRECACHE_URLS = [
   'js/other-maps-tiles.js?v=20261031-other-maps-tile-span',
   'js/other-maps-nls.js?v=20261031-other-maps-tile-span',
   'js/other-maps-overlay.js?v=20261031-other-maps-tile-span',
-  'js/other-maps.js?v=20261031-other-maps-white-outline',
+  'js/other-maps.js?v=20261115-josephine-transylvania',
   'css/other-maps.css?v=20261028-other-maps-fix',
   'data/other-maps-catalog.json?v=20261026-cluj-alba',
   'data/other-maps-nls-catalog.json?v=20261028-other-maps-fix',
-  'iosfree_db.json?v=20261029-other-maps',
+  'iosfree_db.json?v=20261115-josephine-transylvania',
   'js/translations.js?v=20261023-other-maps',
   'js/map3d-mirror.js?v=20261017-archeo-3d-projection',
   'js/map3d-mirror.js?v=20261029-romania-5m',

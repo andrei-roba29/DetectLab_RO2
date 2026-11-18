@@ -30,12 +30,28 @@ prioritate, dar lista include și foile Iosefine. Discurile respectă opacitatea
 stratului și scala geografică la zoom.
 
 Catalogul nu conține poligoane ale localităților sau limite georeferențiate ale
-foilor, deci acestea sunt **estimări**, nu contururi exacte. Localitățile aceleiași
-foi sunt grupate în zone compacte (cel mult 25 km între oricare două puncte),
-iar fiecare disc acoperă centrele grupului cu o marjă de 1 km (minimum 1,2 km
-raza). Astfel, omonimele geocodate departe nu produc un disc pe jumătate de
-țară. Mai multe discuri pot duce la aceeași foaie, fără a o duplica în catalog.
-Calitatea pozițiilor depinde de `iosfree_db.json`.
+foilor, deci acestea sunt **estimări**, nu contururi exacte. Sondaajul iosefin
+(1769–1773) acoperă însă **numai Transilvania**, iar `iosfree_db.json` geocodă
+după NUME, așa că două garduri țin fiecare foaie în regiune
+(`buildJosephineRecords` din `js/other-maps.js`):
+
+1. localitățile în afara ferestrei Transilvania (`JOSEPHINE_TRANSYLVANIA`:
+   lat 45.2059–48.05, lng 22.2319–26.7037 — laturile sud/est/vest sînt
+   amprenta foii „Transilvania 1859” din `layer-registry.js`, nordul împins
+   la 48.05 ca să rămînă vîrful Harghitei, Bixad la 47,95°N) nu sînt indexate
+   deloc;
+2. ce rămâne se strînge pe clusterul dominant al foii: un grup suplimentar aflat
+   la peste 45 km de cluster (`JOSEPHINE_SPREAD_LIMIT_M`) este o greșeală de
+   geocodare, nu teren arătat de scanare.
+
+Apoi localitățile aceleiași foi se împart în zone compacte (cel mult 25 km între
+oricare două puncte) și fiecare disc acoperă centrele grupului cu o marjă de 1 km
+(minimum 1,2 km raza). Astfel foaia pg017 (Chieșd, Șamșud, Coseiu … — toate în
+Sălaj) nu mai ajunge pînă la Bocșa din Caraș-Severin — coordonata „Bocsa” din
+`iosfree_db.json` a fost corectată la Bocșa, Sălaj (47.306366, 22.899294) —, iar
+omonimele geocodate departe nu produc un disc pe jumătate de țară. Mai multe
+discuri pot duce la aceeași foaie, fără a o duplica în catalog. Calitatea
+pozițiilor rămîne legată de `iosfree_db.json`.
 
 ## 1. De ce e nevoie de un modul separat
 
@@ -285,7 +301,7 @@ Alinierea supraviețuiește reîncărcării paginii și repornirii stratului. C�
 | `tools/build-nls-catalog.mjs` | construiește catalogul NLS din WFS (live sau `--json-dir` offline); `--self-test` |
 | `test-other-maps.js` | regresia (rulează fără rețea) |
 | `index.html` | rîndul din panoul „Hărți istorice” + tagurile de asset |
-| `sw.js` | cache `detectlab-v338-other-maps-tile-span` |
+| `sw.js` | cache `detectlab-v406-josephine-transylvania` |
 
 ## 7. Cum extinzi catalogul
 
@@ -419,9 +435,11 @@ pătrată, NLS și Josephine raportează span-uri),
 pictarea la încadrare (512 × 384, nu un pătrat de 512), rîndul de jos al nivelului
 următor (256 px) și stand-in-ul (1024,6 × 768,6 după 2^Δ).
 
-Versiunea: `js/other-maps-tiles.js`, `js/other-maps-nls.js`,
-`js/other-maps-overlay.js` și `js/other-maps.js` sînt versionate
-`20261031-other-maps-tile-span`, cache `detectlab-v338-other-maps-tile-span`.
+Versiunea: `js/other-maps-tiles.js`, `js/other-maps-nls.js` și
+`js/other-maps-overlay.js` sînt versionate `20261031-other-maps-tile-span`,
+iar `js/other-maps.js` (gardurile Iosefine pentru Transilvania) și
+`iosfree_db.json` sînt versionate `20261115-josephine-transylvania`,
+cache `detectlab-v406-josephine-transylvania`.
 
 ## 8. Regresie
 
@@ -485,12 +503,21 @@ peste 3 100 de verificări, fără rețea:
 * **catalogul NLS comis**: fiecare record are id `nls/<număr>`, cale IIIF
   `<prefix>/<număr>`, coordonate în cutia de acoperire și id unic, iar
   `combineCatalogMaps` etichetează corect cele două surse și îmbinarea live
-  (`mergeLiveRecords`/`rebuildRecords`) crește indexul comun fără dubluri.
+  (`mergeLiveRecords`/`rebuildRecords`) crește indexul comun fără dubluri;
+* **foile Iosefine numai în Transilvania**: `buildJosephineRecords` indexează
+  doar localitățile din fereastra `JOSEPHINE_TRANSYLVANIA` și le strânge pe
+  clusterul dominant al foii (≤45 km, `JOSEPHINE_SPREAD_LIMIT_M`); testul
+  verifică pe baza reală că nicio localitate nu iese din fereastră, că foaia
+  pg017 păstrează Bocșa (Sălaj) și Chieșd fără Bocșa din Caraș-Severin, că
+  omoloagele greșite (Orșova, Bicaz, Gherman, Păltiniș …) lipsesc, iar pe
+  datele false un homonym în afara ferestrei și unul departe înăuntru nu primesc
+  niciun disc de acoperire.
 
-`js/other-maps.js`, `js/other-maps-tiles.js`, `js/other-maps-nls.js` și
-`js/other-maps-overlay.js` sînt versionate `20261031-other-maps-tile-span` (vezi
-§8.2), iar `css/other-maps.css` rămîne la `20261028-other-maps-fix`; catalogul
+`js/other-maps-tiles.js`, `js/other-maps-nls.js` și `js/other-maps-overlay.js`
+sînt versionate `20261031-other-maps-tile-span` (vezi §8.2), iar
+`js/other-maps.js` — împreună cu `iosfree_db.json` — `20261115-josephine-transylvania`;
+`css/other-maps.css` rămîne la `20261028-other-maps-fix`; catalogul
 Hungaricana
 (`data/other-maps-catalog.json`) rămîne la `20261026-cluj-alba`, iar catalogul NLS
 (`data/other-maps-nls-catalog.json`) e la `20261028-other-maps-fix`; cache-ul
-service-worker-ului e `detectlab-v338-other-maps-tile-span`.
+service-worker-ului e `detectlab-v406-josephine-transylvania`.

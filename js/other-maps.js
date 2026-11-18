@@ -133,7 +133,7 @@
      * viewport while the layer is on. */
     var CATALOG_URL = 'data/other-maps-catalog.json?v=20261026-cluj-alba';
     var NLS_CATALOG_URL = 'data/other-maps-nls-catalog.json?v=20261028-other-maps-fix';
-    var JOSEPHINE_CATALOG_URL = 'iosfree_db.json?v=20261029-other-maps';
+    var JOSEPHINE_CATALOG_URL = 'iosfree_db.json?v=20261115-josephine-transylvania';
     var NLS_LIVE_MIN_ZOOM = 9;          // city scale: below this a finder query would return too many sheets
     var NLS_LIVE_DEBOUNCE_MS = 700;     // one finder query per settled view
     var NLS_LIVE_MAX_KEYS = 20;         // remembered viewport cells, so panning back does not refetch
@@ -360,9 +360,91 @@
         return 'Hungaricana · Maps';
     }
 
-    /* Collapse the free Josephine place database by scanned sheet. Preserve
-     * every listed locality; buildJosephineFootprints uses them to estimate
-     * compact coverage discs rather than drawing this record centroid. */
+    /* The free Josephine sheets map the 1769–1773 survey of TRANSYLVANIA,
+     * but iosfree_db.json geocodes by NAME, so a homonym outside the region
+     * used to join a sheet and stretch its coverage over the wrong ground:
+     * the pg017 sheet (Chieșd, Șamșud, Coseiu … — all Sălaj) also listed
+     * „Bocsa” geocoded to Bocșa in Caraș-Severin, and its disc reached the
+     * Banat. Two guards keep every sheet over Transylvania only:
+     *   1. localities outside the Transylvania window are not indexed;
+     *   2. what survives is collapsed onto the sheet's dominant compact
+     *      cluster — a further group more than JOSEPHINE_SPREAD_LIMIT_M
+     *      away is a geocoding accident, not ground the scan shows.
+     * A sheet left without a single locality is dropped from the catalogue.
+     * The window south/west/east edges match the Transylvania 1859 sheet
+     * footprint in layer-registry.js; the north edge is pushed to 48.05 to
+     * keep the Harghita tip (Bixad sits at 47.95°N). */
+    var JOSEPHINE_TRANSYLVANIA = { south: 45.2059, west: 22.2319, north: 48.05, east: 26.7037 };
+    /* A Josephine sheet covers roughly 30–35 km of ground: in the database
+     * the closest genuine secondary group sits ~44 km from its sheet's
+     * cluster, while the nearest mis-geocoded name starts at ~46 km. */
+    var JOSEPHINE_SPREAD_LIMIT_M = 45000;
+
+    function josephineInRegion(point) {
+        return point.lat >= JOSEPHINE_TRANSYLVANIA.south && point.lat <= JOSEPHINE_TRANSYLVANIA.north &&
+            point.lng >= JOSEPHINE_TRANSYLVANIA.west && point.lng <= JOSEPHINE_TRANSYLVANIA.east;
+    }
+
+    /* The database contains place centres, not georeferenced sheet outlines.
+     * Some names were geocoded to distant homonyms. Do not join those across
+     * hundreds of kilometres into one misleading disc: split each sheet into
+     * geographically compact groups — a place joins a group only when it lies
+     * within 25 km of EVERY member, so a chain of neighbouring villages stays
+     * together while a far-away name can never attach. Shared by the record
+     * builder (dominant cluster) and buildJosephineFootprints (one disc per
+     * group). */
+    function distanceMeters(a, b) {
+        var dLat = (b.lat - a.lat) * Math.PI / 180;
+        var dLng = (b.lng - a.lng) * Math.PI / 180;
+        var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) *
+            Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        return 12742000 * Math.asin(Math.sqrt(Math.min(1, h)));
+    }
+
+    function groupJosephinePlaces(points) {
+        var groups = [];
+        (points || []).forEach(function (place) {
+            var group = null;
+            for (var i = 0; i < groups.length; i++) {
+                if (groups[i].every(function (p) { return distanceMeters(p, place) <= 25000; })) {
+                    group = groups[i]; break;
+                }
+            }
+            if (!group) { group = []; groups.push(group); }
+            group.push(place);
+        });
+        return groups;
+    }
+
+    /* The sheet's own ground: the dominant (largest) group plus any group
+     * sitting close enough to plausibly belong to the same scan; every other
+     * group is a mis-geocoded name. Original order is preserved. */
+    function keepSheetLocalities(points) {
+        if (!points || points.length < 2) return points || [];
+        var groups = groupJosephinePlaces(points);
+        if (groups.length === 1) return points;
+        var dominant = groups[0];
+        groups.forEach(function (group) { if (group.length > dominant.length) dominant = group; });
+        var spread = [];
+        groups.forEach(function (group) {
+            if (group === dominant) return;
+            var nearest = Infinity;
+            group.forEach(function (a) {
+                dominant.forEach(function (b) { nearest = Math.min(nearest, distanceMeters(a, b)); });
+            });
+            if (nearest <= JOSEPHINE_SPREAD_LIMIT_M) spread = spread.concat(group);
+        });
+        return points.filter(function (p) {
+            return dominant.indexOf(p) >= 0 || spread.indexOf(p) >= 0;
+        });
+    }
+
+    /* Collapse the free Josephine place database by scanned sheet, keeping
+     * only the localities that belong on the sheet (Transylvania window +
+     * dominant cluster — see the guards above). buildJosephineFootprints
+     * uses them to estimate compact coverage discs rather than drawing this
+     * record centroid. */
     function buildJosephineRecords(db) {
         var byImage = Object.create(null);
         Object.keys(db || {}).forEach(function (key) {
@@ -371,13 +453,17 @@
             var lat = Number(place.c.lat);
             var lng = Number(place.c.lng);
             if (!isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return;
+            if (!josephineInRegion({ lat: lat, lng: lng })) return;   // guard 1 — Transylvania only
             var match = place.l.match(/File:([^/?#]+)/i);
             var file = match ? decodeURIComponent(match[1]).replace(/_/g, ' ') : place.l;
             var bucket = byImage[file] || (byImage[file] = { file: file, places: [], first: place });
             bucket.places.push({ name: place.d || key, lat: lat, lng: lng });
         });
-        return Object.keys(byImage).map(function (file) {
-            var group = byImage[file], points = group.places;
+        var records = [];
+        Object.keys(byImage).forEach(function (file) {
+            var group = byImage[file];
+            var points = keepSheetLocalities(group.places);            // guard 2 — dominant cluster
+            if (!points.length) return;
             var lat = points.reduce(function (sum, p) { return sum + p.lat; }, 0) / points.length;
             var lng = points.reduce(function (sum, p) { return sum + p.lng; }, 0) / points.length;
             var radius = points.reduce(function (max, p) {
@@ -394,7 +480,7 @@
                 return b;
             }, { south: 90, north: -90, west: 180, east: -180 });
             var first = group.first;
-            return {
+            records.push({
                 id: 'josephine:' + encodeURIComponent(file), source: 'josephine',
                 path: 'josephine:' + file, title: 'Josephine Map — ' + file.replace(/_/g, ' '),
                 subject: points.map(function (p) { return p.name; }).join(', '),
@@ -404,38 +490,16 @@
                 josephineBounds: [[bounds.south, bounds.west], [bounds.north, bounds.east]],
                 year: '1769–1773', provider: 'Österreichisches Staatsarchiv / Wikimedia Commons',
                 precision: 'sheet'
-            };
+            });
         });
-    }
-
-    // The database contains place centres, not georeferenced sheet outlines.
-    // Some names were geocoded to distant homonyms. Do not join those across
-    // hundreds of kilometres into one misleading disc: split each sheet into
-    // geographically compact groups, retaining the same selectable sheet ID.
-    function distanceMeters(a, b) {
-        var dLat = (b.lat - a.lat) * Math.PI / 180;
-        var dLng = (b.lng - a.lng) * Math.PI / 180;
-        var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) *
-            Math.sin(dLng / 2) * Math.sin(dLng / 2);
-        return 12742000 * Math.asin(Math.sqrt(Math.min(1, h)));
+        return records;
     }
 
     function buildJosephineFootprints(records) {
         var footprints = [];
         (records || []).forEach(function (record) {
             if (record.source !== 'josephine' || !record.josephinePlaces) return;
-            var groups = [];
-            record.josephinePlaces.forEach(function (place) {
-                var group = null;
-                for (var i = 0; i < groups.length; i++) {
-                    if (groups[i].every(function (p) { return distanceMeters(p, place) <= 25000; })) {
-                        group = groups[i]; break;
-                    }
-                }
-                if (!group) { group = []; groups.push(group); }
-                group.push(place);
-            });
+            var groups = groupJosephinePlaces(record.josephinePlaces);
             groups.forEach(function (places) {
                 var lat = places.reduce(function (sum, p) { return sum + p.lat; }, 0) / places.length;
                 var lng = places.reduce(function (sum, p) { return sum + p.lng; }, 0) / places.length;
@@ -1585,6 +1649,8 @@
         combineCatalogMaps: combineCatalogMaps,
         buildJosephineRecords: buildJosephineRecords,
         buildJosephineFootprints: buildJosephineFootprints,
+        josephineRegion: JOSEPHINE_TRANSYLVANIA,
+        josephineSpreadLimitM: JOSEPHINE_SPREAD_LIMIT_M,
         sourceLabel: sourceLabel,
         mergeLiveRecords: mergeLiveRecords,
         rebuildRecords: rebuildRecords,
