@@ -10141,7 +10141,8 @@
 
                     // Harta Iosefină (iosfree overlay) — respectă sub-toggle
                     var iosToggle = document.getElementById('iosfreeToggle');
-                    var iosOn = !iosToggle || iosToggle.checked;
+                    var otherMapsToggle = document.getElementById('otherMapsToggle');
+                    var iosOn = iosToggle ? iosToggle.checked : (otherMapsToggle ? otherMapsToggle.checked : false);
                     if (!on && _currentOverlay) {
                         if (map.hasLayer(_currentOverlay)) {
                             map.removeLayer(_currentOverlay);
@@ -17007,6 +17008,11 @@
                 window._iosFreeActivateSearch = function (localityName, lat, lng) {
                     var toggle = document.getElementById('iosfreeToggle');
                     if (toggle && !toggle.checked) return; // layer is off — don't fetch or display anything
+                    if (!toggle) {
+                        var histToggle = document.getElementById('histToggle');
+                        var otherMapsToggle = document.getElementById('otherMapsToggle');
+                        if (!histToggle || !histToggle.checked || !otherMapsToggle || !otherMapsToggle.checked) return;
+                    }
                     _currentLocality = null;
                     lookupLocality(localityName, lat, lng);
                 };
