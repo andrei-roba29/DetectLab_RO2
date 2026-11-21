@@ -377,18 +377,23 @@
             }
             var twist = wrapDeg(pair.angle - g.startAngle);
             if (!g.engaged) {
-                var spread = (pair.distance - g.startDistance) / g.startDistance;
-                if (Math.abs(spread) > TOUCH_PINCH_SLOP) {
-                    // The fingers are moving apart/together: a two-finger zoom,
-                    // not a request to turn. Google Earth keeps a pinch purely
-                    // radial and so must we.
-                    g.pinching = true;
+                // Engagement is checked BEFORE the pinch gate: a deliberate
+                // twist with a little spread drift must never be swallowed by
+                // the zoom rule — it must turn the map.
+                if (Math.abs(twist) >= this._angleThreshold(pair.distance)) {
+                    g.engaged = true;
+                    g.engagedDistance = pair.distance;
+                    g.offset = twist; // the turn starts from 0° — no jump at engage
+                } else {
+                    var spread = (pair.distance - g.startDistance) / g.startDistance;
+                    if (Math.abs(spread) > TOUCH_PINCH_SLOP) {
+                        // The fingers are moving apart/together: a two-finger zoom,
+                        // not a request to turn. Google Earth keeps a pinch purely
+                        // radial and so must we.
+                        g.pinching = true;
+                    }
                     return;
                 }
-                if (Math.abs(twist) < this._angleThreshold(pair.distance)) return;
-                g.engaged = true;
-                g.engagedDistance = pair.distance;
-                g.offset = twist; // the turn starts from 0° — no jump at engage
             } else {
                 var engagedSpread = (pair.distance - g.engagedDistance) / g.engagedDistance;
                 if (Math.abs(engagedSpread) > TOUCH_PINCH_ABORT) {
@@ -428,22 +433,28 @@
             e.preventDefault();
             if (this._gesturePinch) return;
             var scale = (typeof e.scale === 'number' && e.scale) || this._gestureScale;
-            if (Math.abs(scale / this._gestureScale - 1) > TOUCH_PINCH_SLOP) {
-                // The spread is changing: a zoom. Its rotation delta is finger
-                // noise, not a request to turn the map.
-                this._gesturePinch = true;
-                if (this._gestureEngaged) {
-                    this._gestureEngaged = false;
-                    this._map.fire('moveend');
-                }
-                return;
-            }
             var rot = e.rotation;
             if (!this._gestureEngaged) {
-                if (Math.abs(rot) < TOUCH_GESTURE_MIN_ANGLE) return;
+                // Engagement is checked BEFORE the pinch gate — same rule as
+                // the touch path: a deliberate turn must never be swallowed by
+                // a few percent of natural scale drift.
+                if (Math.abs(rot) < TOUCH_GESTURE_MIN_ANGLE) {
+                    if (Math.abs(scale / this._gestureScale - 1) > TOUCH_PINCH_SLOP) {
+                        // The scale is changing and the rotation is light: a
+                        // zoom. Its rotation delta is finger noise, not a turn.
+                        this._gesturePinch = true;
+                    }
+                    return;
+                }
                 this._gestureEngaged = true;
                 this._gestureRotation = rot;      // the turn starts from 0°
                 this._gestureBearing = this._map.getBearing();
+            } else if (Math.abs(scale / this._gestureScale - 1) > TOUCH_PINCH_ABORT) {
+                // An engaged twist that turns into a pinch stops dead.
+                this._gesturePinch = true;
+                this._gestureEngaged = false;
+                this._map.fire('moveend');
+                return;
             }
             this._map.setBearing(this._gestureBearing + (rot - this._gestureRotation), { noMove: true });
         },

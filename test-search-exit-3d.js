@@ -159,7 +159,7 @@ for (const coordinateItem of [null, { valid: false }]) {
     assert(pending.context.state.open && !pending.events.includes('fly'),
         'pending place lookup and invalid coordinates do not exit 3D');
 }
-const viewerUrl = 'js/map3d-terrain.js?v=20261031-3d-bearing-handoff';
+const viewerUrl = 'js/map3d-terrain.js?v=20261121-3d-touch-twist';
 assert(read('index.html').includes(viewerUrl) && read('sw.js').includes("'" + viewerUrl + "'"),
     'the 3D camera hand-off fix is cache-busted and precached');
 assert(Number(read('sw.js').match(/CACHE_NAME = 'detectlab-v(\d+)-/)[1]) >= 245);

@@ -74,6 +74,37 @@ clamped to `CONFIG.camera.maxPitch` (80°). This is also why Leaflet's own
 rotation control is irrelevant in 3D — 3D reads Leaflet's bearing when it
 opens and writes it back on close, but the camera itself is MapLibre's.
 
+## What changed in 2026-11-21 — the 3D two-finger twist
+
+Header-only addendum (the full story lives in `js/map3d-terrain.js` → the
+GESTURE CAMERA section and in `test-map3d-touch-twist.js`):
+
+* **MapLibre's built-in two-finger rotate is off.** Its deadband is a fixed
+  25 px measured on the circumference of the *smallest* finger spacing seen
+  so far in the gesture — rotation needed ~25° of twist before the map
+  turned at all. `openNow()` now calls
+  `map.touchZoomRotate.disableRotation()`, leaving the pinch and the
+  two-finger drag (zoom/pitch) with MapLibre, and installing
+  `installTouchTwist()` from the viewer instead.
+* **Rotation pivots around the map's centre.** MapLibre's rotate handler
+  re-centred the view on the midpoint of the fingers on every frame, which
+  made turning the map jump it to different locations. The twist never pans:
+  it calls `map.setBearing()` and nothing else (it has no pan API), so a
+  twist turns the centre in place — exactly the 2D map's behaviour with the
+  compass rose.
+* **Same Google-Earth model as the 2D map**: a 34 px tangential-travel
+  deadband (clamped to 8°–45°), 64 px minimum finger spacing, 6 % pinch-slop
+  before any twist engages, 18 % spread that cancels an engaged twist, and a
+  12° degree deadband for iOS Safari gesture events. Engagement is checked
+  BEFORE the pinch gate, so a deliberate twist is never swallowed by the few
+  percent of natural spread drift it carries.
+* **`touchZoomRotate: true` stays** in the map options — the pinch and tap-drag
+  stay MapLibre's own; only the rotate half is disabled.
+* Re-tagged as `js/map3d-terrain.js?v=20261121-3d-touch-twist` (CACHE_NAME
+  `detectlab-v407-3d-touch-twist`).
+* Mouse drag-rotate (`dragRotate`, `aroundCenter: true`) is unchanged;
+  keyboard `Shift`+arrows is unchanged.
+
 ## What deliberately did **not** change
 
 * The **2D map** and its controls — nothing here touches Leaflet.
@@ -89,6 +120,7 @@ opens and writes it back on close, but the camera itself is MapLibre's.
 node test-map3d-slider-layout.js   # bar geometry, no sliders (node assertions),
                                    # gesture handlers + PWA rows/cache wiring
 node test-map3d-terrain.js         # 3D wiring, style, proxy, mirror, fixed exaggeration
+node test-map3d-touch-twist.js   # the 3D two-finger twist: pinch vs twist, centre-only rotation
 node test-map3d-mobile.js          # phone/PWA budget and cache wiring
 node test-lidar-3d-focus.js        # the LiDAR entry gate still installs
 node test-map-control-spacing.js   # controls and cache-tag wiring

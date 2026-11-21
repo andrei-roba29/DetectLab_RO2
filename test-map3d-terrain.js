@@ -80,7 +80,7 @@ const skin = read('css/map3d-terrain.css');
 
 const TAG = '20261019-tile-order';              /* MapLibre itself (coveringTiles patch) */
 const TAG_3D = '20261030-lidar-photo-3d';       /* mirror (canvas tiles)          */
-const TAG_VIEWER = '20261102-lidar-gray-backing'; /* viewer (js)                     */
+const TAG_VIEWER = '20261121-3d-touch-twist'; /* viewer (js)                     */
 const TAG_CSS = '20261102-report-lidar-window';      /* viewer skin (css)              */
 const TAG_FOCUS = '20261102-lidar-disc-zoom-anchor'; /* LiDAR focus (3D, one disc)   */
 const TAG_REGISTRY = '20261030-walachia';       /* shared registry (historical maps) */

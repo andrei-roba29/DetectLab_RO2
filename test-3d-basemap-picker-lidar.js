@@ -57,10 +57,10 @@ const viewerSource = read('js/map3d-terrain.js');
 const focusSource = read('js/lidar-3d-focus.js');
 
 /* Every build that changes the LiDAR 3D focus path bumps its own tag. */
-const TAG = '20261031-lidar-dock-minimized';
+const TAG = '20261102-lidar-disc-zoom-anchor';
 const TAG_MIRROR = '20261030-lidar-photo-3d';
-const TAG_VIEWER = '20261031-3d-bearing-handoff';
-const TAG_CSS = '20261031-lidar-dock-minimized';
+const TAG_VIEWER = '20261121-3d-touch-twist';
+const TAG_CSS = '20261102-report-lidar-window';
 
 /* One real event-loop turn: the viewer runs its entry gate through a promise,
  * so the dialog is not in the DOM in the same tick as open(). */
@@ -338,7 +338,7 @@ const fakeCanvas = function () {
     assert(focusTag > viewerTag, 'the focus module loads after the viewer it installs its gate on');
     assert(indexHtml.includes('css/map3d-terrain.css?v=' + TAG_CSS), 'index.html loads the tagged 3D skin');
 
-    assert(/#map3d-focus \{[\s\S]*?z-index: 1400/.test(skin),
+    assert(/#map3d-focus[,\s][\s\S]*?z-index: 1400/.test(skin),
         'the dialog sits above the layer panel and the search bar (it decides what 3D may load)');
     ['#map3d-focus .m3d-focus-card', '#map3d-focus .m3d-focus-layers', '#map3d-focus .m3d-focus-radius',
      '#map3d-focus .m3d-focus-chips', '#map3d-focus .m3d-focus-fixed',
@@ -349,7 +349,7 @@ const fakeCanvas = function () {
     });
     assert(!/\.m3d-lidar\b/.test(skin) && !/\.m3d-lidar\b/.test(viewerSource),
         'the duplicate LiDAR row in #map3d-bar is removed on both desktop and PWA (the expandable #map3d-focus window owns LiDAR in 3D)');
-    const cardRule = (skin.match(/#map3d-focus \.m3d-focus-card \{[^}]*\}/) || [''])[0];
+    const cardRule = (skin.match(/#map3d-focus \.m3d-focus-card[\s\S]*?\{[^}]*\}/) || [''])[0];
     assert(/width: min\(400px, calc\(100% - 16px\)\)/.test(cardRule) &&
            /max-height: min\(76vh, 620px\)/.test(cardRule) && /overflow-y: auto/.test(cardRule),
         'the dialog card is narrower and height-capped while keeping its contents scrollable');
@@ -909,6 +909,7 @@ function runViewerSuite() {
         localStorage: { getItem: function () { return null; }, setItem: function () {}, removeItem: function () {} },
         matchMedia: function () { return { matches: false }; },
         navigator: { maxTouchPoints: 0, onLine: true },
+        _dlIsPremium: function () { return true; },
         console: quiet
     };
     windowStub.window = windowStub;
@@ -1363,10 +1364,14 @@ function runViewerSuite() {
             {
                 const baseSelect = doc.body.querySelector('#map3d-basemap');
                 assert(baseSelect, 'the 3D bar’s basemap select exists');
-                assert(fakeLayers['m3d-2d-2d.SAT'],
-                    'the deck is drawn on the mirrored Imagery base (m3d-2d-2d.SAT present)');
-                assert(!fakeLayers['base.imagery'],
-                    'and no registry fallback base is stacked in while a mirrored base exists');
+                /* The desktop deck draws the picker’s registry base — the
+                 * mirrored 2D satellite layer is filtered out on purpose
+                 * (the picker owns the base, the 2D layer only decides what
+                 * 3D may load on a mobile device). */
+                assert(fakeLayers['base.imagery'],
+                    'the deck is drawn on the registry Imagery base (base.imagery present)');
+                assert(!fakeLayers['m3d-2d-2d.SAT'],
+                    'and no mirrored satellite layer is stacked on top of it');
                 assert(baseSelect.value === 'imagery',
                     'the select reads Imagery while the deck shows it (' + baseSelect.value + ')');
 
@@ -1382,11 +1387,11 @@ function runViewerSuite() {
                     'the select kept the choice, not reverted (' + baseSelect.value + ')');
                 assert(!map.hasLayer(satelliteLayer), 'Imagery left the 2D map');
                 assert(map.hasLayer(topographicLayer), 'Topographic joined the 2D map');
-                assert(fakeLayers['m3d-2d-2d.TOPO'],
-                    'the 3D deck swapped in the Topographic base (m3d-2d-2d.TOPO)');
-                assert(!fakeLayers['m3d-2d-2d.SAT'],
+                assert(fakeLayers['base.topographic'],
+                    'the 3D deck swapped in the Topographic base (base.topographic)');
+                assert(!fakeLayers['base.imagery'],
                     'and the old Imagery base came off the 3D map');
-                assert(fakeOrder.indexOf('m3d-2d-2d.TOPO') < fakeOrder.indexOf('m3d-2d-2d.R1'),
+                assert(fakeOrder.indexOf('base.topographic') < fakeOrder.indexOf('m3d-2d-2d.R1'),
                     'the new base still stacks under the focused LiDAR disc');
 
                 /* Terrain is a two-layer state. */
@@ -1395,9 +1400,9 @@ function runViewerSuite() {
                 await new Promise(function (resolve) { setTimeout(resolve, 400); });
                 assert(arcgisCurrentBasemap === 'terrain',
                     'the setter moved on to Terrain (' + arcgisCurrentBasemap + ')');
-                assert(fakeLayers['m3d-2d-2d.TBASE'] && fakeLayers['m3d-2d-2d.TRELIEF'],
+                assert(fakeLayers['base.terrain-base'] && fakeLayers['base.terrain-relief'],
                     'both Terrain layers are drawn in 3D');
-                assert(!fakeLayers['m3d-2d-2d.TOPO'], 'Topographic left the 3D deck');
+                assert(!fakeLayers['base.topographic'], 'Topographic left the 3D deck');
                 assert(baseSelect.value === 'terrain',
                     'and the select reads Terrain (' + baseSelect.value + ')');
 
@@ -1405,8 +1410,8 @@ function runViewerSuite() {
                 baseSelect.value = 'imagery';
                 baseSelect.dispatch('change');
                 await new Promise(function (resolve) { setTimeout(resolve, 400); });
-                assert(fakeLayers['m3d-2d-2d.SAT'] && !fakeLayers['m3d-2d-2d.TBASE'] &&
-                       !fakeLayers['m3d-2d-2d.TRELIEF'],
+                assert(fakeLayers['base.imagery'] && !fakeLayers['base.terrain-base'] &&
+                       !fakeLayers['base.terrain-relief'],
                     'round trip: Imagery back on the deck, the Terrain pair gone');
                 assert(viewer.getLidarFocus() && viewer.getLidarFocus().key === '2d.R1',
                     'the LiDAR focus survived every basemap swap');

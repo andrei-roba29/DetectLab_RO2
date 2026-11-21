@@ -28,10 +28,14 @@ assert(!/paintLabels/.test(viewer), 'no slider label painting left behind');
 assert(!viewer.includes('sliderToExag') && !viewer.includes('exagToSlider'), 'no slider mapping helpers left behind');
 assert(/dragRotate: true/.test(viewer) && /pitchWithRotate: true/.test(viewer) && /touchPitch: true/.test(viewer),
     'the map is created with the rotation/pitch gestures enabled');
-assert(/map\.touchZoomRotate\.enableRotation\(\)/.test(viewer) &&
+/* Rotation is not MapLibre's built-in two-finger rotate (a pixel-circumference
+ * gate that pivots around the fingers): it is the Google-Earth twist installed
+ * by installTouchTwist(). Pinch zoom and the tap-drag stay MapLibre's own. */
+assert(/map\.touchZoomRotate\.disableRotation\(\)/.test(viewer) &&
+       /installTouchTwist\(map\)/.test(viewer) &&
        /map\.touchPitch\.enable\(\)/.test(viewer) &&
        /map\.dragRotate\.enable\(\)/.test(viewer),
-    'rotation, pitch and drag handlers are enabled explicitly after creation');
+    'rotation is installed as the Google-Earth twist; pitch and drag handlers are enabled explicitly after creation');
 assert(/map\.keyboard\.enable\(\)/.test(viewer), 'keyboard rotation stays available');
 assert(!viewer.includes('new maplibre.NavigationControl'), 'no duplicate MapLibre +/-, compass buttons in either layout');
 for (const pwa of [false, true]) {
@@ -93,7 +97,7 @@ for (const action of ['reset', 'north', 'flat']) {
 }
 assert(!/\.m3d-lidar\b/.test(ensureBar) && !/\.m3d-lidar\b/.test(skin),
     'the duplicate .m3d-lidar box in #map3d-bar is removed from both desktop and PWA');
-const SLIDER_TAGS = { 'js/map3d-terrain.js': '20261031-3d-bearing-handoff', 'css/map3d-terrain.css': '20261031-lidar-dock-minimized' };
+const SLIDER_TAGS = { 'js/map3d-terrain.js': '20261121-3d-touch-twist', 'css/map3d-terrain.css': '20261102-report-lidar-window' };
 for (const file of ['js/map3d-terrain.js', 'css/map3d-terrain.css']) {
     const url = file + '?v=' + SLIDER_TAGS[file];
     assert(html.includes(url) && sw.includes("'" + url + "'"), 'updated asset cache wiring: ' + file);
