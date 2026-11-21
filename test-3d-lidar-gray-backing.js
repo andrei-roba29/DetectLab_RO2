@@ -18,8 +18,11 @@ assert(translations.includes("lidar_disable_transparency: 'Disable transparency'
 assert(translations.includes("lidar_disable_transparency: 'Dezactivează transparența'"));
 assert(css.includes('body.is-3d .lidar-gray-backing-option'));
 for (const asset of ['js/map3d-terrain.js', 'js/translations.js', 'css/map3d-terrain.css']) {
-    assert(html.includes(`${asset}?v=${asset.endsWith('.css') ? '20261102-report-lidar-window' : '20261102-lidar-gray-backing'}`));
-    assert(sw.includes(`${asset}?v=${asset.endsWith('.css') ? '20261102-report-lidar-window' : '20261102-lidar-gray-backing'}`));
+    const tag = asset.endsWith('.css') ? '20261102-report-lidar-window'
+        : asset === 'js/map3d-terrain.js' ? '20261121-3d-touch-twist'
+        : '20261102-ro-heritage';
+    assert(html.includes(`${asset}?v=${tag}`));
+    assert(sw.includes(`${asset}?v=${tag}`));
 }
 
 const layers = {}, sources = {}, controls = {};

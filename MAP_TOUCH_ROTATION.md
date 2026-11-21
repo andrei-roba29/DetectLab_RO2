@@ -54,19 +54,26 @@ to the min/max), so:
    fingers are closer than 64 px, the baseline waits until they spread far
    enough to be readable (`_rebase`).
 2. **Classification.** On every `touchmove`:
-   * spread changed by more than 6 % from the baseline → **pinch**. The
-     gesture is locked as a zoom for its whole life; the map never turns.
-   * |twist| < arc threshold → nothing (the deadband).
-   * |twist| ≥ arc threshold → **twist engages**, and the turn starts from
-     exactly 0° at that frame (no jump), tracking the fingers 1:1 afterwards.
+   * |twist| ≥ arc threshold → **twist engages** (checked BEFORE the pinch
+     gate), and the turn starts from exactly 0° at that frame (no jump),
+     tracking the fingers 1:1 afterwards. A deliberate twist can carry a
+     few percent of natural spread drift — engagement must win over the
+     zoom rule, or the turn is swallowed by the very gesture that asks for it.
+   * |twist| < arc threshold → nothing (the deadband); spread changed by
+     more than 6 % from the baseline → **pinch**. The gesture is locked as
+     a zoom for its whole life; the map never turns.
 3. **Cancellation.** An engaged twist stops dead — and stays stopped for the
    rest of the gesture — if the spread then changes by more than 18 %
    (the twist turned into a real pinch) or if the fingers converge below the
-   readable spacing.
+   readable spacing. Spread drift under 18 % never freezes an engaged
+   deliberate twist; only a real pinch does.
 
 iOS Safari's `gesturestart`/`gesturechange`/`gestureend` path (which carries a
 rotation in degrees but no finger spacing) gets the same arbitration with the
-12° degree deadband and the 6 % `scale` pinch gate.
+12° degree deadband and the 6 % `scale` pinch gate — engagement checked
+before the pinch gate, exactly like the touch path: a deliberate twist
+(≥ 12°) engages even while the scale drifts a few percent, and an engaged
+twist dies once the scale change passes 18 %.
 
 ### What is untouched
 

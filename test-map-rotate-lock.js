@@ -635,6 +635,36 @@ assert(Math.abs(map.getBearing() - 16) < 0.5,
 fireMapEvent('gestureend', {});
 console.log('  ✔ iOS gesture rotation obeys the same rules');
 
+// 6.7 — a deliberate twist survives natural finger drift in the spread.
+// Engagement is checked before the pinch gate: the spread may drift a few
+// percent while the twist is being reached — it must not swallow the turn.
+// (The "practically impossible to turn" report.)
+map.setBearing(0);
+runTwoFinger([
+    pairAt(400, 300, 0, 150),
+    pairAt(400, 300, 7, 158),    // +5.3 % spread drift, twist 7° — below the ~12.9° deadband
+    pairAt(400, 300, 15, 165),   // twist 15° — engages even with a 10 % spread drift
+    pairAt(400, 300, 30, 160),
+    pairAt(400, 300, 45, 170)    // frame drift stays under the 18 % abort
+]);
+assert(Math.abs(map.getBearing() - 30) < 0.5,
+    'a deliberate twist with spread drift must engage and turn 1:1 from the engage frame (30°), got ' + map.getBearing());
+console.log('  ✔ a deliberate twist engages despite natural spread drift');
+
+// 6.8 — an engaged twist still dies when the spread turns into a real pinch
+// (> 18 % from the engage frame), and never resumes afterwards.
+map.setBearing(0);
+runTwoFinger([
+    pairAt(400, 300, 0, 150),
+    pairAt(400, 300, 15, 150),   // engage at ~13°, starts from 0°
+    pairAt(400, 300, 25, 155),
+    pairAt(400, 300, 32, 185),   // +19.5 % from engage → the twist dies here
+    pairAt(400, 300, 50, 185)    // further twisting stays ignored
+]);
+assert(Math.abs(map.getBearing() - 10) < 0.5,
+    'the turn must freeze the moment the spread turns into a pinch (10°), got ' + map.getBearing());
+console.log('  ✔ an engaged twist still dies on a real pinch');
+
 // -------------------------------------------------------------
 // Test 7: CSS + docs coverage for the new material and behaviour
 // -------------------------------------------------------------

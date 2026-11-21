@@ -4132,6 +4132,238 @@
     }
 
     /* ═══════════════════════════════════════════════════════════════════════
+     *  GESTURE CAMERA — the 3D two-finger twist
+     * -----------------------------------------------------------------------
+     *  MapLibre's built-in two-finger rotate handler is unusable for this
+     *  viewer: it engages only after ~25 px of circumference travel, remembers
+     *  the smallest finger spacing seen so far in the gesture, and pivots
+     *  around the midpoint of the fingers — so a deliberate twist (30°+) is
+     *  needed before the map turns at all, and the camera re-centres on
+     *  every frame to follow the fingers, which made the map jump to
+     *  different locations when it was turned. It has no pinch arbitration
+     *  either, so a pinch can also leak into rotation.
+     *
+     *  The 2D map (js/map-rotate.js) already solves this with the
+     *  Google-Earth model: a ~34 px tangential travel deadband (clamped to
+     *  8°–45°), a pinch gate that never rotates, and a 180° abort that cancels
+     *  an engaged twist the moment it turns into a pinch. The 3D camera now
+     *  uses the same model, but rotation pivots around the map's centre
+     *  (map.setBearing never moves the centre), so turning the view never
+     *  pans it — no teleport. Pinch zoom stays MapLibre's own handler.
+     * ═══════════════════════════════════════════════════════════════════════ */
+    var TWIST_ARC = 34;             /* px of tangential finger travel before a twist counts */
+    var TWIST_ANGLE_MIN = 8;        /* never below this many degrees, however far apart */
+    var TWIST_ANGLE_MAX = 45;       /* …and never above this, however close together */
+    var TWIST_MIN_DISTANCE = 64;    /* px — closer than this, the angle is noise */
+    var TWIST_PINCH_SLOP = 0.06;    /* spread change before any twist engages → it is a pinch */
+    var TWIST_PINCH_ABORT = 0.18;   /* spread change that cancels an already-engaged twist */
+    var TWIST_GESTURE_MIN_ANGLE = 12; /* iOS Safari gesture events: degree deadband */
+
+    function wrapTwistDeg(deg) {
+        deg = deg % 360;
+        if (deg > 180) deg -= 360;
+        if (deg <= -180) deg += 360;
+        return deg;
+    }
+
+    function twistArcThreshold(distance) {
+        var deg = (TWIST_ARC / Math.max(distance, 1)) * (180 / Math.PI);
+        return Math.min(TWIST_ANGLE_MAX, Math.max(TWIST_ANGLE_MIN, deg));
+    }
+
+    /**
+     * Install the two-finger twist handler for a MapLibre map.
+     *
+     * @param {object} map the MapLibre map instance
+     *
+     * The twist is always the view's own camera move, never a pan: the map
+     * is rotated in place (its centre never moves), exactly like the 2D
+     * compass rose and the Leaflet twist. iOS Safari gesture events get the
+     * same model through its own channel (there is no finger spacing there).
+     * Listeners are removed again when the map is removed.
+     */
+    function installTouchTwist(map) {
+        if (!map || typeof map.getCanvasContainer !== 'function') return;
+        var container = map.getCanvasContainer();
+        if (!container || !container.addEventListener) return;
+        var g = null;
+        var usingGesture = false;
+        var dead = false;
+
+        function onRemove() {
+            dead = true;
+            g = null;
+            usingGesture = false;
+            try { if (typeof map.off === 'function') map.off('remove', onRemove); } catch (e) {}
+            container.removeEventListener('touchstart', onStart);
+            document.removeEventListener('touchmove', onMove);
+            document.removeEventListener('touchend', onEnd);
+            document.removeEventListener('touchcancel', onEnd);
+            container.removeEventListener('gesturestart', onGestureStart);
+            container.removeEventListener('gesturechange', onGestureChange);
+            container.removeEventListener('gestureend', onGestureEnd);
+        }
+        try { if (typeof map.on === 'function') map.on('remove', onRemove); } catch (e) {}
+
+        function pairOf(e) {
+            var touches = e && e.touches;
+            if (!touches || touches.length !== 2) return null;
+            var a = touches[0], b = touches[1];
+            var rect = container.getBoundingClientRect();
+            var ax = a.clientX - rect.left, ay = a.clientY - rect.top;
+            var bx = b.clientX - rect.left, by = b.clientY - rect.top;
+            var distance = Math.hypot(bx - ax, by - ay);
+            if (distance < TWIST_MIN_DISTANCE) return null;
+            return { angle: Math.atan2(by - ay, bx - ax) * 180 / Math.PI, distance: distance };
+        }
+
+        function rebase(p) {
+            if (!p || !g || g.engaged || g.pinching) return;
+            g.startAngle = p.angle;
+            g.startDistance = p.distance;
+            g.startBearing = map.getBearing ? map.getBearing() : 0;
+            g.engagedDistance = p.distance;
+            g.pending = false;
+        }
+
+        function fireRotateEnd() {
+            try { map.fire('moveend'); } catch (e) {}
+        }
+
+        function onStart(e) {
+            if (dead || usingGesture) return;
+            if (!e || !e.touches || e.touches.length !== 2) return;
+            g = {
+                pending: true,
+                engaged: false,
+                pinching: false,
+                offset: 0,
+                startAngle: 0,
+                startDistance: 0,
+                startBearing: 0,
+                engagedDistance: 0
+            };
+            rebase(pairOf(e));
+        }
+
+        function onMove(e) {
+            if (dead || usingGesture || !g) return;
+            if (!e || !e.touches || e.touches.length !== 2) return;
+            var p = pairOf(e);
+            if (!p) {
+                // Fingers converged below a readable spacing mid-twist: the
+                // angle is noise now — stop turning and lock the gesture out.
+                if (g.engaged) {
+                    g.pinching = true;
+                    g.engaged = false;
+                    fireRotateEnd();
+                }
+                return;
+            }
+            if (g.pinching) return;
+            if (g.pending) {
+                rebase(p);
+                if (g.pending) return;
+            }
+            var twist = wrapTwistDeg(p.angle - g.startAngle);
+            if (!g.engaged) {
+                if (Math.abs(twist) < twistArcThreshold(p.distance)) {
+                    // Below the arc: a real spread change is a pinch, not a turn.
+                    var spread = (p.distance - g.startDistance) / g.startDistance;
+                    if (Math.abs(spread) > TWIST_PINCH_SLOP) g.pinching = true;
+                    return;
+                }
+                // Engagement is checked BEFORE the pinch gate: a deliberate
+                // twist with a little spread drift must not be swallowed by
+                // the zoom rule — it must turn the map.
+                g.engaged = true;
+                g.engagedDistance = p.distance;
+                g.offset = twist;   // the turn starts from 0° — no jump at engage
+            } else {
+                // An engaged twist that turns into a pinch stops dead.
+                var engagedSpread = (p.distance - g.engagedDistance) / g.engagedDistance;
+                if (Math.abs(engagedSpread) > TWIST_PINCH_ABORT) {
+                    g.pinching = true;
+                    g.engaged = false;
+                    fireRotateEnd();
+                    return;
+                }
+            }
+            map.setBearing(g.startBearing + (twist - g.offset));
+            if (e.preventDefault) e.preventDefault();
+        }
+
+        function onEnd() {
+            if (dead || usingGesture || !g) return;
+            if (g.engaged) fireRotateEnd();
+            g = null;
+        }
+
+        /* iOS Safari: `gesturestart`/`gesturechange`/`gestureend` carry rotation
+         * in degrees but no finger spacing, so they get the same model through
+         * a degree deadband and a scale gate instead of the arc test. */
+        function onGestureStart(e) {
+            if (dead || usingGesture) return;
+            usingGesture = true;
+            g = {
+                pinching: false,
+                engaged: false,
+                rotation: 0,
+                bearing: map.getBearing ? map.getBearing() : 0,
+                scale: (e && typeof e.scale === 'number' && e.scale) || 1
+            };
+            if (e && e.preventDefault) e.preventDefault();
+        }
+
+        function onGestureChange(e) {
+            if (dead || !usingGesture || !g) return;
+            if (!e || typeof e.rotation !== 'number') return;
+            if (e.preventDefault) e.preventDefault();
+            if (g.pinching) return;
+            var scale = (typeof e.scale === 'number' && e.scale) || g.scale;
+            var rot = e.rotation;
+            if (!g.engaged) {
+                // Engagement before the pinch gate — same rule as the touch path.
+                if (Math.abs(rot) >= TWIST_GESTURE_MIN_ANGLE) {
+                    g.engaged = true;
+                    g.rotation = rot;
+                    g.bearing = map.getBearing ? map.getBearing() : 0;
+                } else {
+                    if (Math.abs(scale / g.scale - 1) > TWIST_PINCH_SLOP) g.pinching = true;
+                    return;
+                }
+            } else {
+                if (Math.abs(scale / g.scale - 1) > TWIST_PINCH_ABORT) {
+                    // An engaged twist that turns into a pinch stops dead.
+                    g.pinching = true;
+                    g.engaged = false;
+                    fireRotateEnd();
+                    return;
+                }
+            }
+            map.setBearing(g.bearing + (rot - g.rotation));
+        }
+
+        function onGestureEnd(e) {
+            if (dead || !usingGesture || !g) return;
+            if (g.engaged) fireRotateEnd();
+            g = null;
+            usingGesture = false;
+            if (e && e.preventDefault) e.preventDefault();
+        }
+
+        // Touchstart on the container, movement on the document (fingers may
+        // leave the canvas edge mid-gesture), iOS gesture events on the container.
+        container.addEventListener('touchstart', onStart, { passive: false });
+        document.addEventListener('touchmove', onMove, { passive: false });
+        document.addEventListener('touchend', onEnd, { passive: false });
+        document.addEventListener('touchcancel', onEnd, { passive: false });
+        container.addEventListener('gesturestart', onGestureStart, { passive: false });
+        container.addEventListener('gesturechange', onGestureChange, { passive: false });
+        container.addEventListener('gestureend', onGestureEnd, { passive: false });
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════════
      *  OPEN / CLOSE
      * ═══════════════════════════════════════════════════════════════════════ */
 
@@ -4182,7 +4414,10 @@
              * right-drag (or Ctrl/⌘+drag) pitches and rotates, a two-finger
              * twist rotates / a two-finger vertical drag pitches on touch,
              * Shift+arrows rotate from the keyboard, and the wheel zooms with
-             * pitchWithRotate letting the drag rotate the view while pitched. */
+             * pitchWithRotate letting the drag rotate the view while pitched.
+             * The built-in two-finger ROTATE handler is off (rotation is the
+             * Google-Earth twist in installTouchTwist); the pinch and the
+             * tap-drag stay MapLibre's own. */
             dragRotate: true,
             pitchWithRotate: true,
             touchPitch: true,
@@ -4341,8 +4576,13 @@
             }
             /* The camera is moved by gestures only (see MAP3D_GESTURE_CAMERA.md):
              * make sure every rotation/pitch handler is on, whatever the style,
-             * the safe-mode retry or a device profile did to it. */
-            try { map.touchZoomRotate.enableRotation(); } catch (e) { /* no touch handler */ }
+             * the safe-mode retry or a device profile did to it.
+             * The built-in two-finger rotate handler is replaced by the
+             * Google-Earth twist (installTouchTwist): its pixel-circumference
+             * gate made rotation nearly impossible and it re-centred the view
+             * on the fingers, so turning the map was both hard and jarring. */
+            try { if (map.touchZoomRotate && typeof map.touchZoomRotate.disableRotation === 'function') map.touchZoomRotate.disableRotation(); } catch (e) { /* no touch handler */ }
+            try { installTouchTwist(map); } catch (e) { /* twist must never block the map */ }
             try { if (map.touchPitch) map.touchPitch.enable(); } catch (e) { /* no touch pitch */ }
             try { if (map.dragRotate) map.dragRotate.enable(); } catch (e) { /* no drag rotate */ }
             try { if (map.dragPan) map.dragPan.enable(); } catch (e) { /* no drag pan */ }
@@ -4904,6 +5144,10 @@
         _mapOptions: function (safeMode) {
             return buildMapOptions(cameraFrom2D(), deviceProfile(), !!safeMode);
         },
+        /* The 3D two-finger twist (installTouchTwist), exposed so the suite
+         * can drive the real handler — pinch arbitration, spread-drift
+         * engagement, the iOS gesture path and live removal on close. */
+        _installTouchTwist: installTouchTwist,
         _webglProbe: webglProbe,
         _deviceProfile: deviceProfile,
         getLastError: function () { return state.lastError || ''; },

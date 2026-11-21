@@ -1011,7 +1011,7 @@
 //   onto its dominant compact cluster; iosfree_db.json carries the corrected
 //   Bocșa (Sălaj) coordinate. Re-tags js/other-maps.js, iosfree_db.json and
 //   CACHE_NAME. See OTHER_MAPS.md.
-const CACHE_NAME = 'detectlab-v406-josephine-transylvania';
+const CACHE_NAME = 'detectlab-v407-3d-touch-twist';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1291,6 +1291,7 @@ const PRECACHE_URLS = [
   'js/map3d-terrain.js?v=20261030-3d-analysis-dock',
   'js/map3d-terrain.js?v=20261031-3d-bearing-handoff',
   'js/map3d-terrain.js?v=20261102-lidar-gray-backing',
+  'js/map3d-terrain.js?v=20261121-3d-touch-twist',
   'css/map3d-terrain.css?v=20261102-lidar-gray-backing',
   'js/translations.js?v=20261102-lidar-gray-backing',
   'js/map3d-terrain.js?v=20261102-premium-3d',

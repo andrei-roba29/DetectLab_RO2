@@ -59,7 +59,7 @@ async function testCountryRace() {
     const current = ctx.openNow();
     resolveSDK({ Map: function () {
         constructions++;
-        this.touchZoomRotate = { enableRotation: noop };
+        this.touchZoomRotate = { enableRotation: noop, disableRotation: noop };
         this.on = noop;
     } });
     assert.strictEqual(await old, false);
@@ -95,8 +95,8 @@ function testOpeningSettle() {
     frames[0]();
     assert.strictEqual(calls.length, 6, 'replacement map is not touched');
     assert(source.includes('settleOpeningView(map, generation);'));
-    assert(fs.readFileSync('index.html', 'utf8').includes('js/map3d-terrain.js?v=20261102-lidar-gray-backing'));
-    assert(fs.readFileSync('sw.js', 'utf8').includes('js/map3d-terrain.js?v=20261102-lidar-gray-backing'));
+    assert(fs.readFileSync('index.html', 'utf8').includes('js/map3d-terrain.js?v=20261121-3d-touch-twist'));
+    assert(fs.readFileSync('sw.js', 'utf8').includes('js/map3d-terrain.js?v=20261121-3d-touch-twist'));
 }
 (async () => {
     await testLoader(0);
