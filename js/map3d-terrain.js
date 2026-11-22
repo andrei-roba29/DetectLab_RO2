@@ -4150,6 +4150,13 @@
      *  uses the same model, but rotation pivots around the map's centre
      *  (map.setBearing never moves the centre), so turning the view never
      *  pans it — no teleport. Pinch zoom stays MapLibre's own handler.
+     *  MapLibre counts the bearing the other way from the CSS rotation
+     *  (see bearingFlip): fingers sweeping clockwise move the world
+     *  clockwise, which is a NEGATIVE bearing — the twist negates the sweep.
+     *  Once the twist engages it owns the gesture completely: MapLibre’s own
+     *  two-finger zoom is disabled, so the pinch's midpoint pivot (which
+     *  re-centres and teleports the view) can never share a gesture with
+     *  the turn. It is restored when the twist ends.
      * ═══════════════════════════════════════════════════════════════════════ */
     var TWIST_ARC = 34;             /* px of tangential finger travel before a twist counts */
     var TWIST_ANGLE_MIN = 8;        /* never below this many degrees, however far apart */
@@ -4189,9 +4196,30 @@
         var g = null;
         var usingGesture = false;
         var dead = false;
+        var nativeZoomDisabled = false;
+
+        /* The pinch stays MapLibre's, but it must never share the gesture
+         * with an engaged twist: MapLibre's pinch pivots around the midpoint
+         * of the fingers (and re-centres the view there), which is exactly
+         * the “turn the map on a location” teleport seen on Android. Once
+         * the twist engages it OWNS the gesture — the native two-finger
+         * zoom is disabled and nothing else moves the map. */
+        function disableNativeTouchZoom() {
+            if (nativeZoomDisabled) return;
+            var tz = map && map.touchZoomRotate;
+            if (!tz || typeof tz.disable !== 'function') return;
+            try { tz.disable(); } catch (e) { return; }
+            nativeZoomDisabled = true;
+        }
+        function enableNativeTouchZoom() {
+            if (!nativeZoomDisabled) return;
+            try { if (map && map.touchZoomRotate && typeof map.touchZoomRotate.enable === 'function') map.touchZoomRotate.enable(); } catch (e) {}
+            nativeZoomDisabled = false;
+        }
 
         function onRemove() {
             dead = true;
+            enableNativeTouchZoom();
             g = null;
             usingGesture = false;
             try { if (typeof map.off === 'function') map.off('remove', onRemove); } catch (e) {}
@@ -4279,6 +4307,7 @@
                 g.engaged = true;
                 g.engagedDistance = p.distance;
                 g.offset = twist;   // the turn starts from 0° — no jump at engage
+                disableNativeTouchZoom();   // the twist owns the gesture
             } else {
                 // An engaged twist that turns into a pinch stops dead.
                 var engagedSpread = (p.distance - g.engagedDistance) / g.engagedDistance;
@@ -4289,13 +4318,18 @@
                     return;
                 }
             }
-            map.setBearing(g.startBearing + (twist - g.offset));
+            /* MapLibre counts the bearing the other way from the CSS
+             * rotation (see bearingFlip): fingers clockwise rotate the world
+             * clockwise, which is a NEGATIVE bearing. The native handler
+             * did exactly that (bearing -= finger-arc sign). */
+            map.setBearing(g.startBearing - (twist - g.offset));
             if (e.preventDefault) e.preventDefault();
         }
 
         function onEnd() {
             if (dead || usingGesture || !g) return;
             if (g.engaged) fireRotateEnd();
+            enableNativeTouchZoom();
             g = null;
         }
 
@@ -4328,6 +4362,7 @@
                     g.engaged = true;
                     g.rotation = rot;
                     g.bearing = map.getBearing ? map.getBearing() : 0;
+                    disableNativeTouchZoom();   // the twist owns the gesture
                 } else {
                     if (Math.abs(scale / g.scale - 1) > TWIST_PINCH_SLOP) g.pinching = true;
                     return;
@@ -4341,12 +4376,15 @@
                     return;
                 }
             }
-            map.setBearing(g.bearing + (rot - g.rotation));
+            /* MapLibre counts the bearing the other way (see bearingFlip) —
+             * the iOS gesture rotation is a positive clockwise finger sweep. */
+            map.setBearing(g.bearing - (rot - g.rotation));
         }
 
         function onGestureEnd(e) {
             if (dead || !usingGesture || !g) return;
             if (g.engaged) fireRotateEnd();
+            enableNativeTouchZoom();
             g = null;
             usingGesture = false;
             if (e && e.preventDefault) e.preventDefault();
