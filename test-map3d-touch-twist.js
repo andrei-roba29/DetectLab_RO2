@@ -14,7 +14,9 @@
 //   5. the iOS Safari gesture path gets the same model through a degree
 //      deadband (12°) + scale gate instead of the arc test;
 //   6. rotation is reachable ONLY through setBearing — no pan/center/ease call
-//      may ever reach the map (the reported “teleport” bug);
+//      may ever reach the map, and the twist owns the gesture: MapLibre’s own
+//      two-finger zoom is disabled for the whole twist (its midpoint pivot
+//      is the reported “teleport” bug) and restored when the twist ends;
 //   7. the listeners are removed when the map is removed (no leaks).
 //
 // Usage: node test-map3d-touch-twist.js
@@ -94,7 +96,7 @@ function scenario() {
     const calls = [];          /* every method the twist touches, in order */
     const state = {
         bearing: 0, setBearingCalls: [], moveendCount: 0,
-        onRemove: [], removed: false
+        onRemove: [], removed: false, nativeDisabled: false
     };
     const container = {
         _listeners: {},
@@ -137,6 +139,10 @@ function scenario() {
                 state.removed = true;
             }
             if (type === 'moveend') state.moveendCount += 1;
+        },
+        touchZoomRotate: {
+            disable() { calls.push('touchZoomRotate.disable'); state.nativeDisabled = true; },
+            enable() { calls.push('touchZoomRotate.enable'); state.nativeDisabled = false; }
         }
     };
     /* The fake is deliberately pan-LESS: get/set on any property the twist
@@ -185,12 +191,18 @@ const framesFrom = function (angles, dists) {
     console.log('  ✓ a pinch stays a zoom (no rotation at all)');
 }
 
-/* ── 2. a deliberate twist engages and turns 1:1 from 0° ──────────────────── */
+/* ── 2. a deliberate twist engages and turns 1:1 from 0° ────────────────────
+ * MapLibre counts the bearing the other way from the CSS rotation (see
+ * bearingFlip in js/map3d-terrain.js): a clockwise sweep of the fingers must
+ * turn the view clockwise, which is a NEGATIVE bearing. The sign of the
+ * twist is part of the contract — this is the regression that made turning
+ * feel inverted. */
 {
     const s = scenario();
     runTwoFinger(s, framesFrom([0, 12, 25, 40, 60], [150, 150, 150, 150, 150]));
-    assert(Math.abs(s.state.bearing - 35) < 0.5,
-        'a deliberate twist turns from 0° at the engage frame (35° expected, got ' + s.state.bearing + ')');
+    assert(s.state.bearing < 0, 'the sign must match the fingers — a clockwise sweep must not turn the view the other way (got ' + s.state.bearing + ')');
+    assert(Math.abs(s.state.bearing + 35) < 0.5,
+        'a deliberate twist turns from 0° at the engage frame (-35° expected, got ' + s.state.bearing + ')');
     assert(s.state.setBearingCalls.length > 0 && Math.abs(s.state.setBearingCalls[0] - 0) < 0.5,
         'a twist must start at 0° when it engages — no jump at engage');
     assert(s.state.moveendCount >= 1, 'releasing an engaged twist fires moveend');
@@ -201,8 +213,8 @@ const framesFrom = function (angles, dists) {
 {
     const s = scenario();
     runTwoFinger(s, framesFrom([0, 7, 15, 30, 45], [150, 158, 165, 160, 170]));
-    assert(Math.abs(s.state.bearing - 30) < 0.5,
-        'a deliberate twist with natural spread drift engages and turns (30° expected, got ' + s.state.bearing + ')');
+    assert(Math.abs(s.state.bearing + 30) < 0.5,
+        'a deliberate twist with natural spread drift engages and turns (-30° expected, got ' + s.state.bearing + ')');
     console.log('  ✓ natural spread drift of a twist does not swallow the turn');
 }
 
@@ -210,8 +222,8 @@ const framesFrom = function (angles, dists) {
 {
     const s = scenario();
     runTwoFinger(s, framesFrom([0, 15, 25, 32, 50], [150, 150, 155, 185, 185]));
-    assert(Math.abs(s.state.bearing - 10) < 0.5,
-        'the turn dies the moment the spread turns into a real pinch (10° expected, got ' + s.state.bearing + ')');
+    assert(Math.abs(s.state.bearing + 10) < 0.5,
+        'the turn dies the moment the spread turns into a real pinch (-10° expected, got ' + s.state.bearing + ')');
     assert(s.state.moveendCount >= 1, 'the twist abort fires moveend');
     console.log('  ✓ an engaged twist still dies on a real pinch, and never resumes');
 }
@@ -240,8 +252,8 @@ const framesFrom = function (angles, dists) {
     fireGesture(s, 'gesturechange', { rotation: 20, scale: 1.02 });
     fireGesture(s, 'gesturechange', { rotation: 30, scale: 1.04 });
     fireGesture(s, 'gestureend', {});
-    assert(Math.abs(s.state.bearing - 16) < 0.5,
-        'a deliberate iOS twist turns 1:1 past the deadband (16° expected, got ' + s.state.bearing + ')');
+    assert(Math.abs(s.state.bearing + 16) < 0.5,
+        'a deliberate iOS twist turns 1:1 past the deadband (-16° expected, got ' + s.state.bearing + ')');
     assert(s.state.moveendCount >= 1, 'gestureend of an engaged twist fires moveend');
 
     const s2 = scenario();
@@ -272,8 +284,8 @@ const framesFrom = function (angles, dists) {
     runTwoFinger(s, framesFrom([0, 20, 40, 60], [150, 150, 150, 150]));
     const used = s.calls.filter((c) => c !== 'getCanvasContainer' && c !== 'on' && c !== 'off');
     assert.deepStrictEqual(Array.from(new Set(used)).sort(),
-        ['fire', 'getBearing', 'setBearing'],
-        'the twist may only touch setBearing (plus its own lifecycle) — never a pan/center call: ' + JSON.stringify(used));
+        ['fire', 'getBearing', 'setBearing', 'touchZoomRotate.disable', 'touchZoomRotate.enable'],
+        'the twist may only touch setBearing, the native zoom off (never a pan/center call): ' + JSON.stringify(used));
     assert(!used.some((c) => c.indexOf('get:') === 0),
         'the twist never reads pan/center/ease-related properties: ' + JSON.stringify(used));
     console.log('  ✓ rotation never pans the view — the twist touches setBearing and nothing else');
@@ -297,7 +309,54 @@ const framesFrom = function (angles, dists) {
     console.log('  ✓ the twist listeners are removed with the map');
 }
 
-/* ── 10. the wiring: installed in the open flow, pinch left with MapLibre ──── */
+/* ── 10. a deliberate twist owns the gesture — MapLibre’s zoom stays off ────── */
+/* The reported teleport: on Android, MapLibre’s own pinch zoom (pivoting
+ * around the midpoint of the fingers) would engage mid-twist over natural
+ * spread drift and re-centre the view there. The twist engages first and
+ * now disables the native two-finger zoom for the whole gesture — the map
+ * never pans or zooms, only turns. A pinch that never became a twist leaves
+ * the native zoom fully enabled. */
+{
+    const s = scenario();
+    const frames = framesFrom([0, 15, 24, 34], [150, 150, 150, 150]);
+    fireTouchStart(s, frames[0]);
+    fireTouchMove(s, frames[1]);
+    fireTouchMove(s, frames[2]);
+    fireTouchMove(s, frames[3]);
+    assert.strictEqual(s.state.nativeDisabled, true, 'an engaged twist disables MapLibre’s own zoom');
+    fireTouchEnd(s);
+    assert.strictEqual(s.state.nativeDisabled, false, 'the native zoom is restored when the twist ends');
+    assert(s.calls.filter((c) => c === 'touchZoomRotate.disable').length === 1,
+        'MapLibre’s zoom is disabled exactly once (on engagement)');
+    assert.strictEqual(s.calls.filter((c) => c === 'touchZoomRotate.enable').length, 1,
+        'and restored exactly once (on gesture end)');
+    console.log('  ✓ an engaged twist owns the gesture — MapLibre’s zoom stays off until it ends');
+}
+
+/* ── 11. a pure pinch never disables MapLibre’s zoom ────────────────────────── */
+{
+    const s = scenario();
+    const frames = framesFrom([0, 5], [150, 170]);
+    fireTouchStart(s, frames[0]);
+    fireTouchMove(s, frames[1]);
+    assert.strictEqual(s.state.nativeDisabled, false,
+        'a pinch that never became a turn never disables the native zoom');
+    fireTouchEnd(s);
+    console.log('  ✓ a pure pinch never disables MapLibre’s zoom');
+}
+
+/* ── 12. the gesture path owns the gesture the same way ──────────────────────── */
+{
+    const s = scenario();
+    fireGesture(s, 'gesturestart', { rotation: 0, scale: 1 });
+    fireGesture(s, 'gesturechange', { rotation: 20, scale: 1 });
+    assert.strictEqual(s.state.nativeDisabled, true, 'an engaged gesture twist disables MapLibre’s own zoom');
+    fireGesture(s, 'gestureend', {});
+    assert.strictEqual(s.state.nativeDisabled, false, 'the native zoom is restored when the gesture ends');
+    console.log('  ✓ an engaged iOS gesture twist owns the gesture too');
+}
+
+/* ── 13. the wiring: installed in the open flow, pinch left with MapLibre ──── */
 {
     assert(/disableRotation\(\)/.test(viewer), 'the built-in two-finger rotate is disabled explicitly');
     assert(/installTouchTwist\(map\)/.test(viewer), 'the twist installer is wired into the open flow');

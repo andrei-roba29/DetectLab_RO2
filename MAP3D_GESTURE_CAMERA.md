@@ -92,6 +92,18 @@ GESTURE CAMERA section and in `test-map3d-touch-twist.js`):
   it calls `map.setBearing()` and nothing else (it has no pan API), so a
   twist turns the centre in place — exactly the 2D map's behaviour with the
   compass rose.
+* **The sign is the native handler's.** MapLibre counts the bearing the
+  other way from the CSS rotation (see `bearingFlip()`): fingers sweeping
+  clockwise move the world clockwise, which is a *negative* MapLibre
+  bearing — the twist negates the sweep.
+* **An engaged twist owns the gesture — no teleport.** MapLibre's two-finger
+  pinch pivots around the midpoint of the fingers and re-centres the view
+  on it (`handleMapControlsPan()` → `setLocationAtPoint`), and natural
+  spread drift during a twist makes it engage mid-turn — the view jumps to a
+  different location. The twist engages *before* the pinch gate and now
+  disables MapLibre's own touch-zoom for the whole twist; the map only
+  turns, never pans or zooms. The native zoom is restored when the twist
+  ends, and a pinch that never becomes a turn never touches the disable.
 * **Same Google-Earth model as the 2D map**: a 34 px tangential-travel
   deadband (clamped to 8°–45°), 64 px minimum finger spacing, 6 % pinch-slop
   before any twist engages, 18 % spread that cancels an engaged twist, and a
@@ -100,8 +112,8 @@ GESTURE CAMERA section and in `test-map3d-touch-twist.js`):
   percent of natural spread drift it carries.
 * **`touchZoomRotate: true` stays** in the map options — the pinch and tap-drag
   stay MapLibre's own; only the rotate half is disabled.
-* Re-tagged as `js/map3d-terrain.js?v=20261121-3d-touch-twist` (CACHE_NAME
-  `detectlab-v407-3d-touch-twist`).
+* Re-tagged as `js/map3d-terrain.js?v=20261121-3d-twist-owns` (CACHE_NAME
+  `detectlab-v409-3d-twist-owns`).
 * Mouse drag-rotate (`dragRotate`, `aroundCenter: true`) is unchanged;
   keyboard `Shift`+arrows is unchanged.
 

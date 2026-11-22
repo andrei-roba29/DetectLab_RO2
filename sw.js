@@ -1011,7 +1011,15 @@
 //   onto its dominant compact cluster; iosfree_db.json carries the corrected
 //   Bocșa (Sălaj) coordinate. Re-tags js/other-maps.js, iosfree_db.json and
 //   CACHE_NAME. See OTHER_MAPS.md.
-const CACHE_NAME = 'detectlab-v407-3d-touch-twist';
+// v408: the 3D twist negates its finger sweep — MapLibre counts the bearing
+// the other way from the CSS rotation (the same sign the 2D↔3D hand-offs use
+// via bearingFlip), so a clockwise twist now turns the view clockwise and is
+// not inverted. Re-tags js/map3d-terrain.js and CACHE_NAME.
+// v409: an engaged twist owns the gesture — MapLibre's own two-finger zoom
+// is disabled for its whole life (its midpoint pivot re-centres and
+// teleports the view), and restored when the twist ends. Re-tags
+// js/map3d-terrain.js and CACHE_NAME.
+const CACHE_NAME = 'detectlab-v409-3d-twist-owns';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1292,6 +1300,8 @@ const PRECACHE_URLS = [
   'js/map3d-terrain.js?v=20261031-3d-bearing-handoff',
   'js/map3d-terrain.js?v=20261102-lidar-gray-backing',
   'js/map3d-terrain.js?v=20261121-3d-touch-twist',
+  'js/map3d-terrain.js?v=20261121-3d-twist-sign',
+  'js/map3d-terrain.js?v=20261121-3d-twist-owns',
   'css/map3d-terrain.css?v=20261102-lidar-gray-backing',
   'js/translations.js?v=20261102-lidar-gray-backing',
   'js/map3d-terrain.js?v=20261102-premium-3d',

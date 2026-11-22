@@ -291,7 +291,7 @@ assert(shellVersion >= 196,
  * the bottom-left control column, above the base-layer button. */
 const TAGS = {
     'js/layer-registry.js': '20261030-walachia',
-    'js/map3d-terrain.js': '20261121-3d-touch-twist',
+    'js/map3d-terrain.js': '20261121-3d-twist-owns',
     'css/map3d-terrain.css': '20261102-report-lidar-window',
     'js/danish-layers.config.js': '20261028-kulturarv-sublayers',
     'js/danish-layers.js': '20261115-danish-rows'

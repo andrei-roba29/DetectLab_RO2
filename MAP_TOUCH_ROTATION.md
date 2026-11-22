@@ -97,3 +97,21 @@ simulated two-finger frames and pins the model:
 * iOS gesture rotation obeys the same deadband and pinch rules.
 
 Run with `node test-map-rotate-lock.js`.
+
+## 3D counterpart (MapLibre)
+
+The 3D viewer (`installTouchTwist()` in `js/map3d-terrain.js`) runs the same
+lifecycle — engagement before the pinch gate, 34 px arc (clamped 8°–45°),
+64 px minimum spacing, 6 % slop / 18 % abort, 12° iOS deadband — but the
+sign differs, deliberately: MapLibre counts the bearing the other way from
+the CSS rotation (the same sign the 2D↔3D hand-offs use via
+`bearingFlip()`). Twisting fingers clockwise must turn the view clockwise,
+which is a **negative** MapLibre bearing, so the sweep is negated before the
+camera is turned. An earlier revision of the 3D twist applied the 2D
+(CSS-style) sign and turned the view the opposite way.
+
+The same guard runs on the 3D side: an engaged twist **disables MapLibre's
+own two-finger zoom** — pinch pivots around the midpoint of the fingers and
+re-centres the view on it, which is the reported "teleport". The twist owns
+the gesture for its whole life; the native zoom is restored when it ends,
+and a pure pinch (never a turn) never disables anything.
