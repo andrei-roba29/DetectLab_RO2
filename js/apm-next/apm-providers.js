@@ -23,9 +23,17 @@
     'use strict';
 
     /* ── Configuration (edit here; nothing else needs changing to swap a source) ─ */
-    var APP_VERSION = 'apm-next settlement periods TRAIN (2026-10-30)';
+    var APP_VERSION = 'apm-next settlement periods TRAIN (2026-11-23)';
 
     var CONFIG = {
+        // A stalled endpoint must never park the whole run on "Choosing elevation source…". Every
+        // request has a deadline; a timed-out source is recorded as failed and the chain moves on.
+        requestTimeoutMs: 30000,          // default for capabilities / water / metadata requests
+        demProbeTimeoutMs: 12000,         // 300 m DEM probe: GetCapabilities + one small GetCoverage
+        demBlockTimeoutMs: 45000,         // one DEM block (up to 1000×1000 cells)
+        demProbeMaxBytes: 4 * 1024 * 1024,
+        demMaxBlockBytes: 32 * 1024 * 1024,
+        cacheTimeoutMs: 1500,             // a blocked IndexedDB must not block the fallback either
         // DEM candidates in preference order. EU-DEM WCS is primary; Terrarium (last, in code) is the
         // only fallback. Each candidate's GetCapabilities is read at runtime (coverage id, formats, CRS,
         // advertised request limits). None of these endpoints is verified from the sandbox: check the
@@ -34,14 +42,20 @@
             candidates: [
                 {
                     id: 'eudem-v11', version: '1.1', tier: 'primary',
-                    endpoint: 'https://image.discomap.eea.europa.eu/arcgis/services/Elevation/EUElev_DEM_V11/MapServer/WCSServer'
+                    // The EEA retired EU-DEM from the CLMS download site in 2024. The ArcGIS
+                    // service is published on both discomap hosts; the Copernicus host is the
+                    // one the EEA infrastructure overview lists for Copernicus services, so it
+                    // is tried first. Both are reached through the same deadline logic.
+                    endpoint: 'https://copernicus.discomap.eea.europa.eu/arcgis/services/Elevation/EUElev_DEM_V11/MapServer/WCSServer'
                 },
                 {
                     id: 'eudem-v10', version: '1.0', tier: 'secondary',
                     endpoint: 'https://image.discomap.eea.europa.eu/arcgis/services/GioLandPublic/DEM/MapServer/WCSServer'
                 }
             ],
-            coverageMatch: /dem/i,      // coverage id is discovered from GetCapabilities, not guessed
+            // ArcGIS publishes the coverage id as a bare layer number ("1"), not "DEM…", so the
+            // match looks at the whole CoverageSummary (id + title + abstract) as well.
+            coverageMatch: /dem|elev|dtm|dsm|height/i,
             nominalResM: 25,
             tilePx: 1000
         },
@@ -58,7 +72,8 @@
         terrarium: {
             urlTemplate: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
             maxZoom: 15,
-            nominalResM: 30                     // typical at mid-latitudes; reported per request
+            nominalResM: 30,                    // typical at mid-latitudes; reported per request
+            timeoutMs: 20000
         },
         overpass: {
             url: 'https://overpass-api.de/api/interpreter',
@@ -69,7 +84,7 @@
         proxy: {
             enabled: false,
             prefix: '/.netlify/functions/apm-proxy?url=',
-            hosts: ['image.discomap.eea.europa.eu', 'overpass-api.de', 's3.amazonaws.com']
+            hosts: ['image.discomap.eea.europa.eu', 'copernicus.discomap.eea.europa.eu', 'overpass-api.de', 's3.amazonaws.com']
         }
     };
 
@@ -119,13 +134,48 @@
                 req.onupgradeneeded = function () { req.result.createObjectStore(STORE); };
                 req.onsuccess = function () { resolve(req.result); };
                 req.onerror = function () { resolve(null); };
+                // Another tab can hold the only connection while a version change is pending;
+                // without onblocked the open would wait forever and so would the DEM fallback.
+                req.onblocked = function () { resolve(null); };
             } catch (e) { resolve(null); }
         });
         return dbPromise;
     }
-    /** Returns cached value (or undefined). TTL in ms. */
+    /** Race a promise against a deadline; resolves `fallback` instead of rejecting when it expires. */
+    function withTimeout(promise, ms, fallback) {
+        if (!ms || ms <= 0) return promise;
+        return new Promise(function (resolve, reject) {
+            var done = false;
+            var timer = setTimeout(function () {
+                if (done) return;
+                done = true;
+                resolve(fallback);
+            }, ms);
+            Promise.resolve(promise).then(function (v) {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                resolve(v);
+            }, function (e) {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                reject(e);
+            });
+        });
+    }
+    /** Race a promise against a deadline; rejects with `reason.timeout` when it expires. */
+    var TIMED_OUT = {};
+    function withDeadline(promise, ms) {
+        if (!ms || ms <= 0) return Promise.resolve(promise);
+        return withTimeout(promise, ms, TIMED_OUT).then(function (v) {
+            if (v === TIMED_OUT) throw timeoutFailure(ms);
+            return v;
+        });
+    }
+    /** Returns cached value (or undefined). TTL in ms. Never blocks longer than cacheTimeoutMs. */
     function cacheGet(key) {
-        return openDb().then(function (db) {
+        return withTimeout(openDb().then(function (db) {
             if (!db) return memCache.has(key) ? memCache.get(key) : undefined;
             return new Promise(function (resolve) {
                 var tx = db.transaction(STORE, 'readonly');
@@ -138,12 +188,12 @@
                 };
                 r.onerror = function () { resolve(undefined); };
             });
-        });
+        }), CONFIG.cacheTimeoutMs, undefined);
     }
     function cacheSet(key, value, ttlMs) {
         var rec = { value: value, expires: ttlMs ? Date.now() + ttlMs : 0 };
         memCache.set(key, value);
-        return openDb().then(function (db) {
+        return withTimeout(openDb().then(function (db) {
             if (!db) return;
             return new Promise(function (resolve) {
                 var tx = db.transaction(STORE, 'readwrite');
@@ -151,7 +201,7 @@
                 tx.oncomplete = function () { resolve(); };
                 tx.onerror = function () { resolve(); };
             });
-        }).catch(function () {});
+        }), CONFIG.cacheTimeoutMs, undefined).catch(function () {});
     }
 
     /* ── Diagnostics log: one record per request and one per source decision ─
@@ -192,6 +242,102 @@
     /** Record the response body size on the request record of a fetched response. */
     function noteBytes(res, n) { if (res && res.__apmRec) res.__apmRec.bytes = n; }
 
+    /** Keyed error for a request that did not answer within its deadline. */
+    function timeoutFailure(ms) {
+        var s = Math.max(1, Math.round(ms / 1000));
+        return failure('reason.timeout', { s: s }, 'no response within ' + s + ' s');
+    }
+
+    /** Keyed error for a response body that is far larger than the requested raster. */
+    function tooLargeFailure(maxBytes) {
+        var mb = Math.max(1, Math.round(maxBytes / (1024 * 1024)));
+        return failure('reason.tooLarge', { mb: mb }, 'response larger than ' + mb + ' MB');
+    }
+
+    /**
+     * fetch() with a hard deadline. The deadline starts when the request actually leaves the
+     * per-host queue, not when it is enqueued. A server that accepts the TCP connection and then
+     * stalls is exactly the failure that used to leave APM stuck on "Choosing elevation source…".
+     */
+    function fetchWithTimeout(url, init, timeoutMs, outerSignal) {
+        var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+        var requestInit = {};
+        if (init) Object.keys(init).forEach(function (k) { requestInit[k] = init[k]; });
+        if (ctrl) requestInit.signal = ctrl.signal;
+        if (ctrl && outerSignal) {
+            if (outerSignal.aborted) { try { ctrl.abort(); } catch (e) { /* ignore */ } }
+            else if (typeof outerSignal.addEventListener === 'function') {
+                outerSignal.addEventListener('abort', function () {
+                    try { ctrl.abort(); } catch (e) { /* ignore */ }
+                }, { once: true });
+            }
+        }
+        var request = Promise.resolve().then(function () { return fetchImpl(url, requestInit); });
+        if (!timeoutMs || timeoutMs <= 0) return request;
+        var timer = null;
+        var deadline = new Promise(function (resolve, reject) {
+            timer = setTimeout(function () {
+                if (ctrl) { try { ctrl.abort(); } catch (e) { /* ignore */ } }
+                reject(timeoutFailure(timeoutMs));
+            }, timeoutMs);
+        });
+        return Promise.race([
+            request.then(function (res) { if (timer) clearTimeout(timer); return res; },
+                function (err) { if (timer) clearTimeout(timer); throw err; }),
+            deadline
+        ]);
+    }
+
+    /** Read a response body as an ArrayBuffer, refusing a body over `maxBytes`. */
+    function readBodyBuffer(res, maxBytes, timeoutMs) {
+        var lenHeader = res.headers && res.headers.get ? parseInt(res.headers.get('content-length'), 10) : NaN;
+        if (maxBytes && isFinite(lenHeader) && lenHeader > maxBytes) {
+            return Promise.reject(tooLargeFailure(maxBytes));
+        }
+        var body = res.body;
+        if (!body || typeof body.getReader !== 'function') {
+            if (typeof res.arrayBuffer !== 'function') return Promise.reject(new Error('response has no body'));
+            return withDeadline(res.arrayBuffer(), timeoutMs || CONFIG.requestTimeoutMs).then(function (buf) {
+                if (maxBytes && buf.byteLength > maxBytes) throw tooLargeFailure(maxBytes);
+                return buf;
+            });
+        }
+        var reader = body.getReader();
+        var chunks = [], total = 0;
+        function pump() {
+            return reader.read().then(function (part) {
+                if (part.done) {
+                    var out = new Uint8Array(total), off = 0;
+                    for (var i = 0; i < chunks.length; i++) { out.set(chunks[i], off); off += chunks[i].length; }
+                    return out.buffer;
+                }
+                total += part.value.length;
+                if (maxBytes && total > maxBytes) {
+                    try { reader.cancel(); } catch (e) { /* ignore */ }
+                    throw tooLargeFailure(maxBytes);
+                }
+                chunks.push(part.value);
+                return pump();
+            });
+        }
+        return withDeadline(pump(), timeoutMs || CONFIG.requestTimeoutMs);
+    }
+
+    /** Read a response body as text, refusing an oversized capabilities document. */
+    function readBodyText(res, maxBytes, timeoutMs) {
+        return withDeadline(Promise.resolve().then(function () { return res.text(); }),
+            timeoutMs || CONFIG.requestTimeoutMs).then(function (text) {
+            if (maxBytes && text.length > maxBytes) throw tooLargeFailure(maxBytes);
+            return text;
+        });
+    }
+
+    /** Read a response body as JSON, with the same deadline as the request itself. */
+    function readBodyJson(res, timeoutMs) {
+        return withDeadline(Promise.resolve().then(function () { return res.json(); }),
+            timeoutMs || CONFIG.requestTimeoutMs);
+    }
+
     /** Cached, rate-limited GET/POST. Resolves the Response; rejects with a keyed `reason` on failure. */
     function httpFetch(url, init, opts) {
         opts = opts || {};
@@ -199,12 +345,13 @@
         var host = hostOf(url);
         var viaProxy = CONFIG.proxy.enabled && (opts.viaProxy || CONFIG.proxy.hosts.indexOf(host) >= 0);
         var target = viaProxy ? CONFIG.proxy.prefix + encodeURIComponent(url) : url;
+        var timeoutMs = opts.timeoutMs == null ? CONFIG.requestTimeoutMs : opts.timeoutMs;
         return schedule(host, function () {
             if (!fetchImpl) throw failure('reason.error', { msg: 'fetch unavailable' }, 'fetch is not available in this environment.');
             var t0 = nowMs();
             var rec = { kind: 'request', step: opts.step || null, method: method, url: target, endpoint: opts.endpoint || null,
-                proxied: !!viaProxy, status: null, ok: null, ms: null, contentType: null, bytes: null };
-            return fetchImpl(target, init).then(function (res) {
+                proxied: !!viaProxy, status: null, ok: null, ms: null, contentType: null, bytes: null, timeoutMs: timeoutMs || null };
+            return fetchWithTimeout(target, init, timeoutMs, opts.signal).then(function (res) {
                 rec.ms = Math.round(nowMs() - t0);
                 rec.status = res.status;
                 rec.ok = res.ok;
@@ -221,12 +368,15 @@
                 // Browsers report CORS failures and network errors as a bare TypeError with no detail.
                 rec.ms = Math.round(nowMs() - t0);
                 rec.error = (err && err.name) + ': ' + (err && err.message);
-                rec.reason = core.msg('reason.network', {}, 'no HTTP response (network failure or CORS block)');
-                rec.hint = 'no HTTP response: network failure or CORS block (see the browser Network tab)';
+                if (err && err.reason && err.reason.key === 'reason.timeout') {
+                    rec.reason = err.reason;
+                    rec.hint = 'no response within the request deadline';
+                } else {
+                    rec.reason = (err && err.reason) || core.msg('reason.network', {}, 'no HTTP response (network failure or CORS block)');
+                    rec.hint = 'no HTTP response: network failure or CORS block (see the browser Network tab)';
+                }
                 logRecord(rec);
-                var e = failure('reason.network', {}, 'no HTTP response (network failure or CORS block)');
-                e.cause = err;
-                throw e;
+                throw err && err.reason ? err : failure('reason.network', {}, 'no HTTP response (network failure or CORS block)');
             });
         }, opts.rate);
     }
@@ -316,16 +466,40 @@
         return isFinite(n) && n > 0 ? n : null;
     }
 
-    function parseWcsCoverageIds(xmlText) {
-        var ids = [];
+    /**
+     * Coverage summaries from a WCS 2.0.1 GetCapabilities document.
+     * Returns [{ id, text }] where `text` is the flattened CoverageSummary (title, abstract,
+     * keywords). ArcGIS publishes the coverage id as a bare layer number, so callers that
+     * need to recognise "a DEM" must look at the whole block, not only at the id.
+     */
+    function parseWcsCoverageSummaries(xmlText) {
         var xml = String(xmlText || '');
-        var re = /<(?:\w+:)?CoverageId>([^<]+)<\/(?:\w+:)?CoverageId>/g, m;
-        while ((m = re.exec(xml))) ids.push(m[1].trim());
-        if (!ids.length) {
-            var re2 = /<(?:\w+:)?CoverageOfferingBrief[\s\S]*?<(?:\w+:)?name>([^<]+)<\/(?:\w+:)?name>/g;
-            while ((m = re2.exec(xml))) ids.push(m[1].trim());
+        var out = [], m;
+        var re = /<(?:\w+:)?CoverageSummary\b[^>]*>([\s\S]*?)<\/(?:\w+:)?CoverageSummary>/g;
+        while ((m = re.exec(xml))) {
+            var block = m[1];
+            var idm = /<(?:\w+:)?CoverageId>([^<]+)<\//.exec(block);
+            if (!idm) {
+                var nm = /<(?:\w+:)?(?:name|Title|label)>([^<]+)<\//i.exec(block);
+                if (nm) idm = nm;
+            }
+            if (idm) {
+                out.push({ id: idm[1].trim(), text: block.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() });
+            }
         }
-        return ids;
+        if (!out.length) {
+            // WCS 1.0 CoverageOfferingBrief documents.
+            var re2 = /<(?:\w+:)?CoverageOfferingBrief\b[^>]*>([\s\S]*?)<\/(?:\w+:)?CoverageOfferingBrief>/g;
+            while ((m = re2.exec(xml))) {
+                var nm2 = /<(?:\w+:)?name>([^<]+)<\//.exec(m[1]);
+                if (nm2) out.push({ id: nm2[1].trim(), text: m[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() });
+            }
+        }
+        return out;
+    }
+
+    function parseWcsCoverageIds(xmlText) {
+        return parseWcsCoverageSummaries(xmlText).map(function (s) { return s.id; });
     }
 
     /** Cached capabilities per endpoint (only successful reads are cached). */
@@ -347,12 +521,14 @@
                 var px = c ? maxPixelsFrom(c.maxRequestSize) : null;
                 return px ? Math.max(64, Math.min(CONFIG.euDem.tilePx, Math.floor(Math.sqrt(px)))) : CONFIG.euDem.tilePx;
             },
-            discover: function () {
+            discover: function (timeoutMs) {
                 if (demCaps[cand.endpoint]) return Promise.resolve(demCaps[cand.endpoint]);
+                var deadline = timeoutMs || CONFIG.demProbeTimeoutMs;
                 var url = cand.endpoint + '?service=WCS&version=2.0.1&request=GetCapabilities';
-                return httpFetch(url, {}, { rate: { concurrency: 1, minIntervalMs: 500 }, step: 'dem', endpoint: cand.endpoint })
+                return httpFetch(url, {}, { rate: { concurrency: 1, minIntervalMs: 500 }, step: 'dem', endpoint: cand.endpoint,
+                    timeoutMs: deadline, maxBytes: 8 * 1024 * 1024 })
                     .then(function (r) {
-                        return r.text().then(function (text) {
+                        return readBodyText(r, 8 * 1024 * 1024, deadline).then(function (text) {
                             noteBytes(r, text.length);
                             var ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
                             if (!text.trim()) throw failure('reason.emptyBody', {}, 'empty response body');
@@ -361,9 +537,18 @@
                             }
                             var caps = parseWcsCapabilities(text);
                             if (caps.exception) throw failure('reason.error', { msg: caps.exception }, 'server exception: ' + caps.exception);
-                            var ids = caps.coverageIds.filter(function (id) { return CONFIG.euDem.coverageMatch.test(id); });
-                            if (!ids.length) {
-                                throw failure('reason.noCoverage', { found: caps.coverageIds.slice(0, 5).join(', ') || 'none' },
+                            var summaries = parseWcsCoverageSummaries(text);
+                            var ids = summaries.map(function (s) { return s.id; });
+                            var matchRe = CONFIG.euDem.coverageMatch;
+                            var matched = summaries.filter(function (s) { return matchRe.test(s.id) || matchRe.test(s.text); });
+                            // A service with a single coverage is unambiguous even when ArcGIS
+                            // publishes its id as a bare layer number — but never accept a
+                            // coverage that names an obviously different product.
+                            var notDem = /land\s*cover|corine|water|hydro|road|built|forest|impervious|soil|geology|hillshade/i;
+                            if (!matched.length && summaries.length === 1 &&
+                                !notDem.test(summaries[0].id + ' ' + summaries[0].text)) matched = summaries;
+                            if (!matched.length) {
+                                throw failure('reason.noCoverage', { found: ids.slice(0, 5).join(', ') || 'none' },
                                     'no EU-DEM coverage in GetCapabilities');
                             }
                             if (caps.formats.length && !caps.formats.some(function (f) { return /tiff/i.test(f); })) {
@@ -371,7 +556,7 @@
                                     'no GeoTIFF output format');
                             }
                             var found = {
-                                id: ids[0], all: ids, endpoint: cand.endpoint, version: cand.version,
+                                id: matched[0].id, all: ids, endpoint: cand.endpoint, version: cand.version,
                                 formats: caps.formats, crs: caps.crs, maxRequestSize: caps.maxRequestSize,
                                 maxPx: maxPixelsFrom(caps.maxRequestSize)
                             };
@@ -382,59 +567,123 @@
                         });
                     });
             },
-            fetchBlock: function (grid) {
-                return p.discover().then(function (cov) {
-                    var n = grid.north, s = grid.north - grid.h * grid.dLat;
-                    var w = grid.west, e = grid.west + grid.w * grid.dLon;
-                    var q = [
-                        'service=WCS', 'version=2.0.1', 'request=GetCoverage',
-                        'coverageId=' + encodeURIComponent(cov.id),
-                        'format=' + encodeURIComponent('image/tiff'),
-                        'subsettingCRS=' + encodeURIComponent('http://www.opengis.net/def/crs/EPSG/0/4326'),
-                        'outputCRS=' + encodeURIComponent('http://www.opengis.net/def/crs/EPSG/0/4326'),
-                        'subset=' + encodeURIComponent('Lat(' + s + ',' + n + ')'),
-                        'subset=' + encodeURIComponent('Long(' + w + ',' + e + ')'),
-                        'scalesize=' + encodeURIComponent('i(' + grid.w + '),j(' + grid.h + ')')
-                    ];
-                    return httpFetch(cov.endpoint + '?' + q.join('&'), {},
-                        { rate: { concurrency: 2, minIntervalMs: 300 }, step: 'dem', endpoint: cov.endpoint })
-                        .then(function (r) {
-                            return r.arrayBuffer().then(function (buf) {
+            fetchBlock: function (grid, opts) {
+                opts = opts || {};
+                var probe = !!opts.probe;
+                var timeoutMs = opts.timeoutMs || (probe ? CONFIG.demProbeTimeoutMs : CONFIG.demBlockTimeoutMs);
+                var maxBytes = opts.maxBytes || (probe ? CONFIG.demProbeMaxBytes : CONFIG.demMaxBlockBytes);
+                return p.discover(timeoutMs).then(function (cov) {
+                    var urls = wcsCoverageUrls(cov, grid);
+                    var attempt = 0;
+                    function tryNext() {
+                        var url = urls[attempt++];
+                        return httpFetch(url, {}, {
+                            rate: { concurrency: 2, minIntervalMs: 300 }, step: 'dem', endpoint: cov.endpoint,
+                            timeoutMs: timeoutMs, maxBytes: maxBytes
+                        }).then(function (r) {
+                            var ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
+                            if (ct && !/tiff|octet-stream|image\//i.test(ct)) {
+                                throw failure('reason.wrongFormat', { got: ct, expected: 'image/tiff' }, 'wrong format');
+                            }
+                            return readBodyBuffer(r, maxBytes, timeoutMs).then(function (buf) {
                                 noteBytes(r, buf.byteLength);
-                                var ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
                                 if (!buf.byteLength) throw failure('reason.emptyBody', {}, 'empty response body');
-                                if (ct && !/tiff|octet-stream|image\//i.test(ct)) {
-                                    throw failure('reason.wrongFormat', { got: ct, expected: 'image/tiff' }, 'wrong format');
-                                }
-                                return decodeGeoTiffFloat(buf).catch(function (err) {
-                                    if (/geotiff\.js/.test(String(err && err.message))) throw err;
-                                    throw failure('reason.wrongFormat', { got: 'undecodable body', expected: 'image/tiff' }, 'undecodable GeoTIFF');
+                                return decodeGeoTiffRaster(buf).then(function (raster) {
+                                    return resampleRaster(raster, grid);
                                 });
                             });
+                        }).catch(function (err) {
+                            // A server that rejects one KVP dialect (ArcGIS axis labels vs the
+                            // WCS-core form) gets the other. Network, HTTP and timeout failures
+                            // are final: retrying the same host would only waste the deadline.
+                            if (attempt < urls.length && err && err.reason &&
+                                (err.reason.key === 'reason.wrongFormat' || err.reason.key === 'reason.error')) {
+                                return tryNext();
+                            }
+                            if (err && /geotiff\.js/.test(String(err.message))) throw err;
+                            if (err && err.reason) throw err;
+                            throw failure('reason.wrongFormat', { got: 'undecodable body', expected: 'image/tiff' }, 'undecodable GeoTIFF');
                         });
+                    }
+                    return tryNext();
                 });
             }
         };
         return p;
     }
 
-    /** Decode a single-band GeoTIFF into Float32Array (uses vendored geotiff.js global). */
-    function decodeGeoTiffFloat(buf) {
+    /**
+     * GetCoverage URL variants for one grid. ArcGIS Server documents the axis label and the
+     * CRS inside the subset value (`subset=x,http://…/4326(west,east)`); WCS-core servers use
+     * `subsettingCRS` plus `Long(...)`/`Lat(...)` and a scaling extension. Both are tried.
+     */
+    function wcsCoverageUrls(cov, grid) {
+        var n = grid.north, s = grid.north - grid.h * grid.dLat;
+        var w = grid.west, e = grid.west + grid.w * grid.dLon;
+        var crs = 'http://www.opengis.net/def/crs/EPSG/0/4326';
+        var common = [
+            'service=WCS', 'version=2.0.1', 'request=GetCoverage',
+            'coverageId=' + encodeURIComponent(cov.id),
+            'format=' + encodeURIComponent('image/tiff')
+        ];
+        var arcgis = common.concat([
+            'subset=' + encodeURIComponent('x,' + crs + '(' + w + ',' + e + ')'),
+            'subset=' + encodeURIComponent('y,' + crs + '(' + s + ',' + n + ')')
+        ]);
+        var standard = common.concat([
+            'subsettingCRS=' + encodeURIComponent(crs),
+            'outputCRS=' + encodeURIComponent(crs),
+            'subset=' + encodeURIComponent('Long(' + w + ',' + e + ')'),
+            'subset=' + encodeURIComponent('Lat(' + s + ',' + n + ')'),
+            'scalesize=' + encodeURIComponent('x(' + grid.w + '),y(' + grid.h + ')')
+        ]);
+        return [cov.endpoint + '?' + arcgis.join('&'), cov.endpoint + '?' + standard.join('&')];
+    }
+
+    /** Decode a single-band GeoTIFF into { data, width, height } (uses vendored geotiff.js). */
+    function decodeGeoTiffRaster(buf) {
         if (typeof GeoTIFF === 'undefined') return Promise.reject(new Error('geotiff.js is not loaded (setup problem).'));
         return GeoTIFF.fromArrayBuffer(buf).then(function (tiff) {
             return tiff.getImage().then(function (img) {
-                return img.readRasters({ interleave: true }).then(function (rasters) {
+                return img.readRasters({ samples: [1], interleave: true }).then(function (rasters) {
                     var w = img.getWidth(), h = img.getHeight();
+                    var data = rasters;
+                    // Some decoders return an array of bands even with `samples`; take band 1.
+                    if (typeof data === 'object' && !ArrayBuffer.isView(data) && data.length) data = data[0];
+                    if (!data || data.length < w * h) throw new Error('geotiff.js returned fewer samples than pixels');
                     var out = new Float32Array(w * h);
                     var nodata = img.getGDALNoData ? img.getGDALNoData() : null;
                     for (var i = 0; i < w * h; i++) {
-                        var v = rasters[i];
+                        var v = data[i];
                         out[i] = (nodata != null && v === nodata) ? NaN : v;
                     }
                     return { data: out, width: w, height: h };
                 });
             });
-        }).then(function (r) { return r.data; });
+        });
+    }
+
+    /** Nearest-neighbour resample of a decoded raster onto the requested grid (row 0 = north). */
+    function resampleRaster(raster, grid) {
+        var w = grid.w, h = grid.h;
+        if (raster.width === w && raster.height === h) return raster.data;
+        var out = new Float32Array(w * h);
+        var sx = raster.width / w, sy = raster.height / h;
+        for (var j = 0; j < h; j++) {
+            var sy0 = Math.min(raster.height - 1, Math.max(0, Math.floor((j + 0.5) * sy - 0.5)));
+            for (var i = 0; i < w; i++) {
+                var sx0 = Math.min(raster.width - 1, Math.max(0, Math.floor((i + 0.5) * sx - 0.5)));
+                out[j * w + i] = raster.data[sy0 * raster.width + sx0];
+            }
+        }
+        return out;
+    }
+
+    /** Backwards-compatible helper: decode and flatten to the grid's cell order. */
+    function decodeGeoTiffFloat(buf, grid) {
+        return decodeGeoTiffRaster(buf).then(function (raster) {
+            return grid ? resampleRaster(raster, grid) : raster.data;
+        });
     }
 
     /* ── DEM: Terrarium (global fallback, AWS open elevation tiles) ───────── */
@@ -480,7 +729,10 @@
             nominalResM: CONFIG.terrarium.nominalResM,
             coversLonLat: function () { return true; },
             zoomFor: terrariumZoomFor,
-            fetchBlock: function (grid) {
+            fetchBlock: function (grid, opts) {
+                opts = opts || {};
+                var timeoutMs = opts.timeoutMs || CONFIG.terrarium.timeoutMs;
+                var maxBytes = opts.maxBytes || 4 * 1024 * 1024;
                 var midLat = grid.north - grid.h / 2 * grid.dLat;
                 var midLon = grid.west + grid.w / 2 * grid.dLon;
                 var sp = raster.gridSpacingM(grid);
@@ -507,8 +759,15 @@
                         if (tileCache.has(key)) { pix.set(key, tileCache.get(key)); return; }
                         return cacheGet('terrarium|' + key).then(function (cachedBuf) {
                             if (cachedBuf) return decodePng(new Blob([cachedBuf], { type: 'image/png' }));
-                            return httpFetch(url, {}, { rate: { concurrency: 4, minIntervalMs: 20 }, step: 'dem', endpoint: 'terrarium' })
-                                .then(function (r) { return r.arrayBuffer().then(function (ab) { return cacheSet('terrarium|' + key, ab).then(function () { return decodePng(new Blob([ab], { type: 'image/png' })); }); }); });
+                            return httpFetch(url, {}, { rate: { concurrency: 4, minIntervalMs: 20 }, step: 'dem', endpoint: 'terrarium',
+                                timeoutMs: timeoutMs, maxBytes: maxBytes })
+                                .then(function (r) {
+                                    return readBodyBuffer(r, maxBytes, timeoutMs).then(function (ab) {
+                                        return cacheSet('terrarium|' + key, ab).then(function () {
+                                            return decodePng(new Blob([ab], { type: 'image/png' }));
+                                        });
+                                    });
+                                });
                         }).then(function (rgba) { tileCache.set(key, rgba); pix.set(key, rgba); });
                     });
                 }, Promise.resolve()).then(function () {
@@ -631,7 +890,7 @@
     function queryLayerAll(base, layer, bbox, depth, acc, simplifyDeg) {
         var url = buildEsriQuery(base, layer.id, bbox, { maxAllowableOffsetDeg: simplifyDeg });
         return httpFetch(url, {}, { rate: { concurrency: 2, minIntervalMs: 250 }, step: 'water', endpoint: 'eu-hydro' })
-            .then(function (r) { return r.json(); })
+            .then(function (r) { return readBodyJson(r); })
             .then(function (json) {
                 if (json.error) throw new Error('EU-Hydro query error: ' + (json.error.message || json.error.code));
                 var parsed = parseEsriGeoJson(json);
@@ -652,7 +911,7 @@
         function layers() {
             if (!layersPromise) {
                 layersPromise = httpFetch(CONFIG.euHydro.base + '?f=json', {}, { rate: { concurrency: 1, minIntervalMs: 500 }, step: 'water', endpoint: 'eu-hydro layers' })
-                    .then(function (r) { return r.text(); })
+                    .then(function (r) { return readBodyText(r, 8 * 1024 * 1024); })
                     .then(function (text) {
                         var j;
                         try { j = JSON.parse(text); } catch (e) { throw failure('reason.wrongFormat', { got: 'non-JSON', expected: 'ArcGIS JSON' }, 'wrong format'); }
@@ -760,8 +1019,9 @@
                         method: 'POST',
                         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                         body: body
-                    }, { rate: { concurrency: 1, minIntervalMs: 1500 }, step: 'water', endpoint: 'overpass' })
-                        .then(function (r) { return r.json(); })
+                    }, { rate: { concurrency: 1, minIntervalMs: 1500 }, step: 'water', endpoint: 'overpass',
+                        timeoutMs: (CONFIG.overpass.timeoutS + 15) * 1000 })
+                        .then(function (r) { return readBodyJson(r, (CONFIG.overpass.timeoutS + 15) * 1000); })
                         .then(function (json) {
                             var parsed = parseOverpass(json);
                             var res = { lines: parsed.lines, polygons: parsed.polygons, meta: { provider: 'osm-overpass' } };
@@ -846,6 +1106,17 @@
         forEachDemTile: forEachDemTile,
         loadDemGrid: loadDemGrid,
         parseWcsCoverageIds: parseWcsCoverageIds,
+        parseWcsCoverageSummaries: parseWcsCoverageSummaries,
+        wcsCoverageUrls: wcsCoverageUrls,
+        decodeGeoTiffRaster: decodeGeoTiffRaster,
+        decodeGeoTiffFloat: decodeGeoTiffFloat,
+        resampleRaster: resampleRaster,
+        withTimeout: withTimeout,
+        withDeadline: withDeadline,
+        fetchWithTimeout: fetchWithTimeout,
+        httpFetch: httpFetch,
+        readBodyBuffer: readBodyBuffer,
+        timeoutFailure: timeoutFailure,
         lonLatToWorldPx: lonLatToWorldPx,
         terrariumZoomFor: terrariumZoomFor,
         terrariumHeight: terrariumHeight,

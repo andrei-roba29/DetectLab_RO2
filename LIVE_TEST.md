@@ -24,6 +24,8 @@ Time: about 10 minutes. You need a premium account.
 ## What to look for
 
 - `EU-DEM v1.1` → `HTTP 200` for `GetCapabilities` and `GetCoverage`: the primary source works.
+- `failed (no response within 12 s)` on EU-DEM: the EEA host accepted the request but never answered. The run must continue with the next source (the bar may stay on *Choosing elevation source…* for about 12 s per EU-DEM candidate, never longer). Send the Network-tab timing of that request.
+- `failed (response larger than 4 MB)` on a DEM probe: the service ignored the requested window; send the logged `content-length`.
 - `failed (HTTP 503)` or `(no HTTP response …)` on EU-DEM: the EEA host is down or blocks your domain (CORS). Say which.
 - `wrong format` or `empty response body`: the endpoint answers, but not with GeoTIFF. Say what `content type` was logged.
 - A warning that Terrarium (about 30 m) was used instead of 25 m: the EU-DEM sources failed.

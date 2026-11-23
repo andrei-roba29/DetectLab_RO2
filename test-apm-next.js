@@ -523,12 +523,12 @@ const WCS_OK = '<wcs:Capabilities xmlns:wcs="http://www.opengis.net/wcs/2.0" xml
     '<wcs:MaxPixels>4000000</wcs:MaxPixels></wcs:ServiceMetadata>' +
     '<wcs:Contents><wcs:CoverageSummary><wcs:CoverageId>DEM_v11_Masked2</wcs:CoverageId></wcs:CoverageSummary></wcs:Contents></wcs:Capabilities>';
 
-test('EU-DEM candidates: v1.1 primary, v1.0 second, no copernicus guess; Terrarium only after them', () => {
+test('EU-DEM candidates: v1.1 primary on the Copernicus WCS host, v1.0 second; Terrarium only after them', () => {
     const ids = prov.CONFIG.euDem.candidates.map((c) => c.id);
     assert.deepStrictEqual(ids, ['eudem-v11', 'eudem-v10']);
-    assert.strictEqual(prov.CONFIG.euDem.candidates[0].endpoint, 'https://image.discomap.eea.europa.eu/arcgis/services/Elevation/EUElev_DEM_V11/MapServer/WCSServer');
+    assert.strictEqual(prov.CONFIG.euDem.candidates[0].endpoint, 'https://copernicus.discomap.eea.europa.eu/arcgis/services/Elevation/EUElev_DEM_V11/MapServer/WCSServer');
     assert.strictEqual(prov.CONFIG.euDem.candidates[1].endpoint, 'https://image.discomap.eea.europa.eu/arcgis/services/GioLandPublic/DEM/MapServer/WCSServer');
-    assert.ok(!JSON.stringify(prov.CONFIG).includes('copernicus'), 'the copernicus candidate is removed');
+    assert.ok(!JSON.stringify(prov.CONFIG).includes('copernicus.discomap.eea.europa.eu/arcgis/services/GioLand'), 'the retired copernicus GioLand guess is not used');
     const plan = prov.demPlan(50, 13).map((x) => x.provider.id);
     assert.deepStrictEqual(plan, ['eudem-v11', 'eudem-v10', 'terrarium']);
     assert.strictEqual(prov.demPlan(-33, 151).filter((x) => x.use).length, 1, 'outside Europe only Terrarium is used');
@@ -631,6 +631,165 @@ testAsync('no DEM source at all: keyed error lists every attempt with its reason
         return true;
     });
     prov.setFetch(null);
+});
+
+/* ── DEM chooser cannot hang: deadlines, parallel probes, visible reasons ─── */
+
+function stubTerrariumPixels() {
+    global.createImageBitmap = async () => ({ width: 256, height: 256 });
+    global.OffscreenCanvas = class {
+        getContext() {
+            return {
+                drawImage() {},
+                getImageData: (x, y, w, h) => {
+                    const d = new Uint8ClampedArray(w * h * 4);
+                    for (let i = 0; i < w * h; i++) { d[i * 4] = 128; d[i * 4 + 3] = 255; }   // 0 m
+                    return { data: d };
+                }
+            };
+        }
+    };
+}
+
+testAsync('a request that never answers is aborted at its deadline and reported as reason.timeout', async () => {
+    prov.setFetch(() => new Promise(() => {}));                     // accepts, then stalls forever
+    const t0 = Date.now();
+    try {
+        await assert.rejects(prov.httpFetch('https://stall.example/dem', {}, { timeoutMs: 80 }), (e) => {
+            assert.strictEqual(e.reason.key, 'reason.timeout');
+            return true;
+        });
+        assert.ok(Date.now() - t0 < 1000, 'the deadline rejects instead of hanging');
+    } finally {
+        prov.setFetch(null);
+    }
+});
+
+testAsync('DEM chooser: a stalled EU-DEM endpoint cannot park the run — Terrarium is used after the deadline', async () => {
+    const realGeo = global.GeoTIFF, realBmp = global.createImageBitmap, realOff = global.OffscreenCanvas;
+    const oldProbe = prov.CONFIG.demProbeTimeoutMs;
+    stubTerrariumPixels();
+    prov.CONFIG.demProbeTimeoutMs = 100;
+    prov.setFetch(async (url) => {
+        if (url.includes('discomap')) return new Promise(() => {});        // EEA stalls
+        if (url.includes('elevation-tiles-prod')) return { ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(8), headers: { get: () => 'image/png' } };
+        throw new Error('unexpected URL in test: ' + url);
+    });
+    try {
+        const warnings = [];
+        const t0 = Date.now();
+        const pick = await pipeline.pickDemProvider({ lat: 50, lon: 13 }, null, warnings);
+        const ms = Date.now() - t0;
+        assert.strictEqual(pick.provider.id, 'terrarium');
+        assert.ok(ms < 1500, 'fell back in ' + ms + ' ms');
+        assert.ok(warnings.some((w) => w.key === 'warn.demFallback' && w.vars.reason.key === 'reason.timeout'),
+            'the timeout is visible in the fallback warning');
+        assert.ok(warnings.some((w) => w.key === 'warn.demTerrarium'));
+    } finally {
+        global.GeoTIFF = realGeo; global.createImageBitmap = realBmp; global.OffscreenCanvas = realOff;
+        prov.CONFIG.demProbeTimeoutMs = oldProbe;
+        prov.setFetch(null);
+    }
+});
+
+testAsync('DEM chooser: cancelling the run ends the wait at once, even while a probe is stalled', async () => {
+    const oldProbe = prov.CONFIG.demProbeTimeoutMs;
+    prov.CONFIG.demProbeTimeoutMs = 500;                        // the cancel must not wait for this
+    prov.setFetch(() => new Promise(() => {}));
+    const token = {};
+    setTimeout(() => { token.cancelled = true; }, 30);
+    try {
+        const t0 = Date.now();
+        await assert.rejects(pipeline.pickDemProvider({ lat: 50, lon: 13 }, token, []), (e) => e.code === 'cancelled');
+        assert.ok(Date.now() - t0 < 1000, 'cancel did not wait for the probe deadline');
+    } finally {
+        // The abandoned probes captured their deadline when they started; let them expire so
+        // their timeout records do not leak into the next test's debug log.
+        await new Promise((r) => setTimeout(r, 700));
+        await Promise.all(['copernicus.discomap.eea.europa.eu', 'image.discomap.eea.europa.eu', 's3.amazonaws.com']
+            .map((h) => prov.schedule(h, () => null)));
+        prov.CONFIG.demProbeTimeoutMs = oldProbe;
+        prov.setFetch(null);
+    }
+});
+
+testAsync('DEM chooser: v1.1 stalls but v1.0 answers; v1.0 is used without waiting for Terrarium', async () => {
+    const realGeo = global.GeoTIFF;
+    const oldProbe = prov.CONFIG.demProbeTimeoutMs;
+    global.GeoTIFF = { fromArrayBuffer: async () => ({ getImage: async () => ({
+        getWidth: () => 40, getHeight: () => 40, getGDALNoData: () => null,
+        readRasters: async () => new Float32Array(40 * 40).fill(100)
+    }) }) };
+    prov.CONFIG.demProbeTimeoutMs = 100;
+    prov.setFetch(async (url) => {
+        if (url.includes('EUElev_DEM_V11')) return new Promise(() => {});
+        if (url.includes('GioLandPublic')) {
+            return url.includes('GetCapabilities')
+                ? { ok: true, status: 200, text: async () => WCS_OK.replace('DEM_v11_Masked2', 'DEM_v10'), headers: { get: () => 'text/xml' } }
+                : { ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(8), headers: { get: () => 'image/tiff' } };
+        }
+        if (url.includes('elevation-tiles-prod')) return new Promise(() => {});   // must not be awaited
+        throw new Error('unexpected URL in test: ' + url);
+    });
+    try {
+        const warnings = [];
+        const t0 = Date.now();
+        const pick = await pipeline.pickDemProvider({ lat: 50, lon: 13 }, null, warnings);
+        const ms = Date.now() - t0;
+        assert.strictEqual(pick.provider.id, 'eudem-v10');
+        assert.ok(ms < 1500, 'v1.0 was used after ' + ms + ' ms');
+        assert.ok(warnings.some((w) => w.key === 'warn.demFallback' && w.vars.reason.key === 'reason.timeout'));
+        assert.ok(warnings.some((w) => w.key === 'warn.demOlder'));
+    } finally {
+        global.GeoTIFF = realGeo;
+        prov.CONFIG.demProbeTimeoutMs = oldProbe;
+        prov.setFetch(null);
+    }
+});
+
+test('WCS coverage discovery accepts an ArcGIS numeric coverage id whose title names a DEM', () => {
+    const xml = '<wcs:Capabilities xmlns:wcs="http://www.opengis.net/wcs/2.0" xmlns:ows="http://www.opengis.net/ows/2.0"><wcs:Contents>' +
+        '<wcs:CoverageSummary><wcs:CoverageId>1</wcs:CoverageId><ows:Title>DEM_v11_Masked2</ows:Title></wcs:CoverageSummary>' +
+        '</wcs:Contents></wcs:Capabilities>';
+    const s = prov.parseWcsCoverageSummaries(xml);
+    assert.deepStrictEqual(s.map((x) => x.id), ['1']);
+    assert.ok(/dem/i.test(s[0].text), 'the title is part of the match text');
+});
+
+testAsync('GeoTIFF decode: a raster with a different size is resampled onto the requested grid', async () => {
+    const real = global.GeoTIFF;
+    global.GeoTIFF = { fromArrayBuffer: async () => ({ getImage: async () => ({
+        getWidth: () => 10, getHeight: () => 10, getGDALNoData: () => null,
+        readRasters: async () => Float32Array.from({ length: 100 }, (_, i) => i)
+    }) }) };
+    try {
+        const raster = await prov.decodeGeoTiffRaster(new ArrayBuffer(8));
+        assert.strictEqual(raster.width, 10);
+        assert.strictEqual(raster.height, 10);
+        const out = prov.resampleRaster(raster, { w: 5, h: 5 });
+        assert.strictEqual(out.length, 25);
+        assert.ok(out.every((v) => isFinite(v)));
+    } finally {
+        global.GeoTIFF = real;
+    }
+});
+
+testAsync('an oversized DEM response is refused instead of being downloaded', async () => {
+    const res = { headers: { get: () => String(50 * 1024 * 1024) }, arrayBuffer: async () => new ArrayBuffer(8) };
+    await assert.rejects(prov.readBodyBuffer(res, 1024 * 1024), (e) => e.reason.key === 'reason.tooLarge');
+});
+
+test('the page loads geotiff.js before apm-providers.js (EU-DEM replies are GeoTIFF)', () => {
+    const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+    const g = html.indexOf('js/vendor/geotiff.browser.js');
+    const p = html.indexOf('js/apm-next/apm-providers.js');
+    assert.ok(g > 0 && g < p, 'geotiff must be loaded before the providers');
+});
+
+test('the service worker pre-caches geotiff.js with the APM shell', () => {
+    const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
+    assert.ok(sw.includes("'js/vendor/geotiff.browser.js"), 'geotiff is in PRECACHE_URLS');
+    assert.ok(/detectlab-v410-apm-dem-timeout/.test(sw), 'cache name bumped');
 });
 
 testAsync('debug mode records every request: URL, status, timing; CORS/network failures are labelled', async () => {

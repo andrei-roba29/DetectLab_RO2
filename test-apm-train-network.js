@@ -32,11 +32,12 @@ function harness(mode='ok') {
             return {data:{rows,total_in_area:40,excluded_approximate:0,excluded_unknown_coord:0,excluded_geometry:0,truncated:false},error:null};
         }
         if(u.host==='overpass-api.de') return {ok:true,status:200,headers:{get:()=> 'application/json'},json:async()=>({elements:[]})};
-        assert.equal(u.host,'image.discomap.eea.europa.eu','unexpected host: '+url);
+        assert.ok(['image.discomap.eea.europa.eu','copernicus.discomap.eea.europa.eu'].includes(u.host),'unexpected host: '+url);
         if(url.includes('GetCapabilities'))return {ok:true,status:200,text:async()=>wcs,headers:{get:()=> 'text/xml'}};
         if(url.includes('GetCoverage')) {
-            const dims=u.searchParams.get('scalesize').match(/i\((\d+)\),j\((\d+)\)/);
-            return {ok:true,status:200,headers:{get:()=> 'image/tiff'},arrayBuffer:async()=>({byteLength:8,w:+dims[1],h:+dims[2]})};
+            // The provider resamples whatever the service returns onto the requested grid;
+            // 64×64 is enough for the synthetic 1000 m test raster.
+            return {ok:true,status:200,headers:{get:()=> 'image/tiff'},arrayBuffer:async()=>({byteLength:8,w:64,h:64})};
         }
         return {ok:true,status:200,headers:{get:()=> 'application/json'},json:async()=>url.includes('/query?') ?
             {type:'FeatureCollection',features:[]} : {layers:[{id:5,name:'Strahler 3',parentLayerId:4}]}};
@@ -100,7 +101,7 @@ function harness(mode='ok') {
         assert(h.completed.scoreStats.cells > 0 && h.completed.heatmap.rgba.some((v,i)=>i%4===3 && v>0), 'TRAIN produces visible heat');
         assert.equal(h.requests.filter(u=>u.includes('/rpc/apm_sites_within')).length,1);
         assert(h.requests.some(u=>u.includes('GetCoverage'))&&h.requests.some(u=>u.includes('EUHydro')));
-        assert(h.requests.every(u=>['project.supabase.example','image.discomap.eea.europa.eu','overpass-api.de'].includes(new URL(u).host)), JSON.stringify(h.requests));
+        assert(h.requests.every(u=>['project.supabase.example','image.discomap.eea.europa.eu','copernicus.discomap.eea.europa.eu','s3.amazonaws.com','overpass-api.de'].includes(new URL(u).host)), JSON.stringify(h.requests));
         console.log('PASS Romania TRAIN: real UI/provider/pipeline/worker completed; site-data calls = [Supabase apm_sites_within]; other requests = existing DEM/hydro only; no legacy heritage download.');
     } finally {h.dom.window.close();}
     const out=harness();
@@ -121,7 +122,7 @@ function harness(mode='ok') {
         assert.equal(out.params.siteSource.id,'csv');
         assert.equal(out.params.backgroundAllowed,null,'CSV background is not constrained to Romania');
         assert.equal(out.requests.filter(u=>u.includes('supabase')||u.includes('/rpc/')).length,0);
-        assert(out.requests.every(u=>['image.discomap.eea.europa.eu','overpass-api.de'].includes(new URL(u).host)));
+        assert(out.requests.every(u=>['image.discomap.eea.europa.eu','copernicus.discomap.eea.europa.eu','s3.amazonaws.com','overpass-api.de'].includes(new URL(u).host)));
         console.log('PASS outside Romania: zero site-data requests; explicit CSV upload; real CSV TRAIN completed with DEM/hydro only, no Romania background constraint.');
     } finally {out.dom.window.close();}
     const fail=harness('error');

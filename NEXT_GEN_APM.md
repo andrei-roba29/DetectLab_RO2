@@ -79,24 +79,26 @@ Order is chosen by location. The EEA39 test is a coarse bounding approximation (
 
 | Order | Source | Endpoint | Notes |
 |---|---|---|---|
-| 1 (primary) | EU-DEM **v1.1** (EEA, 25 m), inside EEA39 | `https://image.discomap.eea.europa.eu/arcgis/services/Elevation/EUElev_DEM_V11/MapServer/WCSServer` | GetCapabilities read at runtime |
+| 1 (primary) | EU-DEM **v1.1** (EEA, 25 m), inside EEA39 | `https://copernicus.discomap.eea.europa.eu/arcgis/services/Elevation/EUElev_DEM_V11/MapServer/WCSServer` | GetCapabilities read at runtime |
 | 2 (secondary, older) | EU-DEM **v1.0** (EEA, 25 m, lower quality), inside EEA39 | `https://image.discomap.eea.europa.eu/arcgis/services/GioLandPublic/DEM/MapServer/WCSServer` | GetCapabilities read at runtime. Shows a warning that it is the older version |
 | 3 (fallback only) | Terrarium tiles (mixed global sources, about 30 m) | `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png` | Always used outside EEA39. Inside EEA39 only if both EU-DEM candidates fail |
 
-The former `copernicus.discomap` candidate has been removed: its GetCapabilities returned HTML, not WCS XML.
+The same ArcGIS service is published on both discomap hosts; the Copernicus host is the one the EEA infrastructure overview lists for Copernicus services, so it is tried first.
 
-**At run time** each EU-DEM candidate is probed with a 300 m window before use. Its GetCapabilities document is read and the following is taken from it and logged: the coverage id (matched by `/dem/i`), the advertised output formats (must include `image/tiff`), the CRS list, and any advertised maximum request size in pixels (which sets the tile size). Failures are recorded with a reason:
+**The chooser cannot hang.** *Choosing elevation source…* used to freeze when an EEA request was accepted but never answered: `fetch()` had no deadline, so the promise never settled and the bar stayed at 5 %. Now:
 
-- `HTTP <status>` (for example 503);
-- `no HTTP response (network failure or CORS block)`;
-- `empty response body`;
-- `wrong format (got …, expected …)`;
-- `no EU-DEM coverage listed (found …)`;
-- `mostly no-data at this location`.
+- every request has a deadline (`fetchWithTimeout`, `AbortController` + a race): 12 s for the 300 m DEM probe (GetCapabilities + one small GetCoverage), 45 s for a DEM block, 30 s by default, 20 s per Terrarium tile. The deadline starts when the request leaves the per-host queue. Response bodies are read through the same deadline and a size cap (4 MB probe, 32 MB block, 8 MB capabilities).
+- all usable candidates are **probed at the same time** (small 300 m windows) and the first success in preference order wins. A stalled EEA host therefore costs at most its deadline, while the Terrarium probe is already in flight; a higher-preference candidate is never skipped in favour of a faster lower one.
+- every failure is keyed: `HTTP <status>`, `no HTTP response (network failure or CORS block)`, `no response within <n> s`, `response larger than <mb> MB`, `empty response body`, `wrong format (got …, expected …)`, `no EU-DEM coverage listed (found …)`, `undecodable GeoTIFF`, `mostly no-data at this location`.
+- the vendored `js/vendor/geotiff.browser.js` is loaded by `index.html` (before `apm-providers.js`) and pre-cached by the service worker, so a WCS GeoTIFF can actually be decoded (`decodeGeoTiffRaster`, then nearest-neighbour resampled onto the requested grid).
 
-**Fallbacks are always visible.** When an EU-DEM candidate fails, the result shows *Elevation source "EU-DEM v1.1 (EEA, 25 m)" failed (<reason>); used <source> instead*. When Terrarium is used after an EU-DEM candidate failed (inside Europe), a second warning gives its resolution and says that terrain values are less precise than 25 m. When Terrarium is the only possible source (outside EU-DEM coverage, Europe only), the result shows a plain note instead ("Outside EU-DEM coverage … Terrarium is the only elevation source"), not a warning. Keys starting with `info.` are notes: they are shown in the warnings list in italics and do not change the status to *Done with warnings*. The provenance line always shows the source, version and cell size actually used.
+**GetCapabilities** is read for each EU-DEM candidate. The coverage is matched by `/dem|elev|dtm|dsm|height/i` against the coverage id **or** the whole `CoverageSummary` text (ArcGIS publishes the coverage id as a bare layer number, e.g. `1`, with the product in the title). A service with a single coverage is accepted unless its text names an obviously different product (land cover, hydrography, roads, …). Advertised output formats must include `image/tiff`; the CRS list and any maximum request size in pixels are logged (the latter sets the tile size).
 
-**Not verified:** none of the three endpoints has been called from a browser. The sandbox cannot reach the EEA host. The GioLandPublic path is the one the user supplied; its existence is not confirmed here.
+**GetCoverage** is tried in two WCS 2.0.1 dialects: the ArcGIS form (`subset=x,<crs>(west,east)`, `subset=y,<crs>(south,north)`) and the WCS-core form (`subsettingCRS`, `outputCRS`, `subset=Long(w,e)`, `subset=Lat(s,n)`, `scalesize=x(w),y(h)`). The second is tried only when the first answers with `wrong format` or a server exception; network, HTTP and timeout failures are final. Whatever size the service returns is resampled onto the requested grid.
+
+**Fallbacks are always visible.** When an EU-DEM candidate fails, the result shows *Elevation source "EU-DEM v1.1 (EEA, 25 m)" failed (<reason>); used <source> instead*. When Terrarium is used after an EU-DEM candidate failed (inside Europe), a second warning gives its resolution and says that terrain values are less precise than 25 m. When Terrarium is the only possible source (outside EU-DEM coverage), the result shows a plain note instead ("Outside EU-DEM coverage … Terrarium is the only elevation source"), not a warning. Keys starting with `info.` are notes: they are shown in the warnings list in italics and do not change the status to *Done with warnings*. The provenance line always shows the source, version and cell size actually used.
+
+**Not verified:** the EEA WCS endpoints cannot be reached from the sandbox (the MapServer folders are live; the GetCoverage dialects are untested against the live service). If neither dialect is accepted, the run falls back to Terrarium and the warning names the reason. Check the log in debug mode (`?apmDebug=1`).
 
 ### Water
 
