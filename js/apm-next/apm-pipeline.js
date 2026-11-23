@@ -173,40 +173,85 @@
 
     /**
      * Pick the first DEM provider in the plan that returns real terrain at the centre.
-     * Probes a small window so an unavailable service fails fast. Resolves { provider, decision }.
-     * Warnings (fallbacks, Terrarium, older version) are pushed into `warnings` as keyed messages.
+     * All usable candidates are probed at the same time with small 300 m windows; the
+     * first success in preference order wins. Probing in parallel is what keeps a dead
+     * or stalled EEA endpoint from parking the run on "Choosing elevation source…":
+     * the Terrarium probe is already in flight and every request has a deadline.
+     * Resolves { provider, decision }. Warnings (fallbacks, Terrarium, older version)
+     * are pushed into `warnings` as keyed messages.
      */
     function pickDemProvider(centre, token, warnings) {
         var plan = prov.demPlan(centre.lat, centre.lon);
-        var attempts = [];
-        return plan.reduce(function (p, item) {
-            return p.then(function (found) {
-                if (found) { attempts.push(stepRecord('dem', item, 'skipped', M('skip.earlierUsed', {}, 'an earlier source was used'))); return found; }
-                if (!item.use) { attempts.push(stepRecord('dem', item, 'skipped', item.skipReason)); return null; }
+        var bb = core.circleBBox(centre.lat, centre.lon, 300);
+        var results = new Array(plan.length);
+        var probes = new Array(plan.length);
+        // A cancellation observed by any probe ends the wait at once; it must not sit behind
+        // a sibling probe that is still running down its deadline.
+        var rejectCancelled;
+        var cancelledWait = new Promise(function (_, reject) { rejectCancelled = reject; });
+        cancelledWait.catch(function () { /* handled by the chain below when it is waiting */ });
+        // The token is a plain flag that long steps check between operations; poll it here so
+        // Cancel is honoured within a tenth of a second even while every probe is stalled.
+        var pollTimer = (token && typeof setInterval === 'function')
+            ? setInterval(function () { if (token.cancelled) rejectCancelled(cancelledError()); }, 100) : null;
+        function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+        plan.forEach(function (item, idx) {
+            if (!item.use) return;
+            var g = raster.gridForBBox(bb, item.provider.nominalResM);
+            var t0 = Date.now();
+            probes[idx] = Promise.resolve().then(function () {
                 checkToken(token);
-                var bb = core.circleBBox(centre.lat, centre.lon, 300);
-                var g = raster.gridForBBox(bb, item.provider.nominalResM);
-                var t0 = Date.now();
-                return item.provider.fetchBlock(g).then(function (elev) {
-                    var f = validFraction(elev);
-                    if (f < 0.5) throw prov.failure('reason.noData', {}, 'mostly no-data at this location');
-                    attempts.push(stepRecord('dem', item, 'used', null, Date.now() - t0));
-                    return { provider: item.provider };
-                }).catch(function (e) {
-                    if (isCancelled(e)) throw e;
-                    var reason = (e && e.reason) || M('reason.error', { msg: e && e.message }, String(e && e.message));
-                    attempts.push(stepRecord('dem', item, 'failed', reason, Date.now() - t0));
-                    return null;
+                return item.provider.fetchBlock(g, { probe: true, timeoutMs: prov.CONFIG.demProbeTimeoutMs });
+            }).then(function (elev) {
+                var f = validFraction(elev);
+                if (f < 0.5) throw prov.failure('reason.noData', {}, 'mostly no-data at this location');
+                results[idx] = { ok: true, ms: Date.now() - t0 };
+            }).catch(function (e) {
+                if (isCancelled(e)) {
+                    results[idx] = { ok: false, cancelled: true, ms: Date.now() - t0 };
+                    rejectCancelled(e);
+                    return;
+                }
+                results[idx] = { ok: false, reason: (e && e.reason) || M('reason.error', { msg: e && e.message }, String(e && e.message)), ms: Date.now() - t0 };
+            });
+        });
+
+        // Wait in preference order. A candidate that already answered (or already failed)
+        // resolves immediately; a higher-preference candidate gets its full deadline
+        // before the chain moves on to the next one.
+        var chosenIdx = -1;
+        var chain = Promise.resolve();
+        plan.forEach(function (item, idx) {
+            if (!item.use) return;
+            chain = chain.then(function () {
+                if (chosenIdx >= 0) return;
+                return Promise.race([probes[idx], cancelledWait]).then(function () {
+                    if (results[idx] && results[idx].ok) chosenIdx = idx;
                 });
             });
-        }, Promise.resolve(null)).then(function (found) {
-            if (!found) {
+        });
+
+        return chain.then(function () {
+            stopPoll();
+            checkToken(token);
+            var attempts = plan.map(function (item, idx) {
+                if (!item.use) return stepRecord('dem', item, 'skipped', item.skipReason);
+                var r = results[idx] || {};
+                if (idx === chosenIdx) return stepRecord('dem', item, 'used', null, r.ms);
+                if (r.cancelled) return stepRecord('dem', item, 'skipped', M('skip.cancelled', {}, 'cancelled'));
+                if (chosenIdx >= 0 && idx > chosenIdx) return stepRecord('dem', item, 'skipped', M('skip.earlierUsed', {}, 'an earlier source was used'));
+                if (r.ok) return stepRecord('dem', item, 'skipped', M('skip.earlierUsed', {}, 'an earlier source was used'));
+                return stepRecord('dem', item, 'failed', r.reason || M('reason.error', {}, 'no result'), r.ms);
+            });
+
+            if (chosenIdx < 0) {
                 var tried = attempts.filter(function (a) { return a.outcome === 'failed'; })
                     .map(function (a) { return a.label + ' (' + a.reason.key + ')'; }).join('; ') || 'none';
                 throw core.keyedError('err.noDem', { tried: tried },
                     'No elevation source responded for this location. Tried: ' + tried + '.');
             }
-            var dem = found.provider;
+            var dem = plan[chosenIdx].provider;
             var failed = attempts.filter(function (a) { return a.outcome === 'failed'; });
             var decision = { chosen: { id: dem.id, label: dem.label, version: dem.version || null, tier: dem.tier, resM: dem.nominalResM, endpoint: dem.endpoint }, attempts: attempts };
             if (failed.length) {
@@ -224,6 +269,9 @@
             }
             if (dem.version === '1.0') warnings.push(M('warn.demOlder', {}, 'Elevation is EU-DEM v1.0.'));
             return { provider: dem, decision: decision };
+        }, function (e) {
+            stopPoll();
+            throw e;
         });
     }
 

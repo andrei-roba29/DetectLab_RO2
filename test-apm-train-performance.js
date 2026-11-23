@@ -280,10 +280,18 @@ function redTileData(size, alpha = 255) {
 
     test('changed assets are re-tagged for the browser and the PWA shell cache', () => {
         const html = read('index.html'), sw = read('sw.js');
-        for (const f of ['apm-raster.js', 'apm-i18n.js']) {
-            const tag = 'js/apm-next/' + f + '?v=' + TAG;
+        assert.ok(html.includes('js/apm-next/apm-raster.js?v=' + TAG) && sw.includes('js/apm-next/apm-raster.js?v=' + TAG), TAG);
+        // Later fixes re-tag i18n and pipeline under newer tags (the shell keeps the older
+        // URLs pre-cached for older shells). Latest: DEM deadline + geotiff.js.
+        assert.ok(sw.includes('js/apm-next/apm-i18n.js?v=' + TAG), 'older i18n tag stays precached for older shells');
+        const DEM_TAG = '20261123-apm-dem-timeout';
+        for (const f of ['apm-providers.js', 'apm-i18n.js', 'apm-pipeline.js']) {
+            const tag = 'js/apm-next/' + f + '?v=' + DEM_TAG;
             assert.ok(html.includes(tag) && sw.includes(tag), tag);
         }
+        const g = html.indexOf('js/vendor/geotiff.browser.js?v=' + DEM_TAG), pr = html.indexOf('js/apm-next/apm-providers.js?v=' + DEM_TAG);
+        assert.ok(g > 0 && g < pr, 'geotiff.js is loaded before apm-providers.js (WCS GeoTIFF decoding)');
+        assert.ok(sw.includes('js/vendor/geotiff.browser.js?v=' + DEM_TAG));
         // Later fixes re-tag the UI, worker and mask under the newer HEAT_TAG.
         const HEAT_TAG = '20261102-apm-continuous-heat';
         const uiTag = 'js/apm-next/apm-ui.js?v=20261102-apm-mask-band';
@@ -299,7 +307,7 @@ function redTileData(size, alpha = 255) {
         // instead of in sequence (TRAIN's "run" step no longer sums their times).
         const PARALLEL_TAG = '20261102-apm-parallel-fetch';
         const pipelineTag = 'js/apm-next/apm-pipeline.js?v=' + PARALLEL_TAG;
-        assert.ok(html.includes(pipelineTag) && sw.includes(pipelineTag), pipelineTag);
+        assert.ok(sw.includes(pipelineTag), 'older pipeline tag stays precached for older shells');
         assert.ok(sw.includes('js/apm-next/apm-pipeline.js?v=' + TAG), 'older pipeline tag stays precached for older shells');
         // The shell cache keeps moving (v388 parallel-fetch → … → v392 report
         // window); only require that it never falls back below that release.

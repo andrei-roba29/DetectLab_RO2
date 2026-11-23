@@ -1019,7 +1019,15 @@
 // is disabled for its whole life (its midpoint pivot re-centres and
 // teleports the view), and restored when the twist ends. Re-tags
 // js/map3d-terrain.js and CACHE_NAME.
-const CACHE_NAME = 'detectlab-v409-3d-twist-owns';
+// v410: APM Next-Gen elevation source can no longer hang the run. The EEA
+//   EU-DEM WCS hosts stall without answering (the loading bar used to freeze
+//   on "Choosing elevation source…"), so every DEM request now has a deadline
+//   and a response-size cap, the candidates are probed in parallel so
+//   Terrarium is already in flight when the EEA stalls, and the vendored
+//   geotiff.js is actually loaded so a WCS GeoTIFF can be decoded.
+//   Re-tags js/apm-next/apm-providers.js, apm-i18n.js, apm-pipeline.js,
+//   js/vendor/geotiff.browser.js and CACHE_NAME.
+const CACHE_NAME = 'detectlab-v410-apm-dem-timeout';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1127,6 +1135,12 @@ const PRECACHE_URLS = [
   'js/apm-next/apm-ui.js?v=20261102-apm-mask-band',
   // v388: DEM/water/UAT-mask fetches run in parallel instead of in sequence.
   'js/apm-next/apm-pipeline.js?v=20261102-apm-parallel-fetch',
+  // v410: elevation-source deadline + geotiff.js (EU-DEM WCS replies are GeoTIFF).
+  'js/vendor/geotiff.browser.js?v=20261123-apm-dem-timeout',
+  'js/vendor/geotiff.browser.js',
+  'js/apm-next/apm-providers.js?v=20261123-apm-dem-timeout',
+  'js/apm-next/apm-i18n.js?v=20261123-apm-dem-timeout',
+  'js/apm-next/apm-pipeline.js?v=20261123-apm-dem-timeout',
   'js/d3.min.js',
   'js/rbush.min.js',
   'js/vendor/polygon-clipping.umd.min.js',
