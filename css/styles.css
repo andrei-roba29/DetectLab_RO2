@@ -6277,6 +6277,9 @@
         .arch-report-panel .apm-actions { display: flex; gap: 8px; margin-top: 10px; }
         .arch-report-panel .apm-actions .arch-report-button { flex: 1; }
         .arch-report-panel .apm-note { line-height: 1.35; }
+        .arch-report-panel .arch-report-results-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+        .arch-report-panel .arch-report-results-head strong { color: #66c8ff; font-family: 'Cinzel', serif; font-size: .82rem; }
+        .arch-report-panel .arch-report-results-ticks { display: flex; justify-content: space-between; font-size: .64rem; color: rgba(245,240,235,.45); margin-top: 2px; }
         .arch-report-panel .layer-info-btn[aria-expanded="true"] { background: rgba(200,169,110,0.30); border-color: rgba(200,169,110,0.60); color: #ffcf8a; }
         .arch-report-control { display:flex; justify-content:space-between; align-items:center; font-size:.7rem; color:rgba(245,240,235,.6); margin:8px 0 6px; }
         .arch-report-control strong { color:#66c8ff; font-family:'Cinzel',serif; font-size:.74rem; }
@@ -6427,7 +6430,8 @@
            exactly the lag reported on mobile. Claiming the gesture outright
            makes the thumb track the finger from the first move event. */
         #lidarScannerDistance,
-        #archReportDistance {
+        #archReportDistance,
+        #archReportMaxResults {
             touch-action: none;
             -ms-touch-action: none;
         }

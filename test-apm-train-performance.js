@@ -285,23 +285,26 @@ function redTileData(size, alpha = 255) {
         // URLs pre-cached for older shells). Latest: DEM deadline + geotiff.js.
         assert.ok(sw.includes('js/apm-next/apm-i18n.js?v=' + TAG), 'older i18n tag stays precached for older shells');
         const DEM_TAG = '20261123-apm-dem-timeout';
-        for (const f of ['apm-providers.js', 'apm-i18n.js', 'apm-pipeline.js']) {
-            const tag = 'js/apm-next/' + f + '?v=' + DEM_TAG;
+        const REPORT_FAST_TAG = '20261124-arch-report-fast';
+        assert.ok(html.includes('js/apm-next/apm-i18n.js?v=' + DEM_TAG) && sw.includes('js/apm-next/apm-i18n.js?v=' + DEM_TAG));
+        for (const f of ['apm-core.js', 'apm-providers.js', 'apm-pipeline.js', 'apm-ui.js']) {
+            const tag = 'js/apm-next/' + f + '?v=' + REPORT_FAST_TAG;
             assert.ok(html.includes(tag) && sw.includes(tag), tag);
         }
-        const g = html.indexOf('js/vendor/geotiff.browser.js?v=' + DEM_TAG), pr = html.indexOf('js/apm-next/apm-providers.js?v=' + DEM_TAG);
+        const g = html.indexOf('js/vendor/geotiff.browser.js?v=' + DEM_TAG), pr = html.indexOf('js/apm-next/apm-providers.js?v=' + REPORT_FAST_TAG);
         assert.ok(g > 0 && g < pr, 'geotiff.js is loaded before apm-providers.js (WCS GeoTIFF decoding)');
         assert.ok(sw.includes('js/vendor/geotiff.browser.js?v=' + DEM_TAG));
-        // Later fixes re-tag the UI, worker and mask under the newer HEAT_TAG.
+        // Older tags stay pre-cached for shells that have not refreshed yet.
         const HEAT_TAG = '20261102-apm-continuous-heat';
-        const uiTag = 'js/apm-next/apm-ui.js?v=20261102-apm-mask-band';
-        assert.ok(html.includes(uiTag) && sw.includes(uiTag), uiTag);
+        assert.ok(sw.includes('js/apm-next/apm-providers.js?v=' + DEM_TAG));
+        assert.ok(sw.includes('js/apm-next/apm-pipeline.js?v=' + DEM_TAG));
+        assert.ok(sw.includes('js/apm-next/apm-ui.js?v=20261102-apm-mask-band'));
         assert.ok(sw.includes('js/apm-next/apm-ui.js?v=' + TAG), 'older UI tag stays precached for older shells');
         assert.ok(html.includes('js/archeo-potential.js?v=' + HEAT_TAG));
         assert.ok(sw.includes('js/archeo-potential.js?v=' + HEAT_TAG));
         assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + HEAT_TAG));
-        // The worker URL follows the newest worker re-tag (band-based mask).
-        assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=20261102-apm-mask-band'));
+        assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=' + REPORT_FAST_TAG));
+        assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + REPORT_FAST_TAG));
         assert.ok(sw.includes('js/apm-next/apm-worker.js?v=20261102-apm-mask-band'));
         // Latest fix: the pipeline's DEM/water/UAT-mask fetches run in parallel
         // instead of in sequence (TRAIN's "run" step no longer sums their times).
@@ -317,6 +320,166 @@ function redTileData(size, alpha = 255) {
         assert.match(read('js/apm-next/apm-pipeline.js'), /boundedGridForBBox/);
         assert.match(read('js/apm-next/apm-pipeline.js'), /startExclusionMask/,
             'DEM and the UAT exclusion mask are requested together, not one after another');
+    });
+
+    test('sparse sampleTile matches full-tile Horn terrain bit-for-bit (smooth on and off)', () => {
+        const send = workerHarness();
+        // Large 128x128 tile (> 4096 cells, sparse path) vs exact 64x64 sub-tile (<= 4096 cells, dense R.terrain path)
+        const gLarge = { w: 128, h: 128, west: LON - 0.1, north: LAT + 0.1, dLon: 0.001, dLat: 0.0008 };
+        const gDense = { w: 64, h: 64, west: gLarge.west, north: gLarge.north, dLon: gLarge.dLon, dLat: gLarge.dLat };
+        const elevLarge = new Float32Array(gLarge.w * gLarge.h);
+        const elevDense = new Float32Array(gDense.w * gDense.h);
+        for (let j = 0; j < gLarge.h; j++) {
+            for (let i = 0; i < gLarge.w; i++) {
+                const v = ((i === 20 && j === 20) || i === 0 || j === gLarge.h - 1)
+                    ? NaN
+                    : Math.fround(250 + 0.4 * i - 0.25 * j + 18 * Math.sin(i / 7) * Math.cos(j / 9));
+                elevLarge[j * gLarge.w + i] = v;
+                if (i < gDense.w && j < gDense.h) elevDense[j * gDense.w + i] = v;
+            }
+        }
+        const nPts = 40;
+        const pts = new Float64Array(nPts * 2);
+        const siteMask = new Uint8Array(nPts);
+        for (let k = 0; k < nPts; k++) {
+            // Keep sample points well inside the 64x64 overlap (with 4-cell margin so 3x3 + median radius never touch row/col 63)
+            const ci = 4 + ((k * 13) % (gDense.w - 8));
+            const cj = 4 + ((k * 11) % (gDense.h - 8));
+            pts[2 * k] = gDense.west + (ci + 0.5) * gDense.dLon;
+            pts[2 * k + 1] = gDense.north - (cj + 0.5) * gDense.dLat;
+            if (k < 18) siteMask[k] = 1;
+        }
+        for (const smooth of [false, true]) {
+            const ref = send('sampleTile', {
+                w: gDense.w, h: gDense.h, tile: gDense, elev: elevDense,
+                dxM: 25, dyM: 25, positionRadiusM: 50, smooth, points: pts, siteMask
+            });
+            const got = send('sampleTile', {
+                w: gLarge.w, h: gLarge.h, tile: gLarge, elev: elevLarge,
+                dxM: 25, dyM: 25, positionRadiusM: 50, smooth, points: pts, siteMask
+            });
+            assert.equal(ref.ok, true);
+            assert.equal(got.ok, true);
+            for (let k = 0; k < nPts * 5; k++) {
+                if (Number.isNaN(ref.values[k])) {
+                    assert.ok(Number.isNaN(got.values[k]), 'NaN match at idx=' + k + ' smooth=' + smooth);
+                } else {
+                    assert.equal(got.values[k], ref.values[k], 'exact match at idx=' + k + ' smooth=' + smooth);
+                }
+            }
+        }
+    });
+
+    await testAsync('Report-mode TRAIN returns reportRaster and reuses 50 km env + model across periods and radii', async () => {
+        let demFetches = 0, waterFetches = 0, trainOps = 0;
+        const dem = {
+            id: 'synthetic-eudem', label: 'Synthetic EU-DEM 25 m', source: 'test',
+            version: '1.1', tier: 'primary', endpoint: 'https://example.invalid/wcs',
+            nominalResM: 25, tilePx: 1000,
+            fetchBlock(g) {
+                demFetches++;
+                const out = new Float32Array(g.w * g.h);
+                for (let j = 0; j < g.h; j++) for (let i = 0; i < g.w; i++) {
+                    out[j * g.w + i] = 210 + 0.08 * i + 0.03 * j + 15 * Math.sin(i / 13) * Math.cos(j / 19);
+                }
+                return Promise.resolve(out);
+            }
+        };
+        const water = {
+            id: 'synthetic-water', label: 'Synthetic water', source: 'test', endpoint: null,
+            fetchWater() {
+                waterFetches++;
+                return Promise.resolve({
+                    lines: [{ coords: [[LON - 0.5, LAT - 0.5], [LON + 0.5, LAT + 0.5]], cls: 'stream' }],
+                    polygons: []
+                });
+            }
+        };
+        const savedDemPlan = prov.demPlan, savedWaterPlan = prov.waterPlan;
+        prov.demPlan = () => [{ provider: dem, use: true, skipReason: null }];
+        prov.waterPlan = () => [{ provider: water, use: true, skipReason: null }];
+
+        function CountingWorker() {
+            FakeWorker.call(this);
+            const origPost = this.postMessage.bind(this);
+            this.postMessage = function (msg) {
+                if (msg && msg.op === 'train') trainOps++;
+                return origPost(msg);
+            };
+        }
+        CountingWorker.prototype = Object.create(FakeWorker.prototype);
+
+        const exclusionStub = async (grid) => ({
+            mask: new Uint8Array(grid.w * grid.h),
+            stats: { unknown: 0, heritage: 0, uat: 0, outside: 0 }
+        });
+        const pctx = vm.createContext({
+            module: { exports: {} },
+            require: id => require(path.join(apmDir, id.replace(/^\.\//, ''))),
+            console, Promise, Map, Set, Date, Math, Float32Array, Float64Array, Uint8Array,
+            Int32Array, Uint32Array, Uint8ClampedArray, setTimeout, clearTimeout, performance,
+            Worker: CountingWorker, computeArcheoExclusionMask: exclusionStub
+        });
+        vm.runInContext(read('js/apm-next/apm-pipeline.js'), pctx);
+        const pipeline = pctx.module.exports;
+
+        const csv = 'latitude,longitude,type,positionAccuracy,periodStart,periodEnd,period\n' +
+            Array.from({ length: 40 }, (_, i) => {
+                const pFrom = i < 25 ? 100 : -1500;
+                const pTo = i < 25 ? 300 : -800;
+                const pLabel = i < 25 ? 'Roman' : 'Bronze Age';
+                return `${LAT + ((i % 8) - 4) * 0.04},${LON + (Math.floor(i / 8) - 2) * 0.05},settlement,5,${pFrom},${pTo},${pLabel}`;
+            }).join('\n');
+        const records = sites.parseSitesCsv(csv, 'test').records;
+        const session = { worker: null, analysisKey: null };
+
+        try {
+            // 1. Cold report TRAIN run (All periods, 3 km)
+            const r1 = await pipeline.runTrain(session, {
+                centre: { lat: LAT, lon: LON }, records, period: null, siteSource: null,
+                radiusKm: 3, minSlopeDeg: 0.5, smoothDem: true, includeDrainage: false,
+                strahlerMap: null, waterClasses: ['stream'], workerUrl: 'worker.js',
+                bgCount: 300, minAreaM2: 2500, forReport: true, token: { cancelled: false }
+            });
+            assert.ok(r1.reportRaster && ArrayBuffer.isView(r1.reportRaster.classes) &&
+                r1.reportRaster.classes.BYTES_PER_ELEMENT === 1, 'reportRaster returned');
+            assert.equal(r1.heatmap, null, 'heatmap skipped in report mode');
+            assert.equal(r1.geojson.features.length, 0, 'polygonisation skipped in report mode');
+            assert.equal(trainOps, 1, 'model trained once on cold run');
+            const coldDem = demFetches, coldWater = waterFetches;
+            assert.ok(coldDem > 1 && coldWater === 1);
+
+            // 2. Period switch (Roman, same 3 km centre) -> ZERO DEM or water fetches!
+            const romanPeriod = { start: 100, end: 300, label: 'Roman' };
+            const tWarm = Date.now();
+            const r2 = await pipeline.runTrain(session, {
+                centre: { lat: LAT, lon: LON }, records, period: romanPeriod, siteSource: null,
+                radiusKm: 3, minSlopeDeg: 0.5, smoothDem: true, includeDrainage: false,
+                strahlerMap: null, waterClasses: ['stream'], workerUrl: 'worker.js',
+                bgCount: 300, minAreaM2: 2500, forReport: true, token: { cancelled: false }
+            });
+            const warmMs = Date.now() - tWarm;
+            assert.equal(demFetches, coldDem, 'switching period reuses cached 50 km DEM samples + 3 km window');
+            assert.equal(waterFetches, coldWater, 'switching period reuses cached 50 km water network');
+            assert.equal(trainOps, 2, 'new period fits only the lightweight logistic model');
+            assert.ok(r2.reportRaster && r2.reportRaster.classes.some(v => v >= 40), 'Roman reportRaster has optimal cells');
+            assert.ok(warmMs < 1500, 'period switch completes sub-second (' + warmMs + ' ms)');
+
+            // 3. Radius change (Roman, 5 km) -> reuses BOTH 50 km env AND trained Roman model!
+            const r3 = await pipeline.runTrain(session, {
+                centre: { lat: LAT, lon: LON }, records, period: romanPeriod, siteSource: null,
+                radiusKm: 5, minSlopeDeg: 0.5, smoothDem: true, includeDrainage: false,
+                strahlerMap: null, waterClasses: ['stream'], workerUrl: 'worker.js',
+                bgCount: 300, minAreaM2: 2500, forReport: true, token: { cancelled: false }
+            });
+            assert.equal(trainOps, 2, 'changing radius reuses cached trained model without re-fitting');
+            assert.equal(waterFetches, coldWater, 'changing radius within 50 km reuses cached water network');
+            assert.equal(demFetches, coldDem + 1, 'changing radius fetches only the new 5 km prediction block');
+            assert.ok(r3.reportRaster && r3.reportRaster.grid.w > r2.reportRaster.grid.w);
+        } finally {
+            prov.demPlan = savedDemPlan;
+            prov.waterPlan = savedWaterPlan;
+        }
     });
 
     console.log('\n' + passed + ' TRAIN performance checks passed.');

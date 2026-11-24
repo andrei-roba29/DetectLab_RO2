@@ -2796,7 +2796,7 @@
      * folosea o rază în pixeli trunchiată — trei surse de „alunecare” la zoom.
      * Iar culoarea nu mai e alfa acumulat, ci scorul celulei (vezi 7c). */
 
-    var HEAT_REDRAW_EVENTS = ['move', 'moveend', 'zoom', 'zoomend', 'viewreset', 'resize'];
+    var HEAT_REDRAW_EVENTS = ['move', 'rotate', 'moveend', 'zoom', 'zoomend', 'viewreset', 'resize'];
 
     // Poziția/transformata canvas-ului, scrise direct pe element. Leaflet face
     // același lucru prin L.DomUtil (translate3d, opțional scale); îl ținem
@@ -2978,10 +2978,24 @@
             if (map.touchZoom && map.touchZoom._zooming) return;
             var size = (typeof map.getSize === 'function' && map.getSize()) || null;
             if (!size) return;
-            if (this._canvas.width !== size.x) this._canvas.width = size.x;
-            if (this._canvas.height !== size.y) this._canvas.height = size.y;
-
             var topLeft = map.containerPointToLayerPoint([0, 0]);
+            var vpWidth = size.x;
+            var vpHeight = size.y;
+            if (typeof map.getBearing === 'function' && map.getBearing()) {
+                var c1 = map.containerPointToLayerPoint([size.x, 0]);
+                var c2 = map.containerPointToLayerPoint([size.x, size.y]);
+                var c3 = map.containerPointToLayerPoint([0, size.y]);
+                var minX = Math.floor(Math.min(topLeft.x, c1.x, c2.x, c3.x));
+                var minY = Math.floor(Math.min(topLeft.y, c1.y, c2.y, c3.y));
+                var maxX = Math.ceil(Math.max(topLeft.x, c1.x, c2.x, c3.x));
+                var maxY = Math.ceil(Math.max(topLeft.y, c1.y, c2.y, c3.y));
+                topLeft = { x: minX, y: minY };
+                vpWidth = maxX - minX;
+                vpHeight = maxY - minY;
+            }
+            if (this._canvas.width !== vpWidth) this._canvas.width = vpWidth;
+            if (this._canvas.height !== vpHeight) this._canvas.height = vpHeight;
+
             setCanvasPosition(this._canvas, topLeft);   // curăță orice transform de zoom
             this._zoom = map.getZoom();
             var origin = (typeof map.getPixelOrigin === 'function' && map.getPixelOrigin()) || { x: 0, y: 0 };

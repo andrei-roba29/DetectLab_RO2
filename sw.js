@@ -1027,7 +1027,14 @@
 //   geotiff.js is actually loaded so a WCS GeoTIFF can be decoded.
 //   Re-tags js/apm-next/apm-providers.js, apm-i18n.js, apm-pipeline.js,
 //   js/vendor/geotiff.browser.js and CACHE_NAME.
-const CACHE_NAME = 'detectlab-v410-apm-dem-timeout';
+// v411: fast APM Next-Gen TRAIN baseline for the Archaeological Report
+//   (sparse Horn tile sampling, concurrent DEM/water/feature loading, 2-tier
+//   session cache across periods & radii, direct reportRaster scoring) plus
+//   selectable 1–10 result count across UI, 2D/3D map and paginated PDF.
+// v412: fix rotated 2D map drag / maxBounds / pinch-zoom / zoom-out teleportation
+//   near asymmetric border regions (e.g. Ramna) and rotated custom-canvas AABB
+//   clipping across Patrimoniu, Other Maps and APM heatmap layers.
+const CACHE_NAME = 'detectlab-v412-map-rotate-fix';
 // v346: PWA minimized-window drawer sits level with the "© Leafleet" tag.
 // Raster tiles explicitly downloaded by the user. This cache is separate from
 // the app shell so expiring one offline area never evicts the PWA itself.
@@ -1197,6 +1204,7 @@ const PRECACHE_URLS = [
   // v283: Google-Earth-style two-finger twist deadband + pinch arbitration
   // (a two-finger zoom can no longer turn the map).
   'js/map-rotate.js?v=20261026-touch-rotate-deadband',
+  'js/map-rotate.js?v=20261124-map-rotate-fix',
   'js/tutorial.js?v=20261102-video-speed',
   'js/layer-panel-rows.js?v=20261025-layer-glass',
   'js/layer-panel-rows.js?v=20261101-walachia-sheet',
@@ -1238,7 +1246,9 @@ const PRECACHE_URLS = [
   'js/other-maps-tiles.js?v=20261031-other-maps-tile-span',
   'js/other-maps-nls.js?v=20261031-other-maps-tile-span',
   'js/other-maps-overlay.js?v=20261031-other-maps-tile-span',
+  'js/other-maps-overlay.js?v=20261124-map-rotate-fix',
   'js/other-maps.js?v=20261115-josephine-transylvania',
+  'js/other-maps.js?v=20261124-map-rotate-fix',
   'css/other-maps.css?v=20261028-other-maps-fix',
   'data/other-maps-catalog.json?v=20261026-cluj-alba',
   'data/other-maps-nls-catalog.json?v=20261028-other-maps-fix',
@@ -2097,7 +2107,15 @@ const PRECACHE_URLS = [
    * module, the row chrome and the shared skin. */
   'js/danish-layers.js?v=20261115-danish-rows',
   'js/layer-panel-rows.js?v=20261115-danish-rows',
-  'css/styles.css?v=20261115-danish-rows'
+  'css/styles.css?v=20261115-danish-rows',
+  /* v411: fast APM Next-Gen TRAIN report pipeline + 1–10 selectable results. */
+  'js/apm-next/apm-core.js?v=20261124-arch-report-fast',
+  'js/apm-next/apm-providers.js?v=20261124-arch-report-fast',
+  'js/apm-next/apm-pipeline.js?v=20261124-arch-report-fast',
+  'js/apm-next/apm-ui.js?v=20261124-arch-report-fast',
+  'js/apm-next/apm-worker.js?v=20261124-arch-report-fast',
+  'js/archeo-report-pdf.js?v=20261124-arch-report-fast',
+  'js/archeo-report.js?v=20261124-arch-report-fast'
 ];
 
 // ── Domains that normally bypass the app-shell strategy ──

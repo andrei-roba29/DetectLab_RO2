@@ -1475,6 +1475,138 @@ section('End-to-end analysis (runReport)');
                 return !!m && m.meta.baseline === 'apm20'; })());
     }
 
+    /* ═══════════ 11a-bis. selectable results (1–10), instant re-selection & 10-result PDF ═══════════ */
+    section('Selectable result count (1–10), fast reportRaster & PDF pagination');
+    {
+        const R = sandbox._archeoReportDebug;
+        let apmCalls = 0;
+        // Build a synthetic Next-Gen reportRaster (50=veryhigh, 45=high, 40=medium, 0=excluded)
+        // covering the 3 km analysis window around C so >=10 well-separated candidates exist.
+        const cLocal = R.projectToLocalMeters(C.lat, C.lng, C.lat);
+        const bboxTest = { minX: cLocal.x - 3600, minY: cLocal.y - 3600, maxX: cLocal.x + 3600, maxY: cLocal.y + 3600, lat0: C.lat };
+        const rw = 120, rh = 120;
+        const rrData = new Uint8Array(rw * rh);
+        for (let ry = 0; ry < rh; ry++) {
+            for (let rx = 0; rx < rw; rx++) {
+                const ix = ry * rw + rx;
+                const band = (Math.floor(rx / 8) + Math.floor(ry / 8)) % 3;
+                if (rx < 6 || ry < 6 || rx > rw - 7 || ry > rh - 7 || (rx === 60 && ry === 60)) rrData[ix] = 0;
+                else if (band === 0) rrData[ix] = 50;
+                else if (band === 1) rrData[ix] = 45;
+                else rrData[ix] = 40;
+            }
+        }
+        const fakeReportRaster = {
+            grid: {
+                w: rw, h: rh,
+                west: C.lng - 0.065,
+                north: C.lat + 0.045,
+                dLon: 0.13 / rw,
+                dLat: 0.09 / rh
+            },
+            classes: rrData
+        };
+        const directGrid = R.rasterizeNextGenReportRaster(fakeReportRaster, bboxTest, 20);
+        let saw5 = false, saw45 = false, saw4 = false, saw0 = false;
+        for (let i = 0; i < directGrid.cls.length; i++) {
+            const v = directGrid.cls[i];
+            if (v === 5) saw5 = true;
+            else if (v === 4.5) saw45 = true;
+            else if (v === 4) saw4 = true;
+            else if (v === 0) saw0 = true;
+        }
+        check('reportRaster preserves veryhigh (5), high (4.5), medium (4) and excluded (0)',
+            saw5 && saw45 && saw4 && saw0);
+
+        sandbox.DetectLabApmUi = {
+            report: {
+                periods() { return Promise.resolve([]); },
+                run(opts) {
+                    apmCalls++;
+                    check('reportRun receives forReport: true', opts && opts.forReport === true);
+                    return Promise.resolve({
+                        mode: 'train',
+                        reportRaster: fakeReportRaster,
+                        geojson: { type: 'FeatureCollection', features: [] },
+                        siteCount: 40
+                    });
+                }
+            }
+        };
+        fakeEl('archReportBaseline').value = 'nextgen_train';
+        R.setBaseline('nextgen_train', false);
+        fakeEl('archReportMaxResults').value = '3';
+        const m3 = await sandbox.runArcheoReport();
+        check('default report returns 3 results via reportRaster',
+            !!m3 && m3.results.length === 3 && m3.meta.maxResults === 3 && apmCalls === 1,
+            m3 && (m3.results.length + ' / calls=' + apmCalls));
+
+        // Change max results to 10 -> instant re-selection from cached candidates, NO new APM run!
+        sandbox._archeoReportSetMaxResults(10);
+        const st10 = sandbox._archeoReportState();
+        check('increasing to 10 results reuses cached candidates without re-running APM',
+            apmCalls === 1 && st10.results.length === 10 && st10.model.meta.maxResults === 10,
+            'calls=' + apmCalls + ', results=' + st10.results.length);
+        const virt10 = R.reportResultsFeatures3d(st10.model);
+        const feats10 = (virt10 && virt10.geojson && virt10.geojson.features) || [];
+        const focus10 = feats10.filter(f => f.properties && f.properties.kind === 'result-focus');
+        const pts10 = feats10.filter(f => f.properties && f.properties.kind === 'result-point');
+        check('3D features update immediately to all 10 selected results',
+            focus10.length === 10 && pts10.length === 10,
+            'focus=' + focus10.length + ', pts=' + pts10.length);
+
+        // Load real translations so PDF layout & wrap heights match production
+        {
+            const tsrc = fs.readFileSync(path.join(__dirname, 'js/translations.js'), 'utf8');
+            const at = tsrc.indexOf('const translations = {');
+            let d = 0, i = tsrc.indexOf('{', at);
+            const from = i;
+            for (; i < tsrc.length; i++) { if (tsrc[i] === '{') d++; else if (tsrc[i] === '}' && --d === 0) break; }
+            sandbox.translations = eval('(' + tsrc.slice(from, i + 1) + ')');
+        }
+
+        // Build 10-result PDF and verify multi-page cover pagination + dynamic 1/10…10/10 legend
+        const textBefore10 = ALL_FILL_TEXT.length;
+        const pdf10 = await sandbox.DetectLabReportPdf.build(st10.model, {}, {
+            tr: R.makeTr('en'), fmtM: m => Math.round(m) + ' m', lang: 'en'
+        });
+        const pdf10Bytes = pdf10.build();
+        const text10 = ALL_FILL_TEXT.slice(textBefore10).join('\n');
+        // 10 results => 2 cover pages + 1 method + 30 result pages + 1 sources = 34 pages (no figure JPEGs attached)
+        check('10-result PDF paginates cover cleanly across 2 pages (34 pages total)',
+            pdf10.pageCount === 34 && pdf10Bytes.length > 5000, 'pages=' + pdf10.pageCount);
+        check('10-result PDF includes Result 1/10 through Result 10/10 and dynamic 1/10…10/10 legend',
+            text10.indexOf('Result 1/10') !== -1 &&
+            text10.indexOf('Result 10/10') !== -1 &&
+            (text10.indexOf('1/10\u202610/10') !== -1 || text10.indexOf('1/10...10/10') !== -1));
+
+        // Clamp check: >10 clamps to 10, <1 clamps to 1, 7 selects 7
+        sandbox._archeoReportSetMaxResults(99);
+        check('maxResults > 10 clamps to 10', sandbox._archeoReportState().results.length === 10);
+        sandbox._archeoReportSetMaxResults(7);
+        check('maxResults = 7 selects 7 results instantly without re-running APM',
+            apmCalls === 1 && sandbox._archeoReportState().results.length === 7);
+        sandbox._archeoReportSetMaxResults(0);
+        const st1 = sandbox._archeoReportState();
+        check('maxResults < 1 clamps to 1 result without re-running APM',
+            apmCalls === 1 && st1.results.length === 1 && st1.model.meta.maxResults === 1);
+        const pdf1 = await sandbox.DetectLabReportPdf.build(st1.model, {}, {
+            tr: R.makeTr('en'), fmtM: m => Math.round(m) + ' m', lang: 'en'
+        });
+        // 1 result => 1 cover + 1 method + 3 result pages + 1 sources = 6 pages
+        check('1-result PDF builds cleanly with 1 cover page and 3 detail pages (6 pages total)',
+            pdf1.pageCount === 6 && pdf1.build().length > 1000, 'pages=' + pdf1.pageCount);
+
+        // Restore defaults for downstream sections
+        delete sandbox.translations;
+        delete sandbox.DetectLabApmUi;
+        fakeEl('archReportMaxResults').value = '3';
+        fakeEl('archReportBaseline').value = 'apm20';
+        R.setBaseline('apm20', false);
+        sandbox._archeoReportSetPoint(C.lat, C.lng);
+        await sandbox.runArcheoReport();
+    }
+
     pixelsFor = origPixelsFor;
     /* ═══════════ 11b. degraded sources (offline / CORS blocked) ═══════════ */
     section('Degraded sources');
@@ -1563,7 +1695,8 @@ section('End-to-end analysis (runReport)');
         ['archReportRow', 'archReportToggle', 'archReportRunBtn', 'archReportPdfBtn',
          'archReportPdfLang', 'archReportPdfLangRo', 'archReportPdfLangEn',
          'archReportResultsToggleWrap', 'archReportResultsToggle', 'archReportStatus', 'archReportSummary',
-         'archReportDistance', 'archReportDistanceValue', 'archReportLoading', 'archReportIgnoreLidar']
+         'archReportDistance', 'archReportDistanceValue', 'archReportMaxResults', 'archReportMaxResultsValue',
+         'archReportLoading', 'archReportIgnoreLidar']
             .forEach(function (id) { check('index.html has #' + id, html.indexOf('id="' + id + '"') !== -1); });
         check('the PDF language selector sits next to the PDF button',
             html.indexOf('id="archReportPdfBtn"') < html.indexOf('id="archReportPdfLang"') &&

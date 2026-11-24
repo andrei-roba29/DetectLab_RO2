@@ -4299,6 +4299,9 @@
                     <div class="apm-group">
                         <div class="arch-report-control"><span>Search radius / Rază</span><strong id="archReportDistanceValue">3 km</strong></div>
                         <input type="range" class="transp-slider" id="archReportDistance" min="1" max="10" value="3" step="1" aria-label="Search radius from 1 to 10 kilometres">
+                        <div class="arch-report-control"><span class="t" data-key="arch_report_opt_results">Number of results</span><strong id="archReportMaxResultsValue">3</strong></div>
+                        <input type="range" class="transp-slider" id="archReportMaxResults" min="1" max="10" value="3" step="1" aria-label="Number of results from 1 to 10">
+                        <div class="apm-note t" data-key="arch_report_opt_results_hint">Top-scoring areas returned on the map and in the PDF (1–10).</div>
                         <label class="arch-report-show" id="archReportResultsToggleWrap" style="display:none">
                             <input type="checkbox" id="archReportResultsToggle" checked>
                             <span class="t" data-key="arch_report_show_results">Show results on the map</span>
@@ -5215,7 +5218,7 @@
          update per layer per gesture and a page-wide budget on live tiles.
          Must load right after Leaflet and before map-app.js. -->
     <script src="js/tile-perf.js?v=20261030-sat60-live-location"></script>
-    <script src="js/map-rotate.js?v=20261026-touch-rotate-deadband"></script>
+    <script src="js/map-rotate.js?v=20261124-map-rotate-fix"></script>
     <script src="js/L.Control.Layers.Tree.min.js"></script>
     <script src="js/L.Control.Locate.min.js"></script>
     <script src="js/leaflet-hash.js"></script>
@@ -5388,8 +5391,8 @@
          singure la harta Live (window._dlMap) după map-app.js. -->
     <script src="js/other-maps-tiles.js?v=20261031-other-maps-tile-span"></script>
     <script src="js/other-maps-nls.js?v=20261031-other-maps-tile-span"></script>
-    <script src="js/other-maps-overlay.js?v=20261031-other-maps-tile-span"></script>
-    <script src="js/other-maps.js?v=20261115-josephine-transylvania"></script>
+    <script src="js/other-maps-overlay.js?v=20261124-map-rotate-fix"></script>
+    <script src="js/other-maps.js?v=20261124-map-rotate-fix"></script>
     <script src="js/offline-maps.js?v=20261024-uk-historical-maps"></script>
     <script src="js/battles-layer.js?v=20261020-3d-analysis-points"></script>
     <script src="js/vertical-opacity-control.js?v=20261102-ro-heritage"></script>
@@ -5400,18 +5403,18 @@
     <!-- Next-Gen APM (MANUAL + TRAIN, Premium): js/apm-next/ holds the scoring core,
          raster/polygon helpers, providers and the pipeline; apm-ui.js adds its
          own floating button and panel. Shares mandatory spatial exclusions with Archaeological Potential Sites. -->
-    <script src="js/apm-next/apm-core.js?v=20261101-robust-train"></script>
+    <script src="js/apm-next/apm-core.js?v=20261124-arch-report-fast"></script>
     <script src="js/apm-next/apm-raster.js?v=20261102-apm-train-bounded-grid"></script>
     <script src="js/apm-next/apm-heatmap.js?v=20261102-apm-continuous-heat"></script>
     <script src="js/apm-next/apm-sites.js?v=20261101-train-source"></script>
     <script src="js/apm-next/romania-periods.config.js?v=20261101-train-source"></script>
     <!-- geotiff.js must load before apm-providers.js: the EU-DEM WCS replies are GeoTIFF. -->
     <script src="js/vendor/geotiff.browser.js?v=20261123-apm-dem-timeout"></script>
-    <script src="js/apm-next/apm-providers.js?v=20261123-apm-dem-timeout"></script>
+    <script src="js/apm-next/apm-providers.js?v=20261124-arch-report-fast"></script>
     <script src="js/apm-next/apm-romania-sites.js?v=20261101-train-source"></script>
     <script src="js/apm-next/apm-i18n.js?v=20261123-apm-dem-timeout"></script>
-    <script src="js/apm-next/apm-pipeline.js?v=20261123-apm-dem-timeout"></script>
-    <script src="js/apm-next/apm-ui.js?v=20261102-apm-mask-band"></script>
+    <script src="js/apm-next/apm-pipeline.js?v=20261124-arch-report-fast"></script>
+    <script src="js/apm-next/apm-ui.js?v=20261124-arch-report-fast"></script>
     <script src="js/archeo-potential.js?v=20261102-apm-continuous-heat"></script>
     <script src="js/lidar-geo.js?v=20260811-latlon"></script>
     <script src="js/lidar-scanner.js?v=20261020-3d-analysis-points"></script>
@@ -5419,8 +5422,8 @@
     <!-- Premium "Archeological Report" / "Raport arheologic": PDF writer →
          PDF layout → the analysis layer itself (this order matters). -->
     <script src="js/pdf-writer.js?v=20260827-arch-report"></script>
-    <script src="js/archeo-report-pdf.js?v=20261102-arch-report-focus"></script>
-    <script src="js/archeo-report.js?v=20261102-arch-report-focus"></script>
+    <script src="js/archeo-report-pdf.js?v=20261124-arch-report-fast"></script>
+    <script src="js/archeo-report.js?v=20261124-arch-report-fast"></script>
     <script src="js/tutorial.js?v=20261102-video-speed"></script>
 
     <!-- AUTH MODAL -->

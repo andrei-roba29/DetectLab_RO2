@@ -275,9 +275,14 @@
         });
     }
 
-    /** Water options passed to every water provider (Strahler map, drainage switch). */
+    /** Water options passed to every water provider (Strahler map, drainage switch, artificial waterways). */
     function waterOptions(params) {
-        return { strahlerMap: params.strahlerMap || prov.defaultStrahlerMap(), includeDrainage: !!params.includeDrainage };
+        var wc = params.waterClasses || [];
+        return {
+            strahlerMap: params.strahlerMap || prov.defaultStrahlerMap(),
+            includeDrainage: !!params.includeDrainage,
+            includeArtificial: wc.indexOf('artificial') >= 0
+        };
     }
 
     /**
@@ -416,13 +421,15 @@
                 waterClasses: enabled,
                 thresholds: params.thresholds,
                 minAreaM2: params.minAreaM2,
-                smoothIters: 1
+                smoothIters: 1,
+                forReport: !!params.forReport
             }).then(function (res) {
                 requireScores(res);
                 progress('prog.done', 100);
                 return {
                     geojson: res.geojson,
                     heatmap: res.heatmap,
+                    reportRaster: res.reportRaster || null,
                     thresholds: res.thresholds,
                     areaKm2: res.areaKm2,
                     scoreStats: res.scoreStats,
@@ -559,10 +566,29 @@
         return { status: 'ok', n: n, min: minSites, rec: warnSites };
     }
 
+    function mapTilesConcurrent(keys, concurrency, fn) {
+        var len = keys.length;
+        if (!len) return Promise.resolve();
+        var limit = Math.max(1, Math.min(concurrency || 1, len));
+        var next = 0;
+        function worker() {
+            if (next >= len) return Promise.resolve();
+            var k = keys[next++];
+            return Promise.resolve().then(function () { return fn(k); }).then(worker);
+        }
+        var runners = [];
+        for (var i = 0; i < limit; i++) runners.push(worker());
+        return Promise.all(runners).then(function () { return undefined; });
+    }
+
+    function siteCoordKey(lat, lon) {
+        return Number(lat).toFixed(7) + ',' + Number(lon).toFixed(7);
+    }
+
     /**
      * params: { centre, records, period:{key,label,start,end}|null, radiusKm, curves?, waterClasses,
      *           bgCount=5000, minSlopeDeg, smoothDem, thresholds? , minAreaM2, minSites=10, warnSites=30,
-     *           onProgress, token, workerUrl, rnd }
+     *           onProgress, token, workerUrl, rnd, forReport }
      */
     function runTrain(session, params) {
         var warnings = [];
@@ -585,33 +611,38 @@
         }
         if (nSites < warnSites) warnings.push(M('warn.fewSites', { n: nSites, rec: warnSites }, 'Only ' + nSites + ' sites.'));
 
-        var bg = sampleBackground(centre, areaM, params.bgCount || 5000, sel.sites, BG_EXCLUDE_M, params.rnd, params.backgroundAllowed);
-        var pts = sel.sites.map(function (s) {
-            var mpd = core.metresPerDegree(centre.lat);
-            return { id: s.id, name: s.name, lat: s.lat, lon: s.lon, x: (s.lon - centre.lon) * mpd.lon, y: (s.lat - centre.lat) * mpd.lat, isSite: true };
-        }).concat(bg.map(function (b) { return { lat: b.lat, lon: b.lon, x: b.x, y: b.y, isSite: false }; }));
+        var canUseSessionCache = !params.rnd;
+        var envKey = [
+            centre.lat.toFixed(5), centre.lon.toFixed(5),
+            params.records ? params.records.length : 0,
+            params.bgCount || 5000,
+            params.smoothDem ? 's' : 'r',
+            params.includeDrainage ? 'd' : '-',
+            (params.waterClasses || []).indexOf('artificial') >= 0 ? 'a' : '-',
+            JSON.stringify(params.strahlerMap || null)
+        ].join('|');
+        var modelKey = [
+            envKey,
+            params.period ? params.period.key : '__all__',
+            params.minSlopeDeg == null ? 0.5 : params.minSlopeDeg,
+            (params.waterClasses || []).slice().sort().join(','),
+            params.forReport ? 'rep' : 'ui'
+        ].join('|');
 
+        var mpd = core.metresPerDegree(centre.lat);
         var bbox = core.circleBBox(centre.lat, centre.lon, areaM + 1000);
-        var dem, demDecision = null, grid, water = { water: null, provider: null }, classes = [];
-        return pickDemProvider(centre, params.token, warnings).then(function (pick) {
-            dem = pick.provider;
-            demDecision = pick.decision;
-            // Site/background sampling stays close to the DEM resolution, but the
-            // 50 km tile grid is bounded so it does not fan out into dozens of
-            // full-size WCS tiles (one per 1000x1000 block).
-            grid = raster.boundedGridForBBox(bbox, dem.nominalResM, raster.MAX_SAMPLING_CELLS);
-            progress('prog.waterTrain', 8);
-            return fetchWaterChain(centre, bbox, params.token, warnings, waterOptions(params));
-        }).then(function (wr) {
-            water = wr;
-            var segs = waterSegments(wr.water);
-            classes = Object.keys(segs);
-            if (session.worker) session.worker.terminate();
-            session.worker = createWorkerClient(params.workerUrl);
-            session.analysisKey = null;
-            return session.worker.call('setWater', { classes: segs });
-        }).then(function () {
-            // Map every point to its DEM tile (1000 px cores), then sample tile by tile.
+
+        function ensureWorker() {
+            if (!session.worker) {
+                session.worker = createWorkerClient(params.workerUrl);
+                session.analysisKey = null;
+                session._predWindowKey = null;
+                session._waterKey = null;
+            }
+            return session.worker;
+        }
+
+        function samplePointsOnGrid(pts, dem, grid) {
             var tilePx = dem.tilePx || 1000;
             var tileOf = new Map();
             pts.forEach(function (p, idx) {
@@ -625,84 +656,188 @@
             var results = new Array(pts.length);
             var keys = Array.from(tileOf.keys());
             var done = 0;
+            var spacing = raster.gridSpacingM(grid);
+            var pad = Math.max(1, Math.ceil(TRAIN_ROBUST_CONFIG.positionRadiusM / Math.min(spacing.dx, spacing.dy)));
             progress('prog.sampling', 15, { pct: 0 });
-            return keys.reduce(function (pr, key) {
-                return pr.then(function () {
+            return mapTilesConcurrent(keys, 4, function (key) {
+                checkToken(params.token);
+                var parts = key.split(',').map(Number);
+                var j0 = parts[0] * tilePx, i0 = parts[1] * tilePx;
+                var cw = Math.min(grid.w - i0, tilePx), ch = Math.min(grid.h - j0, tilePx);
+                var hg = prov.subGrid(grid, i0 - pad, j0 - pad, cw + 2 * pad, ch + 2 * pad);
+                return dem.fetchBlock(hg).then(function (elev) {
                     checkToken(params.token);
-                    var parts = key.split(',').map(Number);
-                    var j0 = parts[0] * tilePx, i0 = parts[1] * tilePx;
-                    var cw = Math.min(grid.w - i0, tilePx), ch = Math.min(grid.h - j0, tilePx);
-                    var spacing = raster.gridSpacingM(grid), pad = Math.max(1, Math.ceil(TRAIN_ROBUST_CONFIG.positionRadiusM / Math.min(spacing.dx, spacing.dy)));
-                    var hg = prov.subGrid(grid, i0 - pad, j0 - pad, cw + 2 * pad, ch + 2 * pad);
-                    return dem.fetchBlock(hg).then(function (elev) {
-                        var idxs = tileOf.get(key);
-                        var flat = new Float64Array(idxs.length * 2), siteMask = new Uint8Array(idxs.length);
-                        idxs.forEach(function (pi, k) { flat[2 * k] = pts[pi].lon; flat[2 * k + 1] = pts[pi].lat; siteMask[k] = pts[pi].isSite ? 1 : 0; });
-                        return session.worker.call('sampleTile', {
-                            elev: elev, w: hg.w, h: hg.h, dxM: spacing.dx, dyM: spacing.dy, positionRadiusM: TRAIN_ROBUST_CONFIG.positionRadiusM, siteMask: siteMask,
-                            tile: { west: hg.west, north: hg.north, dLon: hg.dLon, dLat: hg.dLat },
-                            smooth: !!params.smoothDem, nodata: undefined, points: flat
-                        }).then(function (r) {
-                            idxs.forEach(function (pi, k) {
-                                var o = k * 5;
-                                var water = {};
-                                r.classes.forEach(function (c) { water[c] = r.water[c][k]; });
-                                results[pi] = {
-                                    elev: r.values[o], slope: r.values[o + 1], aspect: r.values[o + 2],
-                                    curv: r.values[o + 3], valid: r.inside[k] && r.values[o + 4] === 1, water: water
-                                };
-                            });
-                            done += idxs.length;
-                            progress('prog.sampling', 15 + Math.round(45 * done / pts.length), { pct: Math.round(100 * done / pts.length) });
+                    var idxs = tileOf.get(key);
+                    var flat = new Float64Array(idxs.length * 2), siteMask = new Uint8Array(idxs.length);
+                    idxs.forEach(function (pi, k) {
+                        flat[2 * k] = pts[pi].lon;
+                        flat[2 * k + 1] = pts[pi].lat;
+                        siteMask[k] = pts[pi].isSite ? 1 : 0;
+                    });
+                    return session.worker.call('sampleTile', {
+                        elev: elev, w: hg.w, h: hg.h, dxM: spacing.dx, dyM: spacing.dy,
+                        positionRadiusM: TRAIN_ROBUST_CONFIG.positionRadiusM, siteMask: siteMask,
+                        tile: { west: hg.west, north: hg.north, dLon: hg.dLon, dLat: hg.dLat },
+                        smooth: !!params.smoothDem, nodata: undefined, points: flat
+                    }).then(function (r) {
+                        idxs.forEach(function (pi, k) {
+                            var o = k * 5;
+                            var wmap = {};
+                            r.classes.forEach(function (c) { wmap[c] = r.water[c][k]; });
+                            results[pi] = {
+                                elev: r.values[o], slope: r.values[o + 1], aspect: r.values[o + 2],
+                                curv: r.values[o + 3], valid: r.inside[k] && r.values[o + 4] === 1, water: wmap
+                            };
                         });
+                        done += idxs.length;
+                        progress('prog.sampling', 15 + Math.round(45 * done / pts.length), { pct: Math.round(100 * done / pts.length) });
                     });
                 });
-            }, Promise.resolve()).then(function () {
-                var merged = pts.map(function (p, i) {
-                    var r = results[i] || { valid: false };
-                    return Object.assign({}, p, r);
-                });
-                var hard = filterTrainingSites(merged, water.water, grid, TRAIN_ROBUST_CONFIG);
-                var built = buildSampleSet(hard.points, {
-                    minSlopeDeg: params.minSlopeDeg, radiusM: areaM, folds: 5, waterClasses: params.waterClasses.filter(function (c) { return classes.indexOf(c) >= 0; })
-                });
-                if (built.counts.sites < minSites) {
-                    var e2 = core.keyedError('err.tooFewTerrain', { n: built.counts.sites, min: minSites },
-                        'After terrain sampling only ' + built.counts.sites + ' sites had valid terrain (minimum ' + minSites + ').');
-                    e2.code = 'too_few_sites';
-                    throw e2;
-                }
+            }).then(function () { return results; });
+        }
+
+        function prepareEnvironment() {
+            if (canUseSessionCache && session._trainEnvCache && session._trainEnvCache.key === envKey && session.worker) {
+                var cachedEnv = session._trainEnvCache;
+                cachedEnv.envWarnings.forEach(function (w) { warnings.push(w); });
+                return Promise.resolve(cachedEnv);
+            }
+            ensureWorker();
+            progress('prog.chooseDem', 5);
+            var demWarnings = [], waterWarnings = [];
+            var demP = pickDemProvider(centre, params.token, demWarnings);
+            var waterP = fetchWaterChain(centre, bbox, params.token, waterWarnings, waterOptions(params));
+            return Promise.all([demP, waterP]).then(function (pair) {
                 checkToken(params.token);
-                progress('prog.train', 65);
-                return session.worker.call('train', {
-                    S: built.S, waterClasses: built.waterClasses,
-                    minSlopeDeg: params.minSlopeDeg, folds: 5, robustConfig: TRAIN_ROBUST_CONFIG
-                }).then(function (tr) {
-                    return { train: tr.result, built: built, hardExcluded: hard, warnings: warnings };
+                var pick = pair[0], wr = pair[1];
+                var envWarnings = demWarnings.concat(waterWarnings);
+                envWarnings.forEach(function (w) { warnings.push(w); });
+                var dem = pick.provider;
+                var grid = raster.boundedGridForBBox(bbox, dem.nominalResM, raster.MAX_SAMPLING_CELLS);
+                var segs = waterSegments(wr.water);
+                var classes = Object.keys(segs);
+                return session.worker.call('setWater', { classes: segs }).then(function () {
+                    session._waterKey = envKey;
+                    // When session caching is enabled, sample all unique site coordinates in the 50 km
+                    // pool + background points once so period switches reuse the sampled features instantly.
+                    var poolSites = canUseSessionCache
+                        ? sites.filterSites(params.records, { center: centre, radiusKm: TRAIN_AREA_KM, period: null, dedupeM: -1 }).sites
+                        : sel.sites;
+                    var uniqSiteCoords = [];
+                    var seenCoords = Object.create(null);
+                    poolSites.forEach(function (s) {
+                        var ck = siteCoordKey(s.lat, s.lon);
+                        if (seenCoords[ck]) return;
+                        seenCoords[ck] = true;
+                        uniqSiteCoords.push({
+                            coordKey: ck, lat: s.lat, lon: s.lon,
+                            x: (s.lon - centre.lon) * mpd.lon, y: (s.lat - centre.lat) * mpd.lat, isSite: true
+                        });
+                    });
+                    var bg = sampleBackground(centre, areaM, params.bgCount || 5000,
+                        canUseSessionCache ? poolSites : sel.sites, BG_EXCLUDE_M, params.rnd, params.backgroundAllowed);
+                    var sampleTargets = uniqSiteCoords.concat(bg.map(function (b) {
+                        return { lat: b.lat, lon: b.lon, x: b.x, y: b.y, isSite: false };
+                    }));
+                    return samplePointsOnGrid(sampleTargets, dem, grid).then(function (sampled) {
+                        var byCoord = new Map();
+                        for (var si = 0; si < uniqSiteCoords.length; si++) {
+                            byCoord.set(uniqSiteCoords[si].coordKey, sampled[si] || { valid: false });
+                        }
+                        var bgSampled = [];
+                        for (var bi = uniqSiteCoords.length; bi < sampleTargets.length; bi++) {
+                            bgSampled.push(Object.assign({}, sampleTargets[bi], sampled[bi] || { valid: false }));
+                        }
+                        var envObj = {
+                            key: envKey,
+                            dem: dem,
+                            demDecision: pick.decision,
+                            grid: grid,
+                            water: wr,
+                            classes: classes,
+                            byCoord: byCoord,
+                            bgSampled: bgSampled,
+                            envWarnings: envWarnings
+                        };
+                        if (canUseSessionCache) {
+                            session._trainEnvCache = envObj;
+                            session._trainedModelCache = new Map();
+                        }
+                        return envObj;
+                    });
                 });
             });
-        }).then(function (t) {
+        }
+
+        return prepareEnvironment().then(function (env) {
             checkToken(params.token);
-            // Prediction window (search circle + buffer) with the same DEM provider.
+            if (canUseSessionCache && session._trainedModelCache && session._trainedModelCache.has(modelKey)) {
+                return { env: env, fit: session._trainedModelCache.get(modelKey) };
+            }
+            var mergedSites = sel.sites.map(function (s) {
+                var r = env.byCoord.get(siteCoordKey(s.lat, s.lon)) || { valid: false };
+                return Object.assign({
+                    id: s.id, name: s.name, lat: s.lat, lon: s.lon,
+                    x: (s.lon - centre.lon) * mpd.lon, y: (s.lat - centre.lat) * mpd.lat, isSite: true
+                }, r);
+            });
+            var merged = mergedSites.concat(env.bgSampled);
+            var hard = filterTrainingSites(merged, env.water.water, env.grid, TRAIN_ROBUST_CONFIG);
+            var built = buildSampleSet(hard.points, {
+                minSlopeDeg: params.minSlopeDeg, radiusM: areaM, folds: 5,
+                waterClasses: params.waterClasses.filter(function (c) { return env.classes.indexOf(c) >= 0; })
+            });
+            if (built.counts.sites < minSites) {
+                var e2 = core.keyedError('err.tooFewTerrain', { n: built.counts.sites, min: minSites },
+                    'After terrain sampling only ' + built.counts.sites + ' sites had valid terrain (minimum ' + minSites + ').');
+                e2.code = 'too_few_sites';
+                throw e2;
+            }
+            progress('prog.train', 65);
+            return session.worker.call('train', {
+                S: built.S, waterClasses: built.waterClasses,
+                minSlopeDeg: params.minSlopeDeg, folds: 5,
+                robustConfig: TRAIN_ROBUST_CONFIG,
+                skipDiagnosticCV: !!params.forReport
+            }).then(function (tr) {
+                var fitObj = { train: tr.result, built: built, hardExcluded: hard };
+                if (canUseSessionCache && session._trainedModelCache) {
+                    session._trainedModelCache.set(modelKey, fitObj);
+                }
+                return { env: env, fit: fitObj };
+            });
+        }).then(function (bundle) {
+            checkToken(params.token);
+            var env = bundle.env, t = bundle.fit;
+            var predKey = envKey + '|r=' + params.radiusKm;
+            if (canUseSessionCache && session._predWindowKey === predKey && session.worker &&
+                session.exclusionStats && !session.exclusionStats.unknown) {
+                if (session._predWarnings && session._predWarnings.length) {
+                    session._predWarnings.forEach(function (w) { warnings.push(w); });
+                }
+                if (params.siteSource && session.provenance) session.provenance.sites = params.siteSource;
+                return t;
+            }
             progress('prog.window', 80);
             var wb = core.circleBBox(centre.lat, centre.lon, radiusM + BUFFER_M);
-            var wgrid = predictionGridFor(wb, dem, warnings);
-            // The prediction DEM raster and the UAT protection mask (often ~hundreds
-            // of tiles for a 50 km TRAIN window) do not depend on each other: fetch
-            // them together instead of the mask waiting for the DEM to finish first.
-            var demP = prov.loadDemGrid(dem, wgrid, dem.tilePx || 1000);
+            var predWarnings = [];
+            var wgrid = predictionGridFor(wb, env.dem, predWarnings);
+            var demP = prov.loadDemGrid(env.dem, wgrid, env.dem.tilePx || 1000);
             var exclusionP = startExclusionMask(wgrid, centre.lat, centre.lon, radiusM, params);
             return Promise.all([demP, exclusionP]).then(function (r) {
                 var elev = r[0], exclusionResult = r[1];
-                var masks = rasteriseWater(water.water, wgrid);
+                var masks = rasteriseWater(env.water.water, wgrid);
                 return setPredictionAnalysis(session, {
                     grid: wgrid, elev: elev, smooth: !!params.smoothDem, nodata: undefined,
                     circle: { lat: centre.lat, lon: centre.lon, radiusM: radiusM },
                     waterMasks: masks,
                     altRef: t.built.altRef, soilRef: t.built.soilRef, _exclusionResult: exclusionResult
-                }, params, warnings).then(function (res) {
+                }, params, predWarnings).then(function (res) {
+                    predWarnings.forEach(function (w) { warnings.push(w); });
                     session.analysisKey = null;
-                    session.provenance = provenanceFor(dem, wgrid, water.water, water.provider, demDecision);
+                    session._predWindowKey = (session.exclusionStats && session.exclusionStats.unknown) ? null : predKey;
+                    session._predWarnings = predWarnings;
+                    session.provenance = provenanceFor(env.dem, wgrid, env.water.water, env.water.provider, env.demDecision);
                     if (params.siteSource) session.provenance.sites = params.siteSource;
                     session.stats = res.stats;
                     session.waterClasses = Object.keys(masks);
@@ -712,15 +847,16 @@
         }).then(function (t) {
             checkToken(params.token);
             progress('prog.scoring', 90);
-                var tr = t.train;
-                var thr = tr.thresholds;
-                if(tr.robust.skipped)warnings.push(M('warn.robustSkipped',{n:tr.robust.siteCount,min:TRAIN_ROBUST_CONFIG.minSites},'Robust fitting was skipped: too few sites.'));
-                if(tr.robust.possibleSecondPattern.length)warnings.push(M('warn.secondPattern',{n:tr.robust.possibleSecondPattern.length},'A coherent alternate site pattern was preserved, not down-weighted.'));
-                if(tr.robust.weightChange>=TRAIN_ROBUST_CONFIG.weightChangeWarning)warnings.push(M('warn.weightShift',{v:(100*tr.robust.weightChange).toFixed(0)},'Robust fitting materially changed the learned variable weights.'));
-                var robustSites=tr.robust.flagged.map(function(x){var p=t.built.samples[x.index]||{};return {id:p.id||null,sampleIndex:x.index,lat:p.lat,lon:p.lon,weight:x.weight,reason:x.reason};});
+            var tr = t.train;
+            var thr = tr.thresholds;
+            if(tr.robust.skipped)warnings.push(M('warn.robustSkipped',{n:tr.robust.siteCount,min:TRAIN_ROBUST_CONFIG.minSites},'Robust fitting was skipped: too few sites.'));
+            if(tr.robust.possibleSecondPattern.length)warnings.push(M('warn.secondPattern',{n:tr.robust.possibleSecondPattern.length},'A coherent alternate site pattern was preserved, not down-weighted.'));
+            if(tr.robust.weightChange>=TRAIN_ROBUST_CONFIG.weightChangeWarning)warnings.push(M('warn.weightShift',{v:(100*tr.robust.weightChange).toFixed(0)},'Robust fitting materially changed the learned variable weights.'));
+            var robustSites=tr.robust.flagged.map(function(x){var p=t.built.samples[x.index]||{};return {id:p.id||null,sampleIndex:x.index,lat:p.lat,lon:p.lon,weight:x.weight,reason:x.reason};});
             return session.worker.call('score', {
                 mode: 'train', model: tr.model, waterClasses: t.built.waterClasses,
-                thresholds: thr, minAreaM2: params.minAreaM2, smoothIters: 1
+                thresholds: thr, minAreaM2: params.minAreaM2, smoothIters: 1,
+                forReport: !!params.forReport
             }).then(function (res) {
                 requireScores(res);
                 progress('prog.done', 100);
@@ -729,11 +865,12 @@
                     mode: 'train',
                     geojson: res.geojson,
                     heatmap: res.heatmap,
+                    reportRaster: res.reportRaster || null,
                     thresholds: res.thresholds,
                     areaKm2: res.areaKm2,
                     scoreStats: res.scoreStats,
                     provenance: session.provenance,
-                    warnings: warnings.slice(),   // t.warnings is the same array; do not duplicate every note
+                    warnings: warnings.slice(),
                     diagnostics: {
                         siteData: siteMeta || null,
                         sitesUsed: t.built.counts.sites,
@@ -763,7 +900,16 @@
                         noSignal: tr.model.noSignal
                     }
                 };
-                if(session.trainCache)session.trainCache.output=output;
+                session.trainCache = {
+                    S: t.built.S,
+                    built: t.built,
+                    waterClasses: t.built.waterClasses,
+                    minSlopeDeg: params.minSlopeDeg,
+                    minAreaM2: params.minAreaM2,
+                    robustConfig: TRAIN_ROBUST_CONFIG,
+                    restoredIndices: [],
+                    output: output
+                };
                 return output;
             });
         });

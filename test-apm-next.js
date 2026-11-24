@@ -789,7 +789,8 @@ test('the page loads geotiff.js before apm-providers.js (EU-DEM replies are GeoT
 test('the service worker pre-caches geotiff.js with the APM shell', () => {
     const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
     assert.ok(sw.includes("'js/vendor/geotiff.browser.js"), 'geotiff is in PRECACHE_URLS');
-    assert.ok(/detectlab-v410-apm-dem-timeout/.test(sw), 'cache name bumped');
+    const ver = Number((sw.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1] || 0);
+    assert.ok(ver >= 411, 'cache name bumped');
 });
 
 testAsync('debug mode records every request: URL, status, timing; CORS/network failures are labelled', async () => {

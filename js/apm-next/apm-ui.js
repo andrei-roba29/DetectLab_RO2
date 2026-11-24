@@ -12,7 +12,7 @@
 (function (root) {
     'use strict';
 
-    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261102-apm-mask-band';
+    var WORKER_URL = 'js/apm-next/apm-worker.js?v=20261124-arch-report-fast';
     var SWITCH_KEY = 'detectlab_apm_next';         // 'on' | 'off' (default off)
     var DEBUG_KEY = 'apmDebug';                    // shared with apm-providers.js
     var TRAIN_AREA_KM = 50;
@@ -44,10 +44,13 @@
         curveText: null,            // editable curve text per curve name
         result: null,
         busy: false,
-        reportBusy: false,          // the Archeological Report owns the sessions
+        reportBusy: false,          // the Archeological Report owns the report sessions
+        activeReportToken: null,
         token: null,
         manualSession: { worker: null, analysisKey: null, provenance: null, stats: null, waterClasses: [] },
-        trainSession: { worker: null, analysisKey: null, provenance: null, stats: null, waterClasses: [] }
+        trainSession: { worker: null, analysisKey: null, provenance: null, stats: null, waterClasses: [] },
+        reportManualSession: { worker: null, analysisKey: null, provenance: null, stats: null, waterClasses: [] },
+        reportTrainSession: { worker: null, analysisKey: null, provenance: null, stats: null, waterClasses: [] }
     };
 
     var map = null, layer = null, centreMarker = null, radiusCircle = null, downweightedLayer = null;
@@ -1211,28 +1214,52 @@
      * period and cancellation token — everything else is read from this panel,
      * so the two features can never drift apart. */
 
-    var reportSites = { centre: null, records: null };
+    var reportSites = { centre: null, records: null, inflightCentre: null, inflight: null };
 
     function reportCentreKey(centre) {
         return Number(centre.lat).toFixed(5) + ',' + Number(centre.lon).toFixed(5);
     }
 
-    /** Known-site pool for a report centre (50 km, cached per centre). */
+    /** Known-site pool for a report centre (50 km, cached per centre + deduplicated in-flight). */
     function loadReportSites(centre, token) {
-        if (reportSites.centre === reportCentreKey(centre) && reportSites.records) {
+        var ckey = reportCentreKey(centre);
+        if (reportSites.centre === ckey && reportSites.records) {
+            if (token && token.cancelled) return Promise.reject(new Error('Cancelled'));
             return Promise.resolve(reportSites.records);
+        }
+        if (reportSites.inflightCentre === ckey && reportSites.inflight) {
+            return reportSites.inflight.then(function (records) {
+                if (token && token.cancelled) throw new Error('Cancelled');
+                return records;
+            });
         }
         var provider = root.DetectLabRomaniaApmSites;
         if (!provider || typeof provider.createProvider !== 'function') {
             return Promise.reject(new Error('The known-sites dataset is unavailable.'));
         }
-        var t = token || { cancelled: false };
-        return provider.createProvider().getSites(centre, TRAIN_AREA_KM, { token: t }).then(function (records) {
-            if (t.cancelled) throw new Error('Cancelled');
+        var sharedToken = { cancelled: false };
+        var pr = provider.createProvider().getSites(centre, TRAIN_AREA_KM, { token: sharedToken }).then(function (records) {
+            if (reportSites.inflight === pr) {
+                reportSites.inflight = null;
+                reportSites.inflightCentre = null;
+            }
             if (records._meta && records._meta.outsideRomania) {
                 throw new Error('The report point is outside the Romanian training dataset.');
             }
-            reportSites = { centre: reportCentreKey(centre), records: records };
+            reportSites.centre = ckey;
+            reportSites.records = records;
+            return records;
+        }, function (err) {
+            if (reportSites.inflight === pr) {
+                reportSites.inflight = null;
+                reportSites.inflightCentre = null;
+            }
+            throw err;
+        });
+        reportSites.inflightCentre = ckey;
+        reportSites.inflight = pr;
+        return pr.then(function (records) {
+            if (token && token.cancelled) throw new Error('Cancelled');
             return records;
         });
     }
@@ -1246,21 +1273,37 @@
 
     /** Run this panel's configuration as someone else's APM baseline.
      * opts: { mode: 'custom'|'train', centre:{lat,lon}, radiusKm, periodKey,
-     *         token, onProgress } → Promise<result> (geojson + thresholds). */
+     *         token, onProgress } → Promise<result> (reportRaster + geojson + thresholds). */
     function reportRun(opts) {
         opts = opts || {};
         if (!pipe() || !core()) return Promise.reject(new Error('APM Next-Gen is not loaded.'));
-        if (state.busy || state.reportBusy) return Promise.reject(new Error('APM Next-Gen is already running — wait for it to finish.'));
+        if (state.busy) return Promise.reject(new Error('APM Next-Gen is already running — wait for it to finish.'));
         if (!els.wRelief) return Promise.reject(new Error('The APM Next-Gen panel is not ready yet.'));
         var centre = opts.centre;
         if (!centre) return Promise.reject(new Error(T('status.noPoint')));
-        // Claim the shared worker sessions so the panel cannot start a second
-        // analysis on top of the report's run (and vice versa).
+        // Supersede any previous in-flight report run cleanly instead of failing.
+        if (state.activeReportToken && state.activeReportToken !== opts.token) {
+            state.activeReportToken.cancelled = true;
+        }
+        var runToken = opts.token || { cancelled: false };
+        state.activeReportToken = runToken;
         state.reportBusy = true;
-        function release(value) { state.reportBusy = false; return value; }
-        function releaseReject(err) { state.reportBusy = false; throw err; }
+        function release(value) {
+            if (state.activeReportToken === runToken) {
+                state.activeReportToken = null;
+                state.reportBusy = false;
+            }
+            return value;
+        }
+        function releaseReject(err) {
+            if (state.activeReportToken === runToken) {
+                state.activeReportToken = null;
+                state.reportBusy = false;
+            }
+            throw err;
+        }
         if (opts.mode === 'train') {
-            return loadReportSites(centre, opts.token).then(function (records) {
+            return loadReportSites(centre, runToken).then(function (records) {
                 var pool = pipe().sitePool(records, centre);
                 var period = null;
                 if (opts.periodKey && opts.periodKey !== 'all') {
@@ -1278,10 +1321,11 @@
                     strahlerMap: readStrahlerMap(),
                     waterClasses: core().WATER_CLASSES.filter(function (c) { return els.water[c].checked; }),
                     workerUrl: WORKER_URL,
-                    token: opts.token,
-                    onProgress: opts.onProgress
+                    token: runToken,
+                    onProgress: opts.onProgress,
+                    forReport: true
                 };
-                return pipe().runTrain(state.trainSession, params).then(function (res) {
+                return pipe().runTrain(state.reportTrainSession, params).then(function (res) {
                     res.mode = 'train';
                     res.period = period;
                     return res;
@@ -1290,9 +1334,10 @@
         }
         var params = readManualParams({
             centre: centre, radiusKm: opts.radiusKm,
-            token: opts.token, onProgress: opts.onProgress
+            token: runToken, onProgress: opts.onProgress
         });
-        return pipe().runManual(state.manualSession, params).then(function (res) {
+        params.forReport = true;
+        return pipe().runManual(state.reportManualSession, params).then(function (res) {
             res.mode = 'custom';
             return res;
         }).then(release, releaseReject);

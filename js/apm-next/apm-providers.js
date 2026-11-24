@@ -122,7 +122,42 @@
         }
     }
 
+    var initialFetchImpl = fetchImpl;
+    var isCustomFetch = false;
     var memCache = new Map();
+    var sharedTerrariumTiles = new Map();
+    var sharedTerrariumInflight = new Map();
+    var sharedEuHydroLayersPromise = null;
+    var endpointFailureCache = {};
+
+    function lruSet(map, key, val, maxEntries) {
+        if (map.has(key)) map.delete(key);
+        map.set(key, val);
+        while (map.size > maxEntries) {
+            var oldest = map.keys().next().value;
+            map.delete(oldest);
+        }
+    }
+
+    function mapConcurrent(items, concurrency, fn) {
+        var list = items || [];
+        var len = list.length;
+        if (!len) return Promise.resolve([]);
+        var limit = Math.max(1, Math.min(concurrency || 1, len));
+        var results = new Array(len);
+        var next = 0;
+        function worker() {
+            if (next >= len) return Promise.resolve();
+            var idx = next++;
+            return Promise.resolve().then(function () { return fn(list[idx], idx); }).then(function (val) {
+                results[idx] = val;
+                return worker();
+            });
+        }
+        var runners = [];
+        for (var i = 0; i < limit; i++) runners.push(worker());
+        return Promise.all(runners).then(function () { return results; });
+    }
     var DB_NAME = 'detectlab-apm-next', STORE = 'kv';
     var dbPromise = null;
     function openDb() {
@@ -403,9 +438,9 @@
      * cb(tile) where tile = { elev (Float32Array of tile grid incl. halo), grid (tile grid incl. halo),
      *                         core: {i0,j0,i1,j1} indices into the full grid }.
      * Optional filter(tile) → boolean skips tiles that are not needed.
-     * Sequential by design: one tile in memory at a time.
+     * Sequential by default (one tile in memory at a time); callers may pass opts.concurrency.
      */
-    function forEachDemTile(provider, grid, tilePx, cb, filter) {
+    function forEachDemTile(provider, grid, tilePx, cb, filter, opts) {
         var tiles = [];
         for (var j0 = 0; j0 < grid.h; j0 += tilePx) {
             for (var i0 = 0; i0 < grid.w; i0 += tilePx) {
@@ -413,14 +448,13 @@
                 if (!filter || filter(t)) tiles.push(t);
             }
         }
-        return tiles.reduce(function (p, t) {
-            return p.then(function () {
-                var hg = subGrid(grid, t.i0 - 1, t.j0 - 1, (t.i1 - t.i0) + 2, (t.j1 - t.j0) + 2);
-                return provider.fetchBlock(hg).then(function (elev) {
-                    return cb({ elev: elev, grid: hg, core: t });
-                });
+        var conc = (opts && opts.concurrency) || 1;
+        return mapConcurrent(tiles, conc, function (t) {
+            var hg = subGrid(grid, t.i0 - 1, t.j0 - 1, (t.i1 - t.i0) + 2, (t.j1 - t.j0) + 2);
+            return provider.fetchBlock(hg).then(function (elev) {
+                return cb({ elev: elev, grid: hg, core: t });
             });
-        }, Promise.resolve());
+        }).then(function () { return undefined; });
     }
 
     /** Assemble a full grid from tiles (no halo) — used for the prediction window. */
@@ -434,7 +468,7 @@
                     out[j * grid.w + i] = t.elev[srcRow + (i - t.core.i0)];
                 }
             }
-        }).then(function () { return out; });
+        }, null, { concurrency: 4 }).then(function () { return out; });
     }
 
     /* ── DEM: EU-DEM via WCS (one provider per candidate, capabilities read at runtime) ── */
@@ -523,6 +557,10 @@
             },
             discover: function (timeoutMs) {
                 if (demCaps[cand.endpoint]) return Promise.resolve(demCaps[cand.endpoint]);
+                if (!isCustomFetch) {
+                    var cachedFail = endpointFailureCache[cand.endpoint];
+                    if (cachedFail && cachedFail.until > Date.now()) return Promise.reject(cachedFail.err);
+                }
                 var deadline = timeoutMs || CONFIG.demProbeTimeoutMs;
                 var url = cand.endpoint + '?service=WCS&version=2.0.1&request=GetCapabilities';
                 return httpFetch(url, {}, { rate: { concurrency: 1, minIntervalMs: 500 }, step: 'dem', endpoint: cand.endpoint,
@@ -565,6 +603,13 @@
                                 coverages: ids, formats: caps.formats, crs: caps.crs, maxRequestSize: caps.maxRequestSize });
                             return found;
                         });
+                    })
+                    .catch(function (err) {
+                        if (!isCustomFetch && err && err.reason &&
+                            (err.reason.key === 'reason.timeout' || err.reason.key === 'reason.network')) {
+                            endpointFailureCache[cand.endpoint] = { err: err, until: Date.now() + 5 * 60 * 1000 };
+                        }
+                        throw err;
                     });
             },
             fetchBlock: function (grid, opts) {
@@ -578,7 +623,7 @@
                     function tryNext() {
                         var url = urls[attempt++];
                         return httpFetch(url, {}, {
-                            rate: { concurrency: 2, minIntervalMs: 300 }, step: 'dem', endpoint: cov.endpoint,
+                            rate: { concurrency: 4, minIntervalMs: 80 }, step: 'dem', endpoint: cov.endpoint,
                             timeoutMs: timeoutMs, maxBytes: maxBytes
                         }).then(function (r) {
                             var ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
@@ -718,7 +763,6 @@
     }
 
     function createTerrariumProvider() {
-        var tileCache = new Map();
         return {
             id: 'terrarium',
             tier: 'fallback',
@@ -734,47 +778,92 @@
                 var timeoutMs = opts.timeoutMs || CONFIG.terrarium.timeoutMs;
                 var maxBytes = opts.maxBytes || 4 * 1024 * 1024;
                 var midLat = grid.north - grid.h / 2 * grid.dLat;
-                var midLon = grid.west + grid.w / 2 * grid.dLon;
                 var sp = raster.gridSpacingM(grid);
                 var z = terrariumZoomFor(midLat, Math.max(sp.dx, sp.dy));
-                var out = new Float32Array(grid.w * grid.h);
-                var need = {};
-                var cells = [];
-                for (var j = 0; j < grid.h; j++) {
+                var gw = grid.w, gh = grid.h;
+                var out = new Float32Array(gw * gh);
+                var worldSize = 256 * Math.pow(2, z);
+                var txArr = new Int32Array(gw);
+                var pxArr = new Uint8Array(gw);
+                for (var i = 0; i < gw; i++) {
+                    var lon = raster.cellLon(grid, i);
+                    var wx = (lon + 180) / 360 * worldSize;
+                    var tx = Math.floor(wx / 256);
+                    txArr[i] = tx;
+                    pxArr[i] = Math.min(255, Math.max(0, Math.floor(wx - tx * 256)));
+                }
+                var tyArr = new Int32Array(gh);
+                var pyArr = new Uint8Array(gh);
+                for (var j = 0; j < gh; j++) {
                     var lat = raster.cellLat(grid, j);
-                    for (var i = 0; i < grid.w; i++) {
-                        var p = lonLatToWorldPx(lat, raster.cellLon(grid, i), z);
-                        var tx = Math.floor(p.x / 256), ty = Math.floor(p.y / 256);
-                        var key = z + '/' + tx + '/' + ty;
-                        need[key] = { z: z, x: tx, y: ty };
-                        cells.push(j * grid.w + i, p.x - tx * 256, p.y - ty * 256, key);
+                    var s = Math.sin(lat * Math.PI / 180);
+                    var wy = (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * worldSize;
+                    var ty = Math.floor(wy / 256);
+                    tyArr[j] = ty;
+                    pyArr[j] = Math.min(255, Math.max(0, Math.floor(wy - ty * 256)));
+                }
+                var need = Object.create(null);
+                var uniqTx = Object.create(null), uniqTy = Object.create(null);
+                for (i = 0; i < gw; i++) uniqTx[txArr[i]] = true;
+                for (j = 0; j < gh; j++) uniqTy[tyArr[j]] = true;
+                var txKeys = Object.keys(uniqTx), tyKeys = Object.keys(uniqTy);
+                for (var tj = 0; tj < tyKeys.length; tj++) {
+                    var rty = Number(tyKeys[tj]);
+                    for (var ti = 0; ti < txKeys.length; ti++) {
+                        var rtx = Number(txKeys[ti]);
+                        var key = z + '/' + rtx + '/' + rty;
+                        need[key] = { z: z, x: rtx, y: rty };
                     }
                 }
                 var keys = Object.keys(need);
-                var pix = new Map();
-                return keys.reduce(function (pr, key) {
-                    return pr.then(function () {
-                        var t = need[key];
-                        var url = CONFIG.terrarium.urlTemplate.replace('{z}', t.z).replace('{x}', t.x).replace('{y}', t.y);
-                        if (tileCache.has(key)) { pix.set(key, tileCache.get(key)); return; }
-                        return cacheGet('terrarium|' + key).then(function (cachedBuf) {
-                            if (cachedBuf) return decodePng(new Blob([cachedBuf], { type: 'image/png' }));
-                            return httpFetch(url, {}, { rate: { concurrency: 4, minIntervalMs: 20 }, step: 'dem', endpoint: 'terrarium',
-                                timeoutMs: timeoutMs, maxBytes: maxBytes })
-                                .then(function (r) {
-                                    return readBodyBuffer(r, maxBytes, timeoutMs).then(function (ab) {
-                                        return cacheSet('terrarium|' + key, ab).then(function () {
-                                            return decodePng(new Blob([ab], { type: 'image/png' }));
-                                        });
+                var pix = Object.create(null);
+                function loadOneTile(k) {
+                    if (sharedTerrariumTiles.has(k)) {
+                        var hit = sharedTerrariumTiles.get(k);
+                        lruSet(sharedTerrariumTiles, k, hit, 512);
+                        pix[k] = hit;
+                        return Promise.resolve();
+                    }
+                    if (sharedTerrariumInflight.has(k)) {
+                        return sharedTerrariumInflight.get(k).then(function (rgba) { pix[k] = rgba; });
+                    }
+                    var t = need[k];
+                    var url = CONFIG.terrarium.urlTemplate.replace('{z}', t.z).replace('{x}', t.x).replace('{y}', t.y);
+                    var pr = cacheGet('terrarium|' + k).then(function (cachedBuf) {
+                        if (cachedBuf) return decodePng(new Blob([cachedBuf], { type: 'image/png' }));
+                        return httpFetch(url, {}, { rate: { concurrency: 8, minIntervalMs: 10 }, step: 'dem', endpoint: 'terrarium',
+                            timeoutMs: timeoutMs, maxBytes: maxBytes })
+                            .then(function (r) {
+                                return readBodyBuffer(r, maxBytes, timeoutMs).then(function (ab) {
+                                    return cacheSet('terrarium|' + k, ab).then(function () {
+                                        return decodePng(new Blob([ab], { type: 'image/png' }));
                                     });
                                 });
-                        }).then(function (rgba) { tileCache.set(key, rgba); pix.set(key, rgba); });
+                            });
+                    }).then(function (rgba) {
+                        sharedTerrariumInflight.delete(k);
+                        lruSet(sharedTerrariumTiles, k, rgba, 512);
+                        pix[k] = rgba;
+                        return rgba;
+                    }, function (err) {
+                        sharedTerrariumInflight.delete(k);
+                        throw err;
                     });
-                }, Promise.resolve()).then(function () {
-                    for (var c = 0; c < cells.length; c += 4) {
-                        var rgba = pix.get(cells[c + 3]);
-                        var px = Math.min(255, Math.floor(cells[c + 1])), py = Math.min(255, Math.floor(cells[c + 2]));
-                        out[cells[c]] = terrariumHeight(rgba, (py * 256 + px) * 4);
+                    sharedTerrariumInflight.set(k, pr);
+                    return pr.then(function () { return undefined; });
+                }
+                return mapConcurrent(keys, 8, loadOneTile).then(function () {
+                    for (var row = 0; row < gh; row++) {
+                        var rowTy = tyArr[row], rowPy = pyArr[row], rowBase = row * gw;
+                        var prevTx = -2147483648, curRgba = null;
+                        for (var col = 0; col < gw; col++) {
+                            var colTx = txArr[col];
+                            if (colTx !== prevTx) {
+                                prevTx = colTx;
+                                curRgba = pix[z + '/' + colTx + '/' + rowTy];
+                            }
+                            out[rowBase + col] = terrariumHeight(curRgba, (rowPy * 256 + pxArr[col]) * 4);
+                        }
                     }
                     return out;
                 });
@@ -888,8 +977,8 @@
 
     /** Query one layer over bbox. Pages with resultOffset when allowed, otherwise subdivides. */
     function queryLayerAll(base, layer, bbox, depth, acc, simplifyDeg) {
-        var url = buildEsriQuery(base, layer.id, bbox, { maxAllowableOffsetDeg: simplifyDeg });
-        return httpFetch(url, {}, { rate: { concurrency: 2, minIntervalMs: 250 }, step: 'water', endpoint: 'eu-hydro' })
+        var url = buildEsriQuery(base, layer.id, bbox, { maxAllowableOffsetDeg: simplifyDeg, outFields: 'OBJECTID' });
+        return httpFetch(url, {}, { rate: { concurrency: 4, minIntervalMs: 80 }, step: 'water', endpoint: 'eu-hydro' })
             .then(function (r) { return readBodyJson(r); })
             .then(function (json) {
                 if (json.error) throw new Error('EU-Hydro query error: ' + (json.error.message || json.error.code));
@@ -907,10 +996,13 @@
     }
 
     function createEuHydroProvider() {
-        var layersPromise = null;
         function layers() {
-            if (!layersPromise) {
-                layersPromise = httpFetch(CONFIG.euHydro.base + '?f=json', {}, { rate: { concurrency: 1, minIntervalMs: 500 }, step: 'water', endpoint: 'eu-hydro layers' })
+            if (!sharedEuHydroLayersPromise) {
+                if (!isCustomFetch) {
+                    var cachedFail = endpointFailureCache[CONFIG.euHydro.base];
+                    if (cachedFail && cachedFail.until > Date.now()) return Promise.reject(cachedFail.err);
+                }
+                sharedEuHydroLayersPromise = httpFetch(CONFIG.euHydro.base + '?f=json', {}, { rate: { concurrency: 1, minIntervalMs: 300 }, step: 'water', endpoint: 'eu-hydro layers' })
                     .then(function (r) { return readBodyText(r, 8 * 1024 * 1024); })
                     .then(function (text) {
                         var j;
@@ -921,9 +1013,16 @@
                         if (!ls.length) throw failure('reason.noCoverage', { found: 'no River_Net / InlandWater layers' }, 'no EU-Hydro river layers in service JSON');
                         return ls;
                     })
-                    .catch(function (e) { layersPromise = null; throw e; });
+                    .catch(function (e) {
+                        sharedEuHydroLayersPromise = null;
+                        if (!isCustomFetch && e && e.reason &&
+                            (e.reason.key === 'reason.timeout' || e.reason.key === 'reason.network')) {
+                            endpointFailureCache[CONFIG.euHydro.base] = { err: e, until: Date.now() + 5 * 60 * 1000 };
+                        }
+                        throw e;
+                    });
             }
-            return layersPromise;
+            return sharedEuHydroLayersPromise;
         }
         return {
             id: 'eu-hydro',
@@ -938,24 +1037,33 @@
                 var simplify = opts.simplifyDeg == null ? 0.0001 : opts.simplifyDeg;
                 var map = opts.strahlerMap || CONFIG.water.defaultStrahlerMap;
                 var includeDrainage = !!opts.includeDrainage;
-                return layers().then(function (ls) {
-                    var acc = { lines: [], rings: [] };
-                    var skipped = [];
-                    var use = [];
-                    ls.forEach(function (l) {
-                        if (l.role === 'drainage' && !includeDrainage) return;
-                        var cls = l.order != null ? strahlerToClass(l.order, map) : l.cls;
-                        if (!cls) { skipped.push(l.name + ' (no size class in the map)'); return; }
-                        use.push({ id: l.id, name: l.name, role: l.role, cls: cls });
-                    });
-                    return use.reduce(function (p, layer) {
-                        return p.then(function () { return queryLayerAll(CONFIG.euHydro.base, layer, bbox, 0, acc, simplify); });
-                    }, Promise.resolve()).then(function () {
-                        return {
-                            lines: acc.lines, polygons: acc.rings,
-                            meta: { provider: 'eu-hydro', layers: use.map(function (l) { return l.name; }),
-                                drainage: includeDrainage, skippedLayers: skipped, incompleteTiles: acc.incomplete || 0 }
-                        };
+                var waterCacheKey = [
+                    'euhydro',
+                    bbox.west.toFixed(4), bbox.south.toFixed(4), bbox.east.toFixed(4), bbox.north.toFixed(4),
+                    simplify, includeDrainage ? '1' : '0', JSON.stringify(map)
+                ].join('|');
+                return cacheGet(waterCacheKey).then(function (cachedWater) {
+                    if (cachedWater) return cachedWater;
+                    return layers().then(function (ls) {
+                        var acc = { lines: [], rings: [] };
+                        var skipped = [];
+                        var use = [];
+                        ls.forEach(function (l) {
+                            if (l.role === 'drainage' && !includeDrainage) return;
+                            var cls = l.order != null ? strahlerToClass(l.order, map) : l.cls;
+                            if (!cls) { skipped.push(l.name + ' (no size class in the map)'); return; }
+                            use.push({ id: l.id, name: l.name, role: l.role, cls: cls });
+                        });
+                        return mapConcurrent(use, 4, function (layer) {
+                            return queryLayerAll(CONFIG.euHydro.base, layer, bbox, 0, acc, simplify);
+                        }).then(function () {
+                            var res = {
+                                lines: acc.lines, polygons: acc.rings,
+                                meta: { provider: 'eu-hydro', layers: use.map(function (l) { return l.name; }),
+                                    drainage: includeDrainage, skippedLayers: skipped, incompleteTiles: acc.incomplete || 0 }
+                            };
+                            return cacheSet(waterCacheKey, res, 7 * 24 * 3600 * 1000).then(function () { return res; });
+                        });
                     });
                 });
             }
@@ -969,10 +1077,13 @@
     };
 
     /** Overpass QL for waterways + water polygons inside bbox. Pure. */
-    function buildOverpassQuery(bbox, timeoutS) {
+    function buildOverpassQuery(bbox, timeoutS, opts) {
         var b = [bbox.south, bbox.west, bbox.north, bbox.east].join(',');
+        var ww = (opts && opts.includeArtificial === false)
+            ? '^(river|stream|brook|riverbank)$'
+            : '^(river|stream|brook|riverbank|canal|drain|ditch)$';
         return '[out:json][timeout:' + (timeoutS || 60) + '];(' +
-            'way["waterway"~"^(river|stream|brook|riverbank|canal|drain|ditch)$"](' + b + ');' +
+            'way["waterway"~"' + ww + '"](' + b + ');' +
             'way["natural"="water"](' + b + ');' +
             'way["natural"="sea"](' + b + ');' +
             'relation["natural"~"^(water|sea)$"]["type"="multipolygon"](' + b + ');' +
@@ -1011,7 +1122,7 @@
             source: '© OpenStreetMap contributors (ODbL)',
             coversLonLat: function () { return true; },
             fetchWater: function (bbox, opts) {
-                var q = buildOverpassQuery(bbox, CONFIG.overpass.timeoutS);
+                var q = buildOverpassQuery(bbox, CONFIG.overpass.timeoutS, opts);
                 var body = 'data=' + encodeURIComponent(q);
                 return cacheGet('overpass|' + q).then(function (cached) {
                     if (cached) return cached;
@@ -1084,7 +1195,15 @@
 
     return {
         CONFIG: CONFIG,
-        setFetch: function (fn) { fetchImpl = fn; },
+        setFetch: function (fn) {
+            fetchImpl = fn || initialFetchImpl;
+            isCustomFetch = !!fn && fn !== initialFetchImpl;
+            memCache.clear();
+            sharedTerrariumTiles.clear();
+            sharedTerrariumInflight.clear();
+            sharedEuHydroLayersPromise = null;
+            endpointFailureCache = {};
+        },
         APP_VERSION: APP_VERSION,
         setDebug: setDebug,
         logStep: logStep,
