@@ -75,10 +75,37 @@
         return Math.atan2(b.y - a.y, b.x - a.x) * RAD;
     }
 
+    function rotatedViewportHalfSize(map) {
+        var size = map.getSize();
+        if (!map || !map._rotate || !map._bearing) {
+            return size.divideBy(2);
+        }
+        var rad = Math.abs(map._bearing) * DEG;
+        var cos = Math.abs(Math.cos(rad));
+        var sin = Math.abs(Math.sin(rad));
+        return L.point(
+            (size.x * cos + size.y * sin) / 2,
+            (size.x * sin + size.y * cos) / 2
+        );
+    }
+
+    function fireRotationMoveEnd(map) {
+        if (!map) return;
+        map._dlRotationMoveEnd = true;
+        try {
+            map.fire('moveend');
+        } finally {
+            map._dlRotationMoveEnd = false;
+        }
+    }
+
     var origSetPosition = L.DomUtil.setPosition;
     var origGetBounds = L.Map.prototype.getBounds;
     var origContainerToLayer = L.Map.prototype.containerPointToLayerPoint;
     var origLayerToContainer = L.Map.prototype.layerPointToContainerPoint;
+    var origLimitCenter = L.Map.prototype._limitCenter;
+    var origLimitOffset = L.Map.prototype._limitOffset;
+    var origPanInsideMaxBounds = L.Map.prototype._panInsideMaxBounds;
     var origGetTiledPixelBounds = L.GridLayer && L.GridLayer.prototype._getTiledPixelBounds;
 
     L.DomUtil.setPosition = function (el, point) {
@@ -132,7 +159,7 @@
             } catch (err) {}
             if (reduceMotion) {
                 this.setBearing(0);
-                this.fire('moveend');
+                fireRotationMoveEnd(this);
                 return this;
             }
             var start = null;
@@ -142,7 +169,7 @@
                 var eased = 1 - Math.pow(1 - t, 3);
                 map.setBearing(from * (1 - eased), { noMove: t < 1 });
                 if (t < 1) L.Util.requestAnimFrame(step);
-                else map.fire('moveend');
+                else fireRotationMoveEnd(map);
             }
             L.Util.requestAnimFrame(step);
             return this;
@@ -176,6 +203,9 @@
             if (!this._animatingZoom) {
                 var pivot = this._pivot();
                 pane.style.transformOrigin = (pivot.x - pos.x) + 'px ' + (pivot.y - pos.y) + 'px';
+            } else if (!pane.style.transformOrigin || pane.style.transformOrigin === '0px 0px') {
+                var animPivot = this._pivot();
+                pane.style.transformOrigin = (animPivot.x - pos.x) + 'px ' + (animPivot.y - pos.y) + 'px';
             }
             pane.style[L.DomUtil.TRANSFORM] =
                 'translate3d(' + pos.x + 'px,' + pos.y + 'px,0) rotate(' + bearing + 'deg)';
@@ -209,6 +239,55 @@
             ]);
         }
     });
+
+    if (typeof origPanInsideMaxBounds === 'function') {
+        L.Map.include({
+            _panInsideMaxBounds: function () {
+                // Turning the view in place (compass / twist / Alt-drag) fires
+                // moveend only so tile layers refresh their rotated corners;
+                // it must never re-centre or pan the camera away from the place
+                // the user is inspecting.
+                if (this._dlRotationMoveEnd) return this;
+                return origPanInsideMaxBounds.apply(this, arguments);
+            }
+        });
+    }
+
+    if (typeof origLimitCenter === 'function') {
+        L.Map.include({
+            _limitCenter: function (center, zoom, bounds) {
+                if (!this._rotate || !this._bearing || !bounds) {
+                    return origLimitCenter.apply(this, arguments);
+                }
+                var target = L.latLng(center);
+                var centerPoint = this.project(target, zoom);
+                var half = rotatedViewportHalfSize(this);
+                var viewBounds = L.bounds(centerPoint.subtract(half), centerPoint.add(half));
+                var offset = this._getBoundsOffset(viewBounds, bounds, zoom);
+                if (Math.abs(offset.x) <= 1 && Math.abs(offset.y) <= 1) {
+                    return target;
+                }
+                return this.unproject(centerPoint.add(offset), zoom);
+            }
+        });
+    }
+
+    if (typeof origLimitOffset === 'function') {
+        L.Map.include({
+            _limitOffset: function (offset, bounds) {
+                if (!this._rotate || !this._bearing || !bounds) {
+                    return origLimitOffset.apply(this, arguments);
+                }
+                var centerPoint = this.project(this.getCenter(), this.getZoom());
+                var half = rotatedViewportHalfSize(this);
+                var viewBounds = L.bounds(
+                    centerPoint.subtract(half).add(offset),
+                    centerPoint.add(half).add(offset)
+                );
+                return offset.add(this._getBoundsOffset(viewBounds, bounds));
+            }
+        });
+    }
 
     if (origGetTiledPixelBounds) {
         L.GridLayer.include({
@@ -366,7 +445,7 @@
                 if (g.engaged) {
                     g.pinching = true;
                     g.engaged = false;
-                    this._map.fire('moveend');
+                    fireRotationMoveEnd(this._map);
                 }
                 return;
             }
@@ -384,6 +463,16 @@
                     g.engaged = true;
                     g.engagedDistance = pair.distance;
                     g.offset = twist; // the turn starts from 0° — no jump at engage
+                    var tz = this._map.touchZoom;
+                    if (tz && tz._zooming) {
+                        if (tz._animRequest) {
+                            L.Util.cancelAnimFrame(tz._animRequest);
+                            tz._animRequest = null;
+                        }
+                        tz._center = this._map.getCenter();
+                        tz._zoom = this._map.getZoom();
+                        tz._moved = false;
+                    }
                 } else {
                     var spread = (pair.distance - g.startDistance) / g.startDistance;
                     if (Math.abs(spread) > TOUCH_PINCH_SLOP) {
@@ -401,7 +490,7 @@
                     // not resume for the rest of the gesture.
                     g.pinching = true;
                     g.engaged = false;
-                    this._map.fire('moveend');
+                    fireRotationMoveEnd(this._map);
                     return;
                 }
             }
@@ -412,7 +501,7 @@
         _onEnd: function () {
             L.DomEvent.off(document, 'touchmove', this._onMove, this);
             L.DomEvent.off(document, 'touchend touchcancel', this._onEnd, this);
-            if (this._gesture && this._gesture.engaged) this._map.fire('moveend');
+            if (this._gesture && this._gesture.engaged) fireRotationMoveEnd(this._map);
             this._gesture = null;
         },
 
@@ -453,13 +542,13 @@
                 // An engaged twist that turns into a pinch stops dead.
                 this._gesturePinch = true;
                 this._gestureEngaged = false;
-                this._map.fire('moveend');
+                fireRotationMoveEnd(this._map);
                 return;
             }
             this._map.setBearing(this._gestureBearing + (rot - this._gestureRotation), { noMove: true });
         },
         _onGestureEnd: function () {
-            if (this._gestureEngaged) this._map.fire('moveend');
+            if (this._gestureEngaged) fireRotationMoveEnd(this._map);
             this._gestureEngaged = false;
             this._gesturePinch = false;
             this._usingGesture = false;
@@ -512,7 +601,7 @@
             L.DomEvent.off(document, 'mouseup', this._onUp, this);
             if (this._dragWasEnabled && this._map.dragging) this._map.dragging.enable();
             this._dragWasEnabled = false;
-            if (this._moved) this._map.fire('moveend');
+            if (this._moved) fireRotationMoveEnd(this._map);
             this._moved = false;
         },
         _onWheel: function (e) {
@@ -628,7 +717,7 @@
                 if (!drag) return;
                 self._drag = null;
                 btn.classList.remove('is-dragging');
-                if (drag.moved && self._map) self._map.fire('moveend');
+                if (drag.moved && self._map) fireRotationMoveEnd(self._map);
                 if (self._suppressClick) {
                     // pointerup is followed by click in the same interaction;
                     // clear the flag right after it so the next tap works.
@@ -701,6 +790,191 @@
     L.control.compass = function (options) {
         return new L.Control.Compass(options);
     };
+
+    /* Map.Drag._onDragStart computes _offsetLimit from latLngToContainerPoint(NW)
+     * and latLngToContainerPoint(SE), which are rotated screen coordinates, while
+     * _onPreDragLimit clamps (_draggable._newPos - _startPos) in unrotated
+     * _mapPane layer coordinates. Near asymmetric border regions (e.g. Ramna in
+     * Caraș-Severin under Romania's maxBounds with viscosity 1), rotating the
+     * compass puts both NW and SE on the same side of the container origin so 0
+     * lies outside _offsetLimit — the very first pointer move then snaps the map
+     * hundreds of kilometres away. Compute _offsetLimit in unrotated world/pane
+     * pixel space from the rotated viewport footprint, always containing 0. */
+    if (L.Map.Drag && typeof L.Map.Drag.prototype._onDragStart === 'function') {
+        var origDragStart = L.Map.Drag.prototype._onDragStart;
+        L.Map.Drag.include({
+            _onDragStart: function () {
+                origDragStart.apply(this, arguments);
+                var map = this._map;
+                if (!map || !map._rotate || !map._bearing || !this._offsetLimit || !map.options.maxBounds) {
+                    return;
+                }
+                var maxBounds = L.latLngBounds(map.options.maxBounds);
+                if (!maxBounds.isValid()) return;
+                var zoom = map.getZoom();
+                var centerPx = map.project(map.getCenter(), zoom);
+                var maxPx = L.bounds(
+                    map.project(maxBounds.getNorthWest(), zoom),
+                    map.project(maxBounds.getSouthEast(), zoom)
+                );
+                var half = rotatedViewportHalfSize(map);
+                var spanX = maxPx.max.x - maxPx.min.x;
+                var spanY = maxPx.max.y - maxPx.min.y;
+                var minCenterX = spanX > 2 * half.x ? maxPx.min.x + half.x : (maxPx.min.x + maxPx.max.x) / 2;
+                var maxCenterX = spanX > 2 * half.x ? maxPx.max.x - half.x : minCenterX;
+                var minCenterY = spanY > 2 * half.y ? maxPx.min.y + half.y : (maxPx.min.y + maxPx.max.y) / 2;
+                var maxCenterY = spanY > 2 * half.y ? maxPx.max.y - half.y : minCenterY;
+                var minOffX = Math.min(0, centerPx.x - maxCenterX);
+                var maxOffX = Math.max(0, centerPx.x - minCenterX);
+                var minOffY = Math.min(0, centerPx.y - maxCenterY);
+                var maxOffY = Math.max(0, centerPx.y - minCenterY);
+                this._offsetLimit = L.bounds(
+                    L.point(minOffX, minOffY),
+                    L.point(maxOffX, maxOffY)
+                );
+            }
+        });
+    }
+
+    /* Map.TouchZoom._onTouchMove subtracts the finger-midpoint offset `mid - center`
+     * (in rotated container pixels) directly from project(_pinchStartLatLng) (in
+     * unrotated world pixels), which teleports the view whenever the user pinches
+     * in or out off-centre while rotated. Rotate that offset by -bearing into
+     * world pixel space, and keep TouchZoom passive while an engaged two-finger
+     * twist owns the gesture. */
+    if (L.Map.TouchZoom && typeof L.Map.TouchZoom.prototype._onTouchMove === 'function') {
+        var origTouchZoomStart = L.Map.TouchZoom.prototype._onTouchStart;
+        var origTouchZoomMove = L.Map.TouchZoom.prototype._onTouchMove;
+        L.Map.TouchZoom.include({
+            _onTouchStart: function (e) {
+                origTouchZoomStart.apply(this, arguments);
+                if (this._zooming && e && e.touches && e.touches.length === 2 && this._map) {
+                    var p1 = this._map.mouseEventToContainerPoint(e.touches[0]);
+                    var p2 = this._map.mouseEventToContainerPoint(e.touches[1]);
+                    this._dlStartMidpoint = p1.add(p2)._divideBy(2);
+                }
+            },
+            _onTouchMove: function (e) {
+                var map = this._map;
+                if (!map || !map._rotate) {
+                    return origTouchZoomMove.apply(this, arguments);
+                }
+                if (!e.touches || e.touches.length !== 2 || !this._zooming) return;
+                var p1 = map.mouseEventToContainerPoint(e.touches[0]);
+                var p2 = map.mouseEventToContainerPoint(e.touches[1]);
+                var mid = p1.add(p2)._divideBy(2);
+                var dist = p1.distanceTo(p2);
+                var tr = map.touchRotate;
+                if (tr && tr._gesture && tr._gesture.engaged) {
+                    this._centerPoint = map.getSize()._divideBy(2);
+                    this._startLatLng = map.containerPointToLatLng(this._centerPoint);
+                    if (map.options.touchZoom !== 'center') {
+                        this._pinchStartLatLng = map.containerPointToLatLng(mid);
+                    }
+                    this._startDist = dist || 1;
+                    this._startZoom = map.getZoom();
+                    this._dlStartMidpoint = mid.clone();
+                    this._center = map.getCenter();
+                    this._zoom = this._startZoom;
+                    return;
+                }
+                if (!map._bearing) {
+                    return origTouchZoomMove.apply(this, arguments);
+                }
+                var scale = dist / this._startDist;
+                this._zoom = map.getScaleZoom(scale, this._startZoom);
+                if (!map.options.bounceAtZoomLimits && (
+                    (this._zoom < map.getMinZoom() && scale < 1) ||
+                    (this._zoom > map.getMaxZoom() && scale > 1)
+                )) {
+                    this._zoom = map._limitZoom(this._zoom);
+                }
+                if (map.options.touchZoom === 'center') {
+                    this._center = this._startLatLng;
+                    if (scale === 1) return;
+                } else {
+                    var delta = mid.subtract(this._centerPoint);
+                    if (scale === 1 && (
+                        (delta.x === 0 && delta.y === 0) ||
+                        (this._dlStartMidpoint && mid.equals(this._dlStartMidpoint))
+                    )) {
+                        return;
+                    }
+                    var unrotatedDelta = rotatePoint(delta, -map._bearing, L.point(0, 0));
+                    this._center = map.unproject(
+                        map.project(this._pinchStartLatLng, this._zoom).subtract(unrotatedDelta),
+                        this._zoom
+                    );
+                }
+                if (!this._moved) {
+                    map._moveStart(true, false);
+                    this._moved = true;
+                }
+                L.Util.cancelAnimFrame(this._animRequest);
+                var moveFn = L.bind(map._move, map, this._center, this._zoom, { pinch: true, round: false }, undefined);
+                this._animRequest = L.Util.requestAnimFrame(moveFn, this, true);
+                L.DomEvent.preventDefault(e);
+            }
+        });
+    }
+
+    /* Keyboard arrow pan: rotate screen-direction pan vectors into mapPane space. */
+    if (L.Map.Keyboard && typeof L.Map.Keyboard.prototype._onKeyDown === 'function') {
+        var origKeyDown = L.Map.Keyboard.prototype._onKeyDown;
+        L.Map.Keyboard.include({
+            _onKeyDown: function (e) {
+                var map = this._map;
+                if (!map || !map._rotate || !map._bearing || e.altKey || e.ctrlKey || e.metaKey ||
+                    !(e.keyCode in (this._panKeys || {}))) {
+                    return origKeyDown.apply(this, arguments);
+                }
+                if (map._panAnim && map._panAnim._inProgress) {
+                    L.DomEvent.stop(e);
+                    return;
+                }
+                var offset = L.point(this._panKeys[e.keyCode]);
+                if (e.shiftKey) offset = offset.multiplyBy(3);
+                offset = rotatePoint(offset, -map._bearing, L.point(0, 0)).round();
+                if (map.options.maxBounds) {
+                    offset = map._limitOffset(offset, map.options.maxBounds);
+                }
+                if (map.options.worldCopyJump) {
+                    var newLatLng = map.wrapLatLng(map.unproject(map.project(map.getCenter()).add(offset)));
+                    map.panTo(newLatLng);
+                } else {
+                    map.panBy(offset);
+                }
+                L.DomEvent.stop(e);
+            }
+        });
+    }
+
+    /* Shift-drag BoxZoom: build LatLngBounds from all 4 rotated screen corners. */
+    if (L.Map.BoxZoom && typeof L.Map.BoxZoom.prototype._onMouseUp === 'function') {
+        var origBoxZoomUp = L.Map.BoxZoom.prototype._onMouseUp;
+        L.Map.BoxZoom.include({
+            _onMouseUp: function (e) {
+                var map = this._map;
+                if (!map || !map._rotate || !map._bearing) {
+                    return origBoxZoomUp.apply(this, arguments);
+                }
+                if (e.which !== 1 && e.button !== 1) return;
+                this._finish();
+                if (!this._moved) return;
+                this._clearDeferredResetState();
+                this._resetStateTimeout = setTimeout(L.bind(this._resetState, this), 0);
+                var p0 = this._startPoint;
+                var p1 = this._point;
+                var bounds = L.latLngBounds([
+                    map.containerPointToLatLng(p0),
+                    map.containerPointToLatLng(L.point(p1.x, p0.y)),
+                    map.containerPointToLatLng(p1),
+                    map.containerPointToLatLng(L.point(p0.x, p1.y))
+                ]);
+                map.fitBounds(bounds).fire('boxzoomend', { boxZoomBounds: bounds });
+            }
+        });
+    }
 
     L.Map.addInitHook(function () {
         if (!this.options.rotate) return;

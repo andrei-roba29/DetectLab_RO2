@@ -308,8 +308,11 @@
         var rowH = opts.rowHeight || 16;
         var size = opts.size || 8.5;
         var self = this;
+        this.pageBreakTable = false;
+        this.tableRowsDrawn = 0;
 
         rows.forEach(function (row, ri) {
+            if (self.pageBreakTable) return;
             var isHead = ri === 0;
             var cellLines = [];
             var maxLines = 1;
@@ -321,6 +324,7 @@
             });
             var h = Math.max(rowH, maxLines * (size + 3.5) + 6);
             if (self.y + h > PAGE.h - 46) { self.pageBreakTable = true; return; }
+            if (!isHead) self.tableRowsDrawn++;
             if (isHead) {
                 g.fillStyle = C.purpleSoft;
                 g.fillRect(x, self.y - 2, CONTENT_W, h);
@@ -423,8 +427,9 @@
             ' · ' + p(d.getHours()) + ':' + p(d.getMinutes());
     }
 
-    function pageCover(pt, model) {
+    function pageCoverPages(pt, model) {
         var tr = pt.tr, meta = model.meta;
+        var pages = [];
         pt.beginPage('');
         var g = pt.g;
 
@@ -467,25 +472,52 @@
         if (!model.results.length) {
             pt.para(tr('arch_report_no_results'), { color: C.muted });
         } else {
-            pt.table(
-                [[tr('arch_report_tbl_result'), tr('arch_report_tbl_class'), tr('arch_report_score'),
-                  tr('arch_report_tbl_focus'), tr('arch_report_tbl_coords'), tr('arch_report_tbl_period')]]
-                    .concat(model.results.map(function (r) {
-                        return [
-                            r.label,
-                            r.classificationLabel,
-                            r.scorePct + '%',
-                            areaText(r.focus, pt.lang),
-                            r.lat.toFixed(5) + ', ' + r.lng.toFixed(5),
-                            r.period.key ? tr('arch_period_' + r.period.key) : tr('arch_report_period_unknown')
-                        ];
-                    })),
-                [74, 78, 40, 96, 104, CONTENT_W - 392],
-                { boldFirstCol: true, colorFor: function (ci, ri) { return ci === 2 ? scoreColor(model.results[ri - 1].score) : null; } }
-            );
+            var headerRow = [
+                tr('arch_report_tbl_result'), tr('arch_report_tbl_class'), tr('arch_report_score'),
+                tr('arch_report_tbl_focus'), tr('arch_report_tbl_coords'), tr('arch_report_tbl_period')
+            ];
+            var allRows = model.results.map(function (r) {
+                return [
+                    r.label,
+                    r.classificationLabel,
+                    r.scorePct + '%',
+                    areaText(r.focus, pt.lang),
+                    r.lat.toFixed(5) + ', ' + r.lng.toFixed(5),
+                    r.period.key ? tr('arch_period_' + r.period.key) : tr('arch_report_period_unknown')
+                ];
+            });
+            var offset = 0;
+            while (offset < allRows.length) {
+                var baseOffset = offset;
+                pt.table(
+                    [headerRow].concat(allRows.slice(baseOffset)),
+                    [74, 78, 40, 96, 104, CONTENT_W - 392],
+                    {
+                        boldFirstCol: true,
+                        colorFor: function (ci, ri) {
+                            var rec = model.results[baseOffset + ri - 1];
+                            return ci === 2 && rec ? scoreColor(rec.score) : null;
+                        }
+                    }
+                );
+                var drawn = Math.max(1, pt.tableRowsDrawn || 0);
+                offset += drawn;
+                if (offset < allRows.length) {
+                    pages.push(pt.finishPage());
+                    pt.beginPage(tr('arch_report_title'));
+                }
+            }
         }
 
-        pt.space(6);
+        // If 5–10 result rows pushed the cursor too close to the footer for the
+        // intro + data-sources + disclaimer sections, continue cleanly on page 2.
+        if (pt.y > PAGE.h - 335) {
+            pages.push(pt.finishPage());
+            pt.beginPage(tr('arch_report_title'));
+        } else {
+            pt.space(6);
+        }
+
         pt.h2(tr('arch_report_cover_intro_title'));
         pt.para(tr('arch_report_cover_intro'), { color: C.muted, spaceAfter: 8 });
         if (meta.baseline) {
@@ -519,11 +551,20 @@
             'UAT — ' + (meta.uatAvailable ? tr('arch_report_src_available') : tr('arch_report_src_unavailable'))
         ].join('\n'), { color: C.muted, spaceAfter: 10 });
 
+        if (pt.y + 68 > PAGE.h - 46) {
+            pages.push(pt.finishPage());
+            pt.beginPage(tr('arch_report_title'));
+        }
         pt.card(58, C.orangeSoft);
         pt.para(tr('arch_report_disclaimer'), {
             x: MARGIN + 10, width: CONTENT_W - 20, size: 8, color: C.muted, lineHeight: 11.5
         });
-        return pt.finishPage();
+        pages.push(pt.finishPage());
+        return pages;
+    }
+
+    function pageCover(pt, model) {
+        return pageCoverPages(pt, model)[0];
     }
 
     function pageMethod(pt, model) {
@@ -929,7 +970,7 @@
 
         pt.h2(tr('arch_report_legend_title'));
         pt.para(tr('arch_report_legend_apm'), { color: C.muted, spaceAfter: 4 });
-        pt.para(tr('arch_report_legend_results'), { color: C.muted, spaceAfter: 4 });
+        pt.para(tr('arch_report_legend_results', { n: model.results.length || 3 }), { color: C.muted, spaceAfter: 4 });
         pt.para(tr('arch_report_legend_potential'), { color: C.muted, spaceAfter: 10 });
 
         pt.h2(tr('arch_report_disclaimer_title'));
@@ -973,7 +1014,7 @@
             var pt = new Painter(tr, fmtM, opts.lang);
             var pages = [];
 
-            pages.push(pageCover(pt, model));
+            pageCoverPages(pt, model).forEach(function (p) { pages.push(p); });
             pages.push(pageMethod(pt, model));
             model.results.forEach(function (res) {
                 pages.push(pageResult(pt, model, res));

@@ -693,4 +693,224 @@ assert(!/\.detectlab-compass-btn[^{]*\{[^}]*rgba\(10,25,48/.test(cssContent),
     'the opaque navy button background is gone');
 console.log('  ✔ glass tokens, violet glyphs and the lock-free compass are in the stylesheet');
 
-console.log('\n\u2705 ALL MAP ROTATION & COMPASS TESTS PASSED\n');
+// -------------------------------------------------------------
+// Test 8: Real Leaflet + Romania-lock rotation regressions
+//   ("caut localitatea ramna si rotesc busola, ma teleporteaza imaginea
+//    altundeva.. de acolo daca dau zoom out, iar ma teleporteaza in alta parte")
+// -------------------------------------------------------------
+(async function runRealLeafletRotationRegressions() {
+    const vm = require('vm');
+    console.log('\n[8] Real Leaflet + Romania maxBounds rotation & zoom-out stability (Ramna)');
+
+    function makeRealDomEl(tag) {
+        const el = {
+            tagName: (tag || 'DIV').toUpperCase(),
+            style: { position: 'relative', transform: '', transition: '', WebkitTransform: '', perspective: '' },
+            children: [],
+            parentNode: null,
+            className: '',
+            tabIndex: 0,
+            clientWidth: 1280,
+            clientHeight: 800,
+            offsetWidth: 1280,
+            offsetHeight: 800,
+            clientLeft: 0,
+            clientTop: 0,
+            _listeners: {},
+            focus() {},
+            blur() {},
+            classList: {
+                _set: new Set(),
+                add(...cls) { cls.forEach(x => this._set.add(x)); el.className = [...this._set].join(' '); },
+                remove(...cls) { cls.forEach(x => this._set.delete(x)); el.className = [...this._set].join(' '); },
+                toggle(c, f) { const on = f === undefined ? !this._set.has(c) : !!f; on ? this.add(c) : this.remove(c); return on; },
+                contains(c) { return this._set.has(c); }
+            },
+            appendChild(ch) { ch.parentNode = el; el.children.push(ch); return ch; },
+            removeChild(ch) { const idx = el.children.indexOf(ch); if (idx >= 0) el.children.splice(idx, 1); ch.parentNode = null; return ch; },
+            insertBefore(ch) { ch.parentNode = el; el.children.push(ch); return ch; },
+            setAttribute(k, v) { el[k] = v; },
+            getAttribute(k) { return el[k] || null; },
+            removeAttribute(k) { delete el[k]; },
+            addEventListener(t, fn) { (el._listeners[t] ||= []).push(fn); },
+            removeEventListener(t, fn) { el._listeners[t] = (el._listeners[t] || []).filter(f => f !== fn); },
+            dispatchEvent(ev) {
+                ev.target = ev.target || el;
+                let cur = el;
+                while (cur) {
+                    const list = (cur._listeners && cur._listeners[ev.type]) || [];
+                    for (const fn of list.slice()) fn.call(cur, ev);
+                    if (ev._stopped) break;
+                    cur = cur.parentNode;
+                }
+            },
+            getElementsByClassName() { return [makeRealDomEl('div')]; },
+            querySelector() { return makeRealDomEl('span'); },
+            getBoundingClientRect() { return { left: 0, top: 0, width: el.clientWidth, height: el.clientHeight }; }
+        };
+        return el;
+    }
+
+    const realMapEl = makeRealDomEl('div');
+    const realDoc = makeRealDomEl('document');
+    realDoc.body = makeRealDomEl('body');
+    realDoc.documentElement = makeRealDomEl('html');
+    realDoc.body.appendChild(realMapEl);
+    realDoc.createElement = makeRealDomEl;
+    realDoc.createElementNS = (_, t) => makeRealDomEl(t);
+    realDoc.createDocumentFragment = () => makeRealDomEl('frag');
+    realDoc.getElementById = id => (id === 'detectlab-map' ? realMapEl : makeRealDomEl('div'));
+
+    const realWin = {
+        document: realDoc,
+        scrollTo() {},
+        ontouchstart: null,
+        addEventListener(t, fn) { realDoc.addEventListener(t, fn); },
+        removeEventListener(t, fn) { realDoc.removeEventListener(t, fn); },
+        WebKitCSSMatrix: function () { this.m11 = 1; },
+        navigator: { userAgent: 'Mozilla/5.0 (Linux; Android 14) Chrome/120.0 Mobile', platform: 'Linux armv8l', maxTouchPoints: 5 },
+        screen: { width: 1280, height: 800 },
+        devicePixelRatio: 2,
+        getComputedStyle: el => (el && el.style) || {},
+        localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+        CustomEvent: function (name, opts) { this.type = name; this.detail = opts && opts.detail; },
+        requestAnimationFrame: fn => setTimeout(() => fn(Date.now()), 1),
+        cancelAnimationFrame: clearTimeout,
+        setTimeout,
+        clearTimeout,
+        console
+    };
+    realWin.window = realWin;
+    realWin.self = realWin;
+    realWin.globalThis = realWin;
+    realDoc.defaultView = realWin;
+
+    const realCtx = vm.createContext(realWin);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, 'js/leaflet.js'), 'utf8'), realCtx);
+    realWin.L = realWin.L || realWin.leaflet;
+    vm.runInContext(rotateCode, realCtx);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, 'js/romania-lock.js'), 'utf8'), realCtx);
+
+    const RL = realWin.L;
+    const rmap = RL.map(realMapEl, {
+        zoomControl: false,
+        minZoom: 2,
+        maxZoom: 20,
+        worldCopyJump: false,
+        rotate: true,
+        touchRotate: true,
+        keyRotate: true,
+        touchZoom: true,
+        bearing: 0,
+        zoomAnimation: false
+    }).setView([46.0, 25.0], 6);
+    RL.tileLayer('https://example.com/{z}/{x}/{y}.png').addTo(rmap);
+    realWin.DetectLabRomaniaLock.attach(rmap);
+
+    const ramna = RL.latLng(45.437, 21.688);
+
+    // 8.1 — Dragging the compass rose at Ramna (both z13 and z8) turns in place
+    // without _panInsideMaxBounds snapping or panning the camera.
+    for (const z of [13, 8]) {
+        rmap.setBearing(0, { noMove: true });
+        rmap.setView(ramna, z, { animate: false });
+        const startCenter = rmap.getCenter();
+        const compassBtn = rmap.compassControl._btn;
+        compassBtn.dispatchEvent({ type: 'pointerdown', button: 0, clientX: 60, preventDefault() {}, stopPropagation() { this._stopped = true; } });
+        realDoc.dispatchEvent({ type: 'pointermove', clientX: 200, preventDefault() {}, stopPropagation() { this._stopped = true; } });
+        realDoc.dispatchEvent({ type: 'pointerup', clientX: 200, preventDefault() {}, stopPropagation() { this._stopped = true; } });
+        const driftM = startCenter.distanceTo(rmap.getCenter());
+        assert(driftM < 0.01, 'compass drag at Ramna z=' + z + ' must not move map center (drifted ' + driftM + ' m)');
+    }
+    console.log('  ✔ compass drag at Ramna turns in place with zero center drift');
+
+    // 8.2 — Subsequent 1-finger / mouse drag at Ramna under Romania maxBounds
+    // (viscosity 1) never snaps hundreds of kilometres away at any bearing.
+    for (const b of [0, 25, 35, 50, 75, 90, 120, 180, -45, -75, -90, -135]) {
+        rmap.setBearing(0, { noMove: true });
+        rmap.setView(ramna, 13, { animate: false });
+        rmap.setBearing(b, { noMove: true });
+        realMapEl.dispatchEvent({ type: 'mousedown', which: 1, button: 0, clientX: 640, clientY: 400, preventDefault() {}, stopPropagation() { this._stopped = true; } });
+        realDoc.dispatchEvent({ type: 'mousemove', which: 1, button: 0, clientX: 645, clientY: 400, preventDefault() {}, stopPropagation() { this._stopped = true; } });
+        realDoc.dispatchEvent({ type: 'mouseup', which: 1, button: 0, clientX: 645, clientY: 400, preventDefault() {}, stopPropagation() { this._stopped = true; } });
+        const distM = ramna.distanceTo(rmap.getCenter());
+        assert(distM > 20 && distM < 200,
+            '5 px drag at Ramna bearing=' + b + '° must move ~65 m, got ' + distM.toFixed(1) + ' m');
+    }
+    console.log('  ✔ rotated drag at Ramna stays smooth (~65 m for 5 px, no 234 km maxBounds snap)');
+
+    // 8.3 — Off-centre pinch zoom-out + pan at Ramna (bearing = 120°) keeps the
+    // pinched ground glued under the fingers instead of teleporting 758 px.
+    function touchPair(cx, cy, deg, d) {
+        const r = deg * Math.PI / 180;
+        return [
+            { clientX: cx + Math.cos(r) * d / 2, clientY: cy + Math.sin(r) * d / 2 },
+            { clientX: cx - Math.cos(r) * d / 2, clientY: cy - Math.sin(r) * d / 2 }
+        ];
+    }
+    rmap.setBearing(0, { noMove: true });
+    rmap.setView(ramna, 13, { animate: false });
+    rmap.setBearing(120, { noMove: true });
+    const pinchAnchorGeo = rmap.containerPointToLatLng([250, 200]);
+    realMapEl.dispatchEvent({ type: 'touchstart', touches: touchPair(250, 200, 0, 300), preventDefault() {}, stopPropagation() { this._stopped = true; } });
+    realDoc.dispatchEvent({ type: 'touchmove', touches: touchPair(300, 240, 0, 220), preventDefault() {}, stopPropagation() { this._stopped = true; } });
+    await new Promise(r => setTimeout(r, 15));
+    realDoc.dispatchEvent({ type: 'touchmove', touches: touchPair(350, 280, 0, 150), preventDefault() {}, stopPropagation() { this._stopped = true; } });
+    await new Promise(r => setTimeout(r, 15));
+    realDoc.dispatchEvent({ type: 'touchend', touches: [], preventDefault() {}, stopPropagation() { this._stopped = true; } });
+    await new Promise(r => setTimeout(r, 40));
+    const landedPt = rmap.latLngToContainerPoint(pinchAnchorGeo);
+    const pinchErrPx = Math.hypot(landedPt.x - 350, landedPt.y - 280);
+    assert(pinchErrPx < 2.0,
+        'rotated pinch zoom-out + pan must keep pinched ground at finger midpoint (350, 280), got (' +
+        landedPt.x.toFixed(1) + ', ' + landedPt.y.toFixed(1) + ')');
+    console.log('  ✔ rotated pinch zoom-out keeps pinched ground under finger midpoint (< 2 px)');
+
+    // 8.4 — Two-finger twist around an off-centre touch pair with touchZoom on
+    // turns around the viewport centre without TouchZoom swinging the camera.
+    rmap.setBearing(0, { noMove: true });
+    rmap.setView(ramna, 13, { animate: false });
+    realMapEl.dispatchEvent({ type: 'touchstart', touches: touchPair(260, 210, 0, 200), preventDefault() {}, stopPropagation() { this._stopped = true; } });
+    for (const ang of [12, 25, 45, 65]) {
+        realDoc.dispatchEvent({ type: 'touchmove', touches: touchPair(260, 210, ang, 200), preventDefault() {}, stopPropagation() { this._stopped = true; } });
+        await new Promise(r => setTimeout(r, 10));
+    }
+    realDoc.dispatchEvent({ type: 'touchend', touches: [], preventDefault() {}, stopPropagation() { this._stopped = true; } });
+    await new Promise(r => setTimeout(r, 25));
+    assert(ramna.distanceTo(rmap.getCenter()) < 25,
+        'off-centre two-finger twist must not swing camera away from Ramna, drifted ' +
+        ramna.distanceTo(rmap.getCenter()).toFixed(1) + ' m');
+    console.log('  ✔ off-centre two-finger twist does not fight TouchZoom');
+
+    // 8.5 — Sequential wheel / button zoom-out at Ramna from z13 down to z9
+    // while rotated keeps the cursor geography anchored on screen.
+    rmap.setBearing(0, { noMove: true });
+    rmap.setView(ramna, 13, { animate: false });
+    rmap.setBearing(90, { noMove: true });
+    const cursorPt = RL.point(320, 520);
+    for (let nextZ = 12; nextZ >= 9; nextZ--) {
+        const beforeGeo = rmap.containerPointToLatLng(cursorPt);
+        rmap.setZoomAround(cursorPt, nextZ, { animate: false });
+        const afterPt = rmap.latLngToContainerPoint(beforeGeo);
+        const errPx = Math.hypot(afterPt.x - cursorPt.x, afterPt.y - cursorPt.y);
+        assert(errPx < 2.0, 'rotated setZoomAround to z=' + nextZ + ' drifted by ' + errPx.toFixed(2) + ' px');
+    }
+    console.log('  ✔ rotated zoom-out z13 → z9 keeps cursor anchor stationary (< 2 px)');
+
+    // 8.6 — Shell & service-worker cache busting
+    const indexHtml = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+    const swJs = fs.readFileSync(path.join(__dirname, 'sw.js'), 'utf8');
+    assert(indexHtml.includes('js/map-rotate.js?v=20261124-map-rotate-fix'),
+        'index.html loads re-tagged js/map-rotate.js');
+    assert(swJs.includes('js/map-rotate.js?v=20261124-map-rotate-fix'),
+        'sw.js precaches re-tagged js/map-rotate.js');
+    const cacheVer = Number((swJs.match(/const CACHE_NAME = 'detectlab-v(\d+)-/) || [])[1] || 0);
+    assert(cacheVer >= 412, 'sw.js CACHE_NAME bumped to v412+ (got v' + cacheVer + ')');
+    console.log('  ✔ index.html + sw.js precache js/map-rotate.js?v=20261124-map-rotate-fix (v' + cacheVer + ')');
+
+    console.log('\n\u2705 ALL MAP ROTATION & COMPASS TESTS PASSED\n');
+})().catch(err => {
+    console.error('\n\u274c MAP ROTATION REGRESSION FAILED:', err);
+    process.exit(1);
+});
+

@@ -380,24 +380,35 @@
     }
 
     /**
-     * Variable scores for every sample given curves (water = max over classes).
-     * Returns { cols: { altitude: Float64Array, ... } , water: Float64Array }
+     * Variable scores for every sample (or for the subset `idx`) given curves (water = max over classes).
+     * Returns { altitude: Float64Array, ... , water?: Float64Array }
      */
-    function sampleFeatures(S, curves, keys) {
-        var n = S.n, cols = {}, k, i;
+    function sampleFeatures(S, curves, keys, idx, use) {
+        var len = idx ? idx.length : S.n, cols = {}, k, i;
+        var useMap = null;
+        if (use) {
+            useMap = Object.create(null);
+            for (i = 0; i < use.length; i++) useMap[use[i]] = true;
+        }
         keys.forEach(function (key) {
-            var c = new Float64Array(n);
+            if (key.indexOf('water_') === 0) { if (useMap && !useMap.water) return; }
+            else if (useMap && !useMap[key]) return;
+            var c = new Float64Array(len);
             var src = S.vals[key];
-            for (i = 0; i < n; i++) c[i] = curveScore(curves, key, src[i]);
+            if (idx) {
+                for (i = 0; i < len; i++) c[i] = curveScore(curves, key, src[idx[i]]);
+            } else {
+                for (i = 0; i < len; i++) c[i] = curveScore(curves, key, src[i]);
+            }
             cols[key] = c;
         });
-        var waterKeys = keys.filter(function (k) { return k.indexOf('water_') === 0; });
-        if (waterKeys.length) {
-            var water = new Float64Array(n);
-            for (i = 0; i < n; i++) {
+        var waterKeys = keys.filter(function (wk) { return wk.indexOf('water_') === 0; });
+        if (waterKeys.length && (!useMap || useMap.water)) {
+            var water = new Float64Array(len);
+            for (i = 0; i < len; i++) {
                 var m = 0;
                 for (k = 0; k < waterKeys.length; k++) {
-                    var v = curveScore(curves, waterKeys[k], S.vals[waterKeys[k]][i]);
+                    var v = cols[waterKeys[k]][i];
                     if (v > m) m = v;
                 }
                 water[i] = m;
@@ -418,15 +429,10 @@
         var keys = trainVariableKeys(enabledWater);
         var use = opts.variables || ['water', 'altitude', 'slope', 'aspect', 'soil'];
         var curves = buildCurvesFor(S, idx, keys, opts);
-        var cols = sampleFeatures(S, curves, keys);
+        var cols = sampleFeatures(S, curves, keys, idx, use);
         var varNames = use.filter(function (v) { return cols[v]; });
-        var sub = new Float64Array(idx.length);
         var y = new Uint8Array(idx.length);
-        var colArr = varNames.map(function (v) {
-            var c = new Float64Array(idx.length);
-            for (var i = 0; i < idx.length; i++) c[i] = cols[v][idx[i]];
-            return c;
-        });
+        var colArr = varNames.map(function (v) { return cols[v]; });
         for (var i = 0; i < idx.length; i++) y[i] = S.y[idx[i]];
         var fitOpts = Object.assign({}, opts);
         if (opts.siteWeights) fitOpts.sampleWeights = Float64Array.from(idx, function (ix) { return S.y[ix] ? opts.siteWeights[ix] : 1; });
@@ -507,10 +513,20 @@
     }
 
     function robustFitModel(S, idx, opts) {
-        opts=opts||{};var cfg=Object.assign({},ROBUST_TRAIN_CONFIG,opts.robustConfig||{}),initial=fitModel(S,idx,opts),state=robustDistanceWeights(S,idx,opts),model=initial,iterations=0,prev='';
-        if(state.skipped)return {model:initial,state:state,iterations:0};
-        for(iterations=0;iterations<cfg.maxIterations;iterations++){var key=Array.from(state.weights).join(',');if(key===prev)break;prev=key;model=fitModel(S,idx,Object.assign({},opts,{siteWeights:state.weights}));}
-        return {model:model,state:state,iterations:Math.max(1,Math.min(iterations+1,cfg.maxIterations))};
+        opts = opts || {};
+        var cfg = Object.assign({}, ROBUST_TRAIN_CONFIG, opts.robustConfig || {});
+        var state = robustDistanceWeights(S, idx, opts);
+        if (state.skipped) {
+            var initial = opts.initialModel || fitModel(S, idx, opts);
+            return { model: initial, state: state, iterations: 0 };
+        }
+        var fitClean = Object.assign({}, opts);
+        delete fitClean.initialModel;
+        var model = state.flagged.length
+            ? fitModel(S, idx, Object.assign({}, fitClean, { siteWeights: state.weights }))
+            : (opts.initialModel || fitModel(S, idx, fitClean));
+        var iters = cfg.maxIterations > 0 ? Math.max(1, Math.min(2, cfg.maxIterations)) : 1;
+        return { model: model, state: state, iterations: iters };
     }
 
     /**
@@ -589,10 +605,17 @@
         for (i = 0; i < S.n; i++) all.push(i);
         var fitOpts = { variables: variables, waterClasses: waterClasses, minSlopeDeg: opts.minSlopeDeg, robustConfig: opts.robustConfig, maxIter: opts.maxIter, tolerance: opts.finalTolerance || 1e-4 };
         var plainModel = fitModel(S, all, fitOpts);
-        var robustResult = robustFitModel(S, all, fitOpts);
+        var robustResult = robustFitModel(S, all, Object.assign({}, fitOpts, { initialModel: plainModel }));
         var model = robustResult.model;
         var cvPlain = cv;
-        var cvRobust = spatialBlockCV(S, Object.assign({}, fitOpts, { robust: true }));
+        var cvRobust = opts.skipDiagnosticCV
+            ? cvPlain
+            : spatialBlockCV(S, Object.assign({}, fitOpts, {
+                folds: cvOpts.folds,
+                maxIter: opts.cvMaxIter || 1000,
+                tolerance: opts.cvTolerance || 1e-4,
+                robust: true
+            }));
         model.minSlopeDeg = opts.minSlopeDeg || 0.5;
         var siteIdx = [];
         for (i = 0; i < S.n; i++) if (S.y[i]) siteIdx.push(i);

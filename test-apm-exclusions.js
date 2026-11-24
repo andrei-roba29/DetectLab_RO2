@@ -310,16 +310,18 @@ function assertTextureMasked(heatmap, sourceMask, label) {
     const html = read('index.html'), sw = read('sw.js');
     const TAG = '20261102-apm-continuous-heat', BOUNDED = '20261102-apm-train-bounded-grid';
     const PARALLEL = '20261102-apm-parallel-fetch';
-    // v410: the DEM deadline fix re-tagged providers, i18n and pipeline; the shell keeps
-    // every older tag pre-cached for shells that have not refreshed yet.
+    // v411: fast TRAIN report path re-tagged core, providers, pipeline, UI and worker;
+    // the shell keeps every older tag pre-cached for shells that have not refreshed yet.
     const DEM_TAG = '20261123-apm-dem-timeout';
+    const REPORT_FAST_TAG = '20261124-arch-report-fast';
     for (const [file, version] of [['apm-heatmap', TAG],
-        ['apm-raster', BOUNDED], ['apm-i18n', DEM_TAG], ['apm-pipeline', DEM_TAG],
-        ['apm-providers', DEM_TAG], ['apm-ui', '20261102-apm-mask-band']]) {
+        ['apm-raster', BOUNDED], ['apm-i18n', DEM_TAG], ['apm-core', REPORT_FAST_TAG],
+        ['apm-pipeline', REPORT_FAST_TAG], ['apm-providers', REPORT_FAST_TAG], ['apm-ui', REPORT_FAST_TAG]]) {
         const tag = 'js/apm-next/' + file + '.js?v=' + version;
         assert.ok(html.includes(tag) && sw.includes(tag), file + ' is versioned and precached');
     }
-    for (const [file, version] of [['apm-i18n', BOUNDED], ['apm-pipeline', PARALLEL], ['apm-providers', '20261101-train-source']]) {
+    for (const [file, version] of [['apm-i18n', BOUNDED], ['apm-pipeline', PARALLEL], ['apm-pipeline', DEM_TAG],
+        ['apm-providers', '20261101-train-source'], ['apm-providers', DEM_TAG], ['apm-ui', '20261102-apm-mask-band']]) {
         assert.ok(sw.includes('js/apm-next/' + file + '.js?v=' + version), 'older ' + file + ' tag stays precached for older shells');
     }
     // The prediction-path DEM/water/UAT-mask fetches were re-tagged to run in
@@ -328,10 +330,11 @@ function assertTextureMasked(heatmap, sourceMask, label) {
     assert.ok(sw.includes('js/apm-next/apm-pipeline.js?v=' + BOUNDED), 'older pipeline tag stays precached for older shells');
     assert.ok(sw.includes('js/apm-next/apm-polygonise.js?v=20261101-train-source'));
     assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + TAG));
-    // v396: the worker now imports the band-based polygoniser and apm-ui
-    // points at the matching worker URL; the older tags above stay precached.
+    // v396+: the worker imports the band-based polygoniser and apm-ui
+    // points at the latest worker URL; older worker tags stay precached.
     const BAND_TAG = '20261102-apm-mask-band';
-    assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=' + BAND_TAG));
+    assert.ok(read('js/apm-next/apm-ui.js').includes('apm-worker.js?v=' + REPORT_FAST_TAG));
+    assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + REPORT_FAST_TAG));
     assert.ok(sw.includes('js/apm-next/apm-worker.js?v=' + BAND_TAG));
     assert.ok(sw.includes('js/apm-next/apm-polygonise.js?v=' + BAND_TAG));
     assert.ok(read('js/apm-next/apm-worker.js').includes("'apm-polygonise.js?v=" + BAND_TAG + "'"));

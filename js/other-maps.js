@@ -712,6 +712,21 @@
         return state.map.project(latlng, state.map.getZoom()).subtract(state.map.getPixelOrigin());
     }
 
+    function viewportCanvasLayerBox(map, size) {
+        var c0 = map.containerPointToLayerPoint(L.point(0, 0));
+        if (!map.getBearing || !map.getBearing()) {
+            return { topLeft: c0, width: size.x, height: size.y };
+        }
+        var c1 = map.containerPointToLayerPoint(L.point(size.x, 0));
+        var c2 = map.containerPointToLayerPoint(size);
+        var c3 = map.containerPointToLayerPoint(L.point(0, size.y));
+        var minX = Math.floor(Math.min(c0.x, c1.x, c2.x, c3.x));
+        var minY = Math.floor(Math.min(c0.y, c1.y, c2.y, c3.y));
+        var maxX = Math.ceil(Math.max(c0.x, c1.x, c2.x, c3.x));
+        var maxY = Math.ceil(Math.max(c0.y, c1.y, c2.y, c3.y));
+        return { topLeft: L.point(minX, minY), width: maxX - minX, height: maxY - minY };
+    }
+
     function redraw() {
         var map = state.map;
         var canvas = state.canvas;
@@ -724,8 +739,10 @@
             return;
         }
         var size = map.getSize();
-        if (canvas.width !== size.x) canvas.width = size.x;
-        if (canvas.height !== size.y) canvas.height = size.y;
+        var vpBox = viewportCanvasLayerBox(map, size);
+        if (canvas.width !== vpBox.width) canvas.width = vpBox.width;
+        if (canvas.height !== vpBox.height) canvas.height = vpBox.height;
+        L.DomUtil.setPosition(canvas, vpBox.topLeft);
 
         var clusterer = root.DetectLabPatrimoniuClustering;
         var config = clusterConfig();
@@ -760,8 +777,8 @@
                 };
             });
 
-        var topLeft = map.containerPointToLayerPoint(L.point(0, 0));
-        ctx.clearRect(0, 0, size.x, size.y);
+        var topLeft = vpBox.topLeft;
+        ctx.clearRect(0, 0, vpBox.width, vpBox.height);
         ctx.save();
         ctx.translate(-topLeft.x, -topLeft.y);
         ctx.lineWidth = 1.5;
@@ -775,8 +792,8 @@
             var metersPerPixel = 40075016.686 * Math.cos(footprint.lat * Math.PI / 180) /
                 (256 * Math.pow(2, zoom));
             var radius = Math.max(3, footprint.radiusMeters / Math.max(metersPerPixel, 0.01));
-            if (point.x + radius < topLeft.x || point.x - radius > topLeft.x + size.x ||
-                point.y + radius < topLeft.y || point.y - radius > topLeft.y + size.y) return;
+            if (point.x + radius < topLeft.x || point.x - radius > topLeft.x + vpBox.width ||
+                point.y + radius < topLeft.y || point.y - radius > topLeft.y + vpBox.height) return;
             ctx.beginPath();
             ctx.fillStyle = JOSEPHINE_FILL;
             ctx.strokeStyle = JOSEPHINE_STROKE;
@@ -909,7 +926,8 @@
         if (state.map.touchZoom && state.map.touchZoom._zooming) return;
         var canvas = state.canvas;
         if (!canvas) return;
-        L.DomUtil.setPosition(canvas, state.map.containerPointToLayerPoint(L.point(0, 0)));
+        var vpBox = viewportCanvasLayerBox(state.map, state.map.getSize());
+        L.DomUtil.setPosition(canvas, vpBox.topLeft);
         redraw();
         scheduleNlsLive();
     }
@@ -1572,6 +1590,7 @@
         if (stored && isFinite(stored.opacity)) state.opacity = Number(stored.opacity);
 
         map.on('move', onMapMoved);
+        map.on('rotate', onMapMoved);
         map.on('moveend', onMapMoved);
         map.on('zoomend', onMapMoved);
         map.on('viewreset', onMapMoved);

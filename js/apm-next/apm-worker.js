@@ -12,7 +12,7 @@
  */
 /* global importScripts, self, DetectLabApmCore, DetectLabApmRaster, DetectLabApmPolygonise, DetectLabApmHeatmap, rbush */
 importScripts(
-    'apm-core.js',
+    'apm-core.js?v=20261124-arch-report-fast',
     'apm-raster.js',
     'apm-heatmap.js?v=20261102-apm-continuous-heat',
     '../d3.min.js',
@@ -55,10 +55,106 @@ importScripts(
         return medianValue(vals);
     }
 
+    var SMOOTH_KERNEL = [1, 2, 1, 2, 4, 2, 1, 2, 1];
+
+    function createSparseTerrainSampler(elev, w, h, dxM, dyM, smooth, nodata) {
+        var smoothCache = smooth ? new Map() : null;
+        var cellCache = new Map();
+        var i8dx = 1 / (8 * dxM), i8dy = 1 / (8 * dyM);
+        var idx2x = 1 / (dxM * dxM), idx2y = 1 / (dyM * dyM);
+
+        function srcAt(i, j) {
+            var o = j * w + i;
+            if (!smooth) return elev[o];
+            var hit = smoothCache.get(o);
+            if (hit !== undefined) return hit;
+            var raw = elev[o];
+            if (i <= 0 || j <= 0 || i >= w - 1 || j >= h - 1 || !R.isValidElev(raw, nodata)) {
+                smoothCache.set(o, raw);
+                return raw;
+            }
+            var s = 0, ws = 0, kk = 0;
+            for (var dj = -1; dj <= 1; dj++) {
+                for (var di = -1; di <= 1; di++, kk++) {
+                    var v = elev[o + dj * w + di];
+                    if (!R.isValidElev(v, nodata)) continue;
+                    s += SMOOTH_KERNEL[kk] * v;
+                    ws += SMOOTH_KERNEL[kk];
+                }
+            }
+            var val = Math.fround(s / ws);
+            smoothCache.set(o, val);
+            return val;
+        }
+
+        return function atCell(cell) {
+            var hit = cellCache.get(cell);
+            if (hit !== undefined) return hit;
+            var i = cell % w, j = Math.floor(cell / w);
+            if (i <= 0 || j <= 0 || i >= w - 1 || j >= h - 1) {
+                var border = { slope: 0, aspect: 0, curv: 0, valid: 0 };
+                cellCache.set(cell, border);
+                return border;
+            }
+            var a = srcAt(i - 1, j - 1), b = srcAt(i, j - 1), c = srcAt(i + 1, j - 1);
+            var d = srcAt(i - 1, j), e = srcAt(i, j), f = srcAt(i + 1, j);
+            var g = srcAt(i - 1, j + 1), hh = srcAt(i, j + 1), ii = srcAt(i + 1, j + 1);
+            if (!R.isValidElev(a, nodata) || !R.isValidElev(b, nodata) || !R.isValidElev(c, nodata) ||
+                !R.isValidElev(d, nodata) || !R.isValidElev(e, nodata) || !R.isValidElev(f, nodata) ||
+                !R.isValidElev(g, nodata) || !R.isValidElev(hh, nodata) || !R.isValidElev(ii, nodata)) {
+                var inv = { slope: 0, aspect: 0, curv: 0, valid: 0 };
+                cellCache.set(cell, inv);
+                return inv;
+            }
+            var dzdx = ((c + 2 * f + ii) - (a + 2 * d + g)) * i8dx;
+            var dzdrow = ((g + 2 * hh + ii) - (a + 2 * b + c)) * i8dy;
+            var slp = Math.fround(Math.atan(Math.sqrt(dzdx * dzdx + dzdrow * dzdrow)) * 180 / Math.PI);
+            var az = Math.atan2(-dzdx, dzdrow) * 180 / Math.PI;
+            var asp = Math.fround((az + 360) % 360);
+            var crv = Math.fround((d + f - 2 * e) * idx2x + (b + hh - 2 * e) * idx2y);
+            var ok = { slope: slp, aspect: asp, curv: crv, valid: 1 };
+            cellCache.set(cell, ok);
+            return ok;
+        };
+    }
+
+    function sparseNeighborhoodMedians(elev, atCell, cell, w, h, dx, dy, radius) {
+        var i0 = cell % w, j0 = Math.floor(cell / w);
+        var rx = Math.max(1, Math.ceil(radius / dx)), ry = Math.max(1, Math.ceil(radius / dy));
+        var elevs = [], slopes = [], aspects = [], curvs = [];
+        for (var y = Math.max(0, j0 - ry); y <= Math.min(h - 1, j0 + ry); y++) {
+            for (var x = Math.max(0, i0 - rx); x <= Math.min(w - 1, i0 + rx); x++) {
+                var xx = (x - i0) * dx, yy = (y - j0) * dy;
+                if (xx * xx + yy * yy > radius * radius) continue;
+                var k = y * w + x;
+                var tc = atCell(k);
+                if (!tc.valid) continue;
+                if (isFinite(elev[k])) elevs.push(elev[k]);
+                if (isFinite(tc.slope)) slopes.push(tc.slope);
+                if (isFinite(tc.aspect)) aspects.push(tc.aspect);
+                if (isFinite(tc.curv)) curvs.push(tc.curv);
+            }
+        }
+        var aspMed = NaN;
+        if (aspects.length) {
+            var anchor = aspects[0];
+            var unwrapped = aspects.map(function (v) { return anchor + (((v - anchor + 540) % 360) - 180); });
+            aspMed = ((medianValue(unwrapped) % 360) + 360) % 360;
+        }
+        return {
+            elev: elevs.length ? medianValue(elevs) : NaN,
+            slope: slopes.length ? medianValue(slopes) : NaN,
+            aspect: aspMed,
+            curv: curvs.length ? medianValue(curvs) : NaN
+        };
+    }
+
     function handleSampleTile(m) {
         var grid = { w: m.w, h: m.h, west: m.tile.west, north: m.tile.north, dLon: m.tile.dLon, dLat: m.tile.dLat };
-        var t = R.terrain(m.elev, m.w, m.h, m.dxM, m.dyM, { smooth: m.smooth, nodata: m.nodata });
         var pts = m.points, n = pts.length / 2;
+        var useSparse = (m.w * m.h > 4096) && (n < m.w * m.h * 0.08);
+        var t = useSparse ? null : R.terrain(m.elev, m.w, m.h, m.dxM, m.dyM, { smooth: m.smooth, nodata: m.nodata });
+        var atCell = useSparse ? createSparseTerrainSampler(m.elev, m.w, m.h, m.dxM, m.dyM, !!m.smooth, m.nodata) : null;
         var classes = core.WATER_CLASSES.filter(function (c) { return state.water && state.water[c]; });
         var out = new Float64Array(n * 5);
         var waterOut = {};
@@ -69,7 +165,18 @@ importScripts(
             var cell = R.cellOf(grid, lon, lat);
             var o = p * 5;
             if (cell < 0) { out[o + 4] = 0; inside[p] = 0; }
-            else {
+            else if (useSparse) {
+                inside[p] = 1;
+                var tc = atCell(cell);
+                if (m.siteMask && m.siteMask[p]) {
+                    var dxS = m.dxM, dyS = m.dyM, radiusS = Math.max(m.positionRadiusM || 0, dxS, dyS);
+                    var med = sparseNeighborhoodMedians(m.elev, atCell, cell, m.w, m.h, dxS, dyS, radiusS);
+                    out[o] = med.elev; out[o + 1] = med.slope; out[o + 2] = med.aspect; out[o + 3] = med.curv;
+                } else {
+                    out[o] = m.elev[cell]; out[o + 1] = tc.slope; out[o + 2] = tc.aspect; out[o + 3] = tc.curv;
+                }
+                out[o + 4] = tc.valid;
+            } else {
                 inside[p] = 1;
                 var dx=m.dxM,dy=m.dyM,radius=Math.max(m.positionRadiusM||0,dx,dy);
                 if(m.siteMask&&m.siteMask[p]){
@@ -205,6 +312,27 @@ importScripts(
             }
             : { model: m.model, waterClasses: m.waterClasses };
         var res = scoreGrid(m.mode, cfg);
+        if (m.forReport) {
+            var rg = state.analysis.grid, rn = rg.w * rg.h;
+            var classes = new Uint8Array(rn);
+            var thr = m.thresholds || { medium: 0.55, high: 0.7, veryhigh: 0.85 };
+            for (var ri = 0; ri < rn; ri++) {
+                var rs = res.score[ri];
+                if (!(rs === rs)) continue;
+                if (rs >= thr.veryhigh) classes[ri] = 50;
+                else if (rs >= thr.high) classes[ri] = 45;
+                else if (rs >= thr.medium) classes[ri] = 40;
+            }
+            reply(m.id, {
+                geojson: { type: 'FeatureCollection', features: [] },
+                heatmap: null,
+                reportRaster: { grid: rg, classes: classes },
+                thresholds: thr,
+                areaKm2: { medium: 0, high: 0, veryhigh: 0 },
+                scoreStats: res.stats
+            }, [classes.buffer]);
+            return;
+        }
         var fc = P.polygonise(res.score, state.analysis.grid, m.thresholds, {
             minAreaM2: m.minAreaM2 == null ? 2500 : m.minAreaM2,
             smoothIters: m.smoothIters == null ? 1 : m.smoothIters,
@@ -226,7 +354,11 @@ importScripts(
     }
 
     function handleTrain(m) {
-        var res = core.trainModelFromSamples(m.S, { waterClasses: m.waterClasses, minSlopeDeg: m.minSlopeDeg, folds: m.folds, robustConfig: m.robustConfig });
+        var res = core.trainModelFromSamples(m.S, {
+            waterClasses: m.waterClasses, minSlopeDeg: m.minSlopeDeg,
+            folds: m.folds, robustConfig: m.robustConfig,
+            skipDiagnosticCV: !!m.skipDiagnosticCV
+        });
         reply(m.id, { result: res });
     }
 

@@ -88,7 +88,9 @@
         RADIUS_KM_MIN: 1,
         RADIUS_KM_MAX: 10,
         RADIUS_KM_DEFAULT: 3,
-        MAX_RESULTS: 3,               // "Cele 3 rezultate"
+        RESULTS_MIN: 1,
+        RESULTS_MAX: 10,
+        MAX_RESULTS: 3,               // default result count (selectable 1–10)
         RESULT_RADIUS_M: 180,         // legacy circle helper
         FOCUS: { CELL_M: 50, HALF_WIDTH_M: 400, MAIN_MAX_M: 200, GRID_M: 100, MAIN_DROP: 0.10, SECONDARY_DROP: 0.25 },
         // Outline rounding (see buildFocusAreas.outline): sample size, the
@@ -313,6 +315,17 @@
     }
 
     function currentRadiusM() { return currentRadiusKm() * 1000; }
+
+    function currentMaxResults() {
+        var node = el('archReportMaxResults');
+        if (node && node.value !== '' && node.value != null) {
+            var v = parseInt(node.value, 10);
+            if (isFinite(v)) {
+                return Math.max(CONFIG.RESULTS_MIN, Math.min(CONFIG.RESULTS_MAX, v));
+            }
+        }
+        return CONFIG.MAX_RESULTS;
+    }
 
     // Circular analysis area in local meters, centred on the picked point.
     // min/max describe the axis-aligned bbox (used by rasters / roads);
@@ -939,6 +952,43 @@
         return grid;
     }
 
+    function rasterizeNextGenReportRaster(reportRaster, bbox, cellM) {
+        var cols = Math.max(1, Math.ceil((bbox.maxX - bbox.minX) / cellM));
+        var rows = Math.max(1, Math.ceil((bbox.maxY - bbox.minY) / cellM));
+        var cls = new Float32Array(cols * rows);
+        var grid = {
+            x0: bbox.minX, y0: bbox.minY, cols: cols, rows: rows, cellM: cellM,
+            cls: cls, available: false, unreadable: false, source: 'nextgen', histogram: {}
+        };
+        var rg = reportRaster && reportRaster.grid;
+        var src = reportRaster && reportRaster.classes;
+        if (!rg || !src || !rg.w || !rg.h || !rg.dLon || !rg.dLat) return grid;
+        var cos0 = Math.cos(bbox.lat0 * Math.PI / 180) * 111320;
+        var lngArr = new Float64Array(cols);
+        for (var cx = 0; cx < cols; cx++) {
+            lngArr[cx] = (bbox.minX + (cx + 0.5) * cellM) / cos0;
+        }
+        for (var cy = 0; cy < rows; cy++) {
+            var lat = (bbox.minY + (cy + 0.5) * cellM) / 111320;
+            var gj = Math.floor((rg.north - lat) / rg.dLat);
+            if (gj < 0 || gj >= rg.h) continue;
+            var srcRow = gj * rg.w;
+            var dstRow = cy * cols;
+            for (cx = 0; cx < cols; cx++) {
+                var gi = Math.floor((lngArr[cx] - rg.west) / rg.dLon);
+                if (gi < 0 || gi >= rg.w) continue;
+                var code = src[srcRow + gi];
+                if (!code) continue;
+                var mapped = code === 50 ? 5 : (code === 45 ? 4.5 : (code === 40 ? 4 : 0));
+                if (!mapped) continue;
+                cls[dstRow + cx] = mapped;
+                grid.available = true;
+                grid.histogram[mapped] = (grid.histogram[mapped] || 0) + 1;
+            }
+        }
+        return grid;
+    }
+
     /* Runs the Next-Gen engine on the report's own centre/radius with the
      * panel's current configuration (custom curves/weights, or the training
      * period picked in the report window) and rasterises the result. */
@@ -955,14 +1005,18 @@
             centre: { lat: ctx.center.lat, lon: ctx.center.lng },
             radiusKm: ctx.radiusKm,
             periodKey: settings.periodKey,
+            forReport: true,
             token: token,
             onProgress: function () { /* the report keeps its own status line */ }
         }).then(function (res) {
             if (token.cancelled || myVersion !== _state.version) return null;
-            // available === false (the engine produced no allowed-class cell
-            // here) fails closed exactly like an unreadable APM 2.0 raster:
-            // every seed is rejected as apm_below_average, nothing is guessed.
-            return rasterizeNextGenGrid(res && res.geojson, ctx.bbox, apmCellM(ctx.radiusM));
+            var cellM = apmCellM(ctx.radiusM);
+            if (res && res.reportRaster && res.reportRaster.grid && res.reportRaster.classes) {
+                return rasterizeNextGenReportRaster(res.reportRaster, ctx.bbox, cellM);
+            }
+            // Fallback for GeoJSON-only callers / test harnesses:
+            // available === false fails closed exactly like an unreadable APM 2.0 raster.
+            return rasterizeNextGenGrid(res && res.geojson, ctx.bbox, cellM);
         }).finally(function () {
             if (_state.baselineToken === token) _state.baselineToken = null;
         });
@@ -1994,7 +2048,7 @@
         // running — the ignore switch, the three bonus ticks, the baseline
         // tabs and the training-period select.
         ['archReportIgnoreLidar', 'archReportBonusRoads', 'archReportBonusPotential',
-         'archReportBonusLidar', 'archReportPeriod'].forEach(function (id) {
+         'archReportBonusLidar', 'archReportPeriod', 'archReportMaxResults'].forEach(function (id) {
             var node = el(id);
             if (node) node.disabled = running;
         });
@@ -2110,33 +2164,95 @@
                 ctx.polygons = collected.polygons || [];
                 ctx.siteRecords = buildSiteRecords(ctx.sites);
 
-                // ── same packed bubbles as the visible potential layer ──
-                setStatus('arch_report_step_potential');
-                ctx.bubbles = [];
-                ctx.potentialStatus = 'unavailable';
-                if (typeof window.computeArcheoPotentialField === 'function') {
-                    try {
-                        var pot = await window.computeArcheoPotentialField(center.lat, center.lng, radiusM, {
+                var bbox = buildBbox(ctx.square, CONFIG.UAT.CLEARANCE_M + CONFIG.UAT.CELL_M * 2, ctx.lat0);
+                ctx.bbox = bbox;
+                ctx.romanRoadLayer = mapRomanRoadsLayer();
+
+                var apmStepKey = ctx.baseline === 'apm20' ? 'arch_report_step_apm' : 'arch_report_step_baseline';
+                var pendingSteps = [
+                    'arch_report_step_potential',
+                    'arch_report_step_lidar',
+                    'arch_report_step_roads',
+                    'arch_report_step_uat',
+                    apmStepKey
+                ];
+                function syncParallelStatus() {
+                    if (myVersion !== _state.version || !pendingSteps.length) return;
+                    setStatus(pendingSteps[pendingSteps.length - 1]);
+                }
+                function finishParallelStep(stepKey, val) {
+                    var ix = pendingSteps.indexOf(stepKey);
+                    if (ix !== -1) pendingSteps.splice(ix, 1);
+                    syncParallelStatus();
+                    return val;
+                }
+                syncParallelStatus();
+
+                // Run all five independent data/model pipelines concurrently so total
+                // wall-clock time is max(steps) rather than sum(steps).
+                var potentialPromise = ((typeof window.computeArcheoPotentialField === 'function')
+                    ? Promise.resolve().then(function () {
+                        return window.computeArcheoPotentialField(center.lat, center.lng, radiusM, {
                             mode: 'bubbles',
                             isCancelled: function () { return myVersion !== _state.version; },
                             chunkSize: 400,
                             skipDataWait: true      // waitForSiteData() ran just above
                         });
-                        if (myVersion !== _state.version) return null;
-                        ctx.potentialStatus = pot.status;
-                        if (pot.status === 'ok' || pot.status === 'sparse_sites') ctx.bubbles = pot.bubbles || [];
-                    } catch (e) {
+                    }).catch(function (e) {
                         console.warn('[ArcheoReport] potential layer failed:', e);
+                        return null;
+                    })
+                    : Promise.resolve(null)).then(function (v) { return finishParallelStep('arch_report_step_potential', v); });
+
+                var lidarPromise = loadLidarPoints(ctx.ignoreLidar)
+                    .then(function (v) { return finishParallelStep('arch_report_step_lidar', v); });
+                var roadsPromise = (ctx.romanRoadLayer ? Promise.resolve(null) : loadRomanRoadsGeojson())
+                    .then(function (v) { return finishParallelStep('arch_report_step_roads', v); });
+                var uatPromise = buildUatGrid(bbox, uatCellM(ctx.radiusM))
+                    .then(function (v) { return finishParallelStep('arch_report_step_uat', v); });
+                var apmPromise = (ctx.baseline === 'apm20'
+                    ? buildApmGrid(bbox, apmCellM(ctx.radiusM), CONFIG.APM.Z)
+                    : buildNextGenBaselineGrid(ctx, settings, myVersion)
+                ).then(function (g) {
+                    return finishParallelStep(apmStepKey, { ok: true, grid: g });
+                }, function (err) {
+                    return finishParallelStep(apmStepKey, { ok: false, err: err });
+                });
+
+                var parallel = await Promise.all([potentialPromise, lidarPromise, roadsPromise, uatPromise, apmPromise]);
+                if (myVersion !== _state.version) return null;
+
+                var pot = parallel[0];
+                var allLidar = parallel[1] || [];
+                var roadsGj = parallel[2];
+                ctx.uatGrid = parallel[3];
+                var apmOutcome = parallel[4];
+
+                if (!apmOutcome.ok) {
+                    if (ctx.baseline !== 'apm20') {
+                        console.error('[ArcheoReport] Next-Gen baseline failed:', apmOutcome.err);
+                        setStatus('arch_report_baseline_failed', true, {
+                            msg: (apmOutcome.err && apmOutcome.err.message) ? apmOutcome.err.message : String(apmOutcome.err)
+                        });
+                        return null;
                     }
+                    throw apmOutcome.err;
+                }
+                ctx.apmGrid = apmOutcome.grid;
+                if (!ctx.apmGrid) return null;
+
+                // ── potential bubbles ──
+                ctx.bubbles = [];
+                ctx.potentialStatus = 'unavailable';
+                if (pot) {
+                    ctx.potentialStatus = pot.status;
+                    if (pot.status === 'ok' || pot.status === 'sparse_sites') ctx.bubbles = pot.bubbles || [];
                 }
                 ctx.bubblesInArea = ctx.bubbles.filter(function (b) {
                     return inCircle(ctx.square, b.x, b.y);
                 });
 
                 // ── LIDAR Scanner annotations ──
-                setStatus('arch_report_step_lidar');
-                var allLidar = await loadLidarPoints(ctx.ignoreLidar);
-                if (myVersion !== _state.version) return null;
                 var margin = CONFIG.LIDAR.PROXIMITY_M + CONFIG.UAT.CLEARANCE_M;
                 ctx.lidarPoints = allLidar.filter(function (p) {
                     var m = projectToLocalMeters(p.lat, p.lng, ctx.lat0);
@@ -2150,8 +2266,7 @@
                 // The bonus/seed subset: fortification, burgus, tumulus only.
                 ctx.qualifyingLidarPoints = ctx.lidarPoints.filter(isBonusLidarPoint);
 
-                setStatus('arch_report_step_roads');
-                ctx.romanRoadLayer = mapRomanRoadsLayer();
+                // ── Roman roads ──
                 if (ctx.romanRoadLayer) {
                     /* „Drumuri romane” is on: its canvas layer already holds
                      * the network, so nothing is downloaded or parsed here. */
@@ -2161,41 +2276,8 @@
                     ctx.romanRoadsInArea = ctx.romanRoadLayer.roadSegmentsInBounds(
                         swRoad.lat, swRoad.lng, neRoad.lat, neRoad.lng);
                 } else {
-                    var roadsGj = await loadRomanRoadsGeojson();
-                    if (myVersion !== _state.version) return null;
                     ctx.romanRoadSegs = romanRoadSegmentsInSquare(roadsGj, ctx.square, ctx.lat0, CONFIG.ROMAN_ROADS.PROXIMITY_M);
                     ctx.romanRoadsInArea = ctx.romanRoadSegs.length;
-                }
-
-                // ── rasters (UAT red zone + the chosen APM baseline) ──
-                setStatus('arch_report_step_uat');
-                var bbox = buildBbox(ctx.square, CONFIG.UAT.CLEARANCE_M + CONFIG.UAT.CELL_M * 2, ctx.lat0);
-                ctx.bbox = bbox;
-                var uatPromise = buildUatGrid(bbox, uatCellM(ctx.radiusM));
-                if (ctx.baseline === 'apm20') {
-                    setStatus('arch_report_step_apm');
-                    var grids = await Promise.all([
-                        uatPromise,
-                        buildApmGrid(bbox, apmCellM(ctx.radiusM), CONFIG.APM.Z)
-                    ]);
-                    if (myVersion !== _state.version) return null;
-                    ctx.uatGrid = grids[0];
-                    ctx.apmGrid = grids[1];
-                } else {
-                    // Next-Gen baselines fetch their own DEM/water/model; the
-                    // UAT raster runs while that engine is working.
-                    ctx.uatGrid = await uatPromise;
-                    if (myVersion !== _state.version) return null;
-                    try {
-                        ctx.apmGrid = await buildNextGenBaselineGrid(ctx, settings, myVersion);
-                    } catch (err) {
-                        console.error('[ArcheoReport] Next-Gen baseline failed:', err);
-                        setStatus('arch_report_baseline_failed', true, {
-                            msg: (err && err.message) ? err.message : String(err)
-                        });
-                        return null;
-                    }
-                    if (myVersion !== _state.version || !ctx.apmGrid) return null;
                 }
 
                 // ── seeds → exclusions → weighted score ──
@@ -2204,21 +2286,25 @@
                 ctx.seeds = seeds;
                 var candidates = [];
                 var rejected = {};
-                for (var i = 0; i < seeds.length; i += 60) {
-                    var batch = seeds.slice(i, i + 60);
-                    batch.forEach(function (seed) {
-                        var res = evaluateSeed(seed, ctx);
+                var seedBatch = 600;
+                for (var i = 0; i < seeds.length; i += seedBatch) {
+                    var end = Math.min(seeds.length, i + seedBatch);
+                    for (var si = i; si < end; si++) {
+                        var res = evaluateSeed(seeds[si], ctx);
                         if (res.ok && focusCellAllowed(res.x, res.y, CONFIG.FOCUS.CELL_M, ctx)) candidates.push(res);
                         else if (res.ok) rejected.focus_exclusion = (rejected.focus_exclusion || 0) + 1;
                         else rejected[res.reason] = (rejected[res.reason] || 0) + 1;
-                    });
-                    await yieldToUI();
-                    if (myVersion !== _state.version) return null;
+                    }
+                    if (end < seeds.length) {
+                        await yieldToUI();
+                        if (myVersion !== _state.version) return null;
+                    }
                 }
                 ctx.rejected = rejected;
                 ctx.candidates = candidates;
 
-                var picked = selectResults(candidates, CONFIG.MAX_RESULTS, CONFIG.RESULT_MIN_SEPARATION_M);
+                var maxResults = settings.maxResults || currentMaxResults();
+                var picked = selectResults(candidates, maxResults, CONFIG.RESULT_MIN_SEPARATION_M);
                 var results = picked.map(function (cand, idx) {
                     return buildResultModel(cand, ctx, idx + 1, picked.length);
                 });
@@ -2237,6 +2323,7 @@
                         radiusKm: ctx.radiusKm,
                         radiusM: Math.round(ctx.radiusM),
                         sideM: Math.round(ctx.square.sideM),
+                        maxResults: maxResults,
                         center: { lat: center.lat, lng: center.lng },
                         sitesCount: ctx.siteRecords.length,
                         bubblesCount: ctx.bubbles.length,
@@ -2292,8 +2379,10 @@
                 setStatus('arch_report_error', true);
                 return null;
             } finally {
-                if (myVersion === _state.version) _state.running = false;
-                setRunning(false);
+                if (myVersion === _state.version) {
+                    _state.running = false;
+                    setRunning(false);
+                }
             }
         })();
     }
@@ -3422,6 +3511,7 @@
         return {
             baseline: baseline,
             periodKey: periodKey,
+            maxResults: currentMaxResults(),
             ignoreLidar: !!(el('archReportIgnoreLidar') && el('archReportIgnoreLidar').checked),
             bonuses: {
                 roads: checkedOr('archReportBonusRoads', CONFIG.BONUSES.roads),
@@ -3489,6 +3579,70 @@
         });
     }
 
+    function cancelActiveRun() {
+        if (!_state.running) return;
+        _state.version++;
+        if (_state.baselineToken) {
+            _state.baselineToken.cancelled = true;
+            _state.baselineToken = null;
+        }
+        _state.running = false;
+    }
+
+    function canReuseScoredCandidates() {
+        if (!_state.model || !_state.ctx || !Array.isArray(_state.ctx.candidates) || !_state.point) return false;
+        var s = readSettings();
+        var m = _state.model.meta || {};
+        if (_state.point.lat !== m.center.lat || _state.point.lng !== m.center.lng) return false;
+        if (currentRadiusKm() !== m.radiusKm) return false;
+        if (s.baseline !== m.baseline) return false;
+        var curPeriod = s.baseline === 'nextgen_train' ? (s.periodKey || 'all') : null;
+        if (curPeriod !== m.baselinePeriod) return false;
+        if (!!s.ignoreLidar !== !!m.ignoreLidar) return false;
+        var mb = m.bonuses || {};
+        if (!!s.bonuses.roads !== !!mb.roads ||
+            !!s.bonuses.potential !== !!mb.potential ||
+            !!s.bonuses.lidar !== !!mb.lidar) return false;
+        return true;
+    }
+
+    function applyMaxResultsChange(maxResults) {
+        var count = Math.max(CONFIG.RESULTS_MIN, Math.min(CONFIG.RESULTS_MAX,
+            isFinite(maxResults) ? Math.round(maxResults) : currentMaxResults()));
+        var label = el('archReportMaxResultsValue');
+        if (label) label.textContent = String(count);
+        if (_state.running) return null;
+        if (canReuseScoredCandidates()) {
+            var picked = selectResults(_state.ctx.candidates, count, CONFIG.RESULT_MIN_SEPARATION_M);
+            var results = picked.map(function (cand, idx) {
+                return buildResultModel(cand, _state.ctx, idx + 1, picked.length);
+            });
+            _state.results = results;
+            _state.model.results = results;
+            _state.model.meta.maxResults = count;
+            _state.figures = null;
+            renderResults(_state.model);
+            updateUi();
+            if (!results.length) setStatus('arch_report_no_results', true);
+            else setStatus('arch_report_done');
+            return _state.model;
+        }
+        if (_state.point && _state.model) return runReport();
+        return null;
+    }
+
+    function setMaxResults(value, apply) {
+        var count = parseInt(value, 10);
+        if (!isFinite(count)) count = CONFIG.MAX_RESULTS;
+        count = Math.max(CONFIG.RESULTS_MIN, Math.min(CONFIG.RESULTS_MAX, count));
+        var slider = el('archReportMaxResults');
+        if (slider) slider.value = String(count);
+        var label = el('archReportMaxResultsValue');
+        if (label) label.textContent = String(count);
+        if (apply !== false) return applyMaxResultsChange(count);
+        return count;
+    }
+
     function setBaseline(value, rerun) {
         if (CONFIG.BASELINE.MODES.indexOf(value) === -1) value = CONFIG.BASELINE.DEFAULT;
         var input = el('archReportBaseline');
@@ -3503,13 +3657,19 @@
         var row = el('archReportPeriodRow');
         if (row) row.hidden = value !== 'nextgen_train';
         if (value === 'nextgen_train') refreshPeriodOptions();
-        if (rerun !== false && _state.point && !_state.running) runReport();
+        if (rerun !== false && _state.point) {
+            cancelActiveRun();
+            runReport();
+        }
     }
 
     /* Any window setting that feeds the score re-runs the analysis in place —
-     * exactly like the ignore-LIDAR switch has always done. */
+     * superseding any stale in-flight run so rapid toggles never block. */
     function settingsChanged() {
-        if (_state.point && !_state.running) runReport();
+        if (_state.point) {
+            cancelActiveRun();
+            runReport();
+        }
     }
 
     function wireUI() {
@@ -3549,6 +3709,20 @@
                 node.addEventListener('change', function () { settingsChanged(); });
             }
         });
+        var maxResultsSlider = el('archReportMaxResults');
+        var maxResultsValue = el('archReportMaxResultsValue');
+        if (maxResultsSlider && !maxResultsSlider.dataset.archReportWired) {
+            maxResultsSlider.dataset.archReportWired = '1';
+            maxResultsSlider.addEventListener('input', function () {
+                if (maxResultsValue) maxResultsValue.textContent = String(currentMaxResults());
+            });
+            maxResultsSlider.addEventListener('change', function () {
+                applyMaxResultsChange(currentMaxResults());
+            });
+        }
+        if (maxResultsValue && maxResultsSlider) {
+            maxResultsValue.textContent = String(currentMaxResults());
+        }
         var run = el('archReportRunBtn');
         if (run && !run.dataset.archReportWired) {
             run.dataset.archReportWired = '1';
@@ -3682,6 +3856,7 @@
     window.generateArcheoReportPdf = generatePdf;
     window._archeoReportPdfLang = pdfLanguage;
     window._archeoReportSetPdfLang = setPdfLanguage;
+    window._archeoReportSetMaxResults = setMaxResults;
     window._archeoReportState = function () {
         return {
             active: _state.active,
@@ -3715,6 +3890,8 @@
         inSquare: inSquare,
         currentRadiusKm: currentRadiusKm,
         currentRadiusM: currentRadiusM,
+        currentMaxResults: currentMaxResults,
+        setMaxResults: setMaxResults,
         seedGridM: seedGridM,
         uatCellM: uatCellM,
         apmCellM: apmCellM,
@@ -3753,6 +3930,7 @@
         isBonusLidarPoint: isBonusLidarPoint,
         normalizeCategory: normalizeCategory,
         rasterizeNextGenGrid: rasterizeNextGenGrid,
+        rasterizeNextGenReportRaster: rasterizeNextGenReportRaster,
         nextGenReportApi: nextGenReportApi,
         apmGridPolygons: apmGridPolygons,
         outlineCells: outlineCells,

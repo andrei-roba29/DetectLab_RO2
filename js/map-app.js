@@ -4547,6 +4547,21 @@
             // show.  Scaling the anchor that the content was drawn against has no
             // such error: viewport = scale * anchor - newPixelOrigin + scale *
             // (bitmap - anchor) is exactly project(latlng, targetZoom) - origin.
+            function _viewportCanvasLayerBox(size, firstCorner) {
+                var tl = firstCorner || map.containerPointToLayerPoint([0, 0]);
+                if (!map.getBearing || !map.getBearing()) {
+                    return { topLeft: tl, width: size.x, height: size.y };
+                }
+                var c1 = map.containerPointToLayerPoint([size.x, 0]);
+                var c2 = map.containerPointToLayerPoint([size.x, size.y]);
+                var c3 = map.containerPointToLayerPoint([0, size.y]);
+                var minX = Math.floor(Math.min(tl.x, c1.x, c2.x, c3.x));
+                var minY = Math.floor(Math.min(tl.y, c1.y, c2.y, c3.y));
+                var maxX = Math.ceil(Math.max(tl.x, c1.x, c2.x, c3.x));
+                var maxY = Math.ceil(Math.max(tl.y, c1.y, c2.y, c3.y));
+                return { topLeft: L.point(minX, minY), width: maxX - minX, height: maxY - minY };
+            }
+
             function _updateCanvasTransform(center, zoom) {
                 if (_canvasAnchor == null || _canvasZoom == null || !_displayCanvas) return;
                 var scale = map.getZoomScale(zoom, _canvasZoom);
@@ -4580,8 +4595,9 @@
 
                 _sitesCanvas.style.opacity = String(FLAT_OPACITY);
                 var size = map.getSize();
-                if (_sitesCanvas.width !== size.x) _sitesCanvas.width = size.x;
-                if (_sitesCanvas.height !== size.y) _sitesCanvas.height = size.y;
+                var vpBox = _viewportCanvasLayerBox(size, map.containerPointToLayerPoint([0, 0]));
+                if (_sitesCanvas.width !== vpBox.width) _sitesCanvas.width = vpBox.width;
+                if (_sitesCanvas.height !== vpBox.height) _sitesCanvas.height = vpBox.height;
 
                 var zoom = map.getZoom();
                 var clusterDistanceKm = _patrimoniuClusterer
@@ -4613,9 +4629,9 @@
                         return { isCluster: false, count: 1, members: [record], latlng: record.latlng };
                     });
 
-                var topLeft = map.containerPointToLayerPoint([0, 0]);
+                var topLeft = vpBox.topLeft;
                 var ctx = _sitesCtx;
-                ctx.clearRect(0, 0, size.x, size.y);
+                ctx.clearRect(0, 0, vpBox.width, vpBox.height);
                 ctx.save();
                 ctx.translate(-topLeft.x, -topLeft.y);
                 ctx.lineWidth = 1.5;
@@ -4696,6 +4712,8 @@
                 // 3. Translate the 2D context by -topLeft so that latLngToLayerPoint()
                 //    coords draw at the correct canvas pixel.
                 var topLeft = map.containerPointToLayerPoint([0, 0]);
+                var vpBox = _viewportCanvasLayerBox(size, topLeft);
+                topLeft = vpBox.topLeft;
                 // Both custom surfaces are drawn in the same layer-point space.
                 // Reset BOTH elements after every settled move/zoom: setTransform()
                 // from zoomanim must never remain on _sitesCanvas when its pixels
@@ -4716,10 +4734,10 @@
                 _canvasState.anchor = _canvasAnchor;
                 _canvasState.transform = _displayCanvas.style.transform;
 
-                if (_offscreenCanvas.width !== size.x) _offscreenCanvas.width = size.x;
-                if (_offscreenCanvas.height !== size.y) _offscreenCanvas.height = size.y;
-                if (_displayCanvas.width !== size.x) _displayCanvas.width = size.x;
-                if (_displayCanvas.height !== size.y) _displayCanvas.height = size.y;
+                if (_offscreenCanvas.width !== vpBox.width) _offscreenCanvas.width = vpBox.width;
+                if (_offscreenCanvas.height !== vpBox.height) _offscreenCanvas.height = vpBox.height;
+                if (_displayCanvas.width !== vpBox.width) _displayCanvas.width = vpBox.width;
+                if (_displayCanvas.height !== vpBox.height) _displayCanvas.height = vpBox.height;
 
                 if (!_circlesVisible || FLAT_OPACITY === 0) {
                     _displayCtx.clearRect(0, 0, _displayCanvas.width, _displayCanvas.height);
@@ -4849,7 +4867,7 @@
                     _updateCanvasTransform(map.getCenter(), map.getZoom());
                 }
             });
-            map.on('move viewreset resize', _scheduleRedraw);
+            map.on('move rotate viewreset resize', _scheduleRedraw);
             map.on('moveend zoomend', _scheduleRedraw);
 
             function unproject3857(x, y) {

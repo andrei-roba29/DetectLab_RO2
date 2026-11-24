@@ -419,9 +419,26 @@
         /* The viewport in layer pixels, so the planner can bound the tile
          * window it asks for (the sharp-level preference). */
         function viewportRect() {
+            var size = map.getSize();
+            var c0 = map.containerPointToLayerPoint(L.point(0, 0));
+            if (!map.getBearing || !map.getBearing()) {
+                return {
+                    topLeft: c0,
+                    bottomRight: map.containerPointToLayerPoint(size)
+                };
+            }
+            var c1 = map.containerPointToLayerPoint(L.point(size.x, 0));
+            var c2 = map.containerPointToLayerPoint(size);
+            var c3 = map.containerPointToLayerPoint(L.point(0, size.y));
             return {
-                topLeft: map.containerPointToLayerPoint(L.point(0, 0)),
-                bottomRight: map.containerPointToLayerPoint(map.getSize())
+                topLeft: L.point(
+                    Math.min(c0.x, c1.x, c2.x, c3.x),
+                    Math.min(c0.y, c1.y, c2.y, c3.y)
+                ),
+                bottomRight: L.point(
+                    Math.max(c0.x, c1.x, c2.x, c3.x),
+                    Math.max(c0.y, c1.y, c2.y, c3.y)
+                )
             };
         }
 
@@ -1190,6 +1207,7 @@
         function onResize() { renderAll(); }
 
         map.on('move', onMove);
+        map.on('rotate', onMove);
         map.on('moveend', onMove);
         map.on('zoomend', onMove);
         map.on('viewreset', onMove);
@@ -1206,6 +1224,7 @@
         function destroy() {
             setAlignMode(false);
             map.off('move', onMove);
+            map.off('rotate', onMove);
             map.off('moveend', onMove);
             map.off('zoomend', onMove);
             map.off('viewreset', onMove);
